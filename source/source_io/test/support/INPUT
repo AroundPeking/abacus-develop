@@ -272,9 +272,9 @@ vdw_cn_thr_unit                Bohr #unit of cn_thr, Bohr or Angstrom
 vdw_cutoff_period   3 3 3 #periods of periodic structure
 
 #Parameters (14.exx)
-exx_fock_alpha               1 #
-exx_erfc_alpha               0.25 #
-exx_erfc_omega               0.11 #
+exx_hybrid_alpha               default #
+exx_hybrid_beta                beta #
+exx_hse_omega                  0.11 #
 exx_separate_loop              1 #0 or 1
 exx_hybrid_step                100 #
 exx_mixing_beta                1.0 #

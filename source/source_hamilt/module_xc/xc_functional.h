@@ -64,24 +64,14 @@ class XC_Functional
 //		func_type, which is as specified in get_func_type
 //		use_libxc, whether to use LIBXC. The rule is to NOT use it for functionals that we already have.
 
-    static int get_func_type()
-    {
-        return func_type;
-    };
-    static void set_xc_type(const std::string xc_func_in);
-
-    // For hybrid functional
-    static void set_hybrid_alpha(const double alpha_in);
-    static double get_hybrid_alpha()
-    {
-        return hybrid_alpha;
-    };
-    static bool get_ked_flag()
-    {
-        return ked_flag;
-    };
-    /// Usually in exx caculation, the first SCF loop should be converged with PBE
-    static void set_xc_first_loop(const UnitCell& ucell);
+	static int get_func_type();
+	static void set_xc_type(const std::string xc_func_in);
+	static void get_hybrid_mixing(const double alpha_in, const double beta_in);
+#ifdef USE_LIBXC
+	static void set_xc_type_libxc(const std::string xc_func_in);
+	static std::vector<xc_func_type> init_func(const int xc_polarized);
+	static void finish_func(std::vector<xc_func_type> &funcs);
+#endif
 
 	private:
 
@@ -90,15 +80,9 @@ class XC_Functional
     static bool ked_flag; // whether the functional has kinetic energy density
     static bool use_libxc;
 
-    // exx_hybrid_alpha for mixing exx in hybrid functional:
-    static double hybrid_alpha;
-
-	// added by jghan, 2024-07-07
-	// as a scaling factor for different xc-functionals
-	static std::map<int, double> scaling_factor_xc;
-
-	public:
-	static std::vector<int> get_func_id() { return func_id; }
+	//exx_hybrid_alpha for mixing exx in hybrid functional:
+	static double hybrid_alpha;
+	static double hybrid_beta;
 
 //-------------------
 //  xc_functional_wrapper_xc.cpp
