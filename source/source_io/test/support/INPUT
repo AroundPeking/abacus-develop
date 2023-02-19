@@ -276,7 +276,7 @@ exx_hybrid_alpha               default #
 exx_hybrid_beta                beta #
 exx_cam_alpha                  default #
 exx_cam_beta                   default #
-exx_hse_omega                  0.11 #
+exx_hse_omega                  default #
 exx_separate_loop              1 #0 or 1
 exx_hybrid_step                100 #
 exx_mixing_beta                1.0 #
