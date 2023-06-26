@@ -12,28 +12,61 @@
 #include <cassert>
 
 template<typename Tdata>
-void Inverse_Matrix<Tdata>::cal_inverse( const Method &method )
+void Inverse_Matrix<Tdata>::cal_inverse()//const Method &method )
 {
-	switch(method)
-	{
-		case Method::potrf:		using_potrf();			break;
+	//switch(method)
+	//{
+		// case Method::potrf:		using_potrf();			break;
+		// case Method::getrf:		using_getrf();			break;
 //		case Method::syev:		using_syev(1E-6);		break;
-	}
+	//}
+	int info;
+	info = using_potrf();
+	if(info>0)
+		using_getrf();
 }
 
 template<typename Tdata>
-void Inverse_Matrix<Tdata>::using_potrf()
+int Inverse_Matrix<Tdata>::using_potrf()
 {
 	int info;
 	LapackConnector::potrf('U', A.shape[0], A.ptr(), A.shape[0], info);
+	if(info==0)
+	{
+		LapackConnector::potri('U', A.shape[0], A.ptr(), A.shape[0], info);
+		if(info)
+			throw std::range_error("info="+std::to_string(info)+"\n"+std::string(__FILE__)+" line "+std::to_string(__LINE__));
+		copy_down_triangle();
+	}
+	else if(info<0)
+		throw std::range_error("info="+std::to_string(info)+"\n"+std::string(__FILE__)+" line "+std::to_string(__LINE__));
+	
+	return info;
+	// if(info)
+	// 	throw std::range_error("info="+std::to_string(info)+"\n"+std::string(__FILE__)+" line "+std::to_string(__LINE__));
+
+	// LapackConnector::potri('U', A.shape[0], A.ptr(), A.shape[0], info);
+	// if(info)
+	// 	throw std::range_error("info="+std::to_string(info)+"\n"+std::string(__FILE__)+" line "+std::to_string(__LINE__));
+
+	// copy_down_triangle();
+}
+
+template<typename Tdata>
+void Inverse_Matrix<Tdata>::using_getrf()
+{
+	int info;
+	int nipiv = std::min(A.shape[0], A.shape[1]);
+	int *ipiv = new int[nipiv];
+	LapackConnector::getrf(A.shape[0], A.shape[1], A.ptr(), A.shape[0], ipiv, &info, A.shape[0]);
 	if(info)
 		throw std::range_error("info="+std::to_string(info)+"\n"+std::string(__FILE__)+" line "+std::to_string(__LINE__));
 
-	LapackConnector::potri('U', A.shape[0], A.ptr(), A.shape[0], info);
+	int lwork = A.shape[0];
+	Tdata* work = new Tdata[lwork];
+	LapackConnector::getri(A.shape[1], A.ptr(), A.shape[0], ipiv, work, lwork, &info, A.shape[0]);
 	if(info)
 		throw std::range_error("info="+std::to_string(info)+"\n"+std::string(__FILE__)+" line "+std::to_string(__LINE__));
-
-	copy_down_triangle();
 }
 
 /*

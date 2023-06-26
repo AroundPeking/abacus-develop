@@ -133,8 +133,14 @@ extern "C"
 
     // zgetrf computes the LU factorization of a general matrix
     // while zgetri takes its output to perform matrix inversion
-    void zgetrf_(const int* m, const int *n, std::complex<double> *A, const int *lda, int *ipiv, int* info);
-    void zgetri_(const int* n, std::complex<double>* A, const int* lda, const int* ipiv, std::complex<double>* work, const int* lwork, int* info);
+    void sgetrf_(const int* m, const int *n, const float *A, const int *lda, int *ipiv, const int* info);
+    void sgetri_(const int* n, float *A, const int *lda, int *ipiv, float *work, int *lwork, const int *info);
+    void dgetrf_(const int* m, const int *n, const double *A, const int *lda, int *ipiv, const int* info);
+    void dgetri_(const int* n, double *A, const int *lda, int *ipiv, double *work, int *lwork, const int *info);
+    void cgetrf_(const int* m, const int *n, const std::complex<float> *A, const int *lda, int *ipiv, const int* info);
+    void cgetri_(const int* n, std::complex<float> *A, const int *lda, int *ipiv, std::complex<float> *work, int *lwork, const int *info);
+    void zgetrf_(const int* m, const int *n, const std::complex<double> *A, const int *lda, int *ipiv, const int* info);
+    void zgetri_(const int* n, std::complex<double> *A, const int *lda, int *ipiv, std::complex<double> *work, int *lwork, const int *info);
 
     // if trans=='N':	C = alpha * A * A.H + beta * C
 	// if trans=='C':	C = alpha * A.H * A + beta * C
@@ -264,6 +270,34 @@ private:
         return aux;
     }
 
+    static inline
+    float* transpose(const float* a, const int n, const int lda, const int nbase_x)
+    {
+        float* aux = new float[lda*n];
+        for (int i = 0; i < n; ++i)
+        {
+            for (int j = 0; j < lda; ++j)
+            {
+                aux[j * n + i] = a[i * nbase_x + j];
+            }
+        }
+        return aux;
+    }
+
+    static inline
+    double* transpose(const double* a, const int n, const int lda, const int nbase_x)
+    {
+        double* aux = new double[lda*n];
+        for (int i = 0; i < n; ++i)
+        {
+            for (int j = 0; j < lda; ++j)
+            {
+                aux[j * n + i] = a[i * nbase_x + j];
+            }
+        }
+        return aux;
+    }
+
     // Transpose the fortran-form real-std::complex array to the std::complex matrix.
     static inline
     void transpose(const std::complex<double>* aux, ModuleBase::ComplexMatrix& a, const int n, const int lda)
@@ -293,6 +327,30 @@ private:
     // Transpose the fortran-form real-std::complex array to the std::complex matrix.
     static inline
     void transpose(const std::complex<double>* aux, std::complex<double>* a, const int n, const int lda, const int nbase_x)
+    {
+        for (int i = 0; i < n; ++i)
+        {
+            for (int j = 0; j < lda; ++j)
+            {
+                a[j * nbase_x + i] = aux[i * lda + j];		// aux[i*lda+j] means aux[i][j] in semantic, not in syntax!
+            }
+        }
+    }
+
+    static inline
+    void transpose(const float* aux, float* a, const int n, const int lda, const int nbase_x)
+    {
+        for (int i = 0; i < n; ++i)
+        {
+            for (int j = 0; j < lda; ++j)
+            {
+                a[j * nbase_x + i] = aux[i * lda + j];		// aux[i*lda+j] means aux[i][j] in semantic, not in syntax!
+            }
+        }
+    }
+
+    static inline
+    void transpose(const double* aux, double* a, const int n, const int lda, const int nbase_x)
     {
         for (int i = 0; i < n; ++i)
         {
@@ -351,7 +409,7 @@ public:
     }
 
     static inline
-    void zgetrf(int m, int n, ModuleBase::ComplexMatrix &a, const int lda, int *ipiv, int *info)
+    void getrf(int m, int n, ModuleBase::ComplexMatrix &a, const int lda, int *ipiv, int *info)
     {
         std::complex<double> *aux = LapackConnector::transpose(a, n, lda);
         zgetrf_( &m, &n, aux, &lda, ipiv, info);
@@ -360,11 +418,83 @@ public:
                 return;
     }
     static inline
-    void zgetri(int n, ModuleBase::ComplexMatrix &a,  int lda, int *ipiv, std::complex<double> * work, int lwork, int *info)
+    void getri(int n, ModuleBase::ComplexMatrix &a,  int lda, int *ipiv, std::complex<double> * work, int lwork, int *info)
     {
         std::complex<double> *aux = LapackConnector::transpose(a, n, lda);
         zgetri_( &n, aux, &lda, ipiv, work, &lwork, info);
         LapackConnector::transpose(aux, a, n, lda);
+        delete[] aux;
+        return;
+    }
+    static inline
+    void getrf(int m, int n, std::complex<double> *a, const int lda, int *ipiv, int *info, int nbase_x)
+    {
+        std::complex<double> *aux = LapackConnector::transpose(a, n, lda, nbase_x);
+        zgetrf_( &m, &n, aux, &lda, ipiv, info);
+        LapackConnector::transpose(aux, a, n, lda, nbase_x);
+        delete[] aux;
+                return;
+    }
+    static inline
+    void getri(int n, std::complex<double> *a,  int lda, int *ipiv, std::complex<double> * work, int lwork, int *info, int nbase_x)
+    {
+        std::complex<double> *aux = LapackConnector::transpose(a, n, lda, nbase_x);
+        zgetri_( &n, aux, &lda, ipiv, work, &lwork, info);
+        LapackConnector::transpose(aux, a, n, lda, nbase_x);
+        delete[] aux;
+        return;
+    }
+    static inline
+    void getrf(int m, int n, std::complex<float> *a, const int lda, int *ipiv, int *info, int nbase_x)
+    {
+        std::complex<float> *aux = LapackConnector::transpose(a, n, lda, nbase_x);
+        cgetrf_( &m, &n, aux, &lda, ipiv, info);
+        LapackConnector::transpose(aux, a, n, lda, nbase_x);
+        delete[] aux;
+                return;
+    }
+    static inline
+    void getri(int n, std::complex<float> *a,  int lda, int *ipiv, std::complex<float> * work, int lwork, int *info, int nbase_x)
+    {
+        std::complex<float> *aux = LapackConnector::transpose(a, n, lda, nbase_x);
+        cgetri_( &n, aux, &lda, ipiv, work, &lwork, info);
+        LapackConnector::transpose(aux, a, n, lda, nbase_x);
+        delete[] aux;
+        return;
+    }
+    static inline
+    void getrf(int m, int n, double *a, const int lda, int *ipiv, int *info, int nbase_x)
+    {
+        double *aux = LapackConnector::transpose(a, n, lda, nbase_x);
+        dgetrf_( &m, &n, aux, &lda, ipiv, info);
+        LapackConnector::transpose(aux, a, n, lda, nbase_x);
+        delete[] aux;
+                return;
+    }
+    static inline
+    void getri(int n, double *a,  int lda, int *ipiv, double * work, int lwork, int *info, int nbase_x)
+    {
+        double *aux = LapackConnector::transpose(a, n, lda, nbase_x);
+        dgetri_( &n, aux, &lda, ipiv, work, &lwork, info);
+        LapackConnector::transpose(aux, a, n, lda, nbase_x);
+        delete[] aux;
+        return;
+    }
+    static inline
+    void getrf(int m, int n, float *a, const int lda, int *ipiv, int *info, int nbase_x)
+    {
+        float *aux = LapackConnector::transpose(a, n, lda, nbase_x);
+        sgetrf_( &m, &n, aux, &lda, ipiv, info);
+        LapackConnector::transpose(aux, a, n, lda, nbase_x);
+        delete[] aux;
+                return;
+    }
+    static inline
+    void getri(int n, float *a,  int lda, int *ipiv, float * work, int lwork, int *info, int nbase_x)
+    {
+        float *aux = LapackConnector::transpose(a, n, lda, nbase_x);
+        sgetri_( &n, aux, &lda, ipiv, work, &lwork, info);
+        LapackConnector::transpose(aux, a, n, lda, nbase_x);
         delete[] aux;
         return;
     }
