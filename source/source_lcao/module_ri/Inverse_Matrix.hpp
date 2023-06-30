@@ -36,11 +36,11 @@ int Inverse_Matrix<Tdata>::using_potrf()
 		LapackConnector::potri('U', A.shape[0], A.ptr(), A.shape[0], info);
 		if(info)
 			throw std::range_error("info="+std::to_string(info)+"\n"+std::string(__FILE__)+" line "+std::to_string(__LINE__));
-		copy_down_triangle();
 	}
 	else if(info<0)
 		throw std::range_error("info="+std::to_string(info)+"\n"+std::string(__FILE__)+" line "+std::to_string(__LINE__));
 	
+	copy_down_triangle();
 	return info;
 	// if(info)
 	// 	throw std::range_error("info="+std::to_string(info)+"\n"+std::string(__FILE__)+" line "+std::to_string(__LINE__));
