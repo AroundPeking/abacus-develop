@@ -23,7 +23,10 @@ void Inverse_Matrix<Tdata>::cal_inverse()//const Method &method )
 	int info;
 	info = using_potrf();
 	if(info>0)
+	{
+		ModuleBase::WARNING("cal_inverse", "The matrix is not a positive-definite matrix!");
 		using_getrf();
+	}
 }
 
 template<typename Tdata>
