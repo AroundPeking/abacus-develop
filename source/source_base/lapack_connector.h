@@ -408,6 +408,42 @@ public:
         delete[] aux;
     }
 
+
+    static inline
+	void getev(const char jobz, 
+                const char uplo, 
+                const int n, 
+                double* a, 
+                const int lda, 
+                double* w,
+                int *info)		
+	{
+        const int lwork = 2*n;
+        double *work = new double[lwork];
+        double *aux = LapackConnector::transpose(a, n, lda, n);
+        dsyev_(&jobz, &uplo, &n, aux, &lda, w, work, &lwork, info);	
+        LapackConnector::transpose(aux, a, n, lda, n);
+        delete[] aux;
+	}
+
+    static inline
+	void getev(const char jobz, 
+                const char uplo, 
+                const int n, 
+                std::complex< double >* a, 
+                const int lda, 
+                double* w,
+                int *info)		
+	{
+        const int lwork = 2*n;
+        std::complex< double > *work = new std::complex< double >[lwork];
+        double *rwork = new double[3*n-2];
+        std::complex<double> *aux = LapackConnector::transpose(a, n, lda, n);
+        zheev_(&jobz, &uplo, &n, aux, &lda, w, work, &lwork, rwork, info);
+        LapackConnector::transpose(aux, a, n, lda, n);
+        delete[] aux;
+	}
+
     static inline
     void getrf(int m, int n, ModuleBase::ComplexMatrix &a, const int lda, int *ipiv, int *info)
     {
@@ -415,7 +451,7 @@ public:
         zgetrf_( &m, &n, aux, &lda, ipiv, info);
         LapackConnector::transpose(aux, a, n, lda);
         delete[] aux;
-                return;
+        return;
     }
     static inline
     void getri(int n, ModuleBase::ComplexMatrix &a,  int lda, int *ipiv, std::complex<double> * work, int lwork, int *info)

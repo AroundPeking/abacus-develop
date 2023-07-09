@@ -25,7 +25,9 @@ void Inverse_Matrix<Tdata>::cal_inverse()//const Method &method )
 	if(info>0)
 	{
 		ModuleBase::WARNING("cal_inverse", "The matrix is not a positive-definite matrix!");
-		using_getrf();
+		using_getev();
+		// using_getrf();
+		using_getev(1e-14);
 	}
 }
 
@@ -72,28 +74,49 @@ void Inverse_Matrix<Tdata>::using_getrf()
 		throw std::range_error("info="+std::to_string(info)+"\n"+std::string(__FILE__)+" line "+std::to_string(__LINE__));
 }
 
-/*
-void Inverse_Matrix::using_syev( const double &threshold_condition_number )
+template<typename Tdata>
+void Inverse_Matrix<Tdata>::using_getev(const double &threshold_condition_number)
 {
-	std::vector<double> eigen_value(A.nr);
-	LapackConnector::dsyev('V','U',A,eigen_value.data(),info);
+	int info;
+	std::vector<double> eigen_value(A.shape[0]);
+	LapackConnector::getev('V','U',A.shape[0], A.ptr(), A.shape[1], eigen_value.data(),&info);
 
 	double eigen_value_max = 0;
-	for( const double &ie : eigen_value )
-		eigen_value_max = std::max( ie, eigen_value_max );
-	const double threshold = eigen_value_max * threshold_condition_number;
+    for (const auto &ie : eigen_value)
+        eigen_value_max = std::max(std::abs(ie), eigen_value_max);
+    const double threshold = eigen_value_max * threshold_condition_number;
 
-	ModuleBase::matrix eA( A.nr, A.nc );
-	int ie=0;
-	for( int i=0; i!=A.nr; ++i )
-		if( eigen_value[i] > threshold )
+    RI::Tensor<Tdata> eA({A.shape[0], A.shape[1]});
+    int ie = 0;
+    for (int i = 0; i != A.shape[0]; ++i)
+        if (std::abs(eigen_value[i]) > threshold) 
 		{
-			BlasConnector::axpy( A.nc, sqrt(1.0/eigen_value[i]), A.c+i*A.nc,1, eA.c+ie*eA.nc,1 );
-			++ie;
-		}
-	BlasConnector::gemm( 'T','N', eA.nc,eA.nc,ie, 1, eA.c,eA.nc, eA.c,eA.nc, 0, A.c,A.nc );
+            BlasConnector::axpy(A.shape[1], std::sqrt(1.0 / eigen_value[i]), A.ptr() + i * A.shape[1], 1, A.ptr() + ie * eA.shape[1], 1);
+            ++ie;
+        }
+    BlasConnector::gemm('C', 'N', eA.shape[1], eA.shape[1], ie, 1.0, eA.ptr(), eA.shape[1], eA.ptr(), eA.shape[1], 0.0, A.ptr(), A.shape[1]);	
 }
-*/
+
+// void Inverse_Matrix::using_syev( const double &threshold_condition_number )
+// {
+// 	std::vector<double> eigen_value(A.nr);
+// 	LapackConnector::dsyev('V','U',A,eigen_value.data(),info);
+
+// 	double eigen_value_max = 0;
+// 	for( const double &ie : eigen_value )
+// 		eigen_value_max = std::max( ie, eigen_value_max );
+// 	const double threshold = eigen_value_max * threshold_condition_number;
+
+// 	ModuleBase::matrix eA( A.nr, A.nc );
+// 	int ie=0;
+// 	for( int i=0; i!=A.nr; ++i )
+// 		if( eigen_value[i] > threshold )
+// 		{
+// 			BlasConnector::axpy( A.nc, std::sqrt(1.0/eigen_value[i]), A.c+i*A.nc,1, eA.c+ie*eA.nc,1 );
+// 			++ie;
+// 		}
+// 	BlasConnector::gemm( 'T','N', eA.nc,eA.nc,ie, 1, eA.c,eA.nc, eA.c,eA.nc, 0, A.c,A.nc );
+// }
 
 template<typename Tdata>
 void Inverse_Matrix<Tdata>::input( const RI::Tensor<Tdata> &m )

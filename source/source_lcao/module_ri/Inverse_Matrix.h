@@ -24,6 +24,7 @@ public:
 private:
 	int using_potrf();
 	void using_getrf();
+	void using_getev(const double &threshold_condition_number);
 	void copy_down_triangle();
 	RI::Tensor<Tdata> A;
 };
