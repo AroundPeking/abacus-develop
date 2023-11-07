@@ -26,7 +26,8 @@ namespace Wavefunc_in_pw
 		ModuleBase::realArray &table_local); // used for exx abfs
 
 	void write_table_local(
-		const ModuleBase::realArray &table_local
+		const ModuleBase::realArray &table_local,
+		std::string filename
 	)
 
 	void integral(

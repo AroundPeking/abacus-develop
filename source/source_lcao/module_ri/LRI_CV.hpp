@@ -15,6 +15,8 @@
 #include "../../source_base/timer.h"
 #include "../../source_pw/module_pwdft/global.h"
 #include <RI/global/Global_Func-1.h>
+#include "module_hamilt_lcao/hamilt_lcaodft/wavefunc_in_pw.h"
+#include "module_base/realarray.h"
 #include <omp.h>
 
 template<typename Tdata>
@@ -467,5 +469,38 @@ LRI_CV<Tdata>::DPcal_C_dC(
 	} // end else (!(C_read && flag_finish_dC))
 }
 
+
+template<typename Tdata>
+RI::Tensor<Tdata>
+LRI_CV<Tdata>::DPcal_V_lcq()
+{
+	// abfs projection to plane wave
+	int nmax_total_abfs = this->get_nmax_total(this->abfs);
+	ModuleBase::realArray table_local_abfs(this->abfs.size(), nmax_total_abfs, GlobalV::NQX);
+	Wavefunc_in_pw::make_table_q(this->abfs, table_local_abfs); 
+
+	// abfs_cpp projection to plane wave
+	int nmax_total_abfs_ccp = this->get_nmax_total(this->abfs_ccp);
+	ModuleBase::realArray table_local_abfs_cpp(this->abfs_ccp.size(), nmax_total_abfs_ccp, GlobalV::NQX);
+	Wavefunc_in_pw::make_table_q(this->abfs_ccp, table_local_abfs_cpp); 
+
+	
+}
+
+template<typename Tdata>
+int
+LRI_CV<Tdata>::get_nmax_total(const std::vector<std::vector<std::vector<Numerical_Orbital_Lm>>> &orb_in)
+{
+	int max_value = std::numeric_limits<int>::min();
+	for(const auto &outer_vec : orb_in)
+	{
+		for(const auto &value : outer_vec)
+		{
+			if(value > max_value)
+				max_value = value;
+		}
+	}
+	return max_value;
+}
 
 #endif
