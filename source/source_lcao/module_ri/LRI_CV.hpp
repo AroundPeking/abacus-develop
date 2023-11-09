@@ -18,6 +18,7 @@
 #include "module_hamilt_lcao/hamilt_lcaodft/wavefunc_in_pw.h"
 #include "module_base/realarray.h"
 #include <omp.h>
+#include<algorithm>
 
 template<typename Tdata>
 LRI_CV<Tdata>::LRI_CV()
@@ -470,37 +471,114 @@ LRI_CV<Tdata>::DPcal_C_dC(
 }
 
 
-template<typename Tdata>
-RI::Tensor<Tdata>
-LRI_CV<Tdata>::DPcal_V_lcq()
+template<typename Tdata template<typename Tresult>
+std::map<TA,std::map<TAC,Tresult>>
+LRI_CV<Tdata>::cal_Vq1(const K_Vectors& kv,
+						const ModulePW::PW_Basis_K* wfc_basis,
+						const Structure_Factor& sf,
+						const std::vector<TA> &list_A0,
+						const std::vector<TAC> &list_A1,)
 {
-	// abfs projection to plane wave
-	int nmax_total_abfs = this->get_nmax_total(this->abfs);
-	ModuleBase::realArray table_local_abfs(this->abfs.size(), nmax_total_abfs, GlobalV::NQX);
-	Wavefunc_in_pw::make_table_q(this->abfs, table_local_abfs); 
+	ModuleBase::TITLE("LRI_CV","cal_Vq1");
 
-	// abfs_cpp projection to plane wave
-	int nmax_total_abfs_ccp = this->get_nmax_total(this->abfs_ccp);
-	ModuleBase::realArray table_local_abfs_cpp(this->abfs_ccp.size(), nmax_total_abfs_ccp, GlobalV::NQX);
-	Wavefunc_in_pw::make_table_q(this->abfs_ccp, table_local_abfs_cpp); 
+	for(size_t ik=0; ik!=kv.nkstot_full, ++ik)
+	{
+		const int npw = wfc_basis->npwk[ik];
+		ModuleBase::Vector3<double> kpoints = kv.kvec_c[ik];
+		ModuleBase::ComplexMatrix abfs_in_G = this->get_orb_q(const K_Vectors& kv,const ModulePW::PW_Basis_K* wfc_basis,const Structure_Factor& sf, this->abfs);
+		ModuleBase::ComplexMatrix abfs_ccp_in_G = this->get_orb_q(const K_Vectors& kv,const ModulePW::PW_Basis_K* wfc_basis,const Structure_Factor& sf, this->abfs_ccp);
 
-	
+		//#pragma omp parallel
+		for(size_t i0=0; i0!=list_A0.size(); ++i0)
+		{
+			//#pragma omp for schedule(dynamic) nowait
+			for(size_t i1=0; i1!=list_A1.size(); ++i1)
+			{
+				const TA iat0 = list_A0[i0];
+				const TA iat1 = list_A1[i1].first;
+				const TC &cell1 = list_A1[i1].second;
+				const int it0 = GlobalC::ucell.iat2it[iat0];
+				const int ia0 = GlobalC::ucell.iat2ia[iat0];
+				const int it1 = GlobalC::ucell.iat2it[iat1];
+				const int ia1 = GlobalC::ucell.iat2ia[iat1];
+				const ModuleBase::Vector3<double> tau0 = GlobalC::ucell.atoms[it0].tau[ia0];
+				const ModuleBase::Vector3<double> tau1 = GlobalC::ucell.atoms[it1].tau[ia1];
+				const double Rcut = std::min(
+					GlobalC::ORB.Phi[it0].getRcut() * rmesh_times + GlobalC::ORB.Phi[it1].getRcut(),
+					GlobalC::ORB.Phi[it1].getRcut() * rmesh_times + GlobalC::ORB.Phi[it0].getRcut());
+				const Abfs::Vector3_Order<double> R_delta = -tau0+tau1+(RI_Util::array3_to_Vector3(cell1)*GlobalC::ucell.latvec);
+				if( R_delta.norm()*GlobalC::ucell.lat0 < Rcut )
+				{
+					Atom* atom0 = &GlobalC::ucell.atoms[it0];
+					Atom* atom1 = &GlobalC::ucell.atoms[it1];
+					double phase = std::exp(ModuleBase::IMAG_UNIT*kpoints*R_delta);
+
+					// TODO: can we use orb function to find abfs?
+					for(size_t j0=0; j0!=atom0->nw; ++j0)
+					{
+						const int iw0 = GlobalC::ucell.itiaiw2iwt(it0, ia0, j0);
+						for(size_t j1=0; j1!=atom1->nw; ++j1)
+						{
+							const int iw1 = GlobalC::ucell.itiaiw2iwt(it1, ia1, j1);
+							ModuleBase::ComplexMatrix data();
+							for(size_t ig=0; ig!=npw; ++ig)
+								data = std::conj(abfs_in_G(iw0, ig))*abfs_ccp_in_G(iw1, ig);
+						}
+					}
+					
+					//#pragma omp critical(LRI_CV_cal_datas)
+				}
+			}
+		}
+	}
+	}
+}
+
+
+template<typename Tdata>
+ModuleBase::ComplexMatrix
+LRI_CV<Tdata>::get_orb_q(const K_Vectors& kv, 
+						   const ModulePW::PW_Basis_K* wfc_basis, 
+						   const Structure_Factor& sf, 
+						   const std::vector<std::vector<std::vector<Numerical_Orbital_Lm>>> &orb_in,
+						   )
+{
+	// projection to plane wave
+	int nmax_total = this->get_nmax_total(orb_in);
+	ModuleBase::realArray table_local(orb_in.size(), nmax_total, GlobalV::NQX);
+	Wavefunc_in_pw::make_table_q(orb_in, table_local); 
+
+	for(size_t ik=0; ik!=kv.nkstot_full, ++ik)
+	{
+		const int npw = wfc_basis->npwk[ik];
+		//const int npw = kv.ngk[ik];
+		std::vector<ModuleBase::Vector3<double>> gk(npw, ModuleBase::Vector3<double>(0, 0, 0));
+
+		for(size_t ig=0; ig!=npw; ++ig)
+			gk[ig] = wfc_basis->getgcar(ik, ig) - kv.kvec_c[ik];
+
+		// TODO: wrong dimension, do not use GlobalV::NLOCAL
+		ModuleBase::ComplexMatrix orb_in_G(GlobalV::NLOCAL/GlobalV::NPOL, npw); // ecut to restrict npwx?
+		Wavefunc_in_pw::produce_local_basis_in_pw(ik, gk, orb_in, wfc_basis, sf, orb_in_G, table_local);
+	}
+	return orb_in_G;
 }
 
 template<typename Tdata>
 int
 LRI_CV<Tdata>::get_nmax_total(const std::vector<std::vector<std::vector<Numerical_Orbital_Lm>>> &orb_in)
 {
-	int max_value = std::numeric_limits<int>::min();
-	for(const auto &outer_vec : orb_in)
+	std::vector<int> nmax_vec(orb_in.size());
+	for(size_t T=0; T!=orb_in.size(); ++T)
 	{
-		for(const auto &value : outer_vec)
+		for(const auto &value : orb_in[T])
 		{
-			if(value > max_value)
-				max_value = value;
+			for(const auto &sub_value : value)
+				++nmax_vec[T];
 		}
 	}
-	return max_value;
+	int nmax_total = *max_element(nmax_vec.begin(), nmax_vec.end())
+	
+	return nmax_total;
 }
-
 #endif

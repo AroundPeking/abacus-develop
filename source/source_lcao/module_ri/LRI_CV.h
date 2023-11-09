@@ -8,9 +8,12 @@
 
 #include "Matrix_Orbs11.h"
 #include "Matrix_Orbs21.h"
-#include "source_basis/module_ao/ORB_atomic_lm.h"
-#include "source_base/abfs-vector3_order.h"
-#include "source_base/element_basis_index.h"
+#include "module_basis/module_ao/ORB_atomic_lm.h"
+#include "module_base/abfs-vector3_order.h"
+#include "module_base/element_basis_index.h"
+#include "module_cell/klist.h"
+#include "module_basis/module_pw/pw_basis_k.h"
+#include "module_hamilt_pw/hamilt_pwdert/structure_factor.h"
 
 #include <RI/global/Tensor.h>
 #include <RI/global/Global_Func-2.h>
@@ -135,10 +138,11 @@ private:
 		std::map<int,std::map<int,std::map<Abfs::Vector3_Order<double>,To11>>> &o11ws,
 		const Tfunc &func_cal_o11);
 
-	inline RI::Tensor<Tdata>
-	DPcal_V_lcq();
-
 	int get_nmax_total(const std::vector<std::vector<std::vector<Numerical_Orbital_Lm>>> &orb_in);
+	ModuleBase::ComplexMatrix get_orb_q(const K_Vectors& kv, 
+					const ModulePW::PW_Basis_K* wfc_basis, 
+					const Structure_Factor& sf, 
+					const std::vector<std::vector<std::vector<Numerical_Orbital_Lm>>> &orb_in);
 };
 
 #include "LRI_CV.hpp"
