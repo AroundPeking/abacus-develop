@@ -502,50 +502,66 @@ void Exx_Abfs::Construct_Orbs::print_orbs_size(
 	}
 }
 
-std::vector<std::vector<std::vector<double>>> Exx_Abfs::Construct_Orbs::get_multipole(
-    const std::vector<std::vector<std::vector<Numerical_Orbital_Lm>>>& orb_in)
+
+std::map<int, int> Exx_Abfs::Construct_Orbs::get_nw(const std::vector<std::vector<std::vector<Numerical_Orbital_Lm>>> &orb_in)
 {
-    std::vector<std::vector<std::vector<double>>> multipole;
-    multipole.resize(orb_in.size());
-    for (size_t T = 0; T != orb_in.size(); ++T)
-    {
-        multipole[T].resize(orb_in[T].size());
-        for (size_t L = 0; L != orb_in[T].size(); ++L)
-        {
-            multipole[T][L].resize(orb_in[T][L].size());
-            for (size_t N = 0; N != orb_in[T][L].size(); ++N)
-            {
-                const Numerical_Orbital_Lm& orb_lm = orb_in[T][L][N];
-                const int nr = orb_lm.getNr();
-                double* integrated_func = new double[nr];
-                for (size_t ir = 0; ir != nr; ++ir)
-                    integrated_func[ir] = orb_lm.getPsi(ir) * std::pow(orb_lm.getRadial(ir), 2 + L) / (2 * L + 1);
-
-                ModuleBase::Integral::Simpson_Integral(nr, integrated_func, orb_lm.getRab(), multipole[T][L][N]);
-            }
-        }
-    }
-
-    return multipole;
+	std::map<int, std::map<int, int>> data;
+	for(size_t T=0; T!=orb_in.size(); ++T)
+	{
+		int num = 0;
+		for(size_t L=0; L!=orb_in[T].size(); ++L)
+		{
+			for(size_t N=0; N!=orb_in[T][L].size(); ++N)
+				++num;
+		}
+		data[T] = num;
+	}
+	return data;
 }
 
-std::vector<double> Exx_Abfs::Construct_Orbs::get_Rcut(const std::vector<std::vector<std::vector<Numerical_Orbital_Lm>>>& orb_in)
+int Exx_Abfs::Construct_Orbs::get_nmax_total(const std::vector<std::vector<std::vector<Numerical_Orbital_Lm>>> &orb_in)
 {
-    std::vector<double> Rcut(orb_in.size());
-    for (size_t T = 0; T != orb_in.size(); ++T)
-    {
-        double rmax = std::numeric_limits<double>::min();
-        for (size_t L = 0; L != orb_in[T].size(); ++L)
-        {
-            for (size_t N = 0; N != orb_in[T][L].size(); ++N)
-            {
-                const double rcut = orb_in[T][L][N].getRcut();
-                if (rcut > rmax)
-                    rmax = rcut;
-            }
-        }
-        Rcut[T] = rmax;
-    }
+	std::vector<int> nmax_vec(orb_in.size());
+	for(size_t T=0; T!=orb_in.size(); ++T)
+	{
+		for(size_t L=0; L!=orb_in[T].size(); ++L)
+		{
+			for(size_t N=0; N!=orb_in[T][L].size(); ++N)
+				++nmax_vec[T];
+		}
+	}
+	int nmax_total = *max_element(nmax_vec.begin(), nmax_vec.end())
+	
+	return nmax_total;
+}
 
-    return Rcut;
+int Exx_Abfs::Construct_Orbs::get_norb(const std::vector<std::vector<std::vector<Numerical_Orbital_Lm>>> &orb_in)
+{
+	int num = 0;
+	for(size_t T=0; T!=orb_in.size(); ++T)
+	{
+		for(size_t L=0; L!=orb_in[T].size(); ++L)
+		{
+			for(size_t N=0; N!=orb_in[T][L].size(); ++N)
+				++num;
+		}
+	}
+	return num;
+}
+
+std::vector<int> Exx_Abfs::Construct_Orbs::get_iat2iwt(const std::vector<std::vector<std::vector<Numerical_Orbital_Lm>>> &orb_in)
+{
+	std::vector<int> iat2iwt(GlobalC::ucell.nat);
+	int iat=0;
+	int iwt=0;
+	for(size_t it=0; it!=orb_in.size(); ++it)
+	{
+		for(int ia=0; ia<GlobalC::ucell.atoms[it].na; ia++)
+		{
+			iat2iwt[iat] = iwt;
+			iwt += this>get_nw(orb_in)[it];
+			++iat;
+		}	
+	}
+	return iat2iwt;
 }

@@ -31,33 +31,17 @@ public:
 		const UnitCell& ucell,
 		const std::vector<std::vector<std::vector<Numerical_Orbital_Lm>>> &orbs,
 		std::ostream &os);		
-
-    // get the max number of orbitals among all elements
-    // static int get_nmax_total(const
-    // std::vector<std::vector<std::vector<Numerical_Orbital_Lm>>> &orb_in); get
-    // number of orbitals for each element static std::map<int, int>
-    // get_nw(const std::vector<std::vector<std::vector<Numerical_Orbital_Lm>>>
-    // &orb_in);
-
-    // get multipole of orbitals for each element and angular moment
-    static std::vector<std::vector<std::vector<double>>> get_multipole(
-        const std::vector<std::vector<std::vector<Numerical_Orbital_Lm>>>&
-            orb_in);
-
-    static std::vector<double> get_Rcut(
-        const std::vector<std::vector<std::vector<Numerical_Orbital_Lm>>>&
-            orb_in);
-    static inline double get_Rmax(const std::vector<double>& rcut) {
-        return *std::max_element(rcut.begin(), rcut.end());
-    }
-    static inline double get_Rmax(
-        const std::vector<std::vector<std::vector<Numerical_Orbital_Lm>>>&
-            orb_in) {
-        std::vector<double> rcut = get_Rcut(orb_in);
-        return get_Rmax(rcut);
-    }
-
-  private:
+	
+	static int get_nmax_total(const std::vector<std::vector<std::vector<Numerical_Orbital_Lm>>> &orb_in); // get the max number of orbitals among all elements
+	static std::map<int, int> get_nw(const std::vector<std::vector<std::vector<Numerical_Orbital_Lm>>> &orb_in); // get number of orbitals for each element 
+	static int get_norb(const std::vector<std::vector<std::vector<Numerical_Orbital_Lm>>> &orb_in); // get total number of orbitals
+	static std::vector<int> get_iat2iwt(const std::vector<std::vector<std::vector<Numerical_Orbital_Lm>>> &orb_in) // // iat ==> iwt, the first global index for orbital of this atom
+	static inline int get_itiaiw2iwt(const std::vector<std::vector<std::vector<Numerical_Orbital_Lm>>> &orb_in, const int &it, const int &ia, const int &iw) // indexing tool for find orbital global index from it,ia,iw 
+	{
+		return get_iat2iwt(orb_in)[GlobalC::ucell.itia2iat(it, ia)] + iw;
+	}
+		
+private:
 	static std::vector<std::vector<std::vector<std::vector<double>>>> psi_mult_psi( 
 		const std::vector<std::vector<std::vector<Numerical_Orbital_Lm>>> &lcaos );
 		

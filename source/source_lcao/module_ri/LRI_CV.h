@@ -11,6 +11,7 @@
 #include "module_basis/module_ao/ORB_atomic_lm.h"
 #include "module_base/abfs-vector3_order.h"
 #include "module_base/element_basis_index.h"
+#include "module_base/complexmatrix.h"
 #include "module_cell/klist.h"
 #include "module_basis/module_pw/pw_basis_k.h"
 #include "module_hamilt_pw/hamilt_pwdert/structure_factor.h"
@@ -138,11 +139,18 @@ private:
 		std::map<int,std::map<int,std::map<Abfs::Vector3_Order<double>,To11>>> &o11ws,
 		const Tfunc &func_cal_o11);
 
-	int get_nmax_total(const std::vector<std::vector<std::vector<Numerical_Orbital_Lm>>> &orb_in);
-	ModuleBase::ComplexMatrix get_orb_q(const K_Vectors& kv, 
-					const ModulePW::PW_Basis_K* wfc_basis, 
-					const Structure_Factor& sf, 
-					const std::vector<std::vector<std::vector<Numerical_Orbital_Lm>>> &orb_in);
+	ModuleBase::ComplexMatrix 
+	get_orb_q(const K_Vectors& kv, 
+			const ModulePW::PW_Basis_K* wfc_basis, 
+			const Structure_Factor& sf, 
+			const std::vector<std::vector<std::vector<Numerical_Orbital_Lm>>> &orb_in);
+
+	std::vector<std::map<TA,std::map<TAC,ModuleBase::ComplexMatrix>>>
+	cal_Vq1(const K_Vectors& kv,
+			const ModulePW::PW_Basis_K* wfc_basis,
+			const Structure_Factor& sf,
+			const std::vector<TA> &list_A0,
+			const std::vector<TAC> &list_A1);
 };
 
 #include "LRI_CV.hpp"

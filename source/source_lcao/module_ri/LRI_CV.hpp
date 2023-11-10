@@ -8,7 +8,7 @@
 
 #include "LRI_CV.h"
 #include "LRI_CV_Tools.h"
-#include "exx_abfs-abfs_index.h"
+#include "module_ri/exx_abfs-abfs_index.h"
 #include "exx_abfs-construct_orbs.h"
 #include "RI_Util.h"
 #include "../../source_base/tool_title.h"
@@ -471,22 +471,26 @@ LRI_CV<Tdata>::DPcal_C_dC(
 }
 
 
-template<typename Tdata template<typename Tresult>
-std::map<TA,std::map<TAC,Tresult>>
+template<typename Tdata>
+std::vector<std::map<TA,std::map<TAC,ModuleBase::ComplexMatrix>>>
 LRI_CV<Tdata>::cal_Vq1(const K_Vectors& kv,
 						const ModulePW::PW_Basis_K* wfc_basis,
 						const Structure_Factor& sf,
 						const std::vector<TA> &list_A0,
-						const std::vector<TAC> &list_A1,)
+						const std::vector<TAC> &list_A1)
 {
 	ModuleBase::TITLE("LRI_CV","cal_Vq1");
+
+	std::vector<std::map<TA,std::map<TAC,ModuleBase::ComplexMatrix>>> datas;
+	datas.resize(kv.nkstot_full);
 
 	for(size_t ik=0; ik!=kv.nkstot_full, ++ik)
 	{
 		const int npw = wfc_basis->npwk[ik];
-		ModuleBase::Vector3<double> kpoints = kv.kvec_c[ik];
 		ModuleBase::ComplexMatrix abfs_in_G = this->get_orb_q(const K_Vectors& kv,const ModulePW::PW_Basis_K* wfc_basis,const Structure_Factor& sf, this->abfs);
 		ModuleBase::ComplexMatrix abfs_ccp_in_G = this->get_orb_q(const K_Vectors& kv,const ModulePW::PW_Basis_K* wfc_basis,const Structure_Factor& sf, this->abfs_ccp);
+		std::map<int, int> abfs_nw = Exx_Abfs::Construct_Orbs::get_nw(this->abfs);
+		std::map<int, int> abfs_ccp_nw = Exx_Abfs::Construct_Orbs::get_nw(this->abfs_ccp);
 
 		//#pragma omp parallel
 		for(size_t i0=0; i0!=list_A0.size(); ++i0)
@@ -509,28 +513,30 @@ LRI_CV<Tdata>::cal_Vq1(const K_Vectors& kv,
 				const Abfs::Vector3_Order<double> R_delta = -tau0+tau1+(RI_Util::array3_to_Vector3(cell1)*GlobalC::ucell.latvec);
 				if( R_delta.norm()*GlobalC::ucell.lat0 < Rcut )
 				{
-					Atom* atom0 = &GlobalC::ucell.atoms[it0];
-					Atom* atom1 = &GlobalC::ucell.atoms[it1];
-					double phase = std::exp(ModuleBase::IMAG_UNIT*kpoints*R_delta);
-
-					// TODO: can we use orb function to find abfs?
-					for(size_t j0=0; j0!=atom0->nw; ++j0)
+					int abfs_nw_t = abfs_nw[it0];
+					int abfs_ccp_nw_t = abfs_nw[it0];
+					ModuleBase::ComplexMatrix data(abfs_nw_t, abfs_ccp_nw_t, true);
+					
+					for(size_t j0=0; j0!=abfs_nw_t; ++j0)
 					{
-						const int iw0 = GlobalC::ucell.itiaiw2iwt(it0, ia0, j0);
-						for(size_t j1=0; j1!=atom1->nw; ++j1)
+						const int iw0 = Exx_Abfs::Construct_Orbs::get_itiaiw2iwt(it0, ia0, j0);
+						for(size_t j1=0; j1!=abfs_ccp_nw_t; ++j1)
 						{
-							const int iw1 = GlobalC::ucell.itiaiw2iwt(it1, ia1, j1);
-							ModuleBase::ComplexMatrix data();
+							const int iw1 = Exx_Abfs::Construct_Orbs::get_itiaiw2iwt(it1, ia1, j1);
 							for(size_t ig=0; ig!=npw; ++ig)
-								data = std::conj(abfs_in_G(iw0, ig))*abfs_ccp_in_G(iw1, ig);
+							{
+								ModuleBase::Vector3<double> gk = wfc_basis->getgcar(ik, ig) - kv.kvec_c[ik];
+								std::complex<double> phase = std::exp(ModuleBase::IMAG_UNIT*gk*R_delta);
+								data(iw0, iw1) += std::conj(abfs_in_G(iw0, ig)) * abfs_ccp_in_G(iw1, ig) * phase;
+							}
 						}
 					}
 					
+					datas[ik][list_A0[i0]][list_A1[i1]] = data * phase;
 					//#pragma omp critical(LRI_CV_cal_datas)
 				}
 			}
 		}
-	}
 	}
 }
 
@@ -544,9 +550,10 @@ LRI_CV<Tdata>::get_orb_q(const K_Vectors& kv,
 						   )
 {
 	// projection to plane wave
-	int nmax_total = this->get_nmax_total(orb_in);
+	int nmax_total = Exx_Abfs::Construct_Orbs::get_nmax_total(orb_in);
 	ModuleBase::realArray table_local(orb_in.size(), nmax_total, GlobalV::NQX);
 	Wavefunc_in_pw::make_table_q(orb_in, table_local); 
+	int norb = Exx_Abfs::Construct_Orbs::get_norb(orb_in);
 
 	for(size_t ik=0; ik!=kv.nkstot_full, ++ik)
 	{
@@ -557,28 +564,9 @@ LRI_CV<Tdata>::get_orb_q(const K_Vectors& kv,
 		for(size_t ig=0; ig!=npw; ++ig)
 			gk[ig] = wfc_basis->getgcar(ik, ig) - kv.kvec_c[ik];
 
-		// TODO: wrong dimension, do not use GlobalV::NLOCAL
-		ModuleBase::ComplexMatrix orb_in_G(GlobalV::NLOCAL/GlobalV::NPOL, npw); // ecut to restrict npwx?
+		ModuleBase::ComplexMatrix orb_in_G(norb, npw); // ecut to restrict npwx?
 		Wavefunc_in_pw::produce_local_basis_in_pw(ik, gk, orb_in, wfc_basis, sf, orb_in_G, table_local);
 	}
 	return orb_in_G;
-}
-
-template<typename Tdata>
-int
-LRI_CV<Tdata>::get_nmax_total(const std::vector<std::vector<std::vector<Numerical_Orbital_Lm>>> &orb_in)
-{
-	std::vector<int> nmax_vec(orb_in.size());
-	for(size_t T=0; T!=orb_in.size(); ++T)
-	{
-		for(const auto &value : orb_in[T])
-		{
-			for(const auto &sub_value : value)
-				++nmax_vec[T];
-		}
-	}
-	int nmax_total = *max_element(nmax_vec.begin(), nmax_vec.end())
-	
-	return nmax_total;
 }
 #endif
