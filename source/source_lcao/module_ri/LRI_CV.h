@@ -67,6 +67,13 @@ public:
 	
 	size_t get_index_abfs_size(const size_t &iat){return this->index_abfs[iat].count_size; }
 
+	
+	std::map<TA,std::map<TAC,RI::Tensor<Tdata>>>
+	cal_Vs_ewald(const K_Vectors& kv,
+			const std::vector<TA> &list_A0,
+			const std::vector<TAC> &list_A1,
+			std::vector<std::map<TA,std::map<TA,RI::Tensor<Tdata>>>>& Vq);
+
 private:
 	std::vector<std::vector<std::vector<Numerical_Orbital_Lm>>> lcaos;
 	std::vector<std::vector<std::vector<Numerical_Orbital_Lm>>> abfs;
@@ -145,12 +152,21 @@ private:
 			const Structure_Factor& sf, 
 			const std::vector<std::vector<std::vector<Numerical_Orbital_Lm>>> &orb_in);
 
-	std::vector<std::map<TA,std::map<TAC,ModuleBase::ComplexMatrix>>>
+	std::vector<std::map<TA,std::map<TA,RI::Tensor<Tdata>>>>
 	cal_Vq1(const K_Vectors& kv,
 			const ModulePW::PW_Basis_K* wfc_basis,
 			const Structure_Factor& sf,
 			const std::vector<TA> &list_A0,
-			const std::vector<TAC> &list_A1);
+			const std::vector<TAC> &list_A1,
+			const double &frac);
+
+	std::vector<std::map<TA,std::map<TA,RI::Tensor<Tdata>>>>
+	cal_Vq2(const K_Vectors& kv,
+			const std::vector<TA> &list_A0,
+			const std::vector<TAC> &list_A1,
+			std::map<TA,std::map<TAC,RI::Tensor<Tdata>>>& Vs,
+			const double &frac);
+
 };
 
 #include "LRI_CV.hpp"
