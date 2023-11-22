@@ -161,7 +161,7 @@ private:
 		std::map<int,std::map<int,std::map<Abfs::Vector3_Order<double>,To11>>> &o11ws,
 		const Tfunc &func_cal_o11);
 
-	ModuleBase::ComplexMatrix 
+	std::vector<ModuleBase::ComplexMatrix>
 	get_orb_q(const K_Vectors* kv, 
 			const ModulePW::PW_Basis_K* wfc_basis, 
 			const Structure_Factor& sf, 
