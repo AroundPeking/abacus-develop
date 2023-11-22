@@ -135,8 +135,6 @@ extern "C"
     // while zgetri takes its output to perform matrix inversion
     void sgetrf_(const int* m, const int *n, const float *A, const int *lda, int *ipiv, const int* info);
     void sgetri_(const int* n, float *A, const int *lda, int *ipiv, float *work, int *lwork, const int *info);
-    void dgetrf_(const int* m, const int *n, const double *A, const int *lda, int *ipiv, const int* info);
-    void dgetri_(const int* n, double *A, const int *lda, int *ipiv, double *work, int *lwork, const int *info);
     void cgetrf_(const int* m, const int *n, const std::complex<float> *A, const int *lda, int *ipiv, const int* info);
     void cgetri_(const int* n, std::complex<float> *A, const int *lda, int *ipiv, std::complex<float> *work, int *lwork, const int *info);
     void zgetrf_(const int* m, const int *n, const std::complex<double> *A, const int *lda, int *ipiv, const int* info);

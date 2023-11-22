@@ -27,8 +27,8 @@ namespace Wavefunc_in_pw
 
 	void write_table_local(
 		const ModuleBase::realArray &table_local,
-		std::string filename
-	)
+		std::string &filename
+	);
 
 	void integral(
 		const UnitCell& ucell,

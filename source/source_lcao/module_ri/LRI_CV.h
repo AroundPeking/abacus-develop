@@ -69,10 +69,25 @@ public:
 
 	
 	std::map<TA,std::map<TAC,RI::Tensor<Tdata>>>
-	cal_Vs_ewald(const K_Vectors& kv,
+	cal_Vs_ewald(const K_Vectors* kv,
 			const std::vector<TA> &list_A0,
 			const std::vector<TAC> &list_A1,
-			std::vector<std::map<TA,std::map<TA,RI::Tensor<Tdata>>>>& Vq);
+			std::vector<std::map<TA,std::map<TA,RI::Tensor<std::complex<double>>>>>& Vq);
+
+	std::vector<std::map<TA,std::map<TA,RI::Tensor<std::complex<double>>>>>
+	cal_Vq1(const K_Vectors* kv,
+			const ModulePW::PW_Basis_K* wfc_basis,
+			const Structure_Factor& sf,
+			const std::vector<TA> &list_A0,
+			const std::vector<TAC> &list_A1,
+			const double &frac);
+
+	std::vector<std::map<TA,std::map<TA,RI::Tensor<std::complex<double>>>>>
+	cal_Vq2(const K_Vectors* kv,
+			const std::vector<TA> &list_A0,
+			const std::vector<TAC> &list_A1,
+			std::map<TA,std::map<TAC,RI::Tensor<Tdata>>>& Vs,
+			const double &frac);
 
 private:
 	std::vector<std::vector<std::vector<Numerical_Orbital_Lm>>> lcaos;
@@ -147,25 +162,10 @@ private:
 		const Tfunc &func_cal_o11);
 
 	ModuleBase::ComplexMatrix 
-	get_orb_q(const K_Vectors& kv, 
+	get_orb_q(const K_Vectors* kv, 
 			const ModulePW::PW_Basis_K* wfc_basis, 
 			const Structure_Factor& sf, 
 			const std::vector<std::vector<std::vector<Numerical_Orbital_Lm>>> &orb_in);
-
-	std::vector<std::map<TA,std::map<TA,RI::Tensor<Tdata>>>>
-	cal_Vq1(const K_Vectors& kv,
-			const ModulePW::PW_Basis_K* wfc_basis,
-			const Structure_Factor& sf,
-			const std::vector<TA> &list_A0,
-			const std::vector<TAC> &list_A1,
-			const double &frac);
-
-	std::vector<std::map<TA,std::map<TA,RI::Tensor<Tdata>>>>
-	cal_Vq2(const K_Vectors& kv,
-			const std::vector<TA> &list_A0,
-			const std::vector<TAC> &list_A1,
-			std::map<TA,std::map<TAC,RI::Tensor<Tdata>>>& Vs,
-			const double &frac);
 
 };
 

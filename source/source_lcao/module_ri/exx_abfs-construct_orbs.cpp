@@ -1,12 +1,10 @@
 #include "exx_abfs-construct_orbs.h"
 
-#include "source_io/module_parameter/parameter.h"
-#include "ABFs_Construct-PCA.h"
-#include "source_base/gram_schmidt_orth-inl.h"
-#include "source_base/gram_schmidt_orth.h"
-#include "source_basis/module_ao/ORB_read.h"
-#include "source_pw/module_pwdft/global.h"             //for ucell
-#include "source_lcao/module_ri/test_code/exx_abfs-construct_orbs-test.h" // Peize Lin test
+#include "exx_abfs-pca.h"
+#include "module_base/gram_schmidt_orth-inl.h"
+#include "module_base/gram_schmidt_orth.h"
+#include "module_basis/module_ao/ORB_read.h"
+#include "module_ri/test_code/exx_abfs-construct_orbs-test.h" // Peize Lin test
 
 std::vector<std::vector<std::vector<Numerical_Orbital_Lm>>> Exx_Abfs::Construct_Orbs::change_orbs(
 	const LCAO_Orbitals &orbs_in,
@@ -505,7 +503,7 @@ void Exx_Abfs::Construct_Orbs::print_orbs_size(
 
 std::map<int, int> Exx_Abfs::Construct_Orbs::get_nw(const std::vector<std::vector<std::vector<Numerical_Orbital_Lm>>> &orb_in)
 {
-	std::map<int, std::map<int, int>> data;
+	std::map<int, int> data;
 	for(size_t T=0; T!=orb_in.size(); ++T)
 	{
 		int num = 0;
@@ -530,7 +528,7 @@ int Exx_Abfs::Construct_Orbs::get_nmax_total(const std::vector<std::vector<std::
 				++nmax_vec[T];
 		}
 	}
-	int nmax_total = *max_element(nmax_vec.begin(), nmax_vec.end())
+	int nmax_total = *max_element(nmax_vec.begin(), nmax_vec.end());
 	
 	return nmax_total;
 }
@@ -559,7 +557,7 @@ std::vector<int> Exx_Abfs::Construct_Orbs::get_iat2iwt(const std::vector<std::ve
 		for(int ia=0; ia<GlobalC::ucell.atoms[it].na; ia++)
 		{
 			iat2iwt[iat] = iwt;
-			iwt += this>get_nw(orb_in)[it];
+			iwt += get_nw(orb_in)[it];
 			++iat;
 		}	
 	}
