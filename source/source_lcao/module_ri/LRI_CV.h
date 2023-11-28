@@ -69,7 +69,7 @@ public:
 
 	
 	std::map<TA,std::map<TAC,RI::Tensor<Tdata>>>
-	cal_Vs_ewald(const K_Vectors* kv,
+	cal_Vs_ewald(const K_Vectors* kv, 
 			const std::vector<TA> &list_A0,
 			const std::vector<TAC> &list_A1,
 			std::vector<std::map<TA,std::map<TA,RI::Tensor<std::complex<double>>>>>& Vq);
@@ -83,11 +83,19 @@ public:
 			const double &frac);
 
 	std::vector<std::map<TA,std::map<TA,RI::Tensor<std::complex<double>>>>>
-	cal_Vq2(const K_Vectors* kv,
-			const std::vector<TA> &list_A0,
-			const std::vector<TAC> &list_A1,
-			std::map<TA,std::map<TAC,RI::Tensor<Tdata>>>& Vs,
-			const double &frac);
+	cal_Vq2(const K_Vectors* kv, 
+			std::map<TA,std::map<TAC,RI::Tensor<Tdata>>>& Vs);
+
+	// bool check_Vs(const std::vector<TA> &list_A0,
+	// 					const std::vector<TAC> &list_A1,
+	// 					std::map<TA,std::map<TAC,RI::Tensor<Tdata>>>& Vs1,
+	// 					std::map<TA,std::map<TAC,RI::Tensor<Tdata>>>& Vs2);
+
+	// std::vector<ModuleBase::Vector3<double>>
+	// gen_q_mesh_d(std::vector<double>& nmp_in, std::vector<double>& offset, const int& type); // gen q mesh in direct
+
+	// std::vector<ModuleBase::Vector3<double>>
+	// gen_q_mesh_c(std::vector<double>& nmp_in, std::vector<double>& offset, const int& type); // gen q mesh in cartesian
 
 private:
 	std::vector<std::vector<std::vector<Numerical_Orbital_Lm>>> lcaos;

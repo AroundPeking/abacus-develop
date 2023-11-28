@@ -470,60 +470,6 @@ LRI_CV<Tdata>::DPcal_C_dC(
 	} // end else (!(C_read && flag_finish_dC))
 }
 
-// Zd
-template<typename Tdata>
-auto LRI_CV<Tdata>::cal_Vq2(
-	const K_Vectors* kv,
-	const std::vector<TA> &list_A0,
-	const std::vector<TAC> &list_A1,
-	std::map<TA,std::map<TAC,RI::Tensor<Tdata>>>& Vs,
-	const double &frac)
--> std::vector<std::map<TA,std::map<TA,RI::Tensor<std::complex<double>>>>>
-{
-	ModuleBase::TITLE("LRI_CV","cal_Vq2");
-
-	std::vector<std::map<TA,std::map<TA,RI::Tensor<std::complex<double>>>>> datas;
-	datas.resize(kv->nkstot_full);
-
-	for(size_t ik=0; ik!=kv->nkstot_full; ++ik)
-	{
-		for(size_t i0=0; i0!=list_A0.size(); ++i0)
-		{
-			for(size_t i1=0; i1!=list_A1.size(); ++i1)
-			{
-				const TA iat0 = list_A0[i0];
-				const TA iat1 = list_A1[i1].first;
-				if(datas[ik][iat0][iat1].empty())
-				{
-					RI::Tensor<std::complex<double>> data(Vs[list_A0[i0]][list_A1[i1]].shape);
-					datas[ik][iat0][iat1] = data;
-				}
-
-				const TC &cell1 = list_A1[i1].second;
-				const int it0 = GlobalC::ucell.iat2it[iat0];
-				const int ia0 = GlobalC::ucell.iat2ia[iat0];
-				const int it1 = GlobalC::ucell.iat2it[iat1];
-				const int ia1 = GlobalC::ucell.iat2ia[iat1];
-				const ModuleBase::Vector3<double> tau0 = GlobalC::ucell.atoms[it0].tau[ia0];
-				const ModuleBase::Vector3<double> tau1 = GlobalC::ucell.atoms[it1].tau[ia1];
-				const double Rcut = std::min(
-					GlobalC::ORB.Phi[it0].getRcut() * this->ccp_rmesh_times + GlobalC::ORB.Phi[it1].getRcut(),
-					GlobalC::ORB.Phi[it1].getRcut() * this->ccp_rmesh_times + GlobalC::ORB.Phi[it0].getRcut());
-				const Abfs::Vector3_Order<double> R_delta = -tau0+tau1+(RI_Util::array3_to_Vector3(cell1)*GlobalC::ucell.latvec);
-				if( R_delta.norm()*GlobalC::ucell.lat0 < Rcut )
-				{
-					RI::Tensor<Tdata> Vs_temp = Vs[list_A0[i0]][list_A1[i1]] * static_cast<Tdata>(frac);
-					datas[ik][iat0][iat1] = datas[ik][iat0][iat1] + RI::Global_Func::convert<std::complex<double>>(Vs_temp) \
-											 * std::exp(ModuleBase::IMAG_UNIT * (kv->kvec_c[ik] * R_delta*GlobalC::ucell.lat0));
-				}
-				
-			}
-		}
-	}
-
-	return datas;
-}
-
 // Zc
 template<typename Tdata>
 auto LRI_CV<Tdata>::cal_Vq1(const K_Vectors* kv,
@@ -591,40 +537,121 @@ auto LRI_CV<Tdata>::cal_Vq1(const K_Vectors* kv,
 	return datas;
 }
 
+// Zd
 template<typename Tdata>
-auto LRI_CV<Tdata>::cal_Vs_ewald(const K_Vectors* kv,
+auto LRI_CV<Tdata>::cal_Vq2(
+	const K_Vectors* kv, 
+	std::map<TA,std::map<TAC,RI::Tensor<Tdata>>>& Vs)
+-> std::vector<std::map<TA,std::map<TA,RI::Tensor<std::complex<double>>>>>
+{
+	ModuleBase::TITLE("LRI_CV","cal_Vq2");
+
+	std::vector<std::map<TA,std::map<TA,RI::Tensor<std::complex<double>>>>> datas;
+	datas.resize(kv->nkstot_full);
+
+	for(size_t ik=0; ik!=kv->nkstot_full; ++ik)
+	{
+		for(const auto &Vs_tmpA : Vs)
+		{
+			const TA &iat0 = Vs_tmpA.first;
+			for(const auto &Vs_tmpB : Vs_tmpA.second)
+			{
+				const TA &iat1 = Vs_tmpB.first.first;
+				const TC &cell1 = Vs_tmpB.first.second;
+				std::complex<double> phase = std::exp(ModuleBase::TWO_PI * ModuleBase::IMAG_UNIT * (kv->kvec_c[ik] * (RI_Util::array3_to_Vector3(cell1)*GlobalC::ucell.latvec)));
+				// std::cout<<"iat1: "<<Vs_tmpB.first.first<<"\t cell1: "<<Vs_tmpB.first.second[0]<<" "<<Vs_tmpB.first.second[1]<<" "<<Vs_tmpB.first.second[2]<<"\tVs: "<<Vs[iat0][Vs_tmpB.first](0, 0)<<std::endl;
+				// std::cout<<"phase: "<<phase<<std::endl;
+				if(datas[ik][iat0][iat1].empty())
+					datas[ik][iat0][iat1] = RI::Global_Func::convert<std::complex<double>>(Vs[iat0][Vs_tmpB.first]) * phase;
+				else
+					datas[ik][iat0][iat1] = datas[ik][iat0][iat1] + RI::Global_Func::convert<std::complex<double>>(Vs[iat0][Vs_tmpB.first]) * phase;
+
+				//std::cout<<"ik:"<<ik<<"\tiat0: "<<iat0<<"\tiat1: "<<iat1<<"\tVq: "<<datas[ik][iat0][iat1](0, 0)<<"\tVs2: "<<Vs[iat0][Vs_tmpB.first](0, 0)<<std::endl;
+			}
+		}
+	}
+
+	return datas;
+}
+
+
+template<typename Tdata>
+auto LRI_CV<Tdata>::cal_Vs_ewald(const K_Vectors* kv, 
 						const std::vector<TA> &list_A0,
 						const std::vector<TAC> &list_A1,
-						std::vector<std::map<TA,std::map<TA,RI::Tensor<std::complex<double>>>>>& Vq)
+						std::vector<std::map<TA,std::map<TA, RI::Tensor<std::complex<double>>>>>& Vq)
 -> std::map<TA,std::map<TAC,RI::Tensor<Tdata>>>
 {
 	ModuleBase::TITLE("LRI_CV","cal_Vs_ewald");
 
 	std::map<TA,std::map<TAC,RI::Tensor<Tdata>>> datas;
+	const double SPIN_multiple = std::map<int,double>{{1,0.5}, {2,1}, {4,1}}.at(GlobalV::NSPIN);
+
 	for(size_t i0=0; i0!=list_A0.size(); ++i0)
 	{
+		const TA iat0 = list_A0[i0];
 		for(size_t i1=0; i1!=list_A1.size(); ++i1)
 		{
-			const TA iat0 = list_A0[i0];
 			const TA iat1 = list_A1[i1].first;
 			const TC &cell1 = list_A1[i1].second;
-
-			RI::Tensor<Tdata> data;
-			for(size_t ik=0; ik!=kv->nkstot_full; ++ik)
+			const int it0 = GlobalC::ucell.iat2it[iat0];
+			const int ia0 = GlobalC::ucell.iat2ia[iat0];
+			const int it1 = GlobalC::ucell.iat2it[iat1];
+			const int ia1 = GlobalC::ucell.iat2ia[iat1];
+			const ModuleBase::Vector3<double> tau0 = GlobalC::ucell.atoms[it0].tau[ia0];
+			const ModuleBase::Vector3<double> tau1 = GlobalC::ucell.atoms[it1].tau[ia1];
+			const double Rcut = std::min(
+				GlobalC::ORB.Phi[it0].getRcut() * this->ccp_rmesh_times + GlobalC::ORB.Phi[it1].getRcut(),
+				GlobalC::ORB.Phi[it1].getRcut() * this->ccp_rmesh_times + GlobalC::ORB.Phi[it0].getRcut());
+			const Abfs::Vector3_Order<double> R_delta = -tau0+tau1+(RI_Util::array3_to_Vector3(cell1)*GlobalC::ucell.latvec);
+			if( R_delta.norm()*GlobalC::ucell.lat0 < Rcut )
 			{
-				if(datas[list_A0[i0]][list_A1[i1]].empty())
+				for(size_t ik=0; ik!=kv->nkstot_full; ++ik)
 				{
-					RI::Tensor<Tdata> data(Vq[ik][iat0][iat1].shape);
-					datas[list_A0[i0]][list_A1[i1]] = data;
+					const std::complex<double> frac = std::exp(- ModuleBase::TWO_PI * ModuleBase::IMAG_UNIT * (kv->kvec_c[ik] * (RI_Util::array3_to_Vector3(cell1)*GlobalC::ucell.latvec) )) * kv->wk[ik] * SPIN_multiple;
+					if(datas[list_A0[i0]][list_A1[i1]].empty())
+						datas[list_A0[i0]][list_A1[i1]] = RI::Global_Func::convert<Tdata>(Vq[ik][iat0][iat1] * frac);
+					else
+						datas[list_A0[i0]][list_A1[i1]] = datas[list_A0[i0]][list_A1[i1]] + RI::Global_Func::convert<Tdata>(Vq[ik][iat0][iat1] * frac);
 				}
-				const std::complex<double> frac = std::exp( ModuleBase::TWO_PI*ModuleBase::IMAG_UNIT * (kv->kvec_c[ik] * (RI_Util::array3_to_Vector3(cell1)*GlobalC::ucell.latvec)) );
-			    datas[list_A0[i0]][list_A1[i1]] = datas[list_A0[i0]][list_A1[i1]] + RI::Global_Func::convert<Tdata>(Vq[ik][iat0][iat1] * frac);
 			}
 		}
 	}
 	return datas;
 }
-
+// template<typename Tdata>
+// bool 
+// LRI_CV<Tdata>::check_Vs(
+// 						const std::vector<TA> &list_A0,
+// 						const std::vector<TAC> &list_A1,
+// 						std::map<TA,std::map<TAC,RI::Tensor<Tdata>>>& Vs1,
+// 						std::map<TA,std::map<TAC,RI::Tensor<Tdata>>>& Vs2)
+// {
+// 	for(size_t i0=0; i0!=list_A0.size(); ++i0)
+// 	{
+// 		for(size_t i1=0; i1!=list_A1.size(); ++i1)
+// 		{
+// 			const TA iat0 = list_A0[i0];
+// 			const TA iat1 = list_A1[i1].first;
+// 			const TC &cell1 = list_A1[i1].second;
+// 			const int it0 = GlobalC::ucell.iat2it[iat0];
+// 			const int ia0 = GlobalC::ucell.iat2ia[iat0];
+// 			const int it1 = GlobalC::ucell.iat2it[iat1];
+// 			const int ia1 = GlobalC::ucell.iat2ia[iat1];
+// 			const ModuleBase::Vector3<double> tau0 = GlobalC::ucell.atoms[it0].tau[ia0];
+// 			const ModuleBase::Vector3<double> tau1 = GlobalC::ucell.atoms[it1].tau[ia1];
+// 			const double Rcut = std::min(
+// 				GlobalC::ORB.Phi[it0].getRcut() * this->ccp_rmesh_times + GlobalC::ORB.Phi[it1].getRcut(),
+// 				GlobalC::ORB.Phi[it1].getRcut() * this->ccp_rmesh_times + GlobalC::ORB.Phi[it0].getRcut());
+// 			const Abfs::Vector3_Order<double> R_delta = -tau0+tau1+(RI_Util::array3_to_Vector3(cell1)*GlobalC::ucell.latvec);
+// 			if( R_delta.norm()*GlobalC::ucell.lat0 < Rcut )
+// 			{
+// 				std::cout<<"iat0: "<<iat0<<"\tiat1: "<<iat1<<"\tVs1: "<<Vs1[list_A0[i0]][list_A1[i1]](0, 0)<<"\tVs2: "<<Vs2[list_A0[i0]][list_A1[i1]](0, 0)<<std::endl;
+// 			}
+// 		}
+// 	}
+// 	return true;
+// }
 
 template<typename Tdata>
 std::vector<ModuleBase::ComplexMatrix>
@@ -642,20 +669,66 @@ LRI_CV<Tdata>::get_orb_q(const K_Vectors* kv,
 	Wavefunc_in_pw::make_table_q(orb_in, table_local); 
 	const int norb = Exx_Abfs::Construct_Orbs::get_norb(orb_in);
 	std::vector<ModuleBase::ComplexMatrix> orb_in_Gs;
+	orb_in_Gs.resize(kv->nkstot_full);
 
 	for(size_t ik=0; ik!=kv->nkstot_full; ++ik)
 	{
 		const int npw = wfc_basis->npwk[ik];
-		//const int npw = kv->ngk[ik];
+		//const int npw = kv->ngk[ik]; 
 		std::vector<ModuleBase::Vector3<double>> gk(npw, ModuleBase::Vector3<double>(0, 0, 0));
-
 		for(size_t ig=0; ig!=npw; ++ig)
 			gk[ig] = wfc_basis->getgcar(ik, ig) - kv->kvec_c[ik];
-
-		ModuleBase::ComplexMatrix orb_in_G(norb, npw); // ecut to restrict npwx?
+		ModuleBase::ComplexMatrix orb_in_G(norb, npw);
 		Wavefunc_in_pw::produce_local_basis_in_pw(ik, gk, orb_in, wfc_basis, sf, orb_in_G, table_local);
 		orb_in_Gs[ik] = orb_in_G;
 	}
+
 	return orb_in_Gs;
 }
+
+
+// template<typename Tdata>
+// std::vector<ModuleBase::Vector3<double>>
+// LRI_CV<Tdata>::gen_q_mesh_d(std::vector<double>& nmp_in, std::vector<double>& offset, const int& type)
+// {
+// 	const int mpnx = nmp_in[0];
+//     const int mpny = nmp_in[1];
+//     const int mpnz = nmp_in[2];
+// 	const int nqs = mpnx * mpny * mpnz;
+// 	std::vector<ModuleBase::Vector3<double>> qvec_d(nqs);
+
+// 	for(int x=1; x<=nmp[0]; x++)
+// 	{
+// 		double v1 = Monkhorst_Pack_formula(type, koffset_in[0], x, mpnx);
+// 		for (int y = 1;y <= mpny;y++)
+//         {
+//             double v2 = Monkhorst_Pack_formula( k_type, koffset_in[1], y, mpny);
+// 		    if( std::abs(v2) < 1.0e-10 ) v2 = 0.0;
+//             for (int z = 1;z <= mpnz;z++)
+//             {
+//                 double v3 = Monkhorst_Pack_formula( k_type, koffset_in[2], z, mpnz);
+// 				if( std::abs(v3) < 1.0e-10 ) v3 = 0.0;
+//                 const int i = mpnx * mpny * (z - 1) + mpnx * (y - 1) + (x - 1);
+//                 qvec_d[i].set(v1, v2, v3);
+//             }
+//         }
+//     }
+
+// 	return qvec_d;
+// }
+
+// template<typename Tdata>
+// std::vector<ModuleBase::Vector3<double>>
+// LRI_CV<Tdata>::gen_q_mesh_c(std::vector<double>& nmp_in, std::vector<double>& offset, const int& type)
+// {
+// 	std::vector<ModuleBase::Vector3<double>> qvec_d = this->gen_q_mesh_d(nmp_in, offset, type);
+// 	const int nqs = qvec_d.size();
+// 	std::vector<ModuleBase::Vector3<double>> qvec_c(nqs);
+
+// 	for (size_t i = 0;i != nks;++i)
+// 		qvec_c[i] = qvec_d[i] * GlobalC::ucell.G;
+
+// 	return qvec_c;
+// }
+
 #endif
