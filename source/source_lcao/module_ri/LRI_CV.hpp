@@ -11,9 +11,9 @@
 #include "module_ri/exx_abfs-abfs_index.h"
 #include "exx_abfs-construct_orbs.h"
 #include "RI_Util.h"
-#include "../../source_base/tool_title.h"
-#include "../../source_base/timer.h"
-#include "../../source_pw/module_pwdft/global.h"
+#include "RI_2D_Comm.h"
+#include "module_base/tool_title.h"
+#include "module_base/timer.h"
 #include <RI/global/Global_Func-1.h>
 #include "module_hamilt_lcao/hamilt_lcaodft/wavefunc_in_pw.h"
 #include "module_base/realarray.h"
@@ -482,10 +482,12 @@ auto LRI_CV<Tdata>::cal_Vq1(const K_Vectors* kv,
 {
 	ModuleBase::TITLE("LRI_CV","cal_Vq1");
 
+	const int nspin0 = std::map<int,int>{{1,1}, {2,2}, {4,1}}.at(GlobalV::NSPIN);
+	const int nks0 = kv->nks/nspin0;
 	std::vector<std::map<TA,std::map<TA,RI::Tensor<std::complex<double>>>>> datas;
-	datas.resize(kv->nkstot_full);
+	datas.resize(nks0);
 
-	for(size_t ik=0; ik!=kv->nkstot_full; ++ik)
+	for(size_t ik=0; ik!=nks0; ++ik)
 	{
 		const int npw = wfc_basis->npwk[ik];
 		std::vector<ModuleBase::ComplexMatrix> abfs_in_G = this->get_orb_q(kv, wfc_basis, sf, this->abfs);
@@ -512,7 +514,7 @@ auto LRI_CV<Tdata>::cal_Vq1(const K_Vectors* kv,
 				int abfs_nw_t = abfs_nw[it0];
 				int abfs_ccp_nw_t = abfs_nw[it0];
 				RI::Tensor<Tdata> data;//(nabfs, nabfs_ccp);
-					
+
 				for(size_t j0=0; j0!=abfs_nw_t; ++j0)
 				{
 					const int iw0 = Exx_Abfs::Construct_Orbs::get_itiaiw2iwt(this->abfs, it0, ia0, j0);
@@ -527,10 +529,10 @@ auto LRI_CV<Tdata>::cal_Vq1(const K_Vectors* kv,
 						}
 					}
 				}
-				
+
 				datas[ik][iat0][iat1] = data * frac;
 				//#pragma omp critical(LRI_CV_cal_datas)
-			}
+			}	
 		}
 	}
 
@@ -546,10 +548,12 @@ auto LRI_CV<Tdata>::cal_Vq2(
 {
 	ModuleBase::TITLE("LRI_CV","cal_Vq2");
 
+	const int nspin0 = std::map<int,int>{{1,1}, {2,2}, {4,1}}.at(GlobalV::NSPIN);
+	const int nks0 = kv->nks/nspin0;
 	std::vector<std::map<TA,std::map<TA,RI::Tensor<std::complex<double>>>>> datas;
-	datas.resize(kv->nkstot_full);
+	datas.resize(nks0);
 
-	for(size_t ik=0; ik!=kv->nkstot_full; ++ik)
+	for(size_t ik=0; ik!=nks0; ++ik)
 	{
 		for(const auto &Vs_tmpA : Vs)
 		{
@@ -559,14 +563,10 @@ auto LRI_CV<Tdata>::cal_Vq2(
 				const TA &iat1 = Vs_tmpB.first.first;
 				const TC &cell1 = Vs_tmpB.first.second;
 				std::complex<double> phase = std::exp(ModuleBase::TWO_PI * ModuleBase::IMAG_UNIT * (kv->kvec_c[ik] * (RI_Util::array3_to_Vector3(cell1)*GlobalC::ucell.latvec)));
-				// std::cout<<"iat1: "<<Vs_tmpB.first.first<<"\t cell1: "<<Vs_tmpB.first.second[0]<<" "<<Vs_tmpB.first.second[1]<<" "<<Vs_tmpB.first.second[2]<<"\tVs: "<<Vs[iat0][Vs_tmpB.first](0, 0)<<std::endl;
-				// std::cout<<"phase: "<<phase<<std::endl;
 				if(datas[ik][iat0][iat1].empty())
 					datas[ik][iat0][iat1] = RI::Global_Func::convert<std::complex<double>>(Vs[iat0][Vs_tmpB.first]) * phase;
 				else
 					datas[ik][iat0][iat1] = datas[ik][iat0][iat1] + RI::Global_Func::convert<std::complex<double>>(Vs[iat0][Vs_tmpB.first]) * phase;
-
-				//std::cout<<"ik:"<<ik<<"\tiat0: "<<iat0<<"\tiat1: "<<iat1<<"\tVq: "<<datas[ik][iat0][iat1](0, 0)<<"\tVs2: "<<Vs[iat0][Vs_tmpB.first](0, 0)<<std::endl;
 			}
 		}
 	}
@@ -586,7 +586,9 @@ auto LRI_CV<Tdata>::cal_Vs_ewald(const K_Vectors* kv,
 
 	std::map<TA,std::map<TAC,RI::Tensor<Tdata>>> datas;
 	const double SPIN_multiple = std::map<int,double>{{1,0.5}, {2,1}, {4,1}}.at(GlobalV::NSPIN);
-
+	const int nspin0 = std::map<int,int>{{1,1}, {2,2}, {4,1}}.at(GlobalV::NSPIN);
+	const int nks0 = kv->nks/nspin0;
+	
 	for(size_t i0=0; i0!=list_A0.size(); ++i0)
 	{
 		const TA iat0 = list_A0[i0];
@@ -606,52 +608,58 @@ auto LRI_CV<Tdata>::cal_Vs_ewald(const K_Vectors* kv,
 			const Abfs::Vector3_Order<double> R_delta = -tau0+tau1+(RI_Util::array3_to_Vector3(cell1)*GlobalC::ucell.latvec);
 			if( R_delta.norm()*GlobalC::ucell.lat0 < Rcut )
 			{
-				for(size_t ik=0; ik!=kv->nkstot_full; ++ik)
+				for(size_t ik=0; ik!=nks0; ++ik)
 				{
 					const std::complex<double> frac = std::exp(- ModuleBase::TWO_PI * ModuleBase::IMAG_UNIT * (kv->kvec_c[ik] * (RI_Util::array3_to_Vector3(cell1)*GlobalC::ucell.latvec) )) * kv->wk[ik] * SPIN_multiple;
+					RI::Tensor<Tdata> Vs_tmp;
+					if (static_cast<int>(std::round(SPIN_multiple * kv->wk[ik] * kv->nkstot_full)) == 2)
+						Vs_tmp = RI_2D_Comm::tensor_real(RI::Global_Func::convert<Tdata>(Vq[ik][iat0][iat1] * frac));
+                	else Vs_tmp = RI::Global_Func::convert<Tdata>(Vq[ik][iat0][iat1] * frac);
+					
 					if(datas[list_A0[i0]][list_A1[i1]].empty())
-						datas[list_A0[i0]][list_A1[i1]] = RI::Global_Func::convert<Tdata>(Vq[ik][iat0][iat1] * frac);
+						datas[list_A0[i0]][list_A1[i1]] = Vs_tmp;
 					else
-						datas[list_A0[i0]][list_A1[i1]] = datas[list_A0[i0]][list_A1[i1]] + RI::Global_Func::convert<Tdata>(Vq[ik][iat0][iat1] * frac);
+						datas[list_A0[i0]][list_A1[i1]] = datas[list_A0[i0]][list_A1[i1]] + Vs_tmp;
 				}
 			}
 		}
 	}
+
 	return datas;
 }
-// template<typename Tdata>
-// bool 
-// LRI_CV<Tdata>::check_Vs(
-// 						const std::vector<TA> &list_A0,
-// 						const std::vector<TAC> &list_A1,
-// 						std::map<TA,std::map<TAC,RI::Tensor<Tdata>>>& Vs1,
-// 						std::map<TA,std::map<TAC,RI::Tensor<Tdata>>>& Vs2)
-// {
-// 	for(size_t i0=0; i0!=list_A0.size(); ++i0)
-// 	{
-// 		for(size_t i1=0; i1!=list_A1.size(); ++i1)
-// 		{
-// 			const TA iat0 = list_A0[i0];
-// 			const TA iat1 = list_A1[i1].first;
-// 			const TC &cell1 = list_A1[i1].second;
-// 			const int it0 = GlobalC::ucell.iat2it[iat0];
-// 			const int ia0 = GlobalC::ucell.iat2ia[iat0];
-// 			const int it1 = GlobalC::ucell.iat2it[iat1];
-// 			const int ia1 = GlobalC::ucell.iat2ia[iat1];
-// 			const ModuleBase::Vector3<double> tau0 = GlobalC::ucell.atoms[it0].tau[ia0];
-// 			const ModuleBase::Vector3<double> tau1 = GlobalC::ucell.atoms[it1].tau[ia1];
-// 			const double Rcut = std::min(
-// 				GlobalC::ORB.Phi[it0].getRcut() * this->ccp_rmesh_times + GlobalC::ORB.Phi[it1].getRcut(),
-// 				GlobalC::ORB.Phi[it1].getRcut() * this->ccp_rmesh_times + GlobalC::ORB.Phi[it0].getRcut());
-// 			const Abfs::Vector3_Order<double> R_delta = -tau0+tau1+(RI_Util::array3_to_Vector3(cell1)*GlobalC::ucell.latvec);
-// 			if( R_delta.norm()*GlobalC::ucell.lat0 < Rcut )
-// 			{
-// 				std::cout<<"iat0: "<<iat0<<"\tiat1: "<<iat1<<"\tVs1: "<<Vs1[list_A0[i0]][list_A1[i1]](0, 0)<<"\tVs2: "<<Vs2[list_A0[i0]][list_A1[i1]](0, 0)<<std::endl;
-// 			}
-// 		}
-// 	}
-// 	return true;
-// }
+template<typename Tdata>
+bool 
+LRI_CV<Tdata>::check_Vs(
+						const std::vector<TA> &list_A0,
+						const std::vector<TAC> &list_A1,
+						std::map<TA,std::map<TAC,RI::Tensor<Tdata>>>& Vs1,
+						std::map<TA,std::map<TAC,RI::Tensor<Tdata>>>& Vs2)
+{
+	for(size_t i0=0; i0!=list_A0.size(); ++i0)
+	{
+		for(size_t i1=0; i1!=list_A1.size(); ++i1)
+		{
+			const TA iat0 = list_A0[i0];
+			const TA iat1 = list_A1[i1].first;
+			const TC &cell1 = list_A1[i1].second;
+			const int it0 = GlobalC::ucell.iat2it[iat0];
+			const int ia0 = GlobalC::ucell.iat2ia[iat0];
+			const int it1 = GlobalC::ucell.iat2it[iat1];
+			const int ia1 = GlobalC::ucell.iat2ia[iat1];
+			const ModuleBase::Vector3<double> tau0 = GlobalC::ucell.atoms[it0].tau[ia0];
+			const ModuleBase::Vector3<double> tau1 = GlobalC::ucell.atoms[it1].tau[ia1];
+			const double Rcut = std::min(
+				GlobalC::ORB.Phi[it0].getRcut() * this->ccp_rmesh_times + GlobalC::ORB.Phi[it1].getRcut(),
+				GlobalC::ORB.Phi[it1].getRcut() * this->ccp_rmesh_times + GlobalC::ORB.Phi[it0].getRcut());
+			const Abfs::Vector3_Order<double> R_delta = -tau0+tau1+(RI_Util::array3_to_Vector3(cell1)*GlobalC::ucell.latvec);
+			if( R_delta.norm()*GlobalC::ucell.lat0 < Rcut )
+			{
+				std::cout<<"iat0: "<<iat0<<"\tiat1: "<<iat1<<"\tVs1: "<<Vs1[list_A0[i0]][list_A1[i1]](0, 0)<<"\tVs2: "<<Vs2[list_A0[i0]][list_A1[i1]](0, 0)<<std::endl;
+			}
+		}
+	}
+	return true;
+}
 
 template<typename Tdata>
 std::vector<ModuleBase::ComplexMatrix>
@@ -664,17 +672,18 @@ LRI_CV<Tdata>::get_orb_q(const K_Vectors* kv,
 	ModuleBase::TITLE("LRI_CV","get_orb_q");
 
 	// projection to plane wave
+	const int nspin0 = std::map<int,int>{{1,1}, {2,2}, {4,1}}.at(GlobalV::NSPIN);
+	const int nks0 = kv->nks/nspin0;
 	int nmax_total = Exx_Abfs::Construct_Orbs::get_nmax_total(orb_in);
 	ModuleBase::realArray table_local(orb_in.size(), nmax_total, GlobalV::NQX);
 	Wavefunc_in_pw::make_table_q(orb_in, table_local); 
 	const int norb = Exx_Abfs::Construct_Orbs::get_norb(orb_in);
 	std::vector<ModuleBase::ComplexMatrix> orb_in_Gs;
-	orb_in_Gs.resize(kv->nkstot_full);
+	orb_in_Gs.resize(nks0);
 
-	for(size_t ik=0; ik!=kv->nkstot_full; ++ik)
+	for(size_t ik=0; ik!=nks0; ++ik)
 	{
 		const int npw = wfc_basis->npwk[ik];
-		//const int npw = kv->ngk[ik]; 
 		std::vector<ModuleBase::Vector3<double>> gk(npw, ModuleBase::Vector3<double>(0, 0, 0));
 		for(size_t ig=0; ig!=npw; ++ig)
 			gk[ig] = wfc_basis->getgcar(ik, ig) - kv->kvec_c[ik];

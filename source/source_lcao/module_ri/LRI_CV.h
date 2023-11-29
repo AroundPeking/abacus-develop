@@ -86,10 +86,10 @@ public:
 	cal_Vq2(const K_Vectors* kv, 
 			std::map<TA,std::map<TAC,RI::Tensor<Tdata>>>& Vs);
 
-	// bool check_Vs(const std::vector<TA> &list_A0,
-	// 					const std::vector<TAC> &list_A1,
-	// 					std::map<TA,std::map<TAC,RI::Tensor<Tdata>>>& Vs1,
-	// 					std::map<TA,std::map<TAC,RI::Tensor<Tdata>>>& Vs2);
+	bool check_Vs(const std::vector<TA> &list_A0,
+						const std::vector<TAC> &list_A1,
+						std::map<TA,std::map<TAC,RI::Tensor<Tdata>>>& Vs1,
+						std::map<TA,std::map<TAC,RI::Tensor<Tdata>>>& Vs2);
 
 	// std::vector<ModuleBase::Vector3<double>>
 	// gen_q_mesh_d(std::vector<double>& nmp_in, std::vector<double>& offset, const int& type); // gen q mesh in direct
