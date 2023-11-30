@@ -79,8 +79,8 @@ public:
 			const ModulePW::PW_Basis_K* wfc_basis,
 			const Structure_Factor& sf,
 			const std::vector<TA> &list_A0,
-			const std::vector<TAC> &list_A1,
-			const double &frac);
+			const std::vector<TAC> &list_A1
+			);
 
 	std::vector<std::map<TA,std::map<TA,RI::Tensor<std::complex<double>>>>>
 	cal_Vq2(const K_Vectors* kv, 
