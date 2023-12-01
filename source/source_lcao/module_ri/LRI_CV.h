@@ -86,16 +86,16 @@ public:
 	cal_Vq2(const K_Vectors* kv, 
 			std::map<TA,std::map<TAC,RI::Tensor<Tdata>>>& Vs);
 
+	bool check_Vq(const K_Vectors* kv, 
+				const std::vector<TA> &list_A0,
+				const std::vector<TAC> &list_A1,
+				std::vector<std::map<TA,std::map<TA,RI::Tensor<std::complex<double>>>>>& Vq1,
+				std::vector<std::map<TA,std::map<TA,RI::Tensor<std::complex<double>>>>>& Vq2);
+
 	bool check_Vs(const std::vector<TA> &list_A0,
 						const std::vector<TAC> &list_A1,
 						std::map<TA,std::map<TAC,RI::Tensor<Tdata>>>& Vs1,
 						std::map<TA,std::map<TAC,RI::Tensor<Tdata>>>& Vs2);
-
-	// std::vector<ModuleBase::Vector3<double>>
-	// gen_q_mesh_d(std::vector<double>& nmp_in, std::vector<double>& offset, const int& type); // gen q mesh in direct
-
-	// std::vector<ModuleBase::Vector3<double>>
-	// gen_q_mesh_c(std::vector<double>& nmp_in, std::vector<double>& offset, const int& type); // gen q mesh in cartesian
 
 private:
 	std::vector<std::vector<std::vector<Numerical_Orbital_Lm>>> lcaos;
@@ -169,11 +169,16 @@ private:
 		std::map<int,std::map<int,std::map<Abfs::Vector3_Order<double>,To11>>> &o11ws,
 		const Tfunc &func_cal_o11);
 
-	std::vector<ModuleBase::ComplexMatrix>
+	std::vector<std::vector<ModuleBase::ComplexMatrix>>
 	get_orb_q(const K_Vectors* kv, 
 			const ModulePW::PW_Basis_K* wfc_basis, 
-			const Structure_Factor& sf, 
 			const std::vector<std::vector<std::vector<Numerical_Orbital_Lm>>> &orb_in);
+
+	std::vector<ModuleBase::ComplexMatrix>
+	produce_local_basis_in_pw(std::vector<ModuleBase::Vector3<double>>& gk,
+							const std::vector<std::vector<std::vector<Numerical_Orbital_Lm>>> &orb_in,
+                            const ModulePW::PW_Basis_K* wfc_basis,
+                            const ModuleBase::realArray& table_local);
 
 };
 

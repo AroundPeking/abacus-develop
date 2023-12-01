@@ -52,14 +52,6 @@ namespace Wavefunc_in_pw
                                    ModuleBase::ComplexMatrix& psi,
                                    const ModuleBase::realArray& table_local);
 
-	void produce_local_basis_in_pw(const int ik,
-								   std::vector<ModuleBase::Vector3<double>>& gk,
-								   const std::vector<std::vector<std::vector<Numerical_Orbital_Lm>>> &orb_in,
-                                   const ModulePW::PW_Basis_K* wfc_basis,
-                                   const Structure_Factor& sf,
-                                   ModuleBase::ComplexMatrix& psi,
-                                   const ModuleBase::realArray& table_local);
-
     // void produce_local_basis_q_in_pw(const int &ik,
     //                                  ModuleBase::ComplexMatrix &psi,
     //                                  ModulePW::PW_Basis_K *wfc_basis,

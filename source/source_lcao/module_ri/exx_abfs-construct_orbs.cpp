@@ -540,24 +540,33 @@ int Exx_Abfs::Construct_Orbs::get_norb(const std::vector<std::vector<std::vector
 {
 	int num = 0;
 	for(size_t T=0; T!=orb_in.size(); ++T)
-		num += get_nw(orb_in)[T]*GlobalC::ucell.atoms[T].na;
+		num += get_nw(orb_in)[T];
 
 	return num;
 }
 
-std::vector<int> Exx_Abfs::Construct_Orbs::get_iat2iwt(const std::vector<std::vector<std::vector<Numerical_Orbital_Lm>>> &orb_in)
-{
-	std::vector<int> iat2iwt(GlobalC::ucell.nat);
-	int iat=0;
-	int iwt=0;
-	for(size_t it=0; it!=orb_in.size(); ++it)
-	{
-		for(size_t ia=0; ia!=GlobalC::ucell.atoms[it].na; ++ia)
-		{
-			iat2iwt[iat] = iwt;
-			iwt += get_nw(orb_in)[it];
-			++iat;
-		}	
-	}
-	return iat2iwt;
-}
+// int Exx_Abfs::Construct_Orbs::get_total_norb(const std::vector<std::vector<std::vector<Numerical_Orbital_Lm>>> &orb_in)
+// {
+// 	int num = 0;
+// 	for(size_t T=0; T!=orb_in.size(); ++T)
+// 		num += get_nw(orb_in)[T]*GlobalC::ucell.atoms[T].na;
+
+// 	return num;
+// }
+
+// std::vector<int> Exx_Abfs::Construct_Orbs::get_iat2iwt(const std::vector<std::vector<std::vector<Numerical_Orbital_Lm>>> &orb_in)
+// {
+// 	std::vector<int> iat2iwt(GlobalC::ucell.nat);
+// 	int iat=0;
+// 	int iwt=0;
+// 	for(size_t it=0; it!=orb_in.size(); ++it)
+// 	{
+// 		for(size_t ia=0; ia!=GlobalC::ucell.atoms[it].na; ++ia)
+// 		{
+// 			iat2iwt[iat] = iwt;
+// 			iwt += get_nw(orb_in)[it];
+// 			++iat;
+// 		}	
+// 	}
+// 	return iat2iwt;
+// }
