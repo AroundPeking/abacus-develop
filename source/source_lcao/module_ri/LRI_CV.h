@@ -11,10 +11,6 @@
 #include "module_basis/module_ao/ORB_atomic_lm.h"
 #include "module_base/abfs-vector3_order.h"
 #include "module_base/element_basis_index.h"
-#include "module_base/complexmatrix.h"
-#include "module_cell/klist.h"
-#include "module_basis/module_pw/pw_basis_k.h"
-#include "module_hamilt_pw/hamilt_pwdert/structure_factor.h"
 
 #include <RI/global/Tensor.h>
 #include <RI/global/Global_Func-2.h>
@@ -66,36 +62,6 @@ public:
 		const std::map<std::string,bool> &flags);						// "cal_dC", "writable_Cws", "writable_dCws", "writable_Vws", "writable_dVws"
 	
 	size_t get_index_abfs_size(const size_t &iat){return this->index_abfs[iat].count_size; }
-
-	
-	std::map<TA,std::map<TAC,RI::Tensor<Tdata>>>
-	cal_Vs_ewald(const K_Vectors* kv, 
-			const std::vector<TA> &list_A0,
-			const std::vector<TAC> &list_A1,
-			std::vector<std::map<TA,std::map<TA,RI::Tensor<std::complex<double>>>>>& Vq);
-
-	std::vector<std::map<TA,std::map<TA,RI::Tensor<std::complex<double>>>>>
-	cal_Vq1(const K_Vectors* kv,
-			const ModulePW::PW_Basis_K* wfc_basis,
-			const Structure_Factor& sf,
-			const std::vector<TA> &list_A0,
-			const std::vector<TAC> &list_A1
-			);
-
-	std::vector<std::map<TA,std::map<TA,RI::Tensor<std::complex<double>>>>>
-	cal_Vq2(const K_Vectors* kv, 
-			std::map<TA,std::map<TAC,RI::Tensor<Tdata>>>& Vs);
-
-	bool check_Vq(const K_Vectors* kv, 
-				const std::vector<TA> &list_A0,
-				const std::vector<TAC> &list_A1,
-				std::vector<std::map<TA,std::map<TA,RI::Tensor<std::complex<double>>>>>& Vq1,
-				std::vector<std::map<TA,std::map<TA,RI::Tensor<std::complex<double>>>>>& Vq2);
-
-	bool check_Vs(const std::vector<TA> &list_A0,
-						const std::vector<TAC> &list_A1,
-						std::map<TA,std::map<TAC,RI::Tensor<Tdata>>>& Vs1,
-						std::map<TA,std::map<TAC,RI::Tensor<Tdata>>>& Vs2);
 
 private:
 	std::vector<std::vector<std::vector<Numerical_Orbital_Lm>>> lcaos;
@@ -168,18 +134,6 @@ private:
 		pthread_rwlock_t &rwlock_o11,
 		std::map<int,std::map<int,std::map<Abfs::Vector3_Order<double>,To11>>> &o11ws,
 		const Tfunc &func_cal_o11);
-
-	std::vector<std::vector<ModuleBase::ComplexMatrix>>
-	get_orb_q(const K_Vectors* kv, 
-			const ModulePW::PW_Basis_K* wfc_basis, 
-			const std::vector<std::vector<std::vector<Numerical_Orbital_Lm>>> &orb_in);
-
-	std::vector<ModuleBase::ComplexMatrix>
-	produce_local_basis_in_pw(std::vector<ModuleBase::Vector3<double>>& gk,
-							const std::vector<std::vector<std::vector<Numerical_Orbital_Lm>>> &orb_in,
-                            const ModulePW::PW_Basis_K* wfc_basis,
-                            const ModuleBase::realArray& table_local);
-
 };
 
 #include "LRI_CV.hpp"

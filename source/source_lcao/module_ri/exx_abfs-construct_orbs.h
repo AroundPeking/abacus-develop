@@ -33,13 +33,6 @@ public:
 	
 	static int get_nmax_total(const std::vector<std::vector<std::vector<Numerical_Orbital_Lm>>> &orb_in); // get the max number of orbitals among all elements
 	static std::map<int, int> get_nw(const std::vector<std::vector<std::vector<Numerical_Orbital_Lm>>> &orb_in); // get number of orbitals for each element 
-	static int get_norb(const std::vector<std::vector<std::vector<Numerical_Orbital_Lm>>> &orb_in); // get total number of orbitals for all elements
-	// static int get_total_norb(const std::vector<std::vector<std::vector<Numerical_Orbital_Lm>>> &orb_in); // get total number of orbitals for all atoms
-	// static std::vector<int> get_iat2iwt(const std::vector<std::vector<std::vector<Numerical_Orbital_Lm>>> &orb_in); // // iat ==> iwt, the first global index for orbital of this atom
-	// static inline int get_itiaiw2iwt(const std::vector<std::vector<std::vector<Numerical_Orbital_Lm>>> &orb_in, const int &it, const int &ia, const int &iw) // indexing tool for find orbital global index from it,ia,iw 
-	// {
-	// 	return get_iat2iwt(orb_in)[GlobalC::ucell.itia2iat(it, ia)] + iw;
-	// }
 		
 private:
 	static std::vector<std::vector<std::vector<std::vector<double>>>> psi_mult_psi( 

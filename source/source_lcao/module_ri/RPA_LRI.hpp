@@ -75,14 +75,13 @@ template <typename T, typename Tdata>
 void RPA_LRI<T, Tdata>::cal_postSCF_exx(const elecstate::DensityMatrix<T, Tdata>& dm,
     const MPI_Comm& mpi_comm_in,
     const K_Vectors& kv,
-    const ModulePW::PW_Basis_K* wfc_basis, 
-    const Structure_Factor& sf)
+    const ModulePW::PW_Basis_K* wfc_basis)
 {
     exx_lri_rpa.mix_DMk_2D.set_nks(kv.nks, GlobalV::GAMMA_ONLY_LOCAL);
     exx_lri_rpa.mix_DMk_2D.set_mixing(nullptr);
     exx_lri_rpa.mix_DMk_2D.mix(dm.get_DMK_vector(), true);
     exx_lri_rpa.init(mpi_comm_in, kv);
-    exx_lri_rpa.cal_exx_ions(wfc_basis, sf);
+    exx_lri_rpa.cal_exx_ions(wfc_basis);
     exx_lri_rpa.cal_exx_elec(*dm.get_paraV_pointer());
     // cout<<"postSCF_Eexx: "<<exx_lri_rpa.Eexx<<endl;
 }

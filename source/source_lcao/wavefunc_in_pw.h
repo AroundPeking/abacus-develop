@@ -45,8 +45,7 @@ namespace Wavefunc_in_pw
 		const double &ecut,
 		const double &beta);
 
-    void produce_local_basis_in_pw(const UnitCell& ucell,
-								   const int& ik,
+    void produce_local_basis_in_pw(const int& ik,
                                    const ModulePW::PW_Basis_K* wfc_basis,
                                    const Structure_Factor& sf,
                                    ModuleBase::ComplexMatrix& psi,
