@@ -67,12 +67,11 @@ class Ewald_Vq
         const int& ik,
         std::vector<ModuleBase::Vector3<double>>& gk,
         const std::vector<std::vector<std::vector<Numerical_Orbital_Lm>>>& orb_in,
-        const K_Vectors* kv,
-        const ModulePW::PW_Basis_K* wfc_basis,
-        const ModuleBase::realArray& table_local,
-        const double& gk_ecut);
-    std::vector<int> get_npwk(const K_Vectors* kv, const ModulePW::PW_Basis_K* wfc_basis, const double& gk_ecut);
-    ModuleBase::Vector3<double> get_gcar(const ModulePW::PW_Basis_K* wfc_basis, const int ig);
+        const ModuleBase::realArray& table_local);
+    
+    static std::vector<int> get_npwk(const K_Vectors* kv, const ModulePW::PW_Basis_K* wfc_basis, const double& gk_ecut);
+    static std::vector<std::vector<int>> get_igl2isz_k(std::vector<int>& npwk, const ModulePW::PW_Basis_K* wfc_basis);
+    static std::vector<std::vector<ModuleBase::Vector3<double>>> get_gcar(std::vector<int>& npwk, const ModulePW::PW_Basis_K* wfc_basis);
 
     std::vector<double> cal_erfc_kernel(std::vector<ModuleBase::Vector3<double>>& gk, const double& omega);
     std::vector<double> cal_erf_kernel(std::vector<ModuleBase::Vector3<double>>& gk, const double& omega);

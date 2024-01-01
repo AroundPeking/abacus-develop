@@ -19,40 +19,6 @@
 #include "module_base/tool_title.h"
 #include "module_hamilt_lcao/hamilt_lcaodft/wavefunc_in_pw.h"
 
-template <typename Tdata>
-std::vector<double> Ewald_Vq<Tdata>::cal_erfc_kernel(std::vector<ModuleBase::Vector3<double>>& gk, const double& omega)
-{
-    const int npw = gk.size();
-    std::vector<double> vg(npw);
-    for (size_t ig = 0; ig != npw; ++ig)
-    {
-        if (gk[ig].norm2())
-            vg[ig] = (ModuleBase::FOUR_PI / (gk[ig].norm2() * GlobalC::ucell.tpiba2))
-                     * (1 - std::exp(-gk[ig].norm2() * GlobalC::ucell.tpiba2 / (4 * omega * omega)));
-        else
-            vg[ig] = ModuleBase::FOUR_PI / (4 * omega * omega);
-    }
-
-    return vg;
-}
-
-template <typename Tdata>
-std::vector<double> Ewald_Vq<Tdata>::cal_erf_kernel(std::vector<ModuleBase::Vector3<double>>& gk, const double& omega)
-{
-    const int npw = gk.size();
-    std::vector<double> vg(npw);
-    for (size_t ig = 0; ig != npw; ++ig)
-    {
-        if (gk[ig].norm2())
-            vg[ig] = (ModuleBase::FOUR_PI / (gk[ig].norm2() * GlobalC::ucell.tpiba2))
-                     * (std::exp(-gk[ig].norm2() * GlobalC::ucell.tpiba2 / (4 * omega * omega)));
-        else //TODO: Auxiliary functions to eliminate singularities
-            vg[ig] = 0;
-    }
-
-    return vg;
-}
-
 // Zc
 template <typename Tdata>
 auto Ewald_Vq<Tdata>::cal_Vq1(const Ewald_Type& ewald_type,
@@ -149,6 +115,199 @@ auto Ewald_Vq<Tdata>::cal_Vq1(const Ewald_Type& ewald_type,
     ModuleBase::timer::tick("Ewald_Vq", "cal_Vq1");
     return datas;
 }
+
+template <typename Tdata>
+std::pair<std::vector<std::vector<ModuleBase::Vector3<double>>>, std::vector<std::vector<ModuleBase::ComplexMatrix>>>
+    Ewald_Vq<Tdata>::get_orb_q(const K_Vectors* kv,
+                               const ModulePW::PW_Basis_K* wfc_basis,
+                               const std::vector<std::vector<std::vector<Numerical_Orbital_Lm>>>& orb_in,
+                               const double& gk_ecut)
+{
+    ModuleBase::TITLE("Ewald_Vq", "get_orb_q");
+    ModuleBase::timer::tick("Ewald_Vq", "get_orb_q");
+
+    const int nspin0 = std::map<int, int>{
+        {1, 1},
+        {2, 2},
+        {4, 1}
+    }.at(GlobalV::NSPIN);
+    const int nks0 = kv->nks / nspin0;
+    int nmax_total = Exx_Abfs::Construct_Orbs::get_nmax_total(orb_in);
+    const int ntype = orb_in.size();
+    ModuleBase::realArray table_local(ntype, nmax_total, GlobalV::NQX);
+    Wavefunc_in_pw::make_table_q(orb_in, table_local);
+
+    std::vector<std::vector<ModuleBase::ComplexMatrix>> orb_in_Gs(nks0);
+    std::vector<int> npwk = get_npwk(kv, wfc_basis, gk_ecut);
+    std::vector<std::vector<ModuleBase::Vector3<double>>> gks(nks0);
+    std::vector<std::vector<ModuleBase::Vector3<double>>> gcar = get_gcar(npwk, wfc_basis);
+
+    for (size_t ik = 0; ik != nks0; ++ik)
+    {
+        const int npw = npwk[ik];
+        gks[ik].resize(npw);
+        for (size_t ig = 0; ig != npw; ++ig)
+            gks[ik][ig] = kv->kvec_c[ik] - gcar[ik][ig];
+
+        orb_in_Gs[ik] = this->produce_local_basis_in_pw(ik, gks[ik], orb_in, table_local);
+    }
+
+    std::pair<std::vector<std::vector<ModuleBase::Vector3<double>>>,
+              std::vector<std::vector<ModuleBase::ComplexMatrix>>>
+        result = std::make_pair(gks, orb_in_Gs);
+
+    ModuleBase::timer::tick("Ewald_Vq", "get_orb_q");
+    return result;
+}
+
+
+template <typename Tdata>
+std::vector<ModuleBase::ComplexMatrix> Ewald_Vq<Tdata>::produce_local_basis_in_pw(
+    const int& ik,
+    std::vector<ModuleBase::Vector3<double>>& gk,
+    const std::vector<std::vector<std::vector<Numerical_Orbital_Lm>>>& orb_in,
+    const ModuleBase::realArray& table_local)
+{
+    ModuleBase::TITLE("Ewald_Vq", "produce_local_basis_in_pw");
+    ModuleBase::timer::tick("Ewald_Vq", "produce_local_basis_in_pw");
+
+    const int npw = gk.size();
+    const int ntype = orb_in.size();
+    std::map<int, int> orb_nw = Exx_Abfs::Construct_Orbs::get_nw(orb_in);
+    std::vector<ModuleBase::ComplexMatrix> psi;
+    psi.resize(ntype);
+
+    int lmax = std::numeric_limits<int>::min();
+    for (const auto& out_vec: orb_in)
+    {
+        for (const auto& value: out_vec)
+        {
+            int temp = value.size();
+            if (temp > lmax)
+                lmax = temp;
+        }
+    }
+
+    const int total_lm = (lmax + 1) * (lmax + 1);
+    ModuleBase::matrix ylm(total_lm, npw);
+
+    ModuleBase::YlmReal::Ylm_Real(total_lm, npw, gk.data(), ylm);
+
+    std::vector<double> flq(npw);
+    for (size_t T = 0; T != ntype; ++T)
+    {
+        ModuleBase::ComplexMatrix sub_psi(orb_nw[T], npw);
+        int iwall = 0;
+        int ic = 0;
+        for (size_t L = 0; L != orb_in[T].size(); ++L)
+        {
+            std::complex<double> lphase = pow(ModuleBase::NEG_IMAG_UNIT, L);
+            for (size_t N = 0; N != orb_in[T][L].size(); ++N)
+            {
+                for (size_t ig = 0; ig != npw; ++ig)
+                    flq[ig] = ModuleBase::PolyInt::Polynomial_Interpolation(table_local,
+                                                                            T,
+                                                                            ic,
+                                                                            GlobalV::NQX,
+                                                                            GlobalV::DQ,
+                                                                            gk[ig].norm() * GlobalC::ucell.tpiba);
+
+                for (size_t m = 0; m != 2 * L + 1; ++m)
+                {
+                    const int lm = L * L + m;
+                    for (size_t ig = 0; ig != npw; ++ig)
+                        sub_psi(iwall, ig) = lphase * ylm(lm, ig) * flq[ig];
+
+                    ++iwall;
+                }
+                ++ic;
+            } // end for N
+        }     // end for L
+        psi[T] = sub_psi;
+    } // end for T
+
+    ModuleBase::timer::tick("Ewald_Vq", "produce_local_basis_in_pw");
+    return psi;
+}
+
+std::vector<int> Ewald_Vq::get_npwk(const K_Vectors* kv,
+                                           const ModulePW::PW_Basis_K* wfc_basis,
+                                           const double& gk_ecut)
+{
+
+    const int nspin0 = std::map<int, int>{
+        {1, 1},
+        {2, 2},
+        {4, 1}
+    }.at(GlobalV::NSPIN);
+    const int nks0 = kv->nks / nspin0;
+    std::vector<int> npwk(nks0);
+
+    for (size_t ik = 0; ik != nks0; ++ik)
+    {
+        int ng = 0;
+        for (size_t ig = 0; ig != wfc_basis->npw; ++ig)
+        {
+            const double gk2 = (this->get_gcar(wfc_basis, ig) + kv->kvec_c[ik]).norm2();
+            if (gk2 <= gk_ecut / wfc_basis->tpiba2)
+                ++ng;
+        }
+        npwk[ik] = ng;
+    }
+
+    return npwk;
+}
+
+
+std::vector<std::vector<int>> Ewald_Vq::get_igl2isz_k(std::vector<int>& npwk, const ModulePW::PW_Basis_K* wfc_basis)
+{
+    const int nks0 = npwk.size();
+    std::vector<std::vector<int>> igl2isz_k(nks0);
+    for(size_t ik = 0; ik != nks0; ++ik)
+    {
+        const int npw = npwk[ik];
+        igl2isz_k[ik].resize(npw);
+        for (size_t ig = 0; ig != npw; ++ig)
+            igl2isz_k[ik][ig] = wfc_basis->ig2isz[ig];
+    }
+
+    return igl2isz_k;
+}
+
+
+std::vector<std::vector<ModuleBase::Vector3<double>>> Ewald_Vq::get_gcar(std::vector<int>& npwk, const ModulePW::PW_Basis_K* wfc_basis)
+{
+    const int nks0 = npwk.size();
+    std::vector<std::vector<int>> igl2isz_k = get_igl2isz_k(npwk, wfc_basis);
+    std::vector<std::vector<ModuleBase::Vector3<double>>> gcar(nks0);
+    for(size_t ik = 0; ik != nks0; ++ik)
+    {
+        const int npw = npwk[ik];
+        gcar.resize(npw);
+        for (size_t ig = 0; ig != npw; ++ig)
+        {
+            int isz = igl2isz_k[ik][ig];
+            int iz = isz % wfc_basis->nz;
+            int is = isz / wfc_basis->nz;
+            int ix = wfc_basis->is2fftixy[is] / wfc_basis->fftny;
+            int iy = wfc_basis->is2fftixy[is] % wfc_basis->fftny;
+            if (ix >= int(wfc_basis->nx / 2) + 1)
+                ix -= wfc_basis->nx;
+            if (iy >= int(wfc_basis->ny / 2) + 1)
+                iy -= wfc_basis->ny;
+            if (iz >= int(wfc_basis->nz / 2) + 1)
+                iz -= wfc_basis->nz;
+            ModuleBase::Vector3<double> f;
+            f.x = ix;
+            f.y = iy;
+            f.z = iz;
+            gcar[ik][ig] = f * wfc_basis->G;
+        }
+    }
+
+    return gcar;
+}
+
 
 template <typename Tdata>
 auto Ewald_Vq<Tdata>::cal_Vq2(const K_Vectors* kv, std::map<TA, std::map<TAC, RI::Tensor<Tdata>>>& Vs)
@@ -261,170 +420,5 @@ auto Ewald_Vq<Tdata>::cal_Vs_ewald(const K_Vectors* kv,
     return datas;
 }
 
-template <typename Tdata>
-std::pair<std::vector<std::vector<ModuleBase::Vector3<double>>>, std::vector<std::vector<ModuleBase::ComplexMatrix>>>
-    Ewald_Vq<Tdata>::get_orb_q(const K_Vectors* kv,
-                               const ModulePW::PW_Basis_K* wfc_basis,
-                               const std::vector<std::vector<std::vector<Numerical_Orbital_Lm>>>& orb_in,
-                               const double& gk_ecut)
-{
-    ModuleBase::TITLE("Ewald_Vq", "get_orb_q");
-    ModuleBase::timer::tick("Ewald_Vq", "get_orb_q");
-
-    const int nspin0 = std::map<int, int>{
-        {1, 1},
-        {2, 2},
-        {4, 1}
-    }.at(GlobalV::NSPIN);
-    const int nks0 = kv->nks / nspin0;
-    int nmax_total = Exx_Abfs::Construct_Orbs::get_nmax_total(orb_in);
-    const int ntype = orb_in.size();
-    ModuleBase::realArray table_local(ntype, nmax_total, GlobalV::NQX);
-    Wavefunc_in_pw::make_table_q(orb_in, table_local);
-
-    std::vector<std::vector<ModuleBase::ComplexMatrix>> orb_in_Gs(nks0);
-    std::vector<int> npw = this->get_npwk(kv, wfc_basis, gk_ecut);
-    std::vector<std::vector<ModuleBase::Vector3<double>>> gks(nks0);
-
-    for (size_t ik = 0; ik != nks0; ++ik)
-    {
-        gks[ik].resize(npw[ik]);
-        for (size_t ig = 0; ig != npw[ik]; ++ig)
-            gks[ik][ig] = kv->kvec_c[ik] - this->get_gcar(wfc_basis, ig);
-
-        orb_in_Gs[ik] = this->produce_local_basis_in_pw(ik, gks[ik], orb_in, kv, wfc_basis, table_local, gk_ecut);
-    }
-
-    std::pair<std::vector<std::vector<ModuleBase::Vector3<double>>>,
-              std::vector<std::vector<ModuleBase::ComplexMatrix>>>
-        result = std::make_pair(gks, orb_in_Gs);
-
-    ModuleBase::timer::tick("Ewald_Vq", "get_orb_q");
-    return result;
-}
-
-template <typename Tdata>
-std::vector<ModuleBase::ComplexMatrix> Ewald_Vq<Tdata>::produce_local_basis_in_pw(
-    const int& ik,
-    std::vector<ModuleBase::Vector3<double>>& gk,
-    const std::vector<std::vector<std::vector<Numerical_Orbital_Lm>>>& orb_in,
-    const K_Vectors* kv,
-    const ModulePW::PW_Basis_K* wfc_basis,
-    const ModuleBase::realArray& table_local,
-    const double& gk_ecut)
-{
-    ModuleBase::TITLE("Ewald_Vq", "produce_local_basis_in_pw");
-    ModuleBase::timer::tick("Ewald_Vq", "produce_local_basis_in_pw");
-
-    const int npw = gk.size();
-    const int ntype = orb_in.size();
-    std::map<int, int> orb_nw = Exx_Abfs::Construct_Orbs::get_nw(orb_in);
-    std::vector<ModuleBase::ComplexMatrix> psi;
-    psi.resize(ntype);
-
-    int lmax = std::numeric_limits<int>::min();
-    for (const auto& out_vec: orb_in)
-    {
-        for (const auto& value: out_vec)
-        {
-            int temp = value.size();
-            if (temp > lmax)
-                lmax = temp;
-        }
-    }
-
-    const int total_lm = (lmax + 1) * (lmax + 1);
-    ModuleBase::matrix ylm(total_lm, npw);
-
-    ModuleBase::YlmReal::Ylm_Real(total_lm, npw, gk.data(), ylm);
-
-    std::vector<double> flq(npw);
-    for (size_t T = 0; T != ntype; ++T)
-    {
-        ModuleBase::ComplexMatrix sub_psi(orb_nw[T], npw);
-        int iwall = 0;
-        int ic = 0;
-        for (size_t L = 0; L != orb_in[T].size(); ++L)
-        {
-            std::complex<double> lphase = pow(ModuleBase::NEG_IMAG_UNIT, L);
-            for (size_t N = 0; N != orb_in[T][L].size(); ++N)
-            {
-                for (size_t ig = 0; ig != npw; ++ig)
-                    flq[ig] = ModuleBase::PolyInt::Polynomial_Interpolation(table_local,
-                                                                            T,
-                                                                            ic,
-                                                                            GlobalV::NQX,
-                                                                            GlobalV::DQ,
-                                                                            gk[ig].norm() * GlobalC::ucell.tpiba);
-
-                for (size_t m = 0; m != 2 * L + 1; ++m)
-                {
-                    const int lm = L * L + m;
-                    for (size_t ig = 0; ig != npw; ++ig)
-                        sub_psi(iwall, ig) = lphase * ylm(lm, ig) * flq[ig];
-
-                    ++iwall;
-                }
-                ++ic;
-            } // end for N
-        }     // end for L
-        psi[T] = sub_psi;
-    } // end for T
-
-    ModuleBase::timer::tick("Ewald_Vq", "produce_local_basis_in_pw");
-    return psi;
-}
-
-template <typename Tdata>
-std::vector<int> Ewald_Vq<Tdata>::get_npwk(const K_Vectors* kv,
-                                           const ModulePW::PW_Basis_K* wfc_basis,
-                                           const double& gk_ecut)
-{
-
-    const int nspin0 = std::map<int, int>{
-        {1, 1},
-        {2, 2},
-        {4, 1}
-    }.at(GlobalV::NSPIN);
-    const int nks0 = kv->nks / nspin0;
-    std::vector<int> npwk(nks0);
-
-    for (size_t ik = 0; ik != nks0; ++ik)
-    {
-        int ng = 0;
-        for (size_t ig = 0; ig != wfc_basis->npw; ++ig)
-        {
-            const double gk2 = (this->get_gcar(wfc_basis, ig) + kv->kvec_c[ik]).norm2();
-            if (gk2 <= gk_ecut / wfc_basis->tpiba2)
-                ++ng;
-        }
-        npwk[ik] = ng;
-    }
-
-    return npwk;
-}
-
-template <typename Tdata>
-ModuleBase::Vector3<double> Ewald_Vq<Tdata>::get_gcar(const ModulePW::PW_Basis_K* wfc_basis, const int ig)
-{
-    int isz = wfc_basis->ig2isz[ig];
-    int iz = isz % wfc_basis->nz;
-    int is = isz / wfc_basis->nz;
-    int ix = wfc_basis->is2fftixy[is] / wfc_basis->fftny;
-    int iy = wfc_basis->is2fftixy[is] % wfc_basis->fftny;
-    if (ix >= int(wfc_basis->nx / 2) + 1)
-        ix -= wfc_basis->nx;
-    if (iy >= int(wfc_basis->ny / 2) + 1)
-        iy -= wfc_basis->ny;
-    if (iz >= int(wfc_basis->nz / 2) + 1)
-        iz -= wfc_basis->nz;
-    ModuleBase::Vector3<double> f;
-    f.x = ix;
-    f.y = iy;
-    f.z = iz;
-    f = f * wfc_basis->G;
-    ModuleBase::Vector3<double> g_temp_ = f;
-    return g_temp_;
-}
 
 #endif
