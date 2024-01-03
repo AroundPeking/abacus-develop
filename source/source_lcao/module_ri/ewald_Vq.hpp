@@ -60,13 +60,13 @@ auto Ewald_Vq<Tdata>::cal_Vq1(const Ewald_Type& ewald_type,
         const int npw = gks[ik].size();
 
         std::vector<double> vg;
-        switch (ewald_type)
+        switch (ewald_type.ker_type)
         {
-        case Ewald_Type::Erfc:
-            vg = this->cal_erfc_kernel(gks[ik], parameter.at("hse_omega"));
+        case Kernal_Type::Hf:
+            vg = cal_hf_kernel(gks[ik]);
             break;
-        case Ewald_Type::Erf:
-            vg = this->cal_erf_kernel(gks[ik], parameter.at("hse_omega"));
+        case Kernal_Type::Erfc:
+            vg = cal_erfc_kernel(gks[ik], parameter.at("hse_omega"));
             break;
         default:
             throw(ModuleBase::GlobalFunc::TO_STRING(__FILE__) + " line " + ModuleBase::GlobalFunc::TO_STRING(__LINE__));
@@ -160,11 +160,10 @@ std::pair<std::vector<std::vector<ModuleBase::Vector3<double>>>, std::vector<std
     return result;
 }
 
-
-template <typename Tdata>
+` template <typename Tdata>
 std::vector<ModuleBase::ComplexMatrix> Ewald_Vq<Tdata>::produce_local_basis_in_pw(
     const int& ik,
-    std::vector<ModuleBase::Vector3<double>>& gk,
+    const std::vector<ModuleBase::Vector3<double>>& gk,
     const std::vector<std::vector<std::vector<Numerical_Orbital_Lm>>>& orb_in,
     const ModuleBase::realArray& table_local)
 {
@@ -230,9 +229,7 @@ std::vector<ModuleBase::ComplexMatrix> Ewald_Vq<Tdata>::produce_local_basis_in_p
     return psi;
 }
 
-std::vector<int> Ewald_Vq::get_npwk(const K_Vectors* kv,
-                                           const ModulePW::PW_Basis_K* wfc_basis,
-                                           const double& gk_ecut)
+std::vector<int> Ewald_Vq::get_npwk(const K_Vectors* kv, const ModulePW::PW_Basis_K* wfc_basis, const double& gk_ecut)
 {
 
     const int nspin0 = std::map<int, int>{
@@ -258,12 +255,12 @@ std::vector<int> Ewald_Vq::get_npwk(const K_Vectors* kv,
     return npwk;
 }
 
-
-std::vector<std::vector<int>> Ewald_Vq::get_igl2isz_k(std::vector<int>& npwk, const ModulePW::PW_Basis_K* wfc_basis)
+std::vector<std::vector<int>> Ewald_Vq::get_igl2isz_k(const std::vector<int>& npwk,
+                                                      const ModulePW::PW_Basis_K* wfc_basis)
 {
     const int nks0 = npwk.size();
     std::vector<std::vector<int>> igl2isz_k(nks0);
-    for(size_t ik = 0; ik != nks0; ++ik)
+    for (size_t ik = 0; ik != nks0; ++ik)
     {
         const int npw = npwk[ik];
         igl2isz_k[ik].resize(npw);
@@ -274,13 +271,13 @@ std::vector<std::vector<int>> Ewald_Vq::get_igl2isz_k(std::vector<int>& npwk, co
     return igl2isz_k;
 }
 
-
-std::vector<std::vector<ModuleBase::Vector3<double>>> Ewald_Vq::get_gcar(std::vector<int>& npwk, const ModulePW::PW_Basis_K* wfc_basis)
+std::vector<std::vector<ModuleBase::Vector3<double>>> Ewald_Vq::get_gcar(const std::vector<int>& npwk,
+                                                                         const ModulePW::PW_Basis_K* wfc_basis)
 {
     const int nks0 = npwk.size();
     std::vector<std::vector<int>> igl2isz_k = get_igl2isz_k(npwk, wfc_basis);
     std::vector<std::vector<ModuleBase::Vector3<double>>> gcar(nks0);
-    for(size_t ik = 0; ik != nks0; ++ik)
+    for (size_t ik = 0; ik != nks0; ++ik)
     {
         const int npw = npwk[ik];
         gcar.resize(npw);
@@ -308,9 +305,8 @@ std::vector<std::vector<ModuleBase::Vector3<double>>> Ewald_Vq::get_gcar(std::ve
     return gcar;
 }
 
-
 template <typename Tdata>
-auto Ewald_Vq<Tdata>::cal_Vq2(const K_Vectors* kv, std::map<TA, std::map<TAC, RI::Tensor<Tdata>>>& Vs)
+auto Ewald_Vq<Tdata>::cal_Vq2(const K_Vectors* kv, const std::map<TA, std::map<TAC, RI::Tensor<Tdata>>>& Vs)
     -> std::vector<std::map<TA, std::map<TA, RI::Tensor<std::complex<double>>>>>
 {
     ModuleBase::TITLE("Ewald_Vq", "cal_Vq2");
@@ -356,7 +352,7 @@ template <typename Tdata>
 auto Ewald_Vq<Tdata>::cal_Vs_ewald(const K_Vectors* kv,
                                    const std::vector<TA>& list_A0,
                                    const std::vector<TAC>& list_A1,
-                                   std::vector<std::map<TA, std::map<TA, RI::Tensor<std::complex<double>>>>>& Vq,
+                                   const std::vector<std::map<TA, std::map<TA, RI::Tensor<std::complex<double>>>>>& Vq,
                                    const double& ccp_rmesh_times) -> std::map<TA, std::map<TAC, RI::Tensor<Tdata>>>
 {
     ModuleBase::TITLE("Ewald_Vq", "cal_Vs_ewald");
@@ -419,6 +415,5 @@ auto Ewald_Vq<Tdata>::cal_Vs_ewald(const K_Vectors* kv,
     ModuleBase::timer::tick("Ewald_Vq", "cal_Vs_ewald");
     return datas;
 }
-
 
 #endif
