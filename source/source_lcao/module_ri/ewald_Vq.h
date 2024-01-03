@@ -30,7 +30,7 @@ class Ewald_Vq
     enum class Auxiliary_Func
     {
         Type_1, // exp
-        Type_2, // sin
+        Type_2, // Phys. Rev. B, 75:205126, May 2007.
         Default = -1,
     };
 
@@ -99,9 +99,9 @@ class Ewald_Vq
     static std::vector<double> cal_erfc_kernel(const std::vector<ModuleBase::Vector3<double>>& gk, const double& omega);
 
     double Ewald_Vq::solve_chi(const std::vector<ModuleBase::Vector3<double>>& gk,
-                                            const T_cal_fq& func_cal_fq)
-    //Phys. Rev. B, 75:205126, May 2007.
+                                            const T_cal_fq<double>& func_cal_fq)
     static double Ewald_Vq::fq_type_2(const ModuleBase::Vector3<double>& qvec)
+    double Ewald_Vq::cal_type_2(const std::vector<ModuleBase::Vector3<double>>& gk);
 };
 
 #include "ewald_Vq.hpp"

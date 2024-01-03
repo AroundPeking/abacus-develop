@@ -42,7 +42,7 @@ std::vector<double> Ewald_Vq::cal_hf_kernel(const std::vector<ModuleBase::Vector
 }
 
 // for numerical integral of fq
-double Ewald_Vq::solve_chi(const std::vector<ModuleBase::Vector3<double>>& gk, const T_cal_fq& func_cal_fq)
+double Ewald_Vq::solve_chi(const std::vector<ModuleBase::Vector3<double>>& gk, const T_cal_fq<double>& func_cal_fq)
 {
     const double SPIN_multiple = std::map<int, double>{
         {1, 0.5},
@@ -88,25 +88,31 @@ double Ewald_Vq::fq_type_2(const ModuleBase::Vector3<double>& qvec)
     std::vector<double> baq_2(3);
     const double prefactor = ModuleBase::TWO_PI * ModuleBase::TWO_PI;
 
-    for(size_t i=0; i!=3; ++i)
+    for (size_t i = 0; i != 3; ++i)
     {
         baq[i] = GlobalC::ucell.tpiba * bvec[i] * std::sin(avec[i] * qvec[i] * ModuleBase::TWO_PI);
         baq_2[i] = GlobalC::ucell.tpiba * bvec[i] * std::sin(avec[i] * qvec[i] * ModuleBase::PI);
-    }    
+    }
 
     double sum_baq = 0;
     double sum_baq_2 = 0;
-    for(size_t i=1; i!=4; ++i)
+    for (size_t i = 1; i != 4; ++i)
     {
-        size_t j = i%3+1;
-        size_t new_i = i-1;
-        size_t new_j = j-1;
+        size_t j = i % 3 + 1;
+        size_t new_i = i - 1;
+        size_t new_j = j - 1;
         sum_baq_2 += baq_2[new_i] * baq_2[new_i];
         sum_baq += baq[new_i] * baq[new_j];
     }
     double fq = prefactor / (4 * sum_baq_2 + 2 * sum_baq);
 
     return fq;
+}
+
+double Ewald_Vq::cal_type_2(const std::vector<ModuleBase::Vector3<double>>& gk)
+{
+    const T_cal_fq<double> func_cal_fq_type_2 = std::bind(&fq_type_2, this, std::placeholders::_1);
+    return this->solve_chi(gk, func_cal_fq_type_2);
 }
 
 #endif
