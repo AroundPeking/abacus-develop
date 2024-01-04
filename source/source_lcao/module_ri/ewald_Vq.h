@@ -29,8 +29,8 @@ class Ewald_Vq
 
     enum class Auxiliary_Func
     {
-        Type_1, // exp
-        Type_2, // Phys. Rev. B, 75:205126, May 2007.
+        Type_1, // Phys. Rev. B 75,205126 (2007).
+        Type_2, // Phys. Rev. B 48,11692 (1993).
         Default = -1,
     };
 
@@ -94,14 +94,26 @@ class Ewald_Vq
                                                        const ModulePW::PW_Basis_K* wfc_basis);
     static std::vector<std::vector<ModuleBase::Vector3<double>>> get_gcar(const std::vector<int>& npwk,
                                                                           const ModulePW::PW_Basis_K* wfc_basis);
-
     static std::vector<double> cal_hf_kernel(const std::vector<ModuleBase::Vector3<double>>& gk);
     static std::vector<double> cal_erfc_kernel(const std::vector<ModuleBase::Vector3<double>>& gk, const double& omega);
-
+    static double Iter_Integral(const T_cal_fq<double>& func_cal_fq,
+                                const TC nq_vec,
+                                const int& niter = 30,
+                                const double& eps = 1e-6,
+                                const int& a_rate = 3);
     double Ewald_Vq::solve_chi(const std::vector<ModuleBase::Vector3<double>>& gk,
-                                            const T_cal_fq<double>& func_cal_fq)
-    static double Ewald_Vq::fq_type_2(const ModuleBase::Vector3<double>& qvec)
-    double Ewald_Vq::cal_type_2(const std::vector<ModuleBase::Vector3<double>>& gk);
+                               const T_cal_fq<double>& func_cal_fq,
+                               const TC nq_vec,
+                               const int& niter = 30,
+                               const double& eps = 1e-6,
+                               const int& a_rate = 3);
+
+    // TODO: Here, fq is only suited for 3D system
+    // TODO: lower dimension please see PHYSICAL REVIEW B 87, 165122 (2013)
+
+    // qdiv=2 for 3D; qdiv=1 for 2D
+    static double Ewald_Vq::fq_type_1(const ModuleBase::Vector3<double>& qvec, const int& qdiv);
+    double Ewald_Vq::cal_type_1(const std::vector<ModuleBase::Vector3<double>>& gk, const int& qdiv);
 };
 
 #include "ewald_Vq.hpp"
