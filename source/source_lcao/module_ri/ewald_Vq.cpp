@@ -114,10 +114,15 @@ double Ewald_Vq::fq_type_1(const ModuleBase::Vector3<double>& qvec, const int& q
     return fq;
 }
 
-double Ewald_Vq::cal_type_1(const std::vector<ModuleBase::Vector3<double>>& gk, const int& qdiv)
+double Ewald_Vq::cal_type_1(const std::vector<ModuleBase::Vector3<double>>& gk,
+                            const int& qdiv,
+                            const TC nq_vec,
+                            const int& niter,
+                            const double& eps,
+                            const int& a_rate)
 {
     const T_cal_fq<double> func_cal_fq_type_1 = std::bind(&fq_type_1, this, std::placeholders::_1, qdiv);
-    return this->solve_chi(gk, func_cal_fq_type_1);
+    return this->solve_chi(gk, func_cal_fq_type_1, nq_vec, niter, eps, a_rate);
 }
 
 double Ewald_Vq::Iter_Integral(const T_cal_fq<double>& func_cal_fq,

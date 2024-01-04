@@ -98,22 +98,27 @@ class Ewald_Vq
     static std::vector<double> cal_erfc_kernel(const std::vector<ModuleBase::Vector3<double>>& gk, const double& omega);
     static double Iter_Integral(const T_cal_fq<double>& func_cal_fq,
                                 const TC nq_vec,
-                                const int& niter = 30,
-                                const double& eps = 1e-6,
-                                const int& a_rate = 3);
+                                const int& niter,
+                                const double& eps,
+                                const int& a_rate);
     double Ewald_Vq::solve_chi(const std::vector<ModuleBase::Vector3<double>>& gk,
                                const T_cal_fq<double>& func_cal_fq,
                                const TC nq_vec,
-                               const int& niter = 30,
-                               const double& eps = 1e-6,
-                               const int& a_rate = 3);
+                               const int& niter,
+                               const double& eps,
+                               const int& a_rate);
 
     // TODO: Here, fq is only suited for 3D system
     // TODO: lower dimension please see PHYSICAL REVIEW B 87, 165122 (2013)
 
     // qdiv=2 for 3D; qdiv=1 for 2D
     static double Ewald_Vq::fq_type_1(const ModuleBase::Vector3<double>& qvec, const int& qdiv);
-    double Ewald_Vq::cal_type_1(const std::vector<ModuleBase::Vector3<double>>& gk, const int& qdiv);
+    double Ewald_Vq::cal_type_1(const std::vector<ModuleBase::Vector3<double>>& gk,
+                                const int& qdiv,
+                                const TC nq_vec,
+                                const int& niter=30,
+                                const double& eps=1e-6,
+                                const int& a_rate=3);
 };
 
 #include "ewald_Vq.hpp"
