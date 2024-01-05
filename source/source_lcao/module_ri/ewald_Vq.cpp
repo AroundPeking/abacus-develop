@@ -50,6 +50,19 @@ double Ewald_Vq::solve_chi(const std::vector<ModuleBase::Vector3<double>>& gk,
                            const double& eps,
                            const int& a_rate)
 {
+    // cal fq integral
+    double fq_int = Iter_Integral(func_cal_fq, nq_vec, niter, eps, a_rate);
+
+    double chi = solve_chi(gk, func_cal_fq, fq_int);
+
+    return chi;
+}
+
+// for analytic integral of fq
+double Ewald_Vq::solve_chi(const std::vector<ModuleBase::Vector3<double>>& gk,
+                           const T_cal_fq<double>& func_cal_fq,
+                           const double& fq_int)
+{
     const double SPIN_multiple = std::map<int, double>{
         {1, 0.5},
         {2, 1  },
@@ -62,9 +75,6 @@ double Ewald_Vq::solve_chi(const std::vector<ModuleBase::Vector3<double>>& gk,
     for (size_t ig = 0; ig != npw; ++ig)
         if (gk[ig].norm2())
             fq_sum += func_cal_fq(gk[ig]) * kv->wk[ik] * SPIN_multiple;
-
-    // cal fq integral
-    double fq_int = Iter_Integral(func_cal_fq, nq_vec, niter, eps, a_rate);
 
     double chi = ModuleBase::FOUR_PI * (fq_int - fq_sum);
 
@@ -123,6 +133,59 @@ double Ewald_Vq::cal_type_1(const std::vector<ModuleBase::Vector3<double>>& gk,
 {
     const T_cal_fq<double> func_cal_fq_type_1 = std::bind(&fq_type_1, this, std::placeholders::_1, qdiv);
     return this->solve_chi(gk, func_cal_fq_type_1, nq_vec, niter, eps, a_rate);
+}
+
+double Ewald_Vq::fq_type_2(const ModuleBase::Vector3<double>& qvec,
+                           const int& qdiv,
+                           const ModulePW::PW_Basis_K* wfc_basis,
+                           const double& gamma)
+{
+    double fq = 0.0;
+    const int qexpo = -abs(qdiv);
+
+    for (size_t ig = 0; ig != wfc_basis->npw; ++ig)
+    {
+        int isz = ig2isz[ig];
+        int iz = isz % wfc_basis->nz;
+        int is = isz / wfc_basis->nz;
+        int ix = wfc_basis->is2fftixy[is] / wfc_basis->fftny;
+        int iy = wfc_basis->is2fftixy[is] % wfc_basis->fftny;
+        if (ix >= int(wfc_basis->nx / 2) + 1)
+            ix -= wfc_basis->nx;
+        if (iy >= int(wfc_basis->ny / 2) + 1)
+            iy -= wfc_basis->ny;
+        if (iz >= int(wfc_basis->nz / 2) + 1)
+            iz -= wfc_basis->nz;
+        ModuleBase::Vector3<double> f;
+        f.x = ix;
+        f.y = iy;
+        f.z = iz;
+        ModuleBase::Vector3<double> qg = qvec + f * wfc_basis->G;
+
+        fq += std::exp(-gamma * qg.norm2()) * std::pow(qg.norm(), qexpo);
+    }
+
+    return fq;
+}
+
+double Ewald_Vq::cal_type_2(const std::vector<ModuleBase::Vector3<double>>& gk,
+                            const int& qdiv,
+                            const ModulePW::PW_Basis_K* wfc_basis,
+                            const double& gamma)
+{
+    const T_cal_fq<double> func_cal_fq_type_2
+        = std::bind(&fq_type_2, this, std::placeholders::_1, qdiv, wfc_basis, gamma);
+    double prefactor = ModuleBase::TWO_PI * std::pow(gamma, -1 / qdiv);
+    double fq_int;
+    if (qdiv == 2)
+        fq_int = prefactor * std::sqrt(ModuleBase::PI);
+    else if (qdiv == 1)
+        fq_int = prefactor;
+    else:
+        WARNING_QUIT("Ewald_Vq::cal_type_2",
+                     "Type 2 fq only supports qdiv=1 or qdiv=2!");
+
+    return this->solve_chi(gk, func_cal_fq_type_2, fq_int);
 }
 
 double Ewald_Vq::Iter_Integral(const T_cal_fq<double>& func_cal_fq,
