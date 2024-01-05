@@ -111,14 +111,14 @@ class Ewald_Vq
                      const T_cal_fq<double>& func_cal_fq,
                      const double& fq_int);
 
-    // TODO: Here, fq is only suited for 3D system
+    // TODO: Here, fq now only works on 3D and 2D systems
     // TODO: lower dimension please see PHYSICAL REVIEW B 87, 165122 (2013)
 
     // qdiv=2 i.e. q^{-2} for 3D;
     // qdiv=1 i.e. q^{-1} for 2D.
-    static double fq_type_1(const ModuleBase::Vector3<double>& qvec, const int& qdiv);
+    static double fq_type_1(const ModuleBase::Vector3<double>& qvec, const int& qdiv, , std::vector<ModuleBase::Vector3<double>>& avec, std::vector<ModuleBase::Vector3<double>>& bvec);
     double cal_type_1(const std::vector<ModuleBase::Vector3<double>>& gk,
-                      const int& qdiv,
+                      const double& qdense,
                       const TC nq_vec,
                       const int& niter = 30,
                       const double& eps = 1e-6,

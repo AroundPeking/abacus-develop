@@ -81,23 +81,8 @@ double Ewald_Vq::solve_chi(const std::vector<ModuleBase::Vector3<double>>& gk,
     return chi;
 }
 
-double Ewald_Vq::fq_type_1(const ModuleBase::Vector3<double>& qvec, const int& qdiv)
+double Ewald_Vq::fq_type_1(const ModuleBase::Vector3<double>& qvec, const int& qdiv, std::vector<ModuleBase::Vector3<double>>& avec, std::vector<ModuleBase::Vector3<double>>& bvec)
 {
-    std::vector<ModuleBase::Vector3<double>> avec = {GlobalC::ucell.a1, GlobalC::ucell.a2, GlobalC::ucell.a3};
-    std::vector<ModuleBase::Vector3<double>> bvec;
-    bvec.resize(3);
-    bvec[0].x = GlobalC::ucell.G.e11;
-    bvec[0].y = GlobalC::ucell.G.e12;
-    bvec[0].z = GlobalC::ucell.G.e13;
-
-    bvec[1].x = GlobalC::ucell.G.e21;
-    bvec[1].y = GlobalC::ucell.G.e22;
-    bvec[1].z = GlobalC::ucell.G.e23;
-
-    bvec[2].x = GlobalC::ucell.G.e31;
-    bvec[2].y = GlobalC::ucell.G.e32;
-    bvec[2].z = GlobalC::ucell.G.e33;
-
     std::vector<double> baq(3);
     std::vector<double> baq_2(3);
     const int qexpo = -abs(qdiv);
@@ -126,11 +111,30 @@ double Ewald_Vq::fq_type_1(const ModuleBase::Vector3<double>& qvec, const int& q
 
 double Ewald_Vq::cal_type_1(const std::vector<ModuleBase::Vector3<double>>& gk,
                             const int& qdiv,
-                            const TC nq_vec,
+                            const double& qdense,
                             const int& niter,
                             const double& eps,
                             const int& a_rate)
 {
+    
+    std::vector<ModuleBase::Vector3<double>> avec = {GlobalC::ucell.a1, GlobalC::ucell.a2, GlobalC::ucell.a3};
+    std::vector<ModuleBase::Vector3<double>> bvec;
+    bvec.resize(3);
+    bvec[0].x = GlobalC::ucell.G.e11;
+    bvec[0].y = GlobalC::ucell.G.e12;
+    bvec[0].z = GlobalC::ucell.G.e13;
+
+    bvec[1].x = GlobalC::ucell.G.e21;
+    bvec[1].y = GlobalC::ucell.G.e22;
+    bvec[1].z = GlobalC::ucell.G.e23;
+
+    bvec[2].x = GlobalC::ucell.G.e31;
+    bvec[2].y = GlobalC::ucell.G.e32;
+    bvec[2].z = GlobalC::ucell.G.e33;
+    TC nq_vec;
+    for(size_t i=0; i!=3; ++i)
+        nq_vec[i] = static_cast<int>(bvec[i].norm()*qdense);
+
     const T_cal_fq<double> func_cal_fq_type_1 = std::bind(&fq_type_1, this, std::placeholders::_1, qdiv);
     return this->solve_chi(gk, func_cal_fq_type_1, nq_vec, niter, eps, a_rate);
 }
