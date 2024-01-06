@@ -51,7 +51,6 @@ class Ewald_Vq
     using TA = int;
     using TC = std::array<int, 3>;
     using TAC = std::pair<TA, TC>;
-    using T_cal_fq = std::function<double(const std::vector<ModuleBase::Vector3<double>>& gk, const double& param)>;
 
   public:
     std::map<TA, std::map<TAC, RI::Tensor<Tdata>>> cal_Vs_ewald(
@@ -75,7 +74,7 @@ class Ewald_Vq
     std::vector<std::map<TA, std::map<TA, RI::Tensor<std::complex<double>>>>> cal_Vq2(
         const K_Vectors* kv,
         const std::map<TA, std::map<TAC, RI::Tensor<Tdata>>>& Vs);
-  
+
   private:
     const int nspin0 = std::map<int, int>{
         {1, 1},
@@ -109,13 +108,13 @@ class Ewald_Vq
     static std::vector<double> cal_hf_kernel(const std::vector<ModuleBase::Vector3<double>>& gk);
     static std::vector<double> cal_erfc_kernel(const std::vector<ModuleBase::Vector3<double>>& gk, const double& omega);
     static double Iter_Integral(const T_cal_fq<double>& func_cal_fq,
-                                const TC nq_vec,
+                                const TC& nq_arr,
                                 const int& niter,
                                 const double& eps,
                                 const int& a_rate);
     double solve_chi(const std::vector<ModuleBase::Vector3<double>>& gk,
                      const T_cal_fq<double>& func_cal_fq,
-                     const TC nq_vec,
+                     const TC& nq_arr,
                      const int& niter,
                      const double& eps,
                      const int& a_rate);
@@ -128,6 +127,8 @@ class Ewald_Vq
 
     // qdiv=2 i.e. q^{-2} for 3D;
     // qdiv=1 i.e. q^{-1} for 2D.
+    using T_cal_fq_type_1
+        = std::function<double(const std::vector<ModuleBase::Vector3<double>>& gk, const double& qdiv)>;
     static double fq_type_1(const ModuleBase::Vector3<double>& qvec,
                             const int& qdiv,
                             std::vector<ModuleBase::Vector3<double>>& avec,
@@ -139,6 +140,10 @@ class Ewald_Vq
                       const double& eps,
                       const int& a_rate);
     // gamma: chosen as the radius of sphere which has the same volume as the Brillouin zone.
+    using T_cal_fq_type_2 = std::function<double(const std::vector<ModuleBase::Vector3<double>>& gk,
+                                                 const double& qdiv,
+                                                 const ModulePW::PW_Basis_K* wfc_basis,
+                                                 const double& lambda)>;
     static double fq_type_2(const ModuleBase::Vector3<double>& qvec,
                             const int& qdiv,
                             const ModulePW::PW_Basis_K* wfc_basis,

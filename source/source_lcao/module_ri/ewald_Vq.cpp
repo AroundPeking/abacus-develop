@@ -44,7 +44,7 @@ std::vector<double> Ewald_Vq::cal_hf_kernel(const std::vector<ModuleBase::Vector
 // for numerical integral of fq
 double Ewald_Vq::solve_chi(const std::vector<ModuleBase::Vector3<double>>& gk,
                            const T_cal_fq<double>& func_cal_fq,
-                           const TC nq_arr,
+                           const TC& nq_arr,
                            const int& niter,
                            const double& eps,
                            const int& a_rate)
@@ -134,7 +134,7 @@ double Ewald_Vq::cal_type_1(const std::vector<ModuleBase::Vector3<double>>& gk,
     std::transform(bvec.begin(), bvec.end(), nq_arr.begin(), [&qdense](ModuleBase::Vector3<double>& vec) {
         static_cast<int>(vec.norm() * qdense)
     });
-    const T_cal_fq<double> func_cal_fq_type_1 = std::bind(&fq_type_1, this, std::placeholders::_1, qdiv);
+    const T_cal_fq_type_1 func_cal_fq_type_1 = std::bind(&fq_type_1, this, std::placeholders::_1, qdiv);
 
     ModuleBase::timer::tick("Ewald_Vq", "cal_type_1");
     return this->solve_chi(gk, func_cal_fq_type_1, nq_arr, niter, eps, a_rate);
@@ -181,7 +181,7 @@ double Ewald_Vq::cal_type_2(const std::vector<ModuleBase::Vector3<double>>& gk,
     ModuleBase::TITLE("Ewald_Vq", "cal_type_2");
     ModuleBase::timer::tick("Ewald_Vq", "cal_type_2");
 
-    const T_cal_fq<double> func_cal_fq_type_2
+    const T_cal_fq_type_2 func_cal_fq_type_2
         = std::bind(&fq_type_2, this, std::placeholders::_1, qdiv, wfc_basis, lambda);
     double prefactor = ModuleBase::TWO_PI * std::pow(lambda, -1 / qdiv);
     double fq_int;
@@ -198,44 +198,44 @@ double Ewald_Vq::cal_type_2(const std::vector<ModuleBase::Vector3<double>>& gk,
 }
 
 double Ewald_Vq::Iter_Integral(const T_cal_fq<double>& func_cal_fq,
-                               const TC nq_vec,
+                               const TC& nq_arr,
                                const int& niter,
                                const double& eps,
                                const int& a_rate)
 {
-    bool any_negative = std::any_of(nq_vec.begin(), nq_vec.end(), [](int i) { return i < 0; });
-    bool any_nthree = std::any_of(nq_vec.begin(), nq_vec.end(), [](int i) { return i % 3 != 0; });
+    bool any_negative = std::any_of(nq_arr.begin(), nq_arr.end(), [](int i) { return i < 0; });
+    bool any_nthree = std::any_of(nq_arr.begin(), nq_arr.end(), [](int i) { return i % 3 != 0; });
     if (any_negative || any_nthree)
         WARNING_QUIT("Ewald_Vq::Iter_Integral",
-                     "The elements of `nq_vec` should be non-negative and multiples of three!");
-    bool all_zero = std::all_of(nq_vec.begin(), nq_vec.end(), [](int i) { return i == 0; });
+                     "The elements of `nq_arr` should be non-negative and multiples of three!");
+    bool all_zero = std::all_of(nq_arr.begin(), nq_arr.end(), [](int i) { return i == 0; });
     if (all_zero)
-        WARNING_QUIT("Ewald_Vq::Iter_Integral", "At least one element of `nq_vec` should be non-zero!");
+        WARNING_QUIT("Ewald_Vq::Iter_Integral", "At least one element of `nq_arr` should be non-zero!");
 
     const int nqs
-        = std::accumulate(nq_vec.begin(), nq_vec.end(), 1, [](int a, int b) { return (2 * a + 1) * (2 * b + 1); });
+        = std::accumulate(nq_arr.begin(), nq_arr.end(), 1, [](int a, int b) { return (2 * a + 1) * (2 * b + 1); });
     std::array<double, 3> qstep{};
-    TC nq_vec_in{};
+    TC nq_arr_in{};
     int ndim = 0;
     for (size_t i = 0; i != 3; ++i)
     {
-        if (nq_vec[i] != 0)
+        if (nq_arr[i] != 0)
         {
-            qstep[i] = 1 / (2 * nq_vec[i] + 1);
+            qstep[i] = 1 / (2 * nq_arr[i] + 1);
             ndim += 1;
         }
-        nq_vec_in[i] = nq_vec[i] / a_rate;
+        nq_arr_in[i] = nq_arr[i] / a_rate;
     }
 
     double integ = 0.0;
     for (size_t iter = 0; iter != niter; ++iter)
     {
         double integ_iter = 0.0;
-        for (size_t ig1 = -nq_vec[0]; ig1 == nq_vec[0]; ++ig1)
-            for (size_t ig2 = -nq_vec[1]; ig2 == nq_vec[1]; ++ig2)
-                for (size_t ig3 = -nq_vec[2]; ig3 == nq_vec[2]; ++ig3)
+        for (size_t ig1 = -nq_arr[0]; ig1 == nq_arr[0]; ++ig1)
+            for (size_t ig2 = -nq_arr[1]; ig2 == nq_arr[1]; ++ig2)
+                for (size_t ig3 = -nq_arr[2]; ig3 == nq_arr[2]; ++ig3)
                 {
-                    if (std::abs(ig1) <= nq_vec_in[0] && std::abs(ig2) <= nq_vec_in[1] && std::abs(ig3) <= nq_vec_in[2])
+                    if (std::abs(ig1) <= nq_arr_in[0] && std::abs(ig2) <= nq_arr_in[1] && std::abs(ig3) <= nq_arr_in[2])
                         continue;
                     ModuleBase::Vector3<double> qvec;
                     qvec.x = qstep[0] * ig1;
