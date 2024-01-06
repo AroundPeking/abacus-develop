@@ -8,21 +8,23 @@
 
 #include "ewald_Vq.h"
 
+#include <algorithm>
 #include <cmath>
 #include <numeric>
+
+#include "module_base/timer.h"
+#include "module_base/tool_title.h"
 
 std::vector<double> Ewald_Vq::cal_erfc_kernel(const std::vector<ModuleBase::Vector3<double>>& gk, const double& omega)
 {
     const int npw = gk.size();
     std::vector<double> vg(npw);
+    const double prefactor = ModuleBase::FOUR_PI;
+
     for (size_t ig = 0; ig != npw; ++ig)
-    {
-        if (gk[ig].norm2())
-            vg[ig] = (ModuleBase::FOUR_PI / (gk[ig].norm2() * GlobalC::ucell.tpiba2))
-                     * (1 - std::exp(-gk[ig].norm2() * GlobalC::ucell.tpiba2 / (4 * omega * omega)));
-        else
-            vg[ig] = ModuleBase::FOUR_PI / (4 * omega * omega);
-    }
+        vg[ig] = gk[ig].norm2() ? (prefactor / (gk[ig].norm2() * GlobalC::ucell.tpiba2))
+                                      * (1 - std::exp(-gk[ig].norm2() * GlobalC::ucell.tpiba2 / (4 * omega * omega)))
+                                : prefactor / (4 * omega * omega);
 
     return vg;
 }
@@ -31,13 +33,10 @@ std::vector<double> Ewald_Vq::cal_hf_kernel(const std::vector<ModuleBase::Vector
 {
     const int npw = gk.size();
     std::vector<double> vg(npw);
+
+    // set 0 for add Auxiliary functions to eliminate singularities later
     for (size_t ig = 0; ig != npw; ++ig)
-    {
-        if (gk[ig].norm2())
-            vg[ig] = ModuleBase::FOUR_PI / (gk[ig].norm2() * GlobalC::ucell.tpiba2);
-        else // set 0 for add Auxiliary functions to eliminate singularities later
-            vg[ig] = 0;
-    }
+        vg[ig] = gk[ig].norm2() ? (ModuleBase::FOUR_PI / (gk[ig].norm2() * GlobalC::ucell.tpiba2)) : 0;
 
     return vg;
 }
@@ -45,13 +44,13 @@ std::vector<double> Ewald_Vq::cal_hf_kernel(const std::vector<ModuleBase::Vector
 // for numerical integral of fq
 double Ewald_Vq::solve_chi(const std::vector<ModuleBase::Vector3<double>>& gk,
                            const T_cal_fq<double>& func_cal_fq,
-                           const TC nq_vec,
+                           const TC nq_arr,
                            const int& niter,
                            const double& eps,
                            const int& a_rate)
 {
     // cal fq integral
-    double fq_int = Iter_Integral(func_cal_fq, nq_vec, niter, eps, a_rate);
+    double fq_int = Iter_Integral(func_cal_fq, nq_arr, niter, eps, a_rate);
 
     double chi = solve_chi(gk, func_cal_fq, fq_int);
 
@@ -63,25 +62,22 @@ double Ewald_Vq::solve_chi(const std::vector<ModuleBase::Vector3<double>>& gk,
                            const T_cal_fq<double>& func_cal_fq,
                            const double& fq_int)
 {
-    const double SPIN_multiple = std::map<int, double>{
-        {1, 0.5},
-        {2, 1  },
-        {4, 1  }
-    }.at(GlobalV::NSPIN);
     const int npw = gk.size();
 
     // cal fq sum except q=0
     double fq_sum = 0;
     for (size_t ig = 0; ig != npw; ++ig)
-        if (gk[ig].norm2())
-            fq_sum += func_cal_fq(gk[ig]) * kv->wk[ik] * SPIN_multiple;
+        fq_sum += gk[ig].norm2() ? func_cal_fq(gk[ig]) * kv->wk[ik] * this->SPIN_multiple : 0;
 
     double chi = ModuleBase::FOUR_PI * (fq_int - fq_sum);
 
     return chi;
 }
 
-double Ewald_Vq::fq_type_1(const ModuleBase::Vector3<double>& qvec, const int& qdiv, std::vector<ModuleBase::Vector3<double>>& avec, std::vector<ModuleBase::Vector3<double>>& bvec)
+double Ewald_Vq::fq_type_1(const ModuleBase::Vector3<double>& qvec,
+                           const int& qdiv,
+                           std::vector<ModuleBase::Vector3<double>>& avec,
+                           std::vector<ModuleBase::Vector3<double>>& bvec)
 {
     std::vector<double> baq(3);
     std::vector<double> baq_2(3);
@@ -116,7 +112,9 @@ double Ewald_Vq::cal_type_1(const std::vector<ModuleBase::Vector3<double>>& gk,
                             const double& eps,
                             const int& a_rate)
 {
-    
+    ModuleBase::TITLE("Ewald_Vq", "cal_type_1");
+    ModuleBase::timer::tick("Ewald_Vq", "cal_type_1");
+
     std::vector<ModuleBase::Vector3<double>> avec = {GlobalC::ucell.a1, GlobalC::ucell.a2, GlobalC::ucell.a3};
     std::vector<ModuleBase::Vector3<double>> bvec;
     bvec.resize(3);
@@ -131,18 +129,21 @@ double Ewald_Vq::cal_type_1(const std::vector<ModuleBase::Vector3<double>>& gk,
     bvec[2].x = GlobalC::ucell.G.e31;
     bvec[2].y = GlobalC::ucell.G.e32;
     bvec[2].z = GlobalC::ucell.G.e33;
-    TC nq_vec;
-    for(size_t i=0; i!=3; ++i)
-        nq_vec[i] = static_cast<int>(bvec[i].norm()*qdense);
 
+    TC nq_arr;
+    std::transform(bvec.begin(), bvec.end(), nq_arr.begin(), [&qdense](ModuleBase::Vector3<double>& vec) {
+        static_cast<int>(vec.norm() * qdense)
+    });
     const T_cal_fq<double> func_cal_fq_type_1 = std::bind(&fq_type_1, this, std::placeholders::_1, qdiv);
-    return this->solve_chi(gk, func_cal_fq_type_1, nq_vec, niter, eps, a_rate);
+
+    ModuleBase::timer::tick("Ewald_Vq", "cal_type_1");
+    return this->solve_chi(gk, func_cal_fq_type_1, nq_arr, niter, eps, a_rate);
 }
 
 double Ewald_Vq::fq_type_2(const ModuleBase::Vector3<double>& qvec,
                            const int& qdiv,
                            const ModulePW::PW_Basis_K* wfc_basis,
-                           const double& gamma)
+                           const double& lambda)
 {
     double fq = 0.0;
     const int qexpo = -abs(qdiv);
@@ -166,7 +167,7 @@ double Ewald_Vq::fq_type_2(const ModuleBase::Vector3<double>& qvec,
         f.z = iz;
         ModuleBase::Vector3<double> qg = qvec + f * wfc_basis->G;
 
-        fq += std::exp(-gamma * qg.norm2()) * std::pow(qg.norm(), qexpo);
+        fq += std::exp(-lambda * qg.norm2()) * std::pow(qg.norm(), qexpo);
     }
 
     return fq;
@@ -175,11 +176,14 @@ double Ewald_Vq::fq_type_2(const ModuleBase::Vector3<double>& qvec,
 double Ewald_Vq::cal_type_2(const std::vector<ModuleBase::Vector3<double>>& gk,
                             const int& qdiv,
                             const ModulePW::PW_Basis_K* wfc_basis,
-                            const double& gamma)
+                            const double& lambda)
 {
+    ModuleBase::TITLE("Ewald_Vq", "cal_type_2");
+    ModuleBase::timer::tick("Ewald_Vq", "cal_type_2");
+
     const T_cal_fq<double> func_cal_fq_type_2
-        = std::bind(&fq_type_2, this, std::placeholders::_1, qdiv, wfc_basis, gamma);
-    double prefactor = ModuleBase::TWO_PI * std::pow(gamma, -1 / qdiv);
+        = std::bind(&fq_type_2, this, std::placeholders::_1, qdiv, wfc_basis, lambda);
+    double prefactor = ModuleBase::TWO_PI * std::pow(lambda, -1 / qdiv);
     double fq_int;
     if (qdiv == 2)
         fq_int = prefactor * std::sqrt(ModuleBase::PI);
@@ -189,6 +193,7 @@ double Ewald_Vq::cal_type_2(const std::vector<ModuleBase::Vector3<double>>& gk,
         WARNING_QUIT("Ewald_Vq::cal_type_2",
                      "Type 2 fq only supports qdiv=1 or qdiv=2!");
 
+    ModuleBase::timer::tick("Ewald_Vq", "cal_type_2");
     return this->solve_chi(gk, func_cal_fq_type_2, fq_int);
 }
 
@@ -227,27 +232,22 @@ double Ewald_Vq::Iter_Integral(const T_cal_fq<double>& func_cal_fq,
     {
         double integ_iter = 0.0;
         for (size_t ig1 = -nq_vec[0]; ig1 == nq_vec[0]; ++ig1)
-        {
             for (size_t ig2 = -nq_vec[1]; ig2 == nq_vec[1]; ++ig2)
-            {
                 for (size_t ig3 = -nq_vec[2]; ig3 == nq_vec[2]; ++ig3)
                 {
                     if (std::abs(ig1) <= nq_vec_in[0] && std::abs(ig2) <= nq_vec_in[1] && std::abs(ig3) <= nq_vec_in[2])
                         continue;
                     ModuleBase::Vector3<double> qvec;
-                    qvec.x = qstep[0] * static_cast<double>(ig1);
-                    qvec.y = qstep[1] * static_cast<double>(ig2);
-                    qvec.z = qstep[2] * static_cast<double>(ig3);
+                    qvec.x = qstep[0] * ig1;
+                    qvec.y = qstep[1] * ig2;
+                    qvec.z = qstep[2] * ig3;
                     integ_iter += func_cal_fq(qvec);
                 }
-            }
-        }
         integ_iter /= nqs * pow(a_rate, ndim * (iter - 1)); // Each iteration reduces dq by a multiple of a_rate
         integ += integ_iter;
         if (iter != 0 && integ_iter < eps)
             break;
-        for (auto& qs: qstep)
-            qs /= a_rate;
+        std::for_each(qstep.begin(), qstep.end(), [&a_rate](double& qs) { qs /= a_rate; });
     }
 
     if (iter == niter)

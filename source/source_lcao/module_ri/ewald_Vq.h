@@ -75,6 +75,18 @@ class Ewald_Vq
     std::vector<std::map<TA, std::map<TA, RI::Tensor<std::complex<double>>>>> cal_Vq2(
         const K_Vectors* kv,
         const std::map<TA, std::map<TAC, RI::Tensor<Tdata>>>& Vs);
+  
+  private:
+    const int nspin0 = std::map<int, int>{
+        {1, 1},
+        {2, 2},
+        {4, 1}
+    }.at(GlobalV::NSPIN);
+    const double SPIN_multiple = std::map<int, double>{
+        {1, 0.5},
+        {2, 1  },
+        {4, 1  }
+    }.at(GlobalV::NSPIN);
 
   private:
     std::pair<std::vector<std::vector<ModuleBase::Vector3<double>>>,
@@ -116,18 +128,25 @@ class Ewald_Vq
 
     // qdiv=2 i.e. q^{-2} for 3D;
     // qdiv=1 i.e. q^{-1} for 2D.
-    static double fq_type_1(const ModuleBase::Vector3<double>& qvec, const int& qdiv, , std::vector<ModuleBase::Vector3<double>>& avec, std::vector<ModuleBase::Vector3<double>>& bvec);
+    static double fq_type_1(const ModuleBase::Vector3<double>& qvec,
+                            const int& qdiv,
+                            std::vector<ModuleBase::Vector3<double>>& avec,
+                            std::vector<ModuleBase::Vector3<double>>& bvec);
     double cal_type_1(const std::vector<ModuleBase::Vector3<double>>& gk,
+                      const int& qdiv,
                       const double& qdense,
-                      const TC nq_vec,
-                      const int& niter = 30,
-                      const double& eps = 1e-6,
-                      const int& a_rate = 3);
+                      const int& niter,
+                      const double& eps,
+                      const int& a_rate);
     // gamma: chosen as the radius of sphere which has the same volume as the Brillouin zone.
     static double fq_type_2(const ModuleBase::Vector3<double>& qvec,
                             const int& qdiv,
                             const ModulePW::PW_Basis_K* wfc_basis,
-                            const double& gamma);
+                            const double& lambda);
+    double cal_type_2(const std::vector<ModuleBase::Vector3<double>>& gk,
+                      const int& qdiv,
+                      const ModulePW::PW_Basis_K* wfc_basis,
+                      const double& lambda)
 };
 
 #include "ewald_Vq.hpp"

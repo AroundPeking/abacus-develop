@@ -35,12 +35,7 @@ auto Ewald_Vq<Tdata>::cal_Vq1(const Ewald_Type& ewald_type,
     ModuleBase::TITLE("Ewald_Vq", "cal_Vq1");
     ModuleBase::timer::tick("Ewald_Vq", "cal_Vq1");
 
-    const int nspin0 = std::map<int, int>{
-        {1, 1},
-        {2, 2},
-        {4, 1}
-    }.at(GlobalV::NSPIN);
-    const int nks0 = kv->nks / nspin0;
+    const int nks0 = kv->nks / this->nspin0;
     std::vector<std::map<TA, std::map<TA, RI::Tensor<std::complex<double>>>>> datas;
     datas.resize(nks0);
     std::map<int, int> abfs_nw = Exx_Abfs::Construct_Orbs::get_nw(abfs);
@@ -58,15 +53,37 @@ auto Ewald_Vq<Tdata>::cal_Vq1(const Ewald_Type& ewald_type,
     for (size_t ik = 0; ik != nks0; ++ik)
     {
         const int npw = gks[ik].size();
+        std::vector<ModuleBase::Vector3<double>> gk = gks[ik];
+        double V0 = 0;
 
         std::vector<double> vg;
         switch (ewald_type.ker_type)
         {
         case Kernal_Type::Hf:
-            vg = cal_hf_kernel(gks[ik]);
+            vg = cal_hf_kernel(gk);
+            switch (ewald_type.aux_func)
+            {
+            case Auxiliary_Func::Type_1:
+                V0 = this->cal_type_1(gk,
+                                      static_cast<int>(parameter.at("ewald_qdiv")),
+                                      parameter.at("ewald_qdense"),
+                                      static_cast<int>(parameter.at("ewald_niter")),
+                                      parameter.at("ewald_eps"),
+                                      static_cast<int>(parameter.at("ewald_arate")));
+                break;
+            case Auxiliary_Func::Type_2:
+                V0 = this->cal_type_2(gk,
+                                      static_cast<int>(parameter.at("ewald_qdiv")),
+                                      wfc_basis,
+                                      parameter.at("ewald_lambda"));
+                break;
+            default:
+                throw(ModuleBase::GlobalFunc::TO_STRING(__FILE__) + " line "
+                      + ModuleBase::GlobalFunc::TO_STRING(__LINE__));
+            }
             break;
         case Kernal_Type::Erfc:
-            vg = cal_erfc_kernel(gks[ik], parameter.at("hse_omega"));
+            vg = cal_erfc_kernel(gk, parameter.at("hse_omega"));
             break;
         default:
             throw(ModuleBase::GlobalFunc::TO_STRING(__FILE__) + " line " + ModuleBase::GlobalFunc::TO_STRING(__LINE__));
@@ -94,7 +111,6 @@ auto Ewald_Vq<Tdata>::cal_Vq1(const Ewald_Type& ewald_type,
                 RI::Tensor<std::complex<double>> data({abfs_nw_t0, abfs_nw_t1});
 
                 for (size_t iw0 = 0; iw0 != abfs_nw_t0; ++iw0)
-                {
                     for (size_t iw1 = 0; iw1 != abfs_nw_t1; ++iw1)
                     {
                         for (size_t ig = 0; ig != npw; ++ig)
@@ -104,8 +120,8 @@ auto Ewald_Vq<Tdata>::cal_Vq1(const Ewald_Type& ewald_type,
                             data(iw0, iw1) += std::conj(abfs_ccp_in_Gs[ik][it0](iw0, ig)) * abfs_in_Gs[ik][it1](iw1, ig)
                                               * phase * vg[ig];
                         }
+                        data(iw0, iw1) += V0; // correction for V(q-G=0)
                     }
-                }
 #pragma omp critical(Ewald_Vq_cal_Vq1)
                 datas[ik][iat0][iat1] = data;
             }
@@ -126,12 +142,7 @@ std::pair<std::vector<std::vector<ModuleBase::Vector3<double>>>, std::vector<std
     ModuleBase::TITLE("Ewald_Vq", "get_orb_q");
     ModuleBase::timer::tick("Ewald_Vq", "get_orb_q");
 
-    const int nspin0 = std::map<int, int>{
-        {1, 1},
-        {2, 2},
-        {4, 1}
-    }.at(GlobalV::NSPIN);
-    const int nks0 = kv->nks / nspin0;
+    const int nks0 = kv->nks / this->nspin0;
     int nmax_total = Exx_Abfs::Construct_Orbs::get_nmax_total(orb_in);
     const int ntype = orb_in.size();
     ModuleBase::realArray table_local(ntype, nmax_total, GlobalV::NQX);
@@ -160,7 +171,7 @@ std::pair<std::vector<std::vector<ModuleBase::Vector3<double>>>, std::vector<std
     return result;
 }
 
-` template <typename Tdata>
+template <typename Tdata>
 std::vector<ModuleBase::ComplexMatrix> Ewald_Vq<Tdata>::produce_local_basis_in_pw(
     const int& ik,
     const std::vector<ModuleBase::Vector3<double>>& gk,
@@ -178,18 +189,15 @@ std::vector<ModuleBase::ComplexMatrix> Ewald_Vq<Tdata>::produce_local_basis_in_p
 
     int lmax = std::numeric_limits<int>::min();
     for (const auto& out_vec: orb_in)
-    {
         for (const auto& value: out_vec)
         {
             int temp = value.size();
             if (temp > lmax)
                 lmax = temp;
         }
-    }
 
     const int total_lm = (lmax + 1) * (lmax + 1);
     ModuleBase::matrix ylm(total_lm, npw);
-
     ModuleBase::YlmReal::Ylm_Real(total_lm, npw, gk.data(), ylm);
 
     std::vector<double> flq(npw);
@@ -231,13 +239,7 @@ std::vector<ModuleBase::ComplexMatrix> Ewald_Vq<Tdata>::produce_local_basis_in_p
 
 std::vector<int> Ewald_Vq::get_npwk(const K_Vectors* kv, const ModulePW::PW_Basis_K* wfc_basis, const double& gk_ecut)
 {
-
-    const int nspin0 = std::map<int, int>{
-        {1, 1},
-        {2, 2},
-        {4, 1}
-    }.at(GlobalV::NSPIN);
-    const int nks0 = kv->nks / nspin0;
+    const int nks0 = kv->nks / this->nspin0;
     std::vector<int> npwk(nks0);
 
     for (size_t ik = 0; ik != nks0; ++ik)
@@ -312,12 +314,7 @@ auto Ewald_Vq<Tdata>::cal_Vq2(const K_Vectors* kv, const std::map<TA, std::map<T
     ModuleBase::TITLE("Ewald_Vq", "cal_Vq2");
     ModuleBase::timer::tick("Ewald_Vq", "cal_Vq2");
 
-    const int nspin0 = std::map<int, int>{
-        {1, 1},
-        {2, 2},
-        {4, 1}
-    }.at(GlobalV::NSPIN);
-    const int nks0 = kv->nks / nspin0;
+    const int nks0 = kv->nks / this->nspin0;
     std::vector<std::map<TA, std::map<TA, RI::Tensor<std::complex<double>>>>> datas;
     datas.resize(nks0);
 
@@ -359,17 +356,7 @@ auto Ewald_Vq<Tdata>::cal_Vs_ewald(const K_Vectors* kv,
     ModuleBase::timer::tick("Ewald_Vq", "cal_Vs_ewald");
 
     std::map<TA, std::map<TAC, RI::Tensor<Tdata>>> datas;
-    const double SPIN_multiple = std::map<int, double>{
-        {1, 0.5},
-        {2, 1  },
-        {4, 1  }
-    }.at(GlobalV::NSPIN);
-    const int nspin0 = std::map<int, int>{
-        {1, 1},
-        {2, 2},
-        {4, 1}
-    }.at(GlobalV::NSPIN);
-    const int nks0 = kv->nks / nspin0;
+    const int nks0 = kv->nks / this->nspin0;
 
     for (size_t i0 = 0; i0 != list_A0.size(); ++i0)
     {
@@ -396,9 +383,9 @@ auto Ewald_Vq<Tdata>::cal_Vs_ewald(const K_Vectors* kv,
                     const std::complex<double> frac
                         = std::exp(-ModuleBase::TWO_PI * ModuleBase::IMAG_UNIT
                                    * (kv->kvec_c[ik] * (RI_Util::array3_to_Vector3(cell1) * GlobalC::ucell.latvec)))
-                          * kv->wk[ik] * SPIN_multiple;
+                          * kv->wk[ik] * this->SPIN_multiple;
                     RI::Tensor<Tdata> Vs_tmp;
-                    if (static_cast<int>(std::round(SPIN_multiple * kv->wk[ik] * kv->nkstot_full)) == 2)
+                    if (static_cast<int>(std::round(this->SPIN_multiple * kv->wk[ik] * kv->nkstot_full)) == 2)
                         Vs_tmp = RI_2D_Comm::tensor_real(RI::Global_Func::convert<Tdata>(Vq[ik][iat0][iat1] * frac));
                     else
                         Vs_tmp = RI::Global_Func::convert<Tdata>(Vq[ik][iat0][iat1] * frac);
