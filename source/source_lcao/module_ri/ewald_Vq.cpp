@@ -74,7 +74,7 @@ double Ewald_Vq::solve_chi(const std::vector<ModuleBase::Vector3<double>>& gk,
     return chi;
 }
 
-double Ewald_Vq::fq_type_1(const ModuleBase::Vector3<double>& qvec,
+double Ewald_Vq::fq_type_0(const ModuleBase::Vector3<double>& qvec,
                            const int& qdiv,
                            std::vector<ModuleBase::Vector3<double>>& avec,
                            std::vector<ModuleBase::Vector3<double>>& bvec)
@@ -105,15 +105,15 @@ double Ewald_Vq::fq_type_1(const ModuleBase::Vector3<double>& qvec,
     return fq;
 }
 
-double Ewald_Vq::cal_type_1(const std::vector<ModuleBase::Vector3<double>>& gk,
+double Ewald_Vq::cal_type_0(const std::vector<ModuleBase::Vector3<double>>& gk,
                             const int& qdiv,
                             const double& qdense,
                             const int& niter,
                             const double& eps,
                             const int& a_rate)
 {
-    ModuleBase::TITLE("Ewald_Vq", "cal_type_1");
-    ModuleBase::timer::tick("Ewald_Vq", "cal_type_1");
+    ModuleBase::TITLE("Ewald_Vq", "cal_type_0");
+    ModuleBase::timer::tick("Ewald_Vq", "cal_type_0");
 
     std::vector<ModuleBase::Vector3<double>> avec = {GlobalC::ucell.a1, GlobalC::ucell.a2, GlobalC::ucell.a3};
     std::vector<ModuleBase::Vector3<double>> bvec;
@@ -134,13 +134,13 @@ double Ewald_Vq::cal_type_1(const std::vector<ModuleBase::Vector3<double>>& gk,
     std::transform(bvec.begin(), bvec.end(), nq_arr.begin(), [&qdense](ModuleBase::Vector3<double>& vec) {
         static_cast<int>(vec.norm() * qdense)
     });
-    const T_cal_fq_type_1 func_cal_fq_type_1 = std::bind(&fq_type_1, this, std::placeholders::_1, qdiv);
+    const T_cal_fq_type_0 func_cal_fq_type_0 = std::bind(&fq_type_0, this, std::placeholders::_1, qdiv);
 
-    ModuleBase::timer::tick("Ewald_Vq", "cal_type_1");
-    return this->solve_chi(gk, func_cal_fq_type_1, nq_arr, niter, eps, a_rate);
+    ModuleBase::timer::tick("Ewald_Vq", "cal_type_0");
+    return this->solve_chi(gk, func_cal_fq_type_0, nq_arr, niter, eps, a_rate);
 }
 
-double Ewald_Vq::fq_type_2(const ModuleBase::Vector3<double>& qvec,
+double Ewald_Vq::fq_type_1(const ModuleBase::Vector3<double>& qvec,
                            const int& qdiv,
                            const ModulePW::PW_Basis_K* wfc_basis,
                            const double& lambda)
@@ -173,16 +173,16 @@ double Ewald_Vq::fq_type_2(const ModuleBase::Vector3<double>& qvec,
     return fq;
 }
 
-double Ewald_Vq::cal_type_2(const std::vector<ModuleBase::Vector3<double>>& gk,
+double Ewald_Vq::cal_type_1(const std::vector<ModuleBase::Vector3<double>>& gk,
                             const int& qdiv,
                             const ModulePW::PW_Basis_K* wfc_basis,
                             const double& lambda)
 {
-    ModuleBase::TITLE("Ewald_Vq", "cal_type_2");
-    ModuleBase::timer::tick("Ewald_Vq", "cal_type_2");
+    ModuleBase::TITLE("Ewald_Vq", "cal_type_1");
+    ModuleBase::timer::tick("Ewald_Vq", "cal_type_1");
 
-    const T_cal_fq_type_2 func_cal_fq_type_2
-        = std::bind(&fq_type_2, this, std::placeholders::_1, qdiv, wfc_basis, lambda);
+    const T_cal_fq_type_1 func_cal_fq_type_1
+        = std::bind(&fq_type_1, this, std::placeholders::_1, qdiv, wfc_basis, lambda);
     double prefactor = ModuleBase::TWO_PI * std::pow(lambda, -1 / qdiv);
     double fq_int;
     if (qdiv == 2)
@@ -190,11 +190,11 @@ double Ewald_Vq::cal_type_2(const std::vector<ModuleBase::Vector3<double>>& gk,
     else if (qdiv == 1)
         fq_int = prefactor;
     else:
-        WARNING_QUIT("Ewald_Vq::cal_type_2",
-                     "Type 2 fq only supports qdiv=1 or qdiv=2!");
+        WARNING_QUIT("Ewald_Vq::cal_type_1",
+                     "Type 1 fq only supports qdiv=1 or qdiv=2!");
 
-    ModuleBase::timer::tick("Ewald_Vq", "cal_type_2");
-    return this->solve_chi(gk, func_cal_fq_type_2, fq_int);
+    ModuleBase::timer::tick("Ewald_Vq", "cal_type_1");
+    return this->solve_chi(gk, func_cal_fq_type_1, fq_int);
 }
 
 double Ewald_Vq::Iter_Integral(const T_cal_fq<double>& func_cal_fq,

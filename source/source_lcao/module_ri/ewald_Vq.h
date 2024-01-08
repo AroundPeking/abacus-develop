@@ -29,8 +29,8 @@ class Ewald_Vq
 
     enum class Auxiliary_Func
     {
-        Type_1, // Phys. Rev. B, 75:205126, May 2007.
-        Type_2, // Phys. Rev. B, 48:5058--5068, Aug 1993.
+        Type_0, // Phys. Rev. B, 75:205126, May 2007.
+        Type_1, // Phys. Rev. B, 48:5058--5068, Aug 1993.
         Default = -1,
     };
 
@@ -43,7 +43,7 @@ class Ewald_Vq
             : ker_type(ker_type_), aux_func(aux_func_)
         {
             if (ker_type == Kernal_Type::Hf)
-                assert(aux_func == Auxiliary_Func::Type_1 || aux_func == Auxiliary_Func::Type_2)
+                assert(aux_func == Auxiliary_Func::Type_0 || aux_func == Auxiliary_Func::Type_1)
         }
     };
     Ewald_Type ewald_type;
@@ -135,28 +135,28 @@ class Ewald_Vq
 
     // qdiv=2 i.e. q^{-2} for 3D;
     // qdiv=1 i.e. q^{-1} for 2D.
-    using T_cal_fq_type_1
+    using T_cal_fq_type_0
         = std::function<double(const std::vector<ModuleBase::Vector3<double>>& gk, const double& qdiv)>;
-    static double fq_type_1(const ModuleBase::Vector3<double>& qvec,
+    static double fq_type_0(const ModuleBase::Vector3<double>& qvec,
                             const int& qdiv,
                             std::vector<ModuleBase::Vector3<double>>& avec,
                             std::vector<ModuleBase::Vector3<double>>& bvec);
-    double cal_type_1(const std::vector<ModuleBase::Vector3<double>>& gk,
+    double cal_type_0(const std::vector<ModuleBase::Vector3<double>>& gk,
                       const int& qdiv,
                       const double& qdense,
                       const int& niter,
                       const double& eps,
                       const int& a_rate);
     // gamma: chosen as the radius of sphere which has the same volume as the Brillouin zone.
-    using T_cal_fq_type_2 = std::function<double(const std::vector<ModuleBase::Vector3<double>>& gk,
+    using T_cal_fq_type_1 = std::function<double(const std::vector<ModuleBase::Vector3<double>>& gk,
                                                  const double& qdiv,
                                                  const ModulePW::PW_Basis_K* wfc_basis,
                                                  const double& lambda)>;
-    static double fq_type_2(const ModuleBase::Vector3<double>& qvec,
+    static double fq_type_1(const ModuleBase::Vector3<double>& qvec,
                             const int& qdiv,
                             const ModulePW::PW_Basis_K* wfc_basis,
                             const double& lambda);
-    double cal_type_2(const std::vector<ModuleBase::Vector3<double>>& gk,
+    double cal_type_1(const std::vector<ModuleBase::Vector3<double>>& gk,
                       const int& qdiv,
                       const ModulePW::PW_Basis_K* wfc_basis,
                       const double& lambda)

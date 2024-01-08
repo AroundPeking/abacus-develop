@@ -112,16 +112,16 @@ auto Ewald_Vq<Tdata>::cal_Vq_q(const Ewald_Type& ewald_type,
             vg = cal_hf_kernel(gk);
             switch (ewald_type.aux_func)
             {
-            case Auxiliary_Func::Type_1:
-                V0 = this->cal_type_1(gk,
+            case Auxiliary_Func::Type_0:
+                V0 = this->cal_type_0(gk,
                                       static_cast<int>(parameter.at("ewald_qdiv")),
                                       parameter.at("ewald_qdense"),
                                       static_cast<int>(parameter.at("ewald_niter")),
                                       parameter.at("ewald_eps"),
                                       static_cast<int>(parameter.at("ewald_arate")));
                 break;
-            case Auxiliary_Func::Type_2:
-                V0 = this->cal_type_2(gk,
+            case Auxiliary_Func::Type_1:
+                V0 = this->cal_type_1(gk,
                                       static_cast<int>(parameter.at("ewald_qdiv")),
                                       wfc_basis,
                                       parameter.at("ewald_lambda"));
