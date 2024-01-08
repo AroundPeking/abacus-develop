@@ -21,7 +21,7 @@
 
 // Zc
 template <typename Tdata>
-auto Ewald_Vq<Tdata>::cal_Vq1(const Ewald_Type& ewald_type,
+auto Ewald_Vq<Tdata>::cal_Vq_q(const Ewald_Type& ewald_type,
                               const std::vector<std::vector<std::vector<Numerical_Orbital_Lm>>>& abfs,
                               const K_Vectors* kv,
                               const ModulePW::PW_Basis_K* wfc_basis,
@@ -30,8 +30,8 @@ auto Ewald_Vq<Tdata>::cal_Vq1(const Ewald_Type& ewald_type,
                               const std::map<std::string, double>& parameter)
     -> std::vector<std::map<TA, std::map<TA, RI::Tensor<std::complex<double>>>>>
 {
-    ModuleBase::TITLE("Ewald_Vq", "cal_Vq1");
-    ModuleBase::timer::tick("Ewald_Vq", "cal_Vq1");
+    ModuleBase::TITLE("Ewald_Vq", "cal_Vq_q");
+    ModuleBase::timer::tick("Ewald_Vq", "cal_Vq_q");
 
     const int nks0 = kv->nks / this->nspin0;
     std::vector<std::map<TA, std::map<TA, RI::Tensor<std::complex<double>>>>> datas;
@@ -126,7 +126,7 @@ auto Ewald_Vq<Tdata>::cal_Vq1(const Ewald_Type& ewald_type,
         }
     }
 
-    ModuleBase::timer::tick("Ewald_Vq", "cal_Vq1");
+    ModuleBase::timer::tick("Ewald_Vq", "cal_Vq_q");
     return datas;
 }
 
@@ -306,11 +306,11 @@ std::vector<std::vector<ModuleBase::Vector3<double>>> Ewald_Vq::get_gcar(const s
 }
 
 template <typename Tdata>
-auto Ewald_Vq<Tdata>::cal_Vq2(const K_Vectors* kv, const std::map<TA, std::map<TAC, RI::Tensor<Tdata>>>& Vs)
+auto Ewald_Vq<Tdata>::cal_Vq_R(const K_Vectors* kv, const std::map<TA, std::map<TAC, RI::Tensor<Tdata>>>& Vs)
     -> std::vector<std::map<TA, std::map<TA, RI::Tensor<std::complex<double>>>>>
 {
-    ModuleBase::TITLE("Ewald_Vq", "cal_Vq2");
-    ModuleBase::timer::tick("Ewald_Vq", "cal_Vq2");
+    ModuleBase::TITLE("Ewald_Vq", "cal_Vq_R");
+    ModuleBase::timer::tick("Ewald_Vq", "cal_Vq_R");
 
     const int nks0 = kv->nks / this->nspin0;
     std::vector<std::map<TA, std::map<TA, RI::Tensor<std::complex<double>>>>> datas;
@@ -339,19 +339,19 @@ auto Ewald_Vq<Tdata>::cal_Vq2(const K_Vectors* kv, const std::map<TA, std::map<T
         }
     }
 
-    ModuleBase::timer::tick("Ewald_Vq", "cal_Vq2");
+    ModuleBase::timer::tick("Ewald_Vq", "cal_Vq_R");
     return datas;
 }
 
 template <typename Tdata>
-auto Ewald_Vq<Tdata>::cal_Vs_ewald(const K_Vectors* kv,
+auto Ewald_Vq<Tdata>::Vq_2_Vs(const K_Vectors* kv,
                                    const std::vector<TA>& list_A0,
                                    const std::vector<TAC>& list_A1,
                                    const std::vector<std::map<TA, std::map<TA, RI::Tensor<std::complex<double>>>>>& Vq,
                                    const double& ccp_rmesh_times) -> std::map<TA, std::map<TAC, RI::Tensor<Tdata>>>
 {
-    ModuleBase::TITLE("Ewald_Vq", "cal_Vs_ewald");
-    ModuleBase::timer::tick("Ewald_Vq", "cal_Vs_ewald");
+    ModuleBase::TITLE("Ewald_Vq", "Vq_2_Vs");
+    ModuleBase::timer::tick("Ewald_Vq", "Vq_2_Vs");
 
     std::map<TA, std::map<TAC, RI::Tensor<Tdata>>> datas;
     const int nks0 = kv->nks / this->nspin0;
@@ -397,7 +397,7 @@ auto Ewald_Vq<Tdata>::cal_Vs_ewald(const K_Vectors* kv,
         }
     }
 
-    ModuleBase::timer::tick("Ewald_Vq", "cal_Vs_ewald");
+    ModuleBase::timer::tick("Ewald_Vq", "Vq_2_Vs");
     return datas;
 }
 

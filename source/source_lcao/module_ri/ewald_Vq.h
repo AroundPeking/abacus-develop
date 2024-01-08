@@ -54,14 +54,15 @@ class Ewald_Vq
     using TAC = std::pair<TA, TC>;
 
   public:
-    std::map<TA, std::map<TAC, RI::Tensor<Tdata>>> cal_Vs_ewald(
+    std::map<TA, std::map<TAC, RI::Tensor<Tdata>>> Vq_2_Vs(
         const K_Vectors* kv,
         const std::vector<TA>& list_A0,
         const std::vector<TAC>& list_A1,
         const std::vector<std::map<TA, std::map<TA, RI::Tensor<std::complex<double>>>>>& Vq,
         const double& ccp_rmesh_times);
 
-    std::vector<std::map<TA, std::map<TA, RI::Tensor<std::complex<double>>>>> cal_Vq1(
+    //\sum_G P*(q-G)v(q-G)P(q-G)\exp(-i(q-G)\tau)
+    std::vector<std::map<TA, std::map<TA, RI::Tensor<std::complex<double>>>>> cal_Vq_q(
         const Ewald_Type& ewald_type,
         const std::vector<std::vector<std::vector<Numerical_Orbital_Lm>>>& abfs,
         const K_Vectors* kv,
@@ -70,7 +71,8 @@ class Ewald_Vq
         const std::vector<TAC>& list_A1,
         const std::map<std::string, double>& parameter);
 
-    std::vector<std::map<TA, std::map<TA, RI::Tensor<std::complex<double>>>>> cal_Vq2(
+    //\sum_R V(R)\exp(iqR)
+    std::vector<std::map<TA, std::map<TA, RI::Tensor<std::complex<double>>>>> cal_Vq_R(
         const K_Vectors* kv,
         const std::map<TA, std::map<TAC, RI::Tensor<Tdata>>>& Vs);
 
