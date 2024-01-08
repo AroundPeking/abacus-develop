@@ -23,13 +23,11 @@
 template <typename Tdata>
 auto Ewald_Vq<Tdata>::cal_Vq1(const Ewald_Type& ewald_type,
                               const std::vector<std::vector<std::vector<Numerical_Orbital_Lm>>>& abfs,
-                              const std::vector<std::vector<std::vector<Numerical_Orbital_Lm>>>& abfs_ccp,
                               const K_Vectors* kv,
                               const ModulePW::PW_Basis_K* wfc_basis,
                               const std::vector<TA>& list_A0,
                               const std::vector<TAC>& list_A1,
-                              const std::map<std::string, double>& parameter,
-                              const double& gk_ecut)
+                              const std::map<std::string, double>& parameter)
     -> std::vector<std::map<TA, std::map<TA, RI::Tensor<std::complex<double>>>>>
 {
     ModuleBase::TITLE("Ewald_Vq", "cal_Vq1");
@@ -41,7 +39,7 @@ auto Ewald_Vq<Tdata>::cal_Vq1(const Ewald_Type& ewald_type,
     std::map<int, int> abfs_nw = Exx_Abfs::Construct_Orbs::get_nw(abfs);
     std::pair<std::vector<std::vector<ModuleBase::Vector3<double>>>,
               std::vector<std::vector<ModuleBase::ComplexMatrix>>>
-        result1 = this->get_orb_q(kv, wfc_basis, abfs, gk_ecut);
+        result1 = this->get_orb_q(kv, wfc_basis, abfs, parameter.at("ewald_ecut"));
     std::vector<std::vector<ModuleBase::Vector3<double>>> gks = result1.first;
     std::vector<std::vector<ModuleBase::ComplexMatrix>> abfs_in_Gs = result1.second;
 
@@ -106,7 +104,7 @@ auto Ewald_Vq<Tdata>::cal_Vq1(const Ewald_Type& ewald_type,
                 const int it1 = GlobalC::ucell.iat2it[iat1];
                 const ModuleBase::Vector3<double> tau1 = GlobalC::ucell.atoms[it1].tau[ia1];
 
-                const size_t abfs_nw_t0 = abfs_ccp_nw[it0];
+                const size_t abfs_nw_t0 = abfs_nw[it0];
                 const size_t abfs_nw_t1 = abfs_nw[it1];
                 RI::Tensor<std::complex<double>> data({abfs_nw_t0, abfs_nw_t1});
 
@@ -117,7 +115,7 @@ auto Ewald_Vq<Tdata>::cal_Vq1(const Ewald_Type& ewald_type,
                         {
                             std::complex<double> phase
                                 = std::exp(ModuleBase::TWO_PI * ModuleBase::IMAG_UNIT * (gks[ik][ig] * (tau0 - tau1)));
-                            data(iw0, iw1) += std::conj(abfs_ccp_in_Gs[ik][it0](iw0, ig)) * abfs_in_Gs[ik][it1](iw1, ig)
+                            data(iw0, iw1) += std::conj(abfs_in_Gs[ik][it0](iw0, ig)) * abfs_in_Gs[ik][it1](iw1, ig)
                                               * phase * vg[ig];
                         }
                         data(iw0, iw1) += V0; // correction for V(q-G=0)

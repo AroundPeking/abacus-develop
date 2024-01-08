@@ -46,6 +46,7 @@ class Ewald_Vq
                 assert(aux_func == Auxiliary_Func::Type_1 || aux_func == Auxiliary_Func::Type_2)
         }
     };
+    Ewald_Type ewald_type;
 
   private:
     using TA = int;
@@ -63,13 +64,11 @@ class Ewald_Vq
     std::vector<std::map<TA, std::map<TA, RI::Tensor<std::complex<double>>>>> cal_Vq1(
         const Ewald_Type& ewald_type,
         const std::vector<std::vector<std::vector<Numerical_Orbital_Lm>>>& abfs,
-        const std::vector<std::vector<std::vector<Numerical_Orbital_Lm>>>& abfs_ccp,
         const K_Vectors* kv,
         const ModulePW::PW_Basis_K* wfc_basis,
         const std::vector<TA>& list_A0,
         const std::vector<TAC>& list_A1,
-        const std::map<std::string, double>& parameter,
-        const double& gk_ecut);
+        const std::map<std::string, double>& parameter);
 
     std::vector<std::map<TA, std::map<TA, RI::Tensor<std::complex<double>>>>> cal_Vq2(
         const K_Vectors* kv,
