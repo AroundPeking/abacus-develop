@@ -54,12 +54,20 @@ class Ewald_Vq
     using TAC = std::pair<TA, TC>;
 
   public:
-    std::map<TA, std::map<TAC, RI::Tensor<Tdata>>> Vq_2_Vs(
+    /*-------------------------------------------
+    cal_Vs_ewald:
+      in -> 
+        Vs_sr: non-periodic R
+        Vq: full Vq
+      out -> 
+        Vs_full: cam_alpha * Vs_full based on periodic R + cam_beta * Vs_sr based on non-periodic R
+    -------------------------------------------*/
+    void cal_Vs_ewald(
         const K_Vectors* kv,
-        const std::vector<TA>& list_A0,
-        const std::vector<TAC>& list_A1,
+        const std::map<TA, std::map<TAC, RI::Tensor<Tdata>>>& Vs, 
         const std::vector<std::map<TA, std::map<TA, RI::Tensor<std::complex<double>>>>>& Vq,
-        const double& ccp_rmesh_times);
+        const double& cam_alpha,
+        const double& cam_beta);
 
     //\sum_G P*(q-G)v(q-G)P(q-G)\exp(-i(q-G)\tau)
     std::vector<std::map<TA, std::map<TA, RI::Tensor<std::complex<double>>>>> cal_Vq_q(
