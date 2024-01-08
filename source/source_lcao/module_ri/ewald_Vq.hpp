@@ -20,12 +20,11 @@
 #include "module_hamilt_lcao/hamilt_lcaodft/wavefunc_in_pw.h"
 
 template <typename Tdata>
-void Ewald_Vq<Tdata>::cal_Vs_ewald(
-    const K_Vectors* kv,
-    const std::map<TA, std::map<TAC, RI::Tensor<Tdata>>>& Vs,
-    const std::vector<std::map<TA, std::map<TA, RI::Tensor<std::complex<double>>>>>& Vq,
-    const double& cam_alpha,
-    const double& cam_beta)
+void Ewald_Vq<Tdata>::cal_Vs_ewald(const K_Vectors* kv,
+                                   const std::map<TA, std::map<TAC, RI::Tensor<Tdata>>>& Vs,
+                                   const std::vector<std::map<TA, std::map<TA, RI::Tensor<std::complex<double>>>>>& Vq,
+                                   const double& cam_alpha,
+                                   const double& cam_beta)
 {
     ModuleBase::TITLE("Ewald_Vq", "cal_Vs_ewald");
     ModuleBase::timer::tick("Ewald_Vq", "cal_Vs_ewald");
@@ -34,21 +33,23 @@ void Ewald_Vq<Tdata>::cal_Vs_ewald(
     const int nks0 = kv->nks / this->nspin0;
     std::map<TA, std::map<TAC, RI::Tensor<Tdata>>> datas;
 
-    for (const auto &Vs_tmpA : Vs)
+    for (const auto& Vs_tmpA: Vs)
     {
         const TA iat0 = Vs_tmpA.first;
-        for(const auto &Vs_tmpB : Vs_tmpA.second)
+        for (const auto& Vs_tmpB: Vs_tmpA.second)
         {
             const TA iat1 = Vs_tmpB.first.first;
-			const TC cell1 = Vs_tmpB.first.second;
+            const TC cell1 = Vs_tmpB.first.second;
             Vs_tmpB.second = cam_beta * Vs_tmpB.second;
             RI::Tensor<Tdata> Vs_tmp;
             const TC cell1_period = cell1 % period;
             for (size_t ik = 0; ik != nks0; ++ik)
             {
                 const std::complex<double> frac
-                    = cam_alpha * std::exp(-ModuleBase::TWO_PI * ModuleBase::IMAG_UNIT
-                               * (kv->kvec_c[ik] * (RI_Util::array3_to_Vector3(cell1_period) * GlobalC::ucell.latvec)))
+                    = cam_alpha
+                      * std::exp(
+                          -ModuleBase::TWO_PI * ModuleBase::IMAG_UNIT
+                          * (kv->kvec_c[ik] * (RI_Util::array3_to_Vector3(cell1_period) * GlobalC::ucell.latvec)))
                       * kv->wk[ik] * this->SPIN_multiple;
                 RI::Tensor<Tdata> Vs_full_tmp;
                 if (static_cast<int>(std::round(this->SPIN_multiple * kv->wk[ik] * kv->nkstot_full)) == 2)
