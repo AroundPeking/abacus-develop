@@ -65,6 +65,8 @@ class Ewald_Vq
     void cal_Vs_ewald(const K_Vectors* kv,
                       const std::map<TA, std::map<TAC, RI::Tensor<Tdata>>>& Vs,
                       const std::vector<std::map<TA, std::map<TA, RI::Tensor<std::complex<double>>>>>& Vq,
+                      const std::vector<TA>& list_A0,
+                      const std::vector<TAC>& list_A1,
                       const double& cam_alpha,
                       const double& cam_beta);
 
