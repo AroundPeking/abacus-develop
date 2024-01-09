@@ -23,6 +23,8 @@ template <typename Tdata>
 void Ewald_Vq<Tdata>::cal_Vs_ewald(const K_Vectors* kv,
                                    const std::map<TA, std::map<TAC, RI::Tensor<Tdata>>>& Vs,
                                    const std::vector<std::map<TA, std::map<TA, RI::Tensor<std::complex<double>>>>>& Vq,
+                                   const std::vector<TA>& list_A0,
+                                   const std::vector<TAC>& list_A1,
                                    const double& cam_alpha,
                                    const double& cam_beta)
 {
@@ -33,14 +35,17 @@ void Ewald_Vq<Tdata>::cal_Vs_ewald(const K_Vectors* kv,
     const int nks0 = kv->nks / this->nspin0;
     std::map<TA, std::map<TAC, RI::Tensor<Tdata>>> datas;
 
-    for (const auto& Vs_tmpA: Vs)
+    for (size_t i0=0; i0!=list_A0.size(); ++i0)
     {
-        const TA iat0 = Vs_tmpA.first;
-        for (const auto& Vs_tmpB: Vs_tmpA.second)
+        const TA iat0 = list_A0[i0];
+        for (size_t i1=0; i1!=list_A1.size(); ++i1)
         {
-            const TA iat1 = Vs_tmpB.first.first;
-            const TC cell1 = Vs_tmpB.first.second;
-            Vs_tmpB.second = cam_beta * Vs_tmpB.second;
+            const TAC pair_nonperiod = list_A1[i1];
+            const TA iat1 = pair_nonperiod.first;
+            const TC cell1 = pair_nonperiod.second;
+            if(!Vs[iat0][pair_nonperiod].empty())
+                Vs[iat0][pair_nonperiod] = cam_beta * Vs[iat0][pair_nonperiod];
+
             RI::Tensor<Tdata> Vs_tmp;
             const TC cell1_period = cell1 % period;
             for (size_t ik = 0; ik != nks0; ++ik)
@@ -63,7 +68,7 @@ void Ewald_Vq<Tdata>::cal_Vs_ewald(const K_Vectors* kv,
                     Vs_tmp += Vs_full_tmp;
             }
             const TAC pair_period = std::make_pair(iat1, cell1_period);
-            Vs[iat0][pair_period] = Vs_tmpB.second + Vs_tmp;
+            Vs[iat0][pair_period] = Vs[iat0][pair_period].empty() ? Vs_tmp : Vs[iat0][pair_period] + Vs_tmp;
         }
     }
 
@@ -392,13 +397,6 @@ auto Ewald_Vq<Tdata>::cal_Vq_R(const K_Vectors* kv, const std::map<TA, std::map<
 
     ModuleBase::timer::tick("Ewald_Vq", "cal_Vq_R");
     return datas;
-}
-
-std::map<TA, std::map<TAC, RI::Tensor<Tdata>>> cal_Vs_ewald(
-    const K_Vectors* kv,
-    const std::map<TA, std::map<TAC, RI::Tensor<Tdata>>>& Vs_sr,
-    const std::vector<std::map<TA, std::map<TA, RI::Tensor<std::complex<double>>>>>& Vq_lr)
-{
 }
 
 #endif
