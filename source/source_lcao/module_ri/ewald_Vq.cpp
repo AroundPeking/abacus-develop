@@ -14,6 +14,7 @@
 
 #include "module_base/timer.h"
 #include "module_base/tool_title.h"
+#include "module_hamilt_pw/hamilt_pwdft/global.h"
 
 std::vector<double> Ewald_Vq::cal_erfc_kernel(const std::vector<ModuleBase::Vector3<double>>& gk, const double& omega)
 {
@@ -43,7 +44,7 @@ std::vector<double> Ewald_Vq::cal_hf_kernel(const std::vector<ModuleBase::Vector
 
 // for numerical integral of fq
 double Ewald_Vq::solve_chi(const std::vector<ModuleBase::Vector3<double>>& gk,
-                           const T_cal_fq<double>& func_cal_fq,
+                           const T_cal_fq_type_0& func_cal_fq,
                            const TC& nq_arr,
                            const int& niter,
                            const double& eps,
@@ -59,7 +60,7 @@ double Ewald_Vq::solve_chi(const std::vector<ModuleBase::Vector3<double>>& gk,
 
 // for analytic integral of fq
 double Ewald_Vq::solve_chi(const std::vector<ModuleBase::Vector3<double>>& gk,
-                           const T_cal_fq<double>& func_cal_fq,
+                           const T_cal_fq_type_1& func_cal_fq,
                            const double& fq_int)
 {
     const int npw = gk.size();
@@ -197,7 +198,7 @@ double Ewald_Vq::cal_type_1(const std::vector<ModuleBase::Vector3<double>>& gk,
     return this->solve_chi(gk, func_cal_fq_type_1, fq_int);
 }
 
-double Ewald_Vq::Iter_Integral(const T_cal_fq<double>& func_cal_fq,
+double Ewald_Vq::Iter_Integral(const T_cal_fq_type_0& func_cal_fq,
                                const TC& nq_arr,
                                const int& niter,
                                const double& eps,

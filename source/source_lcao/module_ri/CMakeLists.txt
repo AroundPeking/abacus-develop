@@ -22,8 +22,7 @@ if (ENABLE_LIBRI)
         ABFs_Construct-PCA.cpp
         exx_opt_orb-print.cpp
         exx_opt_orb.cpp
-        gaussian_abfs.cpp
-        singular_value.cpp
+        ewald_Vq.cpp
     )
   endif()
   add_library(

@@ -10,6 +10,7 @@
 
 #include <cmath>
 
+#include "RI_2D_Comm.h"
 #include "ewald_Vq.h"
 #include "exx_abfs-construct_orbs.h"
 #include "module_base/math_polyint.h"
@@ -18,6 +19,7 @@
 #include "module_base/timer.h"
 #include "module_base/tool_title.h"
 #include "module_hamilt_lcao/hamilt_lcaodft/wavefunc_in_pw.h"
+#include "module_hamilt_pw/hamilt_pwdft/global.h"
 
 template <typename Tdata>
 void Ewald_Vq<Tdata>::cal_Vs_ewald(const K_Vectors* kv,
@@ -35,15 +37,15 @@ void Ewald_Vq<Tdata>::cal_Vs_ewald(const K_Vectors* kv,
     const int nks0 = kv->nks / this->nspin0;
     std::map<TA, std::map<TAC, RI::Tensor<Tdata>>> datas;
 
-    for (size_t i0=0; i0!=list_A0.size(); ++i0)
+    for (size_t i0 = 0; i0 != list_A0.size(); ++i0)
     {
         const TA iat0 = list_A0[i0];
-        for (size_t i1=0; i1!=list_A1.size(); ++i1)
+        for (size_t i1 = 0; i1 != list_A1.size(); ++i1)
         {
             const TAC pair_nonperiod = list_A1[i1];
             const TA iat1 = pair_nonperiod.first;
             const TC cell1 = pair_nonperiod.second;
-            if(!Vs[iat0][pair_nonperiod].empty())
+            if (!Vs[iat0][pair_nonperiod].empty())
                 Vs[iat0][pair_nonperiod] = cam_beta * Vs[iat0][pair_nonperiod];
 
             RI::Tensor<Tdata> Vs_tmp;
