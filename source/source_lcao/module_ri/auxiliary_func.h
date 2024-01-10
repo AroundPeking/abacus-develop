@@ -9,6 +9,7 @@
 #include <array>
 #include <vector>
 
+#include "module_base/global_variable.h"
 #include "module_basis/module_pw/pw_basis_k.h"
 
 class Auxiliary_Func

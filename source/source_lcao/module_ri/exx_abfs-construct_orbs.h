@@ -5,7 +5,6 @@
 
 #include <limits>
 #include "../module_basis/module_ao/ORB_atomic_lm.h"
-#include "module_hamilt_pw/hamilt_pwdft/global.h"             //for ucell
 
 class LCAO_Orbitals;
 

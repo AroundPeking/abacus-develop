@@ -64,6 +64,11 @@ double Auxiliary_Func::solve_chi(const std::vector<ModuleBase::Vector3<double>>&
                            const double& fq_int)
 {
     const int npw = gk.size();
+    const double SPIN_multiple = std::map<int, double>{
+        {1, 0.5},
+        {2, 1  },
+        {4, 1  }
+    }.at(GlobalV::NSPIN);
 
     // cal fq sum except q=0
     double fq_sum = 0;
