@@ -10,6 +10,7 @@
 
 #include <map>
 #include <vector>
+#include <array>
 
 #include "module_base/abfs-vector3_order.h"
 #include "module_base/complexmatrix.h"
@@ -70,8 +71,8 @@ class Ewald_Vq
         Vs_full: cam_alpha * Vs_full based on periodic R + cam_beta * Vs_sr based on non-periodic R
     -------------------------------------------*/
     void cal_Vs_ewald(const K_Vectors* kv,
-                      const std::map<TA, std::map<TAC, RI::Tensor<Tdata>>>& Vs,
-                      const std::vector<std::map<TA, std::map<TA, RI::Tensor<std::complex<double>>>>>& Vq,
+                      std::map<TA, std::map<TAC, RI::Tensor<Tdata>>>& Vs,
+                      std::vector<std::map<TA, std::map<TA, RI::Tensor<std::complex<double>>>>>& Vq,
                       const std::vector<TA>& list_A0,
                       const std::vector<TAC>& list_A1,
                       const double& cam_alpha,

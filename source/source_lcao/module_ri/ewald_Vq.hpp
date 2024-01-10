@@ -10,6 +10,7 @@
 
 #include <cmath>
 
+#include "RI_Util.h"
 #include "RI_2D_Comm.h"
 #include "ewald_Vq.h"
 #include "exx_abfs-construct_orbs.h"
@@ -23,8 +24,8 @@
 
 template <typename Tdata>
 void Ewald_Vq<Tdata>::cal_Vs_ewald(const K_Vectors* kv,
-                                   const std::map<TA, std::map<TAC, RI::Tensor<Tdata>>>& Vs,
-                                   const std::vector<std::map<TA, std::map<TA, RI::Tensor<std::complex<double>>>>>& Vq,
+                                   std::map<TA, std::map<TAC, RI::Tensor<Tdata>>>& Vs,
+                                   std::vector<std::map<TA, std::map<TA, RI::Tensor<std::complex<double>>>>>& Vq,
                                    const std::vector<TA>& list_A0,
                                    const std::vector<TAC>& list_A1,
                                    const double& cam_alpha,
@@ -33,7 +34,7 @@ void Ewald_Vq<Tdata>::cal_Vs_ewald(const K_Vectors* kv,
     ModuleBase::TITLE("Ewald_Vq", "cal_Vs_ewald");
     ModuleBase::timer::tick("Ewald_Vq", "cal_Vs_ewald");
 
-    const TC period = {kv->nmp[0], kv->nmp[1], kv->nmp[2]};
+    const TC period = RI_Util::get_Born_vonKarmen_period(*kv);
     const int nks0 = kv->nks / this->nspin0;
     std::map<TA, std::map<TAC, RI::Tensor<Tdata>>> datas;
 
@@ -48,8 +49,11 @@ void Ewald_Vq<Tdata>::cal_Vs_ewald(const K_Vectors* kv,
             if (!Vs[iat0][pair_nonperiod].empty())
                 Vs[iat0][pair_nonperiod] = cam_beta * Vs[iat0][pair_nonperiod];
 
+            TC cell1_period;
+            std::transform(cell1.begin(), cell1.end(), period.begin(), cell1_period.begin(),
+                   [](const TA& a, const TA& b) { return a % b; });
+
             RI::Tensor<Tdata> Vs_tmp;
-            const TC cell1_period = cell1 % period;
             for (size_t ik = 0; ik != nks0; ++ik)
             {
                 const std::complex<double> frac
