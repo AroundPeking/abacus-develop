@@ -10,10 +10,10 @@
 
 #include <cmath>
 
-#include "RI_2D_Comm.h"
 #include "RI_Util.h"
 #include "ewald_Vq.h"
 #include "exx_abfs-construct_orbs.h"
+#include "auxiliary_func.h"
 #include "module_base/math_polyint.h"
 #include "module_base/math_ylmreal.h"
 #include "module_base/realarray.h"
@@ -64,11 +64,7 @@ void Ewald_Vq::cal_Vs_ewald(const K_Vectors* kv,
                       * std::exp(-ModuleBase::TWO_PI * ModuleBase::IMAG_UNIT
                                  * (kv->kvec_c[ik] * (RI_Util::array3_to_Vector3(cell1_period) * ucell.latvec)))
                       * kv->wk[ik] * SPIN_multiple;
-                RI::Tensor<Tdata> Vs_full_tmp;
-                if (static_cast<int>(std::round(SPIN_multiple * kv->wk[ik] * kv->nkstot_full)) == 2)
-                    Vs_full_tmp = RI_2D_Comm::tensor_real(RI::Global_Func::convert<Tdata>(Vq[ik][iat0][iat1] * frac));
-                else
-                    Vs_full_tmp = RI::Global_Func::convert<Tdata>(Vq[ik][iat0][iat1] * frac);
+                RI::Tensor<Tdata> Vs_full_tmp = RI::Global_Func::convert<Tdata>(Vq[ik][iat0][iat1] * frac);
 
                 if (Vs_tmp.empty())
                     Vs_tmp = Vs_full_tmp;
@@ -122,19 +118,19 @@ auto Ewald_Vq::cal_Vq_q(const Ewald_Type& ewald_type,
         switch (ewald_type.ker_type)
         {
         case Kernal_Type::Hf:
-            vg = cal_hf_kernel(gk);
+            vg = Auxiliary_Func::cal_hf_kernel(gk);
             switch (ewald_type.aux_func)
             {
-            case Auxiliary_Func::Type_0:
-                V0 = cal_type_0(gk,
+            case Fq_type::Type_0:
+                V0 = Auxiliary_Func::cal_type_0(gk,
                                       static_cast<int>(parameter.at("ewald_qdiv")),
                                       parameter.at("ewald_qdense"),
                                       static_cast<int>(parameter.at("ewald_niter")),
                                       parameter.at("ewald_eps"),
                                       static_cast<int>(parameter.at("ewald_arate")));
                 break;
-            case Auxiliary_Func::Type_1:
-                V0 = cal_type_1(gk,
+            case Fq_type::Type_1:
+                V0 = Auxiliary_Func::cal_type_1(gk,
                                       static_cast<int>(parameter.at("ewald_qdiv")),
                                       wfc_basis,
                                       parameter.at("ewald_lambda"));
@@ -145,7 +141,7 @@ auto Ewald_Vq::cal_Vq_q(const Ewald_Type& ewald_type,
             }
             break;
         case Kernal_Type::Erfc:
-            vg = cal_erfc_kernel(gk, parameter.at("hse_omega"));
+            vg = Auxiliary_Func::cal_erfc_kernel(gk, parameter.at("hse_omega"));
             break;
         default:
             throw(ModuleBase::GlobalFunc::TO_STRING(__FILE__) + " line " + ModuleBase::GlobalFunc::TO_STRING(__LINE__));

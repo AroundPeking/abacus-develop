@@ -22,7 +22,7 @@ if (ENABLE_LIBRI)
         ABFs_Construct-PCA.cpp
         exx_opt_orb-print.cpp
         exx_opt_orb.cpp
-        ewald_Vq.cpp
+        auxiliary_func.cpp
     )
   endif()
   add_library(
