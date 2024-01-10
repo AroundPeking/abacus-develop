@@ -68,7 +68,7 @@ double Ewald_Vq::solve_chi(const std::vector<ModuleBase::Vector3<double>>& gk,
     // cal fq sum except q=0
     double fq_sum = 0;
     for (size_t ig = 0; ig != npw; ++ig)
-        fq_sum += gk[ig].norm2() ? func_cal_fq(gk[ig]) * kv->wk[ik] * this->SPIN_multiple : 0;
+        fq_sum += gk[ig].norm2() ? func_cal_fq(gk[ig]) * kv->wk[ik] * SPIN_multiple : 0;
 
     double chi = ModuleBase::FOUR_PI * (fq_int - fq_sum);
 
@@ -135,10 +135,10 @@ double Ewald_Vq::cal_type_0(const std::vector<ModuleBase::Vector3<double>>& gk,
     std::transform(bvec.begin(), bvec.end(), nq_arr.begin(), [&qdense](ModuleBase::Vector3<double>& vec) {
         static_cast<int>(vec.norm() * qdense)
     });
-    const T_cal_fq_type_0 func_cal_fq_type_0 = std::bind(&fq_type_0, this, std::placeholders::_1, qdiv);
+    const T_cal_fq_type_0 func_cal_fq_type_0 = std::bind(&fq_type_0, std::placeholders::_1, qdiv);
 
     ModuleBase::timer::tick("Ewald_Vq", "cal_type_0");
-    return this->solve_chi(gk, func_cal_fq_type_0, nq_arr, niter, eps, a_rate);
+    return solve_chi(gk, func_cal_fq_type_0, nq_arr, niter, eps, a_rate);
 }
 
 double Ewald_Vq::fq_type_1(const ModuleBase::Vector3<double>& qvec,
@@ -183,7 +183,7 @@ double Ewald_Vq::cal_type_1(const std::vector<ModuleBase::Vector3<double>>& gk,
     ModuleBase::timer::tick("Ewald_Vq", "cal_type_1");
 
     const T_cal_fq_type_1 func_cal_fq_type_1
-        = std::bind(&fq_type_1, this, std::placeholders::_1, qdiv, wfc_basis, lambda);
+        = std::bind(&fq_type_1, std::placeholders::_1, qdiv, wfc_basis, lambda);
     double prefactor = ModuleBase::TWO_PI * std::pow(lambda, -1 / qdiv);
     double fq_int;
     if (qdiv == 2)
@@ -195,7 +195,7 @@ double Ewald_Vq::cal_type_1(const std::vector<ModuleBase::Vector3<double>>& gk,
                      "Type 1 fq only supports qdiv=1 or qdiv=2!");
 
     ModuleBase::timer::tick("Ewald_Vq", "cal_type_1");
-    return this->solve_chi(gk, func_cal_fq_type_1, fq_int);
+    return solve_chi(gk, func_cal_fq_type_1, fq_int);
 }
 
 double Ewald_Vq::Iter_Integral(const T_cal_fq_type_0& func_cal_fq,
