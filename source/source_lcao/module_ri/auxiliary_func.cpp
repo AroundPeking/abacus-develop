@@ -47,7 +47,7 @@ std::vector<double> Auxiliary_Func::cal_hf_kernel(const std::vector<ModuleBase::
 // for numerical integral of fq
 double Auxiliary_Func::solve_chi(const int& nks,
                                  const std::vector<ModuleBase::Vector3<double>>& gk,
-                                 const T_cal_fq_type_0& func_cal_fq,
+                                 const T_cal_fq_type& func_cal_fq,
                                  const std::array<int, 3>& nq_arr,
                                  const int& niter,
                                  const double& eps,
@@ -72,7 +72,7 @@ double Auxiliary_Func::solve_chi(const int& nks,
 // for analytic integral of fq
 double Auxiliary_Func::solve_chi(const int& nks,
                                  const std::vector<ModuleBase::Vector3<double>>& gk,
-                                 const T_cal_fq_type_1& func_cal_fq,
+                                 const T_cal_fq_type& func_cal_fq,
                                  const double& fq_int)
 {
     const int npw = gk.size();
@@ -100,8 +100,8 @@ double Auxiliary_Func::fq_type_0(const ModuleBase::Vector3<double>& qvec,
 
     for (size_t i = 0; i != 3; ++i)
     {
-        baq[i] = GlobalC::ucell.tpiba * bvec[i] * std::sin(avec[i] * qvec[i] * ModuleBase::TWO_PI);
-        baq_2[i] = GlobalC::ucell.tpiba * bvec[i] * std::sin(avec[i] * qvec[i] * ModuleBase::PI);
+        baq[i] = GlobalC::ucell.tpiba * bvec[i] * std::sin(avec[i] * qvec * ModuleBase::TWO_PI);
+        baq_2[i] = GlobalC::ucell.tpiba * bvec[i] * std::sin(avec[i] * qvec * ModuleBase::PI);
     }
 
     double sum_baq = 0;
@@ -119,8 +119,7 @@ double Auxiliary_Func::fq_type_0(const ModuleBase::Vector3<double>& qvec,
     return fq;
 }
 
-double Auxiliary_Func::cal_type_0(
-                                  const std::vector<ModuleBase::Vector3<double>>& gk,
+double Auxiliary_Func::cal_type_0(const std::vector<ModuleBase::Vector3<double>>& gk,
                                   const K_Vectors* kv,
                                   const int& qdiv,
                                   const double& qdense,
@@ -155,12 +154,12 @@ double Auxiliary_Func::cal_type_0(
 
     std::array<int, 3> nq_arr;
     std::transform(bvec.begin(), bvec.end(), nq_arr.begin(), [&qdense](ModuleBase::Vector3<double>& vec) {
-        static_cast<int>(vec.norm() * qdense)
+        static_cast<int>(vec.norm() * qdense);
     });
-    const T_cal_fq_type_0 func_cal_fq_type_0 = std::bind(&fq_type_0, this, std::placeholders::_1, qdiv, avec, bvec);
+    const T_cal_fq_type func_cal_fq_type_0 = std::bind(&fq_type_0, std::placeholders::_1, qdiv, avec, bvec);
 
     ModuleBase::timer::tick("Ewald_Vq", "cal_type_0");
-    return this->solve_chi(nks0, gk, func_cal_fq_type_0, nq_arr, niter, eps, a_rate);
+    return solve_chi(nks0, gk, func_cal_fq_type_0, nq_arr, niter, eps, a_rate);
 }
 
 double Auxiliary_Func::fq_type_1(const ModuleBase::Vector3<double>& qvec,
@@ -173,7 +172,7 @@ double Auxiliary_Func::fq_type_1(const ModuleBase::Vector3<double>& qvec,
 
     for (size_t ig = 0; ig != wfc_basis->npw; ++ig)
     {
-        int isz = ig2isz[ig];
+        int isz = wfc_basis->ig2isz[ig];
         int iz = isz % wfc_basis->nz;
         int is = isz / wfc_basis->nz;
         int ix = wfc_basis->is2fftixy[is] / wfc_basis->fftny;
@@ -196,8 +195,7 @@ double Auxiliary_Func::fq_type_1(const ModuleBase::Vector3<double>& qvec,
     return fq;
 }
 
-double Auxiliary_Func::cal_type_1(
-                                  const std::vector<ModuleBase::Vector3<double>>& gk,
+double Auxiliary_Func::cal_type_1(const std::vector<ModuleBase::Vector3<double>>& gk,
                                   const K_Vectors* kv,
                                   const int& qdiv,
                                   const ModulePW::PW_Basis_K* wfc_basis,
@@ -213,8 +211,8 @@ double Auxiliary_Func::cal_type_1(
     }.at(GlobalV::NSPIN);
     const int nks0 = kv->nks / nspin0;
 
-    const T_cal_fq_type_1 func_cal_fq_type_1
-        = std::bind(&fq_type_1, this, std::placeholders::_1, qdiv, wfc_basis, lambda);
+    const T_cal_fq_type func_cal_fq_type_1
+        = std::bind(&fq_type_1, std::placeholders::_1, qdiv, wfc_basis, lambda);
     double prefactor = ModuleBase::TWO_PI * std::pow(lambda, -1 / qdiv);
     double fq_int;
     if (qdiv == 2)
@@ -222,14 +220,13 @@ double Auxiliary_Func::cal_type_1(
     else if (qdiv == 1)
         fq_int = prefactor;
     else
-        ModuleBase::WARNING_QUIT("Ewald_Vq::cal_type_1",
-                     "Type 1 fq only supports qdiv=1 or qdiv=2!");
+        ModuleBase::WARNING_QUIT("Ewald_Vq::cal_type_1", "Type 1 fq only supports qdiv=1 or qdiv=2!");
 
     ModuleBase::timer::tick("Ewald_Vq", "cal_type_1");
-    return this->solve_chi(nks0, gk, func_cal_fq_type_1, fq_int);
+    return solve_chi(nks0, gk, func_cal_fq_type_1, fq_int);
 }
 
-double Auxiliary_Func::Iter_Integral(const T_cal_fq_type_0& func_cal_fq,
+double Auxiliary_Func::Iter_Integral(const T_cal_fq_type& func_cal_fq,
                                      const std::array<int, 3>& nq_arr,
                                      const int& niter,
                                      const double& eps,
@@ -239,7 +236,7 @@ double Auxiliary_Func::Iter_Integral(const T_cal_fq_type_0& func_cal_fq,
     bool any_nthree = std::any_of(nq_arr.begin(), nq_arr.end(), [](int i) { return i % 3 != 0; });
     if (any_negative || any_nthree)
         ModuleBase::WARNING_QUIT("Ewald_Vq::Iter_Integral",
-                     "The elements of `nq_arr` should be non-negative and multiples of three!");
+                                 "The elements of `nq_arr` should be non-negative and multiples of three!");
     bool all_zero = std::all_of(nq_arr.begin(), nq_arr.end(), [](int i) { return i == 0; });
     if (all_zero)
         ModuleBase::WARNING_QUIT("Ewald_Vq::Iter_Integral", "At least one element of `nq_arr` should be non-zero!");
@@ -260,12 +257,13 @@ double Auxiliary_Func::Iter_Integral(const T_cal_fq_type_0& func_cal_fq,
     }
 
     double integ = 0.0;
+    int tot_iter = 0;
     for (size_t iter = 0; iter != niter; ++iter)
     {
         double integ_iter = 0.0;
-        for (size_t ig1 = -nq_arr[0]; ig1 == nq_arr[0]; ++ig1)
-            for (size_t ig2 = -nq_arr[1]; ig2 == nq_arr[1]; ++ig2)
-                for (size_t ig3 = -nq_arr[2]; ig3 == nq_arr[2]; ++ig3)
+        for (int ig1 = -nq_arr[0]; ig1 == nq_arr[0]; ++ig1)
+            for (int ig2 = -nq_arr[1]; ig2 == nq_arr[1]; ++ig2)
+                for (int ig3 = -nq_arr[2]; ig3 == nq_arr[2]; ++ig3)
                 {
                     if (std::abs(ig1) <= nq_arr_in[0] && std::abs(ig2) <= nq_arr_in[1] && std::abs(ig3) <= nq_arr_in[2])
                         continue;
@@ -282,7 +280,7 @@ double Auxiliary_Func::Iter_Integral(const T_cal_fq_type_0& func_cal_fq,
         std::for_each(qstep.begin(), qstep.end(), [&a_rate](double& qs) { qs /= a_rate; });
     }
 
-    if (iter == niter)
+    if (tot_iter == niter)
         ModuleBase::WARNING_QUIT("Ewald_Vq::Iter_Integral", "Integral not converged!");
 
     return integ;

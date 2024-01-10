@@ -28,32 +28,25 @@ class Auxiliary_Func
     };
 
   private:
-    using T_cal_fq_type_0 = std::function<double(const std::vector<ModuleBase::Vector3<double>>& gk,
-                                                 const double& qdiv,
-                                                 std::vector<ModuleBase::Vector3<double>>& avec,
-                                                 std::vector<ModuleBase::Vector3<double>>& bvec)>;
-    using T_cal_fq_type_1 = std::function<double(const std::vector<ModuleBase::Vector3<double>>& gk,
-                                                 const double& qdiv,
-                                                 const ModulePW::PW_Basis_K* wfc_basis,
-                                                 const double& lambda)>;
+    using T_cal_fq_type = std::function<double(const ModuleBase::Vector3<double>& gk)>;
 
   private:
-    static double Iter_Integral(const T_cal_fq_type_0& func_cal_fq,
+    static double Iter_Integral(const T_cal_fq_type& func_cal_fq,
                                 const std::array<int, 3>& nq_arr,
                                 const int& niter,
                                 const double& eps,
                                 const int& a_rate);
-    double solve_chi(const int& nks,
-                     const std::vector<ModuleBase::Vector3<double>>& gk,
-                     const T_cal_fq_type_0& func_cal_fq,
-                     const std::array<int, 3>& nq_arr,
-                     const int& niter,
-                     const double& eps,
-                     const int& a_rate);
-    double solve_chi(const int& nks,
-                     const std::vector<ModuleBase::Vector3<double>>& gk,
-                     const T_cal_fq_type_1& func_cal_fq,
-                     const double& fq_int);
+    static double solve_chi(const int& nks,
+                            const std::vector<ModuleBase::Vector3<double>>& gk,
+                            const T_cal_fq_type& func_cal_fq,
+                            const std::array<int, 3>& nq_arr,
+                            const int& niter,
+                            const double& eps,
+                            const int& a_rate);
+    static double solve_chi(const int& nks,
+                            const std::vector<ModuleBase::Vector3<double>>& gk,
+                            const T_cal_fq_type& func_cal_fq,
+                            const double& fq_int);
 
     // TODO: Here, fq now only works on 3D and 2D systems
     // TODO: lower dimension please see PHYSICAL REVIEW B 87, 165122 (2013)
