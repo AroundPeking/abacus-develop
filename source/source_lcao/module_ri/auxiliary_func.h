@@ -9,14 +9,29 @@
 #include <array>
 #include <vector>
 
-#include "module_base/global_variable.h"
 #include "module_basis/module_pw/pw_basis_k.h"
+#include "module_cell/klist.h"
 
 class Auxiliary_Func
 {
+  public:
+    enum class Kernal_Type
+    {
+        Hf,
+        Erfc, //  	"hse_omega"
+    };
+
+    enum class Fq_type
+    {
+        Type_0, // Phys. Rev. B, 75:205126, May 2007.
+        Type_1, // Phys. Rev. B, 48:5058--5068, Aug 1993.
+    };
+
   private:
-    using T_cal_fq_type_0
-        = std::function<double(const std::vector<ModuleBase::Vector3<double>>& gk, const double& qdiv)>;
+    using T_cal_fq_type_0 = std::function<double(const std::vector<ModuleBase::Vector3<double>>& gk,
+                                                 const double& qdiv,
+                                                 std::vector<ModuleBase::Vector3<double>>& avec,
+                                                 std::vector<ModuleBase::Vector3<double>>& bvec)>;
     using T_cal_fq_type_1 = std::function<double(const std::vector<ModuleBase::Vector3<double>>& gk,
                                                  const double& qdiv,
                                                  const ModulePW::PW_Basis_K* wfc_basis,
@@ -28,13 +43,15 @@ class Auxiliary_Func
                                 const int& niter,
                                 const double& eps,
                                 const int& a_rate);
-    double solve_chi(const std::vector<ModuleBase::Vector3<double>>& gk,
+    double solve_chi(const int& nks,
+                     const std::vector<ModuleBase::Vector3<double>>& gk,
                      const T_cal_fq_type_0& func_cal_fq,
                      const std::array<int, 3>& nq_arr,
                      const int& niter,
                      const double& eps,
                      const int& a_rate);
-    double solve_chi(const std::vector<ModuleBase::Vector3<double>>& gk,
+    double solve_chi(const int& nks,
+                     const std::vector<ModuleBase::Vector3<double>>& gk,
                      const T_cal_fq_type_1& func_cal_fq,
                      const double& fq_int);
 
@@ -58,12 +75,14 @@ class Auxiliary_Func
     static std::vector<double> cal_erfc_kernel(const std::vector<ModuleBase::Vector3<double>>& gk, const double& omega);
 
     static double cal_type_0(const std::vector<ModuleBase::Vector3<double>>& gk,
+                             const K_Vectors* kv,
                              const int& qdiv,
                              const double& qdense,
                              const int& niter,
                              const double& eps,
                              const int& a_rate);
     static double cal_type_1(const std::vector<ModuleBase::Vector3<double>>& gk,
+                             const K_Vectors* kv,
                              const int& qdiv,
                              const ModulePW::PW_Basis_K* wfc_basis,
                              const double& lambda);

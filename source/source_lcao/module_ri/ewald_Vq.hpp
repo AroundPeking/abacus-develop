@@ -10,9 +10,9 @@
 
 #include <cmath>
 
-#include "ewald_Vq.h"
-#include "auxiliary_func.h"
 #include "RI_Util.h"
+#include "auxiliary_func.h"
+#include "ewald_Vq.h"
 #include "exx_abfs-construct_orbs.h"
 #include "module_base/math_polyint.h"
 #include "module_base/math_ylmreal.h"
@@ -86,14 +86,15 @@ void Ewald_Vq<Tdata>::cal_Vs_ewald(const K_Vectors* kv,
 
 // Zc
 template <typename Tdata>
-auto Ewald_Vq<Tdata>::cal_Vq_q(const Ewald_Type& ewald_type,
-                        const std::vector<std::vector<std::vector<Numerical_Orbital_Lm>>>& abfs,
-                        const K_Vectors* kv,
-                        const UnitCell ucell,
-                        const ModulePW::PW_Basis_K* wfc_basis,
-                        const std::vector<TA>& list_A0,
-                        const std::vector<TAC>& list_A1,
-                        const std::map<std::string, double>& parameter)
+auto Ewald_Vq<Tdata>::cal_Vq_q(const Auxiliary_Func::Kernal_Type& ker_type,
+                               const Auxiliary_Func::Fq_type& fq_type,
+                               const std::vector<std::vector<std::vector<Numerical_Orbital_Lm>>>& abfs,
+                               const K_Vectors* kv,
+                               const UnitCell ucell,
+                               const ModulePW::PW_Basis_K* wfc_basis,
+                               const std::vector<TA>& list_A0,
+                               const std::vector<TAC>& list_A1,
+                               const std::map<std::string, double>& parameter)
     -> std::vector<std::map<TA, std::map<TA, RI::Tensor<std::complex<double>>>>>
 {
     ModuleBase::TITLE("Ewald_Vq", "cal_Vq_q");
@@ -121,22 +122,24 @@ auto Ewald_Vq<Tdata>::cal_Vq_q(const Ewald_Type& ewald_type,
         double V0 = 0;
 
         std::vector<double> vg;
-        switch (ewald_type.ker_type)
+        switch (ker_type)
         {
-        case Kernal_Type::Hf:
+        case Auxiliary_Func::Kernal_Type::Hf:
             vg = Auxiliary_Func::cal_hf_kernel(gk);
-            switch (ewald_type.aux_func)
+            switch (fq_type)
             {
-            case Fq_type::Type_0:
+            case Auxiliary_Func::Fq_type::Type_0:
                 V0 = Auxiliary_Func::cal_type_0(gk,
+                                                kv,
                                                 static_cast<int>(parameter.at("ewald_qdiv")),
                                                 parameter.at("ewald_qdense"),
                                                 static_cast<int>(parameter.at("ewald_niter")),
                                                 parameter.at("ewald_eps"),
                                                 static_cast<int>(parameter.at("ewald_arate")));
                 break;
-            case Fq_type::Type_1:
+            case Auxiliary_Func::Fq_type::Type_1:
                 V0 = Auxiliary_Func::cal_type_1(gk,
+                                                kv,
                                                 static_cast<int>(parameter.at("ewald_qdiv")),
                                                 wfc_basis,
                                                 parameter.at("ewald_lambda"));
@@ -146,7 +149,7 @@ auto Ewald_Vq<Tdata>::cal_Vq_q(const Ewald_Type& ewald_type,
                       + ModuleBase::GlobalFunc::TO_STRING(__LINE__));
             }
             break;
-        case Kernal_Type::Erfc:
+        case Auxiliary_Func::Kernal_Type::Erfc:
             vg = Auxiliary_Func::cal_erfc_kernel(gk, parameter.at("hse_omega"));
             break;
         default:
@@ -199,9 +202,9 @@ auto Ewald_Vq<Tdata>::cal_Vq_q(const Ewald_Type& ewald_type,
 template <typename Tdata>
 std::pair<std::vector<std::vector<ModuleBase::Vector3<double>>>, std::vector<std::vector<ModuleBase::ComplexMatrix>>>
     Ewald_Vq<Tdata>::get_orb_q(const K_Vectors* kv,
-                        const ModulePW::PW_Basis_K* wfc_basis,
-                        const std::vector<std::vector<std::vector<Numerical_Orbital_Lm>>>& orb_in,
-                        const double& gk_ecut)
+                               const ModulePW::PW_Basis_K* wfc_basis,
+                               const std::vector<std::vector<std::vector<Numerical_Orbital_Lm>>>& orb_in,
+                               const double& gk_ecut)
 {
     ModuleBase::TITLE("Ewald_Vq", "get_orb_q");
     ModuleBase::timer::tick("Ewald_Vq", "get_orb_q");
@@ -303,7 +306,10 @@ std::vector<ModuleBase::ComplexMatrix> Ewald_Vq<Tdata>::produce_local_basis_in_p
 }
 
 template <typename Tdata>
-std::vector<int> Ewald_Vq<Tdata>::get_npwk(const int& nks, const K_Vectors* kv, const ModulePW::PW_Basis_K* wfc_basis, const double& gk_ecut)
+std::vector<int> Ewald_Vq<Tdata>::get_npwk(const int& nks,
+                                           const K_Vectors* kv,
+                                           const ModulePW::PW_Basis_K* wfc_basis,
+                                           const double& gk_ecut)
 {
     std::vector<int> npwk(nks);
     std::vector<std::vector<ModuleBase::Vector3<double>>> gcar = get_gcar(npwk, wfc_basis);
@@ -325,7 +331,7 @@ std::vector<int> Ewald_Vq<Tdata>::get_npwk(const int& nks, const K_Vectors* kv, 
 
 template <typename Tdata>
 std::vector<std::vector<int>> Ewald_Vq<Tdata>::get_igl2isz_k(const std::vector<int>& npwk,
-                                                      const ModulePW::PW_Basis_K* wfc_basis)
+                                                             const ModulePW::PW_Basis_K* wfc_basis)
 {
     const int nks0 = npwk.size();
     std::vector<std::vector<int>> igl2isz_k(nks0);
@@ -342,7 +348,7 @@ std::vector<std::vector<int>> Ewald_Vq<Tdata>::get_igl2isz_k(const std::vector<i
 
 template <typename Tdata>
 std::vector<std::vector<ModuleBase::Vector3<double>>> Ewald_Vq<Tdata>::get_gcar(const std::vector<int>& npwk,
-                                                                         const ModulePW::PW_Basis_K* wfc_basis)
+                                                                                const ModulePW::PW_Basis_K* wfc_basis)
 {
     const int nks0 = npwk.size();
     std::vector<std::vector<int>> igl2isz_k = get_igl2isz_k(npwk, wfc_basis);

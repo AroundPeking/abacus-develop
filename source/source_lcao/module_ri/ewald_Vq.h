@@ -12,6 +12,7 @@
 #include <map>
 #include <vector>
 
+#include "auxiliary_func.h"
 #include "module_base/abfs-vector3_order.h"
 #include "module_base/complexmatrix.h"
 #include "module_base/global_variable.h"
@@ -22,34 +23,6 @@
 template <typename Tdata>
 class Ewald_Vq
 {
-  public:
-    enum class Kernal_Type
-    {
-        Hf,
-        Erfc, //  	"hse_omega"
-    };
-
-    enum class Fq_type
-    {
-        Type_0, // Phys. Rev. B, 75:205126, May 2007.
-        Type_1, // Phys. Rev. B, 48:5058--5068, Aug 1993.
-        Default = -1,
-    };
-
-    struct Ewald_Type
-    {
-        Kernal_Type ker_type;
-        Fq_type aux_func;
-
-        // Ewald_Type(Kernal_Type ker_type_, Fq_type aux_func_ = Fq_type::Default)
-        //     : ker_type(ker_type_), aux_func(aux_func_)
-        // {
-        //     if (ker_type == Kernal_Type::Hf)
-        //         assert(aux_func == Fq_type::Type_0 || aux_func == Fq_type::Type_1);
-        // }
-    };
-    // Ewald_Type ewald_type(typename Kernal_Type::Hf);
-
   private:
     using TA = int;
     using TC = std::array<int, 3>;
@@ -75,7 +48,8 @@ class Ewald_Vq
 
     //\sum_G P*(q-G)v(q-G)P(q-G)\exp(-i(q-G)\tau)
     std::vector<std::map<TA, std::map<TA, RI::Tensor<std::complex<double>>>>> cal_Vq_q(
-        const Ewald_Type& ewald_type,
+        const Auxiliary_Func::Kernal_Type& ker_type,
+        const Auxiliary_Func::Fq_type& fq_type,
         const std::vector<std::vector<std::vector<Numerical_Orbital_Lm>>>& abfs,
         const K_Vectors* kv,
         const UnitCell ucell,
@@ -111,7 +85,10 @@ class Ewald_Vq
         const std::vector<std::vector<std::vector<Numerical_Orbital_Lm>>>& orb_in,
         const ModuleBase::realArray& table_local);
 
-    static std::vector<int> get_npwk(const int& nks, const K_Vectors* kv, const ModulePW::PW_Basis_K* wfc_basis, const double& gk_ecut);
+    static std::vector<int> get_npwk(const int& nks,
+                                     const K_Vectors* kv,
+                                     const ModulePW::PW_Basis_K* wfc_basis,
+                                     const double& gk_ecut);
     static std::vector<std::vector<int>> get_igl2isz_k(const std::vector<int>& npwk,
                                                        const ModulePW::PW_Basis_K* wfc_basis);
     static std::vector<std::vector<ModuleBase::Vector3<double>>> get_gcar(const std::vector<int>& npwk,
