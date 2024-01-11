@@ -52,7 +52,7 @@ void Ewald_Vq<Tdata>::cal_Vs_ewald(const K_Vectors* kv,
             const TA iat1 = pair_nonperiod.first;
             const TC cell1 = pair_nonperiod.second;
             if (!Vs[iat0][pair_nonperiod].empty())
-                Vs[iat0][pair_nonperiod] = cam_beta * Vs[iat0][pair_nonperiod];
+                Vs[iat0][pair_nonperiod] = RI::Global_Func::convert<Tdata>(cam_beta) * Vs[iat0][pair_nonperiod];
 
             TC cell1_period;
             std::transform(cell1.begin(),
