@@ -93,8 +93,8 @@ double Auxiliary_Func::fq_type_0(const ModuleBase::Vector3<double>& qvec,
                                  std::vector<ModuleBase::Vector3<double>>& avec,
                                  std::vector<ModuleBase::Vector3<double>>& bvec)
 {
-    std::vector<double> baq(3);
-    std::vector<double> baq_2(3);
+    std::vector<ModuleBase::Vector3<double>> baq(3);
+    std::vector<ModuleBase::Vector3<double>> baq_2(3);
     const int qexpo = -abs(qdiv);
     const double prefactor = std::pow(ModuleBase::TWO_PI, -qexpo);
 
@@ -153,8 +153,8 @@ double Auxiliary_Func::cal_type_0(const std::vector<ModuleBase::Vector3<double>>
     bvec[2].z = GlobalC::ucell.G.e33;
 
     std::array<int, 3> nq_arr;
-    std::transform(bvec.begin(), bvec.end(), nq_arr.begin(), [&qdense](ModuleBase::Vector3<double>& vec) {
-        static_cast<int>(vec.norm() * qdense);
+    std::transform(bvec.begin(), bvec.end(), nq_arr.begin(), [&qdense](ModuleBase::Vector3<double>& vec) -> int {
+        return static_cast<int>(vec.norm() * qdense);
     });
     const T_cal_fq_type func_cal_fq_type_0 = std::bind(&fq_type_0, std::placeholders::_1, qdiv, avec, bvec);
 
