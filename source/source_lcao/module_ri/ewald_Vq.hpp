@@ -311,8 +311,9 @@ std::vector<int> Ewald_Vq<Tdata>::get_npwk(const int& nks,
                                            const ModulePW::PW_Basis_K* wfc_basis,
                                            const double& gk_ecut)
 {
+    std::vector<int> full_npw(nks, wfc_basis->npw);
+    std::vector<std::vector<ModuleBase::Vector3<double>>> gcar = get_gcar(full_npw, wfc_basis);
     std::vector<int> npwk(nks);
-    std::vector<std::vector<ModuleBase::Vector3<double>>> gcar = get_gcar(npwk, wfc_basis);
 
     for (size_t ik = 0; ik != nks; ++ik)
     {
@@ -356,7 +357,7 @@ std::vector<std::vector<ModuleBase::Vector3<double>>> Ewald_Vq<Tdata>::get_gcar(
     for (size_t ik = 0; ik != nks0; ++ik)
     {
         const int npw = npwk[ik];
-        gcar.resize(npw);
+        gcar[ik].resize(npw);
         for (size_t ig = 0; ig != npw; ++ig)
         {
             int isz = igl2isz_k[ik][ig];
