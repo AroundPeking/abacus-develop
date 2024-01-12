@@ -144,7 +144,7 @@ double Auxiliary_Func::cal_type_0(const std::vector<ModuleBase::Vector3<double>>
                    bvec.end(),
                    nq_arr.begin(),
                    [&qdense, &a_rate](ModuleBase::Vector3<double>& vec) -> int {
-                       int index = static_cast<int>(vec.norm() * qdense * ModuleBase::TWO_PI);
+                       int index = static_cast<int>(vec.norm() * qdense * GlobalC::ucell.tpiba);
                        return index ? index - index % a_rate : a_rate;
                    });
     const T_cal_fq_type func_cal_fq_type_0 = std::bind(&fq_type_0, std::placeholders::_1, qdiv, avec, bvec);
