@@ -27,6 +27,7 @@ class Ewald_Vq
     using TA = int;
     using TC = std::array<int, 3>;
     using TAC = std::pair<TA, TC>;
+    using T_kernal_func = std::function<std::vector<double>(std::vector<ModuleBase::Vector3<double>>)>;
 
   public:
     /*-------------------------------------------
@@ -74,7 +75,7 @@ class Ewald_Vq
   private:
     std::pair<std::vector<std::vector<ModuleBase::Vector3<double>>>,
               std::vector<std::vector<ModuleBase::ComplexMatrix>>>
-        get_orb_q(const K_Vectors* kv,
+        get_orb_q(std::vector<ModuleBase::Vector3<double>>& kvec_c,
                   const ModulePW::PW_Basis_K* wfc_basis,
                   const std::vector<std::vector<std::vector<Numerical_Orbital_Lm>>>& orb_in,
                   const double& gk_ecut);
@@ -85,8 +86,7 @@ class Ewald_Vq
         const std::vector<std::vector<std::vector<Numerical_Orbital_Lm>>>& orb_in,
         const ModuleBase::realArray& table_local);
 
-    static std::vector<int> get_npwk(const int& nks,
-                                     const K_Vectors* kv,
+    static std::vector<int> get_npwk(std::vector<ModuleBase::Vector3<double>>& kvec_c,
                                      const ModulePW::PW_Basis_K* wfc_basis,
                                      const double& gk_ecut);
     static std::vector<std::vector<int>> get_igl2isz_k(const std::vector<int>& npwk,

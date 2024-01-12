@@ -30,25 +30,40 @@ class Auxiliary_Func
   private:
     using T_cal_fq_type = std::function<double(const ModuleBase::Vector3<double>& gk)>;
 
+  public:
+    static std::vector<double> cal_hf_kernel(const std::vector<ModuleBase::Vector3<double>>& gk);
+    static std::vector<double> cal_erfc_kernel(const std::vector<ModuleBase::Vector3<double>>& gk, const double& omega);
+
+    static double cal_type_0(const std::vector<ModuleBase::Vector3<double>>& kvec,
+                             const int& qdiv,
+                             const double& qdense,
+                             const int& niter,
+                             const double& eps,
+                             const int& a_rate);
+    static double cal_type_1(const std::vector<ModuleBase::Vector3<double>>& kvec_c,
+                             const int& qdiv,
+                             const ModulePW::PW_Basis_K* wfc_basis,
+                             const double& lambda);
+
   private:
-    static double Iter_Integral(const T_cal_fq_type& func_cal_fq,
-                                const std::array<int, 3>& nq_arr,
-                                const int& niter,
-                                const double& eps,
-                                const int& a_rate);
-    static double solve_chi(const int& nks,
-                            const std::vector<ModuleBase::Vector3<double>>& gk,
+    static double solve_chi(const std::vector<ModuleBase::Vector3<double>>& kvec_c,
                             const T_cal_fq_type& func_cal_fq,
                             const std::array<int, 3>& nq_arr,
                             const int& niter,
                             const double& eps,
                             const int& a_rate);
-    static double solve_chi(const int& nks,
-                            const std::vector<ModuleBase::Vector3<double>>& gk,
+    static double solve_chi(const std::vector<ModuleBase::Vector3<double>>& kvec_c,
                             const T_cal_fq_type& func_cal_fq,
                             const double& fq_int);
+    static double sum_for_solve_chi(const std::vector<ModuleBase::Vector3<double>>& kvec_c,
+                                    const T_cal_fq_type& func_cal_fq,
+                                    const double& fq_int);
+    static double Iter_Integral(const T_cal_fq_type& func_cal_fq,
+                                const std::array<int, 3>& nq_arr,
+                                const int& niter,
+                                const double& eps,
+                                const int& a_rate);
 
-    // TODO: Here, fq now only works on 3D and 2D systems
     // TODO: lower dimension please see PHYSICAL REVIEW B 87, 165122 (2013)
 
     // qdiv=2 i.e. q^{-2} for 3D;
@@ -62,23 +77,6 @@ class Auxiliary_Func
                             const int& qdiv,
                             const ModulePW::PW_Basis_K* wfc_basis,
                             const double& lambda);
-
-  public:
-    static std::vector<double> cal_hf_kernel(const std::vector<ModuleBase::Vector3<double>>& gk);
-    static std::vector<double> cal_erfc_kernel(const std::vector<ModuleBase::Vector3<double>>& gk, const double& omega);
-
-    static double cal_type_0(const std::vector<ModuleBase::Vector3<double>>& gk,
-                             const K_Vectors* kv,
-                             const int& qdiv,
-                             const double& qdense,
-                             const int& niter,
-                             const double& eps,
-                             const int& a_rate);
-    static double cal_type_1(const std::vector<ModuleBase::Vector3<double>>& gk,
-                             const K_Vectors* kv,
-                             const int& qdiv,
-                             const ModulePW::PW_Basis_K* wfc_basis,
-                             const double& lambda);
 };
 
 #endif

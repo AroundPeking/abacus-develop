@@ -44,48 +44,43 @@ std::vector<double> Auxiliary_Func::cal_hf_kernel(const std::vector<ModuleBase::
     return vg;
 }
 
-// for numerical integral of fq
-double Auxiliary_Func::solve_chi(const int& nks,
-                                 const std::vector<ModuleBase::Vector3<double>>& gk,
-                                 const T_cal_fq_type& func_cal_fq,
-                                 const std::array<int, 3>& nq_arr,
-                                 const int& niter,
-                                 const double& eps,
-                                 const int& a_rate)
+// for analytic integral of fq
+double Auxiliary_Func::sum_for_solve_chi(const std::vector<ModuleBase::Vector3<double>>& kvec_c,
+                                         const T_cal_fq_type& func_cal_fq,
+                                         const double& fq_int)
 {
-    const int npw = gk.size();
-    assert(nks > 0);
-
-    // cal fq integral
-    double fq_int = Iter_Integral(func_cal_fq, nq_arr, niter, eps, a_rate);
+    const int nks = kvec_c.size();
 
     // cal fq sum except q=0
     double fq_sum = 0;
-    for (size_t ig = 0; ig != npw; ++ig)
-        fq_sum += gk[ig].norm2() ? func_cal_fq(gk[ig]) / nks : 0;
+    for (size_t ik = 0; ik != nks; ++ik)
+        fq_sum += kvec_c[ik].norm2() ? func_cal_fq(kvec_c[ik]) / nks : 0;
 
     double chi = ModuleBase::FOUR_PI * (fq_int - fq_sum);
 
     return chi;
 }
 
+// for numerical integral of fq
+double Auxiliary_Func::solve_chi(const std::vector<ModuleBase::Vector3<double>>& kvec_c,
+                                 const T_cal_fq_type& func_cal_fq,
+                                 const std::array<int, 3>& nq_arr,
+                                 const int& niter,
+                                 const double& eps,
+                                 const int& a_rate)
+{
+    // cal fq integral
+    double fq_int = Iter_Integral(func_cal_fq, nq_arr, niter, eps, a_rate);
+
+    return sum_for_solve_chi(kvec_c, func_cal_fq, fq_int);
+}
+
 // for analytic integral of fq
-double Auxiliary_Func::solve_chi(const int& nks,
-                                 const std::vector<ModuleBase::Vector3<double>>& gk,
+double Auxiliary_Func::solve_chi(const std::vector<ModuleBase::Vector3<double>>& kvec_c,
                                  const T_cal_fq_type& func_cal_fq,
                                  const double& fq_int)
 {
-    const int npw = gk.size();
-    assert(nks > 0);
-
-    // cal fq sum except q=0
-    double fq_sum = 0;
-    for (size_t ig = 0; ig != npw; ++ig)
-        fq_sum += gk[ig].norm2() ? func_cal_fq(gk[ig]) / nks : 0;
-
-    double chi = ModuleBase::FOUR_PI * (fq_int - fq_sum);
-
-    return chi;
+    return sum_for_solve_chi(kvec_c, func_cal_fq, fq_int);
 }
 
 double Auxiliary_Func::fq_type_0(const ModuleBase::Vector3<double>& qvec,
@@ -119,8 +114,7 @@ double Auxiliary_Func::fq_type_0(const ModuleBase::Vector3<double>& qvec,
     return fq;
 }
 
-double Auxiliary_Func::cal_type_0(const std::vector<ModuleBase::Vector3<double>>& gk,
-                                  const K_Vectors* kv,
+double Auxiliary_Func::cal_type_0(const std::vector<ModuleBase::Vector3<double>>& kvec_c,
                                   const int& qdiv,
                                   const double& qdense,
                                   const int& niter,
@@ -129,13 +123,6 @@ double Auxiliary_Func::cal_type_0(const std::vector<ModuleBase::Vector3<double>>
 {
     ModuleBase::TITLE("Ewald_Vq", "cal_type_0");
     ModuleBase::timer::tick("Ewald_Vq", "cal_type_0");
-
-    const int nspin0 = std::map<int, int>{
-        {1, 1},
-        {2, 2},
-        {4, 1}
-    }.at(GlobalV::NSPIN);
-    const int nks0 = kv->nks / nspin0;
 
     std::vector<ModuleBase::Vector3<double>> avec = {GlobalC::ucell.a1, GlobalC::ucell.a2, GlobalC::ucell.a3};
     std::vector<ModuleBase::Vector3<double>> bvec;
@@ -153,13 +140,16 @@ double Auxiliary_Func::cal_type_0(const std::vector<ModuleBase::Vector3<double>>
     bvec[2].z = GlobalC::ucell.G.e33;
 
     std::array<int, 3> nq_arr;
-    std::transform(bvec.begin(), bvec.end(), nq_arr.begin(), [&qdense, &a_rate](ModuleBase::Vector3<double>& vec) -> int {
-        int index = static_cast<int>(vec.norm() * qdense * ModuleBase::TWO_PI);
-        return index ? index - index % a_rate : a_rate;
-    });
+    std::transform(bvec.begin(),
+                   bvec.end(),
+                   nq_arr.begin(),
+                   [&qdense, &a_rate](ModuleBase::Vector3<double>& vec) -> int {
+                       int index = static_cast<int>(vec.norm() * qdense * ModuleBase::TWO_PI);
+                       return index ? index - index % a_rate : a_rate;
+                   });
     const T_cal_fq_type func_cal_fq_type_0 = std::bind(&fq_type_0, std::placeholders::_1, qdiv, avec, bvec);
-    double val = solve_chi(nks0, gk, func_cal_fq_type_0, nq_arr, niter, eps, a_rate);
 
+    double val = solve_chi(kvec_c, func_cal_fq_type_0, nq_arr, niter, eps, a_rate);
     ModuleBase::timer::tick("Ewald_Vq", "cal_type_0");
     return val;
 }
@@ -197,8 +187,7 @@ double Auxiliary_Func::fq_type_1(const ModuleBase::Vector3<double>& qvec,
     return fq;
 }
 
-double Auxiliary_Func::cal_type_1(const std::vector<ModuleBase::Vector3<double>>& gk,
-                                  const K_Vectors* kv,
+double Auxiliary_Func::cal_type_1(const std::vector<ModuleBase::Vector3<double>>& kvec_c,
                                   const int& qdiv,
                                   const ModulePW::PW_Basis_K* wfc_basis,
                                   const double& lambda)
@@ -206,15 +195,7 @@ double Auxiliary_Func::cal_type_1(const std::vector<ModuleBase::Vector3<double>>
     ModuleBase::TITLE("Ewald_Vq", "cal_type_1");
     ModuleBase::timer::tick("Ewald_Vq", "cal_type_1");
 
-    const int nspin0 = std::map<int, int>{
-        {1, 1},
-        {2, 2},
-        {4, 1}
-    }.at(GlobalV::NSPIN);
-    const int nks0 = kv->nks / nspin0;
-
-    const T_cal_fq_type func_cal_fq_type_1
-        = std::bind(&fq_type_1, std::placeholders::_1, qdiv, wfc_basis, lambda);
+    const T_cal_fq_type func_cal_fq_type_1 = std::bind(&fq_type_1, std::placeholders::_1, qdiv, wfc_basis, lambda);
     double prefactor = ModuleBase::TWO_PI * std::pow(lambda, -1 / qdiv);
     double fq_int;
     if (qdiv == 2)
@@ -223,7 +204,7 @@ double Auxiliary_Func::cal_type_1(const std::vector<ModuleBase::Vector3<double>>
         fq_int = prefactor;
     else
         ModuleBase::WARNING_QUIT("Ewald_Vq::cal_type_1", "Type 1 fq only supports qdiv=1 or qdiv=2!");
-    double val = solve_chi(nks0, gk, func_cal_fq_type_1, fq_int);
+    double val = solve_chi(kvec_c, func_cal_fq_type_1, fq_int);
 
     ModuleBase::timer::tick("Ewald_Vq", "cal_type_1");
     return val;

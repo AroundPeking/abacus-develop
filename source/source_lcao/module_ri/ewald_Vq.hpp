@@ -101,12 +101,48 @@ auto Ewald_Vq<Tdata>::cal_Vq_q(const Auxiliary_Func::Kernal_Type& ker_type,
     ModuleBase::timer::tick("Ewald_Vq", "cal_Vq_q");
 
     const int nks0 = kv->nks / this->nspin0;
-    std::vector<std::map<TA, std::map<TA, RI::Tensor<std::complex<double>>>>> datas;
-    datas.resize(nks0);
-    std::map<int, int> abfs_nw = Exx_Abfs::Construct_Orbs::get_nw(abfs);
+    std::vector<ModuleBase::Vector3<double>> new_kvec(nks0);
+    std::transform(kv->kvec_c.begin(),
+                   kv->kvec_c.begin() + nks0,
+                   new_kvec.begin(),
+                   [](const ModuleBase::Vector3<double>& vec) { return vec; });
+    double V0 = 0;
+    T_kernal_func cal_kernal;
+    switch (ker_type)
+    {
+    case Auxiliary_Func::Kernal_Type::Hf:
+        cal_kernal = std::bind(&Auxiliary_Func::cal_hf_kernel, std::placeholders::_1);
+        switch (fq_type)
+        {
+        case Auxiliary_Func::Fq_type::Type_0:
+            V0 = Auxiliary_Func::cal_type_0(new_kvec,
+                                            static_cast<int>(parameter.at("ewald_qdiv")),
+                                            parameter.at("ewald_qdense"),
+                                            static_cast<int>(parameter.at("ewald_niter")),
+                                            parameter.at("ewald_eps"),
+                                            static_cast<int>(parameter.at("ewald_arate")));
+            break;
+        case Auxiliary_Func::Fq_type::Type_1:
+            V0 = Auxiliary_Func::cal_type_1(new_kvec,
+                                            static_cast<int>(parameter.at("ewald_qdiv")),
+                                            wfc_basis,
+                                            parameter.at("ewald_lambda"));
+            break;
+        default:
+            throw(ModuleBase::GlobalFunc::TO_STRING(__FILE__) + " line " + ModuleBase::GlobalFunc::TO_STRING(__LINE__));
+        }
+        break;
+    case Auxiliary_Func::Kernal_Type::Erfc:
+        cal_kernal = std::bind(&Auxiliary_Func::cal_erfc_kernel, std::placeholders::_1, parameter.at("hse_omega"));
+        break;
+    default:
+        throw(ModuleBase::GlobalFunc::TO_STRING(__FILE__) + " line " + ModuleBase::GlobalFunc::TO_STRING(__LINE__));
+        break;
+    }
+
     std::pair<std::vector<std::vector<ModuleBase::Vector3<double>>>,
               std::vector<std::vector<ModuleBase::ComplexMatrix>>>
-        result1 = get_orb_q(kv, wfc_basis, abfs, parameter.at("ewald_ecut"));
+        result1 = get_orb_q(new_kvec, wfc_basis, abfs, parameter.at("ewald_ecut"));
     std::vector<std::vector<ModuleBase::Vector3<double>>> gks = result1.first;
     std::vector<std::vector<ModuleBase::ComplexMatrix>> abfs_in_Gs = result1.second;
 
@@ -115,47 +151,14 @@ auto Ewald_Vq<Tdata>::cal_Vq_q(const Auxiliary_Func::Kernal_Type& ker_type,
         unique_set_A1.insert(pair.first);
     std::vector<TA> unique_list_A1(unique_set_A1.begin(), unique_set_A1.end());
 
+    std::map<int, int> abfs_nw = Exx_Abfs::Construct_Orbs::get_nw(abfs);
+    std::vector<std::map<TA, std::map<TA, RI::Tensor<std::complex<double>>>>> datas;
+    datas.resize(nks0);
     for (size_t ik = 0; ik != nks0; ++ik)
     {
         const int npw = gks[ik].size();
         std::vector<ModuleBase::Vector3<double>> gk = gks[ik];
-        double V0 = 0;
-
-        std::vector<double> vg;
-        switch (ker_type)
-        {
-        case Auxiliary_Func::Kernal_Type::Hf:
-            vg = Auxiliary_Func::cal_hf_kernel(gk);
-            switch (fq_type)
-            {
-            case Auxiliary_Func::Fq_type::Type_0:
-                V0 = Auxiliary_Func::cal_type_0(gk,
-                                                kv,
-                                                static_cast<int>(parameter.at("ewald_qdiv")),
-                                                parameter.at("ewald_qdense"),
-                                                static_cast<int>(parameter.at("ewald_niter")),
-                                                parameter.at("ewald_eps"),
-                                                static_cast<int>(parameter.at("ewald_arate")));
-                break;
-            case Auxiliary_Func::Fq_type::Type_1:
-                V0 = Auxiliary_Func::cal_type_1(gk,
-                                                kv,
-                                                static_cast<int>(parameter.at("ewald_qdiv")),
-                                                wfc_basis,
-                                                parameter.at("ewald_lambda"));
-                break;
-            default:
-                throw(ModuleBase::GlobalFunc::TO_STRING(__FILE__) + " line "
-                      + ModuleBase::GlobalFunc::TO_STRING(__LINE__));
-            }
-            break;
-        case Auxiliary_Func::Kernal_Type::Erfc:
-            vg = Auxiliary_Func::cal_erfc_kernel(gk, parameter.at("hse_omega"));
-            break;
-        default:
-            throw(ModuleBase::GlobalFunc::TO_STRING(__FILE__) + " line " + ModuleBase::GlobalFunc::TO_STRING(__LINE__));
-            break;
-        }
+        std::vector<double> vg = cal_kernal(gk);
 
 #pragma omp parallel
         for (size_t i0 = 0; i0 != list_A0.size(); ++i0)
@@ -201,7 +204,7 @@ auto Ewald_Vq<Tdata>::cal_Vq_q(const Auxiliary_Func::Kernal_Type& ker_type,
 
 template <typename Tdata>
 std::pair<std::vector<std::vector<ModuleBase::Vector3<double>>>, std::vector<std::vector<ModuleBase::ComplexMatrix>>>
-    Ewald_Vq<Tdata>::get_orb_q(const K_Vectors* kv,
+    Ewald_Vq<Tdata>::get_orb_q(std::vector<ModuleBase::Vector3<double>>& kvec_c,
                                const ModulePW::PW_Basis_K* wfc_basis,
                                const std::vector<std::vector<std::vector<Numerical_Orbital_Lm>>>& orb_in,
                                const double& gk_ecut)
@@ -209,14 +212,14 @@ std::pair<std::vector<std::vector<ModuleBase::Vector3<double>>>, std::vector<std
     ModuleBase::TITLE("Ewald_Vq", "get_orb_q");
     ModuleBase::timer::tick("Ewald_Vq", "get_orb_q");
 
-    const int nks0 = kv->nks / this->nspin0;
+    const int nks0 = kvec_c.size();
     int nmax_total = Exx_Abfs::Construct_Orbs::get_nmax_total(orb_in);
     const int ntype = orb_in.size();
     ModuleBase::realArray table_local(ntype, nmax_total, GlobalV::NQX);
     Wavefunc_in_pw::make_table_q(orb_in, table_local);
 
     std::vector<std::vector<ModuleBase::ComplexMatrix>> orb_in_Gs(nks0);
-    std::vector<int> npwk = get_npwk(nks0, kv, wfc_basis, gk_ecut);
+    std::vector<int> npwk = get_npwk(kvec_c, wfc_basis, gk_ecut);
     std::vector<std::vector<ModuleBase::Vector3<double>>> gks(nks0);
     std::vector<std::vector<ModuleBase::Vector3<double>>> gcar = get_gcar(npwk, wfc_basis);
 
@@ -225,7 +228,7 @@ std::pair<std::vector<std::vector<ModuleBase::Vector3<double>>>, std::vector<std
         const int npw = npwk[ik];
         gks[ik].resize(npw);
         for (size_t ig = 0; ig != npw; ++ig)
-            gks[ik][ig] = kv->kvec_c[ik] - gcar[ik][ig];
+            gks[ik][ig] = kvec_c[ik] - gcar[ik][ig];
 
         orb_in_Gs[ik] = produce_local_basis_in_pw(ik, gks[ik], wfc_basis->tpiba, orb_in, table_local);
     }
@@ -306,11 +309,11 @@ std::vector<ModuleBase::ComplexMatrix> Ewald_Vq<Tdata>::produce_local_basis_in_p
 }
 
 template <typename Tdata>
-std::vector<int> Ewald_Vq<Tdata>::get_npwk(const int& nks,
-                                           const K_Vectors* kv,
+std::vector<int> Ewald_Vq<Tdata>::get_npwk(std::vector<ModuleBase::Vector3<double>>& kvec_c,
                                            const ModulePW::PW_Basis_K* wfc_basis,
                                            const double& gk_ecut)
 {
+    const int nks = kvec_c.size();
     std::vector<int> full_npw(nks, wfc_basis->npw);
     std::vector<std::vector<ModuleBase::Vector3<double>>> gcar = get_gcar(full_npw, wfc_basis);
     std::vector<int> npwk(nks);
@@ -320,7 +323,7 @@ std::vector<int> Ewald_Vq<Tdata>::get_npwk(const int& nks,
         int ng = 0;
         for (size_t ig = 0; ig != wfc_basis->npw; ++ig)
         {
-            const double gk2 = (gcar[ik][ig] + kv->kvec_c[ik]).norm2();
+            const double gk2 = (gcar[ik][ig] + kvec_c[ik]).norm2();
             if (gk2 <= gk_ecut / wfc_basis->tpiba2)
                 ++ng;
         }
