@@ -153,13 +153,15 @@ double Auxiliary_Func::cal_type_0(const std::vector<ModuleBase::Vector3<double>>
     bvec[2].z = GlobalC::ucell.G.e33;
 
     std::array<int, 3> nq_arr;
-    std::transform(bvec.begin(), bvec.end(), nq_arr.begin(), [&qdense](ModuleBase::Vector3<double>& vec) -> int {
-        return static_cast<int>(vec.norm() * qdense);
+    std::transform(bvec.begin(), bvec.end(), nq_arr.begin(), [&qdense, &a_rate](ModuleBase::Vector3<double>& vec) -> int {
+        int index = static_cast<int>(vec.norm() * qdense * ModuleBase::TWO_PI);
+        return index ? index - index % a_rate : a_rate;
     });
     const T_cal_fq_type func_cal_fq_type_0 = std::bind(&fq_type_0, std::placeholders::_1, qdiv, avec, bvec);
+    double val = solve_chi(nks0, gk, func_cal_fq_type_0, nq_arr, niter, eps, a_rate);
 
     ModuleBase::timer::tick("Ewald_Vq", "cal_type_0");
-    return solve_chi(nks0, gk, func_cal_fq_type_0, nq_arr, niter, eps, a_rate);
+    return val;
 }
 
 double Auxiliary_Func::fq_type_1(const ModuleBase::Vector3<double>& qvec,
@@ -221,9 +223,10 @@ double Auxiliary_Func::cal_type_1(const std::vector<ModuleBase::Vector3<double>>
         fq_int = prefactor;
     else
         ModuleBase::WARNING_QUIT("Ewald_Vq::cal_type_1", "Type 1 fq only supports qdiv=1 or qdiv=2!");
+    double val = solve_chi(nks0, gk, func_cal_fq_type_1, fq_int);
 
     ModuleBase::timer::tick("Ewald_Vq", "cal_type_1");
-    return solve_chi(nks0, gk, func_cal_fq_type_1, fq_int);
+    return val;
 }
 
 double Auxiliary_Func::Iter_Integral(const T_cal_fq_type& func_cal_fq,
@@ -233,10 +236,10 @@ double Auxiliary_Func::Iter_Integral(const T_cal_fq_type& func_cal_fq,
                                      const int& a_rate)
 {
     bool any_negative = std::any_of(nq_arr.begin(), nq_arr.end(), [](int i) { return i < 0; });
-    bool any_nthree = std::any_of(nq_arr.begin(), nq_arr.end(), [](int i) { return i % 3 != 0; });
+    bool any_nthree = std::any_of(nq_arr.begin(), nq_arr.end(), [&a_rate](int i) { return i % a_rate != 0; });
     if (any_negative || any_nthree)
         ModuleBase::WARNING_QUIT("Ewald_Vq::Iter_Integral",
-                                 "The elements of `nq_arr` should be non-negative and multiples of three!");
+                                 "The elements of `nq_arr` should be non-negative and multiples of a_rate!");
     bool all_zero = std::all_of(nq_arr.begin(), nq_arr.end(), [](int i) { return i == 0; });
     if (all_zero)
         ModuleBase::WARNING_QUIT("Ewald_Vq::Iter_Integral", "At least one element of `nq_arr` should be non-zero!");
@@ -250,10 +253,10 @@ double Auxiliary_Func::Iter_Integral(const T_cal_fq_type& func_cal_fq,
     {
         if (nq_arr[i] != 0)
         {
-            qstep[i] = 1 / (2 * nq_arr[i] + 1);
+            qstep[i] = 1.0 / (2 * nq_arr[i] + 1);
             ndim += 1;
         }
-        nq_arr_in[i] = nq_arr[i] / a_rate;
+        nq_arr_in[i] = static_cast<int>(nq_arr[i] / a_rate);
     }
 
     double integ = 0.0;
@@ -261,9 +264,9 @@ double Auxiliary_Func::Iter_Integral(const T_cal_fq_type& func_cal_fq,
     for (size_t iter = 0; iter != niter; ++iter)
     {
         double integ_iter = 0.0;
-        for (int ig1 = -nq_arr[0]; ig1 == nq_arr[0]; ++ig1)
-            for (int ig2 = -nq_arr[1]; ig2 == nq_arr[1]; ++ig2)
-                for (int ig3 = -nq_arr[2]; ig3 == nq_arr[2]; ++ig3)
+        for (int ig1 = -nq_arr[0]; ig1 != nq_arr[0]; ++ig1)
+            for (int ig2 = -nq_arr[1]; ig2 != nq_arr[1]; ++ig2)
+                for (int ig3 = -nq_arr[2]; ig3 != nq_arr[2]; ++ig3)
                 {
                     if (std::abs(ig1) <= nq_arr_in[0] && std::abs(ig2) <= nq_arr_in[1] && std::abs(ig3) <= nq_arr_in[2])
                         continue;
