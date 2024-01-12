@@ -251,11 +251,11 @@ double Auxiliary_Func::Iter_Integral(const T_cal_fq_type& func_cal_fq,
                 {
                     if (std::abs(ig1) <= nq_arr_in[0] && std::abs(ig2) <= nq_arr_in[1] && std::abs(ig3) <= nq_arr_in[2])
                         continue;
-                    ModuleBase::Vector3<double> qvec;
+                    ModuleBase::Vector3<double> qvec; //direct
                     qvec.x = qstep[0] * ig1;
                     qvec.y = qstep[1] * ig2;
                     qvec.z = qstep[2] * ig3;
-                    integ_iter += func_cal_fq(qvec);
+                    integ_iter += func_cal_fq(qvec * GlobalC::ucell.G);
                 }
         integ_iter /= nqs * pow(a_rate, ndim * (iter - 1)); // Each iteration reduces dq by a multiple of a_rate
         integ += integ_iter;
