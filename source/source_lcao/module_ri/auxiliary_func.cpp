@@ -54,9 +54,9 @@ double Auxiliary_Func::sum_for_solve_chi(const std::vector<ModuleBase::Vector3<d
     // cal fq sum except q=0
     double fq_sum = 0;
     for (size_t ik = 0; ik != nks; ++ik)
-        fq_sum += kvec_c[ik].norm2() ? func_cal_fq(kvec_c[ik]) / nks : 0;
+        fq_sum += kvec_c[ik].norm2() ? func_cal_fq(kvec_c[ik]): 0;
 
-    double chi = ModuleBase::FOUR_PI * (fq_int - fq_sum);
+    double chi = ModuleBase::FOUR_PI * (fq_int - fq_sum / nks );
 
     return chi;
 }
@@ -88,6 +88,8 @@ double Auxiliary_Func::fq_type_0(const ModuleBase::Vector3<double>& qvec,
                                  std::vector<ModuleBase::Vector3<double>>& avec,
                                  std::vector<ModuleBase::Vector3<double>>& bvec)
 {
+    assert(qvec.norm2());
+
     std::vector<ModuleBase::Vector3<double>> baq(3);
     std::vector<ModuleBase::Vector3<double>> baq_2(3);
     const int qexpo = -abs(qdiv);
@@ -226,7 +228,7 @@ double Auxiliary_Func::Iter_Integral(const T_cal_fq_type& func_cal_fq,
         ModuleBase::WARNING_QUIT("Ewald_Vq::Iter_Integral", "At least one element of `nq_arr` should be non-zero!");
 
     const int nqs
-        = std::accumulate(nq_arr.begin(), nq_arr.end(), 1, [](int a, int b) { return (2 * a + 1) * (2 * b + 1); });
+        = std::accumulate(nq_arr.begin(), nq_arr.end(), 1, [](int a, int b) { return a * (2 * b + 1); });
     std::array<double, 3> qstep{};
     std::array<int, 3> nq_arr_in{};
     int ndim = 0;
@@ -245,9 +247,9 @@ double Auxiliary_Func::Iter_Integral(const T_cal_fq_type& func_cal_fq,
     for (size_t iter = 0; iter != niter; ++iter)
     {
         double integ_iter = 0.0;
-        for (int ig1 = -nq_arr[0]; ig1 != nq_arr[0]; ++ig1)
-            for (int ig2 = -nq_arr[1]; ig2 != nq_arr[1]; ++ig2)
-                for (int ig3 = -nq_arr[2]; ig3 != nq_arr[2]; ++ig3)
+        for (int ig1 = -nq_arr[0]; ig1 != nq_arr[0]+1; ++ig1)
+            for (int ig2 = -nq_arr[1]; ig2 != nq_arr[1]+1; ++ig2)
+                for (int ig3 = -nq_arr[2]; ig3 != nq_arr[2]+1; ++ig3)
                 {
                     if (std::abs(ig1) <= nq_arr_in[0] && std::abs(ig2) <= nq_arr_in[1] && std::abs(ig3) <= nq_arr_in[2])
                         continue;
@@ -257,7 +259,7 @@ double Auxiliary_Func::Iter_Integral(const T_cal_fq_type& func_cal_fq,
                     qvec.z = qstep[2] * ig3;
                     integ_iter += func_cal_fq(qvec * GlobalC::ucell.G);
                 }
-        integ_iter /= nqs * pow(a_rate, ndim * (iter - 1)); // Each iteration reduces dq by a multiple of a_rate
+        integ_iter /= nqs * pow(a_rate, ndim * iter); // Each iteration reduces dq by a multiple of a_rate
         integ += integ_iter;
         if (iter != 0 && integ_iter < eps)
             break;
