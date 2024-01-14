@@ -23,7 +23,7 @@
 
 template <typename Tdata>
 void Ewald_Vq<Tdata>::cal_Vs_ewald(const K_Vectors* kv,
-                                   const UnitCell ucell,
+                                   const UnitCell& ucell,
                                    std::map<TA, std::map<TAC, RI::Tensor<Tdata>>>& Vs,
                                    std::vector<std::map<TA, std::map<TA, RI::Tensor<std::complex<double>>>>>& Vq,
                                    const std::vector<TA>& list_A0,
@@ -90,7 +90,7 @@ auto Ewald_Vq<Tdata>::cal_Vq_q(const Auxiliary_Func::Kernal_Type& ker_type,
                                const Auxiliary_Func::Fq_type& fq_type,
                                const std::vector<std::vector<std::vector<Numerical_Orbital_Lm>>>& abfs,
                                const K_Vectors* kv,
-                               const UnitCell ucell,
+                               const UnitCell& ucell,
                                const ModulePW::PW_Basis_K* wfc_basis,
                                const std::vector<TA>& list_A0,
                                const std::vector<TAC>& list_A1,
@@ -387,7 +387,7 @@ std::vector<std::vector<ModuleBase::Vector3<double>>> Ewald_Vq<Tdata>::get_gcar(
 
 template <typename Tdata>
 auto Ewald_Vq<Tdata>::cal_Vq_R(const K_Vectors* kv,
-                               const UnitCell ucell,
+                               const UnitCell& ucell,
                                const std::map<TA, std::map<TAC, RI::Tensor<Tdata>>>& Vs)
     -> std::vector<std::map<TA, std::map<TA, RI::Tensor<std::complex<double>>>>>
 {

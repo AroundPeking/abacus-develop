@@ -39,7 +39,7 @@ class Ewald_Vq
         Vs_full: cam_alpha * Vs_full based on periodic R + cam_beta * Vs_sr based on non-periodic R
     -------------------------------------------*/
     void cal_Vs_ewald(const K_Vectors* kv,
-                      const UnitCell ucell,
+                      const UnitCell& ucell,
                       std::map<TA, std::map<TAC, RI::Tensor<Tdata>>>& Vs,
                       std::vector<std::map<TA, std::map<TA, RI::Tensor<std::complex<double>>>>>& Vq,
                       const std::vector<TA>& list_A0,
@@ -53,7 +53,7 @@ class Ewald_Vq
         const Auxiliary_Func::Fq_type& fq_type,
         const std::vector<std::vector<std::vector<Numerical_Orbital_Lm>>>& abfs,
         const K_Vectors* kv,
-        const UnitCell ucell,
+        const UnitCell& ucell,
         const ModulePW::PW_Basis_K* wfc_basis,
         const std::vector<TA>& list_A0,
         const std::vector<TAC>& list_A1,
@@ -62,7 +62,7 @@ class Ewald_Vq
     //\sum_R V(R)\exp(iqR)
     std::vector<std::map<TA, std::map<TA, RI::Tensor<std::complex<double>>>>> cal_Vq_R(
         const K_Vectors* kv,
-        const UnitCell ucell,
+        const UnitCell& ucell,
         const std::map<TA, std::map<TAC, RI::Tensor<Tdata>>>& Vs);
 
   private:
