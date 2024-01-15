@@ -27,7 +27,6 @@ class Ewald_Vq
     using TA = int;
     using TC = std::array<int, 3>;
     using TAC = std::pair<TA, TC>;
-    using T_kernal_func = std::function<std::vector<double>(std::vector<ModuleBase::Vector3<double>>)>;
 
   public:
     /*-------------------------------------------
@@ -82,7 +81,7 @@ class Ewald_Vq
     std::vector<ModuleBase::ComplexMatrix> produce_local_basis_in_pw(
         const int& ik,
         const std::vector<ModuleBase::Vector3<double>>& gk,
-        const double tpiba,
+        const double& tpiba,
         const std::vector<std::vector<std::vector<Numerical_Orbital_Lm>>>& orb_in,
         const ModuleBase::realArray& table_local);
 
