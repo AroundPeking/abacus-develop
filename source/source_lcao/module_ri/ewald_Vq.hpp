@@ -51,15 +51,9 @@ void Ewald_Vq<Tdata>::cal_Vs_ewald(const K_Vectors* kv,
             const TAC pair_nonperiod = list_A1[i1];
             const TA iat1 = pair_nonperiod.first;
             const TC cell1 = pair_nonperiod.second;
-            if (!Vs[iat0][pair_nonperiod].empty())
-                Vs[iat0][pair_nonperiod] = RI::Global_Func::convert<Tdata>(cam_beta) * Vs[iat0][pair_nonperiod];
 
-            TC cell1_period;
-            std::transform(cell1.begin(),
-                           cell1.end(),
-                           period.begin(),
-                           cell1_period.begin(),
-                           [](const TA& a, const TA& b) { return a % b; });
+            using namespace RI::Array_Operator;
+            const TC cell1_period = cell1 % period;
 
             RI::Tensor<Tdata> Vs_tmp;
             for (size_t ik = 0; ik != nks0; ++ik)
@@ -76,6 +70,9 @@ void Ewald_Vq<Tdata>::cal_Vs_ewald(const K_Vectors* kv,
                 else
                     Vs_tmp += Vs_full_tmp;
             }
+            Vs[iat0][pair_nonperiod] = Vs[iat0][pair_nonperiod].empty()
+                                           ? RI::Tensor<Tdata>(Vs_tmp.shape)
+                                           : RI::Global_Func::convert<Tdata>(cam_beta) * Vs[iat0][pair_nonperiod];
             const TAC pair_period = std::make_pair(iat1, cell1_period);
             Vs[iat0][pair_period] = Vs[iat0][pair_period].empty() ? Vs_tmp : Vs[iat0][pair_period] + Vs_tmp;
         }
