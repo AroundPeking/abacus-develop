@@ -62,7 +62,7 @@ class Ewald_Vq
     std::vector<std::map<TA, std::map<TA, RI::Tensor<std::complex<double>>>>> cal_Vq_R(
         const K_Vectors* kv,
         const UnitCell& ucell,
-        const std::map<TA, std::map<TAC, RI::Tensor<Tdata>>>& Vs);
+        std::map<TA, std::map<TAC, RI::Tensor<Tdata>>>& Vs);
 
   private:
     const int nspin0 = std::map<int, int>{

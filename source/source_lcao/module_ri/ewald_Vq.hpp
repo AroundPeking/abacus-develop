@@ -189,7 +189,7 @@ auto Ewald_Vq<Tdata>::cal_Vq_q(const Auxiliary_Func::Kernal_Type& ker_type,
                         }
                         data(iw0, iw1) += V0; // correction for V(q-G=0)
                     }
-#pragma omp critical(Ewald_Vq_cal_Vq1)
+#pragma omp critical(Ewald_Vq_cal_Vq_q)
                 datas[ik][iat0][iat1] = data;
             }
         }
@@ -385,7 +385,7 @@ std::vector<std::vector<ModuleBase::Vector3<double>>> Ewald_Vq<Tdata>::get_gcar(
 template <typename Tdata>
 auto Ewald_Vq<Tdata>::cal_Vq_R(const K_Vectors* kv,
                                const UnitCell& ucell,
-                               const std::map<TA, std::map<TAC, RI::Tensor<Tdata>>>& Vs)
+                               std::map<TA, std::map<TAC, RI::Tensor<Tdata>>>& Vs)
     -> std::vector<std::map<TA, std::map<TA, RI::Tensor<std::complex<double>>>>>
 {
     ModuleBase::TITLE("Ewald_Vq", "cal_Vq_R");
