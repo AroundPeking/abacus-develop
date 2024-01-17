@@ -27,6 +27,7 @@ class Ewald_Vq
     using TA = int;
     using TC = std::array<int, 3>;
     using TAC = std::pair<TA, TC>;
+    using T_kernal_func = std::function<std::vector<double>(std::vector<ModuleBase::Vector3<double>>& gk)>;
 
   public:
     /*-------------------------------------------
