@@ -186,8 +186,9 @@ auto Ewald_Vq<Tdata>::cal_Vq_q(const Auxiliary_Func::Kernal_Type& ker_type,
                                 = std::exp(ModuleBase::TWO_PI * ModuleBase::IMAG_UNIT * (gks[ik][ig] * (tau0 - tau1)));
                             data(iw0, iw1) += std::conj(abfs_in_Gs[ik][it0](iw0, ig)) * abfs_in_Gs[ik][it1](iw1, ig)
                                               * phase * vg[ig];
+                            if(!gk[ig].norm2())
+                                data(iw0, iw1) += std::conj(abfs_in_Gs[ik][it0](iw0, ig)) * abfs_in_Gs[ik][it1](iw1, ig) * V0; // correction for V(q-G=0)
                         }
-                        data(iw0, iw1) += V0; // correction for V(q-G=0)
                     }
 #pragma omp critical(Ewald_Vq_cal_Vq_q)
                 datas[ik][iat0][iat1] = data;
