@@ -32,14 +32,14 @@ std::vector<double> Auxiliary_Func::cal_erfc_kernel(const std::vector<ModuleBase
     return vg;
 }
 
-std::vector<double> Auxiliary_Func::cal_hf_kernel(const std::vector<ModuleBase::Vector3<double>>& gk)
+std::vector<double> Auxiliary_Func::cal_hf_kernel(const std::vector<ModuleBase::Vector3<double>>& gk, const double& chi)
 {
     const int npw = gk.size();
     std::vector<double> vg(npw);
 
     // set 0 for add Auxiliary functions to eliminate singularities later
     for (size_t ig = 0; ig != npw; ++ig)
-        vg[ig] = gk[ig].norm2() ? (ModuleBase::FOUR_PI / (gk[ig].norm2() * GlobalC::ucell.tpiba2)) : 0;
+        vg[ig] = gk[ig].norm2() ? (ModuleBase::FOUR_PI / (gk[ig].norm2() * GlobalC::ucell.tpiba2)) : chi;
 
     return vg;
 }

@@ -103,31 +103,31 @@ auto Ewald_Vq<Tdata>::cal_Vq_q(const Auxiliary_Func::Kernal_Type& ker_type,
                    kv->kvec_c.begin() + nks0,
                    new_kvec.begin(),
                    [](const ModuleBase::Vector3<double>& vec) { return vec; });
-    double V0 = 0;
+    double chi = 0;
     T_kernal_func cal_kernal;
     switch (ker_type)
     {
     case Auxiliary_Func::Kernal_Type::Hf:
-        cal_kernal = std::bind(&Auxiliary_Func::cal_hf_kernel, std::placeholders::_1);
         switch (fq_type)
         {
         case Auxiliary_Func::Fq_type::Type_0:
-            V0 = Auxiliary_Func::cal_type_0(new_kvec,
-                                            static_cast<int>(parameter.at("ewald_qdiv")),
-                                            parameter.at("ewald_qdense"),
-                                            static_cast<int>(parameter.at("ewald_niter")),
-                                            parameter.at("ewald_eps"),
-                                            static_cast<int>(parameter.at("ewald_arate")));
+            chi = Auxiliary_Func::cal_type_0(new_kvec,
+                                             static_cast<int>(parameter.at("ewald_qdiv")),
+                                             parameter.at("ewald_qdense"),
+                                             static_cast<int>(parameter.at("ewald_niter")),
+                                             parameter.at("ewald_eps"),
+                                             static_cast<int>(parameter.at("ewald_arate")));
             break;
         case Auxiliary_Func::Fq_type::Type_1:
-            V0 = Auxiliary_Func::cal_type_1(new_kvec,
-                                            static_cast<int>(parameter.at("ewald_qdiv")),
-                                            wfc_basis,
-                                            parameter.at("ewald_lambda"));
+            chi = Auxiliary_Func::cal_type_1(new_kvec,
+                                             static_cast<int>(parameter.at("ewald_qdiv")),
+                                             wfc_basis,
+                                             parameter.at("ewald_lambda"));
             break;
         default:
             throw(ModuleBase::GlobalFunc::TO_STRING(__FILE__) + " line " + ModuleBase::GlobalFunc::TO_STRING(__LINE__));
         }
+        cal_kernal = std::bind(&Auxiliary_Func::cal_hf_kernel, std::placeholders::_1, chi);
         break;
     case Auxiliary_Func::Kernal_Type::Erfc:
         cal_kernal = std::bind(&Auxiliary_Func::cal_erfc_kernel, std::placeholders::_1, parameter.at("hse_omega"));
@@ -183,11 +183,10 @@ auto Ewald_Vq<Tdata>::cal_Vq_q(const Auxiliary_Func::Kernal_Type& ker_type,
                         for (size_t ig = 0; ig != npw; ++ig)
                         {
                             std::complex<double> phase
-                                = std::exp(ModuleBase::TWO_PI * ModuleBase::IMAG_UNIT * (gks[ik][ig] * (tau0 - tau1)));
+                                = std::exp(ModuleBase::TWO_PI * ModuleBase::IMAG_UNIT * (gk[ig] * (tau0 - tau1)));
                             data(iw0, iw1) += std::conj(abfs_in_Gs[ik][it0](iw0, ig)) * abfs_in_Gs[ik][it1](iw1, ig)
                                               * phase * vg[ig];
-                            if(!gk[ig].norm2())
-                                data(iw0, iw1) += std::conj(abfs_in_Gs[ik][it0](iw0, ig)) * abfs_in_Gs[ik][it1](iw1, ig) * V0; // correction for V(q-G=0)
+                            
                         }
                     }
 #pragma omp critical(Ewald_Vq_cal_Vq_q)
