@@ -79,20 +79,6 @@ class Ewald_Vq
                   const ModulePW::PW_Basis_K* wfc_basis,
                   const std::vector<std::vector<std::vector<Numerical_Orbital_Lm>>>& orb_in,
                   const double& gk_ecut);
-    std::vector<ModuleBase::ComplexMatrix> produce_local_basis_in_pw(
-        const int& ik,
-        const std::vector<ModuleBase::Vector3<double>>& gk,
-        const double& tpiba,
-        const std::vector<std::vector<std::vector<Numerical_Orbital_Lm>>>& orb_in,
-        const ModuleBase::realArray& table_local);
-
-    static std::vector<int> get_npwk(std::vector<ModuleBase::Vector3<double>>& kvec_c,
-                                     const ModulePW::PW_Basis_K* wfc_basis,
-                                     const double& gk_ecut);
-    static std::vector<std::vector<int>> get_igl2isz_k(const std::vector<int>& npwk,
-                                                       const ModulePW::PW_Basis_K* wfc_basis);
-    static std::vector<std::vector<ModuleBase::Vector3<double>>> get_gcar(const std::vector<int>& npwk,
-                                                                          const ModulePW::PW_Basis_K* wfc_basis);
 };
 
 #include "ewald_Vq.hpp"

@@ -23,6 +23,7 @@ if (ENABLE_LIBRI)
         exx_opt_orb-print.cpp
         exx_opt_orb.cpp
         auxiliary_func.cpp
+        ewald_Vq_tools.cpp
     )
   endif()
   add_library(
