@@ -226,7 +226,7 @@ std::pair<std::vector<std::vector<ModuleBase::Vector3<double>>>, std::vector<std
         for (size_t ig = 0; ig != npw; ++ig)
             gks[ik][ig] = kvec_c[ik] - gcar[ik][ig];
 
-        orb_in_Gs[ik] = Ewald_Vq_tools::produce_local_basis_in_pw(ik, gks[ik], wfc_basis->tpiba, orb_in, table_local);
+        orb_in_Gs[ik] = Ewald_Vq_tools::produce_local_basis_in_pw(gks[ik], wfc_basis->tpiba, orb_in, table_local);
     }
 
     std::pair<std::vector<std::vector<ModuleBase::Vector3<double>>>,

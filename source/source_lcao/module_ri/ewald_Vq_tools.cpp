@@ -13,7 +13,6 @@
 #include "module_base/math_ylmreal.h"
 
 std::vector<ModuleBase::ComplexMatrix> Ewald_Vq_tools::produce_local_basis_in_pw(
-    const int& ik,
     const std::vector<ModuleBase::Vector3<double>>& gk,
     const double& tpiba,
     const std::vector<std::vector<std::vector<Numerical_Orbital_Lm>>>& orb_in,
