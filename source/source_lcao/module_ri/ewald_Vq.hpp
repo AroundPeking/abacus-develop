@@ -28,56 +28,94 @@ void Ewald_Vq<Tdata>::cal_Vs_ewald(const K_Vectors* kv,
                                    const std::vector<TA>& list_A0,
                                    const std::vector<TAC>& list_A1,
                                    const double& cam_alpha,
-                                   const double& cam_beta)
+                                   const double& cam_beta,
+                                   const double& ccp_rmesh_times)
 {
     ModuleBase::TITLE("Ewald_Vq", "cal_Vs_ewald");
     ModuleBase::timer::tick("Ewald_Vq", "cal_Vs_ewald");
 
-    const TC period = RI_Util::get_Born_vonKarmen_period(*kv);
-    const int nks0 = kv->nks / this->nspin0;
+    std::map<TA, std::map<TAC, RI::Tensor<Tdata>>> Vs_full
+        = this->Vq_2_Vs(kv, ucell, Vq, list_A0, list_A1, ccp_rmesh_times, cam_alpha);
+    if (cam_beta)
+    {
+        for (const auto& Vs_tmpA: Vs)
+        {
+            const TA& iat0 = Vs_tmpA.first;
+            for (const auto& Vs_tmpB: Vs_tmpA.second)
+            {
+                const TA& iat1 = Vs_tmpB.first.first;
+                const TC& cell1 = Vs_tmpB.first.second;
+
+                Vs[iat0][Vs_tmpB.first]
+                    = RI::Global_Func::convert<Tdata>(cam_beta) * Vs[iat0][Vs_tmpB.first] + Vs_full[iat0][Vs_tmpB.first];
+            }
+        }
+    }
+    else
+        Vs = Vs_full;
+
+    ModuleBase::timer::tick("Ewald_Vq", "cal_Vs_ewald");
+}
+
+template <typename Tdata>
+auto Ewald_Vq<Tdata>::Vq_2_Vs(const K_Vectors* kv,
+                              const UnitCell& ucell,
+                              std::vector<std::map<TA, std::map<TA, RI::Tensor<std::complex<double>>>>>& Vq,
+                              const std::vector<TA>& list_A0,
+                              const std::vector<TAC>& list_A1,
+                              const double& ccp_rmesh_times,
+                              const double& alpha) -> std::map<TA, std::map<TAC, RI::Tensor<Tdata>>>
+{
+    ModuleBase::TITLE("Ewald_Vq", "Vq_to_Vs");
+    ModuleBase::timer::tick("Ewald_Vq", "Vq_to_Vs");
+
+    std::map<TA, std::map<TAC, RI::Tensor<Tdata>>> datas;
     const double SPIN_multiple = std::map<int, double>{
         {1, 0.5},
         {2, 1  },
         {4, 1  }
     }.at(GlobalV::NSPIN);
-    std::map<TA, std::map<TAC, RI::Tensor<Tdata>>> datas;
+    const int nks0 = kv->nks / this->nspin0;
 
     for (size_t i0 = 0; i0 != list_A0.size(); ++i0)
     {
-        const TA iat0 = list_A0[i0];
         for (size_t i1 = 0; i1 != list_A1.size(); ++i1)
         {
-            const TAC pair_nonperiod = list_A1[i1];
-            const TA iat1 = pair_nonperiod.first;
-            const TC cell1 = pair_nonperiod.second;
-
-            using namespace RI::Array_Operator;
-            const TC cell1_period = cell1 % period;
-
-            RI::Tensor<Tdata> Vs_tmp;
-            for (size_t ik = 0; ik != nks0; ++ik)
+            const TA iat0 = list_A0[i0];
+            const TA iat1 = list_A1[i1].first;
+            const TC& cell1 = list_A1[i1].second;
+            const int it0 = ucell.iat2it[iat0];
+            const int ia0 = ucell.iat2ia[iat0];
+            const int it1 = ucell.iat2it[iat1];
+            const int ia1 = ucell.iat2ia[iat1];
+            const ModuleBase::Vector3<double> tau0 = ucell.atoms[it0].tau[ia0];
+            const ModuleBase::Vector3<double> tau1 = ucell.atoms[it1].tau[ia1];
+            const double Rcut
+                = std::min(GlobalC::ORB.Phi[it0].getRcut() * ccp_rmesh_times + GlobalC::ORB.Phi[it1].getRcut(),
+                           GlobalC::ORB.Phi[it1].getRcut() * ccp_rmesh_times + GlobalC::ORB.Phi[it0].getRcut());
+            const Abfs::Vector3_Order<double> R_delta
+                = -tau0 + tau1 + (RI_Util::array3_to_Vector3(cell1) * ucell.latvec);
+            if (R_delta.norm() * ucell.lat0 < Rcut)
             {
-                const std::complex<double> frac
-                    = cam_alpha
-                      * std::exp(-ModuleBase::TWO_PI * ModuleBase::IMAG_UNIT
-                                 * (kv->kvec_c[ik] * (RI_Util::array3_to_Vector3(cell1_period) * ucell.latvec)))
-                      * kv->wk[ik] * SPIN_multiple;
-                RI::Tensor<Tdata> Vs_full_tmp = RI::Global_Func::convert<Tdata>(Vq[ik][iat0][iat1] * frac);
-
-                if (Vs_tmp.empty())
-                    Vs_tmp = Vs_full_tmp;
-                else
-                    Vs_tmp += Vs_full_tmp;
+                for (size_t ik = 0; ik != nks0; ++ik)
+                {
+                    const std::complex<double> frac
+                        = alpha
+                          * std::exp(-ModuleBase::TWO_PI * ModuleBase::IMAG_UNIT
+                                     * (kv->kvec_c[ik] * (RI_Util::array3_to_Vector3(cell1) * ucell.latvec)))
+                          * kv->wk[ik] * SPIN_multiple;
+                    RI::Tensor<Tdata> Vs_tmp = RI::Global_Func::convert<Tdata>(Vq[ik][iat0][iat1] * frac);
+                    if (datas[list_A0[i0]][list_A1[i1]].empty())
+                        datas[list_A0[i0]][list_A1[i1]] = Vs_tmp;
+                    else
+                        datas[list_A0[i0]][list_A1[i1]] = datas[list_A0[i0]][list_A1[i1]] + Vs_tmp;
+                }
             }
-            Vs[iat0][pair_nonperiod] = Vs[iat0][pair_nonperiod].empty()
-                                           ? RI::Tensor<Tdata>(Vs_tmp.shape)
-                                           : RI::Global_Func::convert<Tdata>(cam_beta) * Vs[iat0][pair_nonperiod];
-            const TAC pair_period = std::make_pair(iat1, cell1_period);
-            Vs[iat0][pair_period] = Vs[iat0][pair_period].empty() ? Vs_tmp : Vs[iat0][pair_period] + Vs_tmp;
         }
     }
 
-    ModuleBase::timer::tick("Ewald_Vq", "cal_Vs_ewald");
+    ModuleBase::timer::tick("Ewald_Vq", "Vq_to_Vs");
+    return datas;
 }
 
 // Zc
@@ -185,7 +223,6 @@ auto Ewald_Vq<Tdata>::cal_Vq_q(const Auxiliary_Func::Kernal_Type& ker_type,
                                 = std::exp(ModuleBase::TWO_PI * ModuleBase::IMAG_UNIT * (gk[ig] * (tau0 - tau1)));
                             data(iw0, iw1) += std::conj(abfs_in_Gs[ik][it0](iw0, ig)) * abfs_in_Gs[ik][it1](iw1, ig)
                                               * phase * vg[ig];
-                            
                         }
                     }
 #pragma omp critical(Ewald_Vq_cal_Vq_q)

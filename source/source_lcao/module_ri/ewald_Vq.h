@@ -45,7 +45,8 @@ class Ewald_Vq
                       const std::vector<TA>& list_A0,
                       const std::vector<TAC>& list_A1,
                       const double& cam_alpha,
-                      const double& cam_beta);
+                      const double& cam_beta,
+                      const double& ccp_rmesh_times);
 
     //\sum_G P*(q-G)v(q-G)P(q-G)\exp(-i(q-G)\tau)
     std::vector<std::map<TA, std::map<TA, RI::Tensor<std::complex<double>>>>> cal_Vq_q(
@@ -79,6 +80,15 @@ class Ewald_Vq
                   const ModulePW::PW_Basis_K* wfc_basis,
                   const std::vector<std::vector<std::vector<Numerical_Orbital_Lm>>>& orb_in,
                   const double& gk_ecut);
+
+    std::map<TA, std::map<TAC, RI::Tensor<Tdata>>> Vq_2_Vs(
+        const K_Vectors* kv,
+        const UnitCell& ucell,
+        std::vector<std::map<TA, std::map<TA, RI::Tensor<std::complex<double>>>>>& Vq,
+        const std::vector<TA>& list_A0,
+        const std::vector<TAC>& list_A1,
+        const double& ccp_rmesh_times,
+        const double& alpha);
 };
 
 #include "ewald_Vq.hpp"
