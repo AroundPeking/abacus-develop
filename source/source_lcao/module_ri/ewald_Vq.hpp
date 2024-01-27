@@ -144,7 +144,7 @@ auto Ewald_Vq<Tdata>::cal_Vq_q(const Auxiliary_Func::Kernal_Type& ker_type,
     T_kernal_func cal_kernal;
     switch (ker_type)
     {
-    case Auxiliary_Func::Kernal_Type::Hf:
+    case Auxiliary_Func::Kernal_Type::Bare:
         switch (fq_type)
         {
         case Auxiliary_Func::Fq_type::Type_0:

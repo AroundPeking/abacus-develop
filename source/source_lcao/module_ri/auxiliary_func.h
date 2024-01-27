@@ -17,7 +17,7 @@ class Auxiliary_Func
   public:
     enum class Kernal_Type
     {
-        Hf,
+        Bare,
         Erfc, //  	"hse_omega"
     };
 
