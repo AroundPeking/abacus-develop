@@ -3,8 +3,8 @@
 // DATE :   2024-01-01
 //=======================
 
-#ifndef EWALD_VQ_CPP
-#define EWALD_VQ_CPP
+#ifndef AUXILIARY_FUNC_CPP
+#define AUXILIARY_FUNC_CPP
 
 #include "auxiliary_func.h"
 
@@ -192,21 +192,47 @@ double Auxiliary_Func::fq_type_1(const ModuleBase::Vector3<double>& qvec,
 double Auxiliary_Func::cal_type_1(const std::vector<ModuleBase::Vector3<double>>& kvec_c,
                                   const int& qdiv,
                                   const ModulePW::PW_Basis_K* wfc_basis,
-                                  const double& lambda)
+                                  const double& start_lambda,
+                                  const int& niter,
+                                  const double& eps)
 {
     ModuleBase::TITLE("Ewald_Vq", "cal_type_1");
     ModuleBase::timer::tick("Ewald_Vq", "cal_type_1");
 
-    const T_cal_fq_type func_cal_fq_type_1 = std::bind(&fq_type_1, std::placeholders::_1, qdiv, wfc_basis, lambda);
-    double prefactor = ModuleBase::TWO_PI * std::pow(lambda, -1 / qdiv);
-    double fq_int;
-    if (qdiv == 2)
-        fq_int = prefactor * std::sqrt(ModuleBase::PI);
-    else if (qdiv == 1)
-        fq_int = prefactor;
-    else
-        ModuleBase::WARNING_QUIT("Ewald_Vq::cal_type_1", "Type 1 fq only supports qdiv=1 or qdiv=2!");
-    double val = solve_chi(kvec_c, func_cal_fq_type_1, fq_int);
+    auto cal_chi = [&qdiv, &wfc_basis, &kvec_c](const double& lambda)
+    {
+        const T_cal_fq_type func_cal_fq_type_1 = std::bind(&fq_type_1, std::placeholders::_1, qdiv, wfc_basis, lambda);
+        double prefactor = ModuleBase::TWO_PI * std::pow(lambda, -1 / qdiv);
+        double fq_int;
+        if (qdiv == 2)
+            fq_int = prefactor * std::sqrt(ModuleBase::PI);
+        else if (qdiv == 1)
+            fq_int = prefactor;
+        else
+            ModuleBase::WARNING_QUIT("Ewald_Vq::cal_type_1", "Type 1 fq only supports qdiv=1 or qdiv=2!");
+        return solve_chi(kvec_c, func_cal_fq_type_1, fq_int);
+    }
+
+    int tot_iter = 0;
+    double val_extra_old = 0.5 * std::numeric_limits<double>::max();
+    double lammda_old = start_lambda;
+    double val_old = cal_chi(lammda_old);
+    double val_extra;
+    for (size_t iter = 0; iter != niter; ++iter)
+    {
+        double lammda_new = lammda_old * 0.5;
+        double val_new = cal_chi(lammda_new);
+        double dval = (val_new - val_old) / (lammda_new - lammda_old);
+        val_extra = val_new + dval * (0.0-lammda_new);
+        if (std::abs(val_extra - val_extra_old) < eps) break;
+        lammda_old = lammda_new;
+        val_old = val_new;
+        val_extra_old = val_extra;
+        tot_iter += 1;
+    }
+
+    if (tot_iter == niter)
+        ModuleBase::WARNING_QUIT("Ewald_Vq::cal_type_1", "Integral not converged!");
 
     ModuleBase::timer::tick("Ewald_Vq", "cal_type_1");
     return val;
@@ -263,6 +289,7 @@ double Auxiliary_Func::Iter_Integral(const T_cal_fq_type& func_cal_fq,
         if (iter != 0 && integ_iter < eps)
             break;
         std::for_each(qstep.begin(), qstep.end(), [&a_rate](double& qs) { qs /= a_rate; });
+        tot_iter += 1;
     }
 
     if (tot_iter == niter)

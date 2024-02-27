@@ -24,7 +24,7 @@ class Auxiliary_Func
     enum class Fq_type
     {
         Type_0, // Phys. Rev. B, 75:205126, May 2007.
-        Type_1, // Phys. Rev. B, 48:5058--5068, Aug 1993.
+        Type_1, // Phys. Rev. B, 80, 085114 (2009).
     };
 
   private:
