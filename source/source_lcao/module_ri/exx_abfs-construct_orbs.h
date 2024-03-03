@@ -30,8 +30,12 @@ public:
 		const std::vector<std::vector<std::vector<Numerical_Orbital_Lm>>> &orbs,
 		std::ostream &os);		
 	
-	static int get_nmax_total(const std::vector<std::vector<std::vector<Numerical_Orbital_Lm>>> &orb_in); // get the max number of orbitals among all elements
-	static std::map<int, int> get_nw(const std::vector<std::vector<std::vector<Numerical_Orbital_Lm>>> &orb_in); // get number of orbitals for each element 
+	// get the max number of orbitals among all elements
+	static int get_nmax_total(const std::vector<std::vector<std::vector<Numerical_Orbital_Lm>>> &orb_in); 
+	// get number of orbitals for each element
+	static std::map<int, int> get_nw(const std::vector<std::vector<std::vector<Numerical_Orbital_Lm>>> &orb_in); 
+	// get multipole of orbitals for each element and angular moment
+	static std::vector<std::vector<std::vector<double>>> get_multipole(const std::vector<std::vector<std::vector<Numerical_Orbital_Lm>>> &orb_in); 
 		
 private:
 	static std::vector<std::vector<std::vector<std::vector<double>>>> psi_mult_psi( 
