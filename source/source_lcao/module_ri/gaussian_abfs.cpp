@@ -50,7 +50,7 @@ std::vector<std::complex<double>> Gaussian_Abfs::get_lattice_sum(
                     continue;
                 std::complex<double> phase = std::exp(ModuleBase::IMAG_UNIT * (gk_vec * tau));
                 val_s += std::exp(-gamma * gk_vec.norm2()) * std::pow(gk_vec.norm(), power+L) * phase
-                         * ylm(lm, ig); // power + L ?
+                         * ylm(lm, ig); 
             }
             result[lm] = val_s;
         }
@@ -77,7 +77,18 @@ std::vector<std::vector<std::complex<double>>> Gaussian_Abfs::get_Vq(
         (lp_max + 1) * (lp_max + 1),
         std::vector<std::complex<double>>((lq_max + 1) * (lq_max + 1), {0.0, 0.0}));
 
-    const int n_add_ksq = std::min(lp_max, lq_max);
+    /* 
+     n_add_ksq * 2 = lp_max + lq_max - abs(lp_max - lq_max)
+        if lp_max < lq_max
+            n_add_ksq * 2 = lp_max + lq_max - (lq_max - lp_max)
+                          = lp_max * 2
+        if lp_max > lq_max
+            n_add_ksq * 2 = lp_max + lq_max - (lp_max - lq_max)
+                          = lq_max * 2
+        thus,
+            n_add_ksq = min(lp_max, lq_max)
+    */ 
+    const int n_add_ksq = std::min(lp_max, lq_max); 
     const int n_LM = (Lmax + 1) * (Lmax + 1);
     std::vector<std::vector<std::complex<double>>> lattice_sum(n_add_ksq + 1,
                                                                std::vector<std::complex<double>>(n_LM, {0.0, 0.0}));
