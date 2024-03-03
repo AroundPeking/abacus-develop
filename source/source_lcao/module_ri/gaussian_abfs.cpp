@@ -49,7 +49,7 @@ std::vector<std::complex<double>> Gaussian_Abfs::get_lattice_sum(
                 if (exclude_Gamma && gk_vec.norm2() < 1e-10)
                     continue;
                 std::complex<double> phase = std::exp(ModuleBase::IMAG_UNIT * (gk_vec * tau));
-                val_s += std::exp(-gamma * gk_vec.norm2()) * std::pow(gk_vec.norm(), power) * phase
+                val_s += std::exp(-gamma * gk_vec.norm2()) * std::pow(gk_vec.norm(), power+L) * phase
                          * ylm(lm, ig); // power + L ?
             }
             result[lm] = val_s;
