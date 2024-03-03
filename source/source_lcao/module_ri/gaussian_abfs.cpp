@@ -83,7 +83,7 @@ std::vector<std::vector<std::complex<double>>> Gaussian_Abfs::get_Vq(
                                                                std::vector<std::complex<double>>(n_LM, {0.0, 0.0}));
 
     const double exponent = 1.0 / gamma;
-    for (int i_add_ksq = 0; i_add_ksq != n_add_ksq + 1; ++i_add_ksq)
+    for (int i_add_ksq = 0; i_add_ksq != n_add_ksq + 1; ++i_add_ksq) // integrate lp, lq, L to one index i_add_ksq, i.e. (lp+lq-L)/2
     {
         const double power = -2.0 + 2 * i_add_ksq;
         const int this_Lmax = Lmax - 2 * i_add_ksq; // calculate Lmax at current lp+lq
@@ -109,7 +109,7 @@ std::vector<std::vector<std::complex<double>>> Gaussian_Abfs::get_Vq(
             double norm_2 = double_factorial(2 * lq - 1) * sqrt(ModuleBase::PI / 2.0);
             std::complex<double> phase = std::pow(ModuleBase::IMAG_UNIT, lq - lp);
             std::complex<double> cfac = ModuleBase::FOUR_PI * phase / (norm_1 * norm_2);
-            for (int L = std::abs(lp + lq); L != lp + lq + 1; L += 2) // if lp+lq-L == odd, then Gaunt_Coefficients = 0
+            for (int L = std::abs(lp - lq); L != lp + lq + 1; L += 2) // if lp+lq-L == odd, then Gaunt_Coefficients = 0
             {
                 const int i_add_ksq = (lp + lq - L) / 2;
                 for (int mp = 0; mp != 2 * lp + 1; ++mp)
