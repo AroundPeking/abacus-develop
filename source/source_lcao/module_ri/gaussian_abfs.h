@@ -6,6 +6,8 @@
 #ifndef GAUSSIAN_ABFS_H
 #define GAUSSIAN_ABFS_H
 
+#include <RI/global/Tensor.h>
+
 #include <map>
 #include <vector>
 
@@ -33,13 +35,14 @@ class Gaussian_Abfs
         const int& lmax,           // Maximum angular momentum the sum is needed for.
         const ModuleBase::Vector3<double>& tau);
 
-    std::vector<std::vector<std::complex<double>>> get_Vq(
+    RI::Tensor<std::complex<double>> get_Vq(
         const int& lp_max,
         const int& lq_max, // Maximum L for which to calculate interaction.
         const std::vector<ModuleBase::Vector3<double>>& gk,
         const double& chi, // Singularity corrected value at q=0.
         const double& gamma,
         const ModuleBase::Vector3<double>& tau);
+
 
   private:
     // calculates the double factorial n!! of n

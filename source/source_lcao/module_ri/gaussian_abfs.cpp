@@ -73,9 +73,7 @@ std::vector<std::vector<std::complex<double>>> Gaussian_Abfs::get_Vq(
 
     const int Lmax = lp_max + lq_max;
     MGT.init_Gaunt(Lmax);
-    std::vector<std::vector<std::complex<double>>> Vq(
-        (lp_max + 1) * (lp_max + 1),
-        std::vector<std::complex<double>>((lq_max + 1) * (lq_max + 1), {0.0, 0.0}));
+    RI::Tensor<std::complex<double>> Vq({(lp_max + 1) * (lp_max + 1), (lq_max + 1) * (lq_max + 1)});
 
     /* 
      n_add_ksq * 2 = lp_max + lq_max - abs(lp_max - lq_max)
