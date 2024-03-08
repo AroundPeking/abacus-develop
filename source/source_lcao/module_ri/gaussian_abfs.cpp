@@ -13,17 +13,14 @@
 #include "module_base/timer.h"
 #include "module_base/tool_title.h"
 
-Gaussian_Abfs::Gaussian_Abfs(const ORB_gaunt_table& MGT_in) : MGT(MGT_in)
-{
-}
-
 RI::Tensor<std::complex<double>> Gaussian_Abfs::get_Vq(
     const int& lp_max,
     const int& lq_max, // Maximum L for which to calculate interaction.
     const std::vector<ModuleBase::Vector3<double>>& gk,
     const double& chi, // Singularity corrected value at q=0.
     const double& gamma,
-    const ModuleBase::Vector3<double>& tau)
+    const ModuleBase::Vector3<double>& tau,
+    const ORB_gaunt_table& MGT)
 {
     ModuleBase::TITLE("Gaussian_Abfs", "get_Vq");
     ModuleBase::timer::tick("Gaussian_Abfs", "get_Vq");
@@ -32,7 +29,7 @@ RI::Tensor<std::complex<double>> Gaussian_Abfs::get_Vq(
     MGT.init_Gaunt(Lmax);
     RI::Tensor<std::complex<double>> Vq({(lp_max + 1) * (lp_max + 1), (lq_max + 1) * (lq_max + 1)});
 
-    /* 
+    /*
      n_add_ksq * 2 = lp_max + lq_max - abs(lp_max - lq_max)
         if lp_max < lq_max
             n_add_ksq * 2 = lp_max + lq_max - (lq_max - lp_max)
@@ -42,14 +39,15 @@ RI::Tensor<std::complex<double>> Gaussian_Abfs::get_Vq(
                           = lq_max * 2
         thus,
             n_add_ksq = min(lp_max, lq_max)
-    */ 
-    const int n_add_ksq = std::min(lp_max, lq_max); 
+    */
+    const int n_add_ksq = std::min(lp_max, lq_max);
     const int n_LM = (Lmax + 1) * (Lmax + 1);
     std::vector<std::vector<std::complex<double>>> lattice_sum(n_add_ksq + 1,
                                                                std::vector<std::complex<double>>(n_LM, {0.0, 0.0}));
 
     const double exponent = 1.0 / gamma;
-    for (int i_add_ksq = 0; i_add_ksq != n_add_ksq + 1; ++i_add_ksq) // integrate lp, lq, L to one index i_add_ksq, i.e. (lp+lq-L)/2
+    for (int i_add_ksq = 0; i_add_ksq != n_add_ksq + 1;
+         ++i_add_ksq) // integrate lp, lq, L to one index i_add_ksq, i.e. (lp+lq-L)/2
     {
         const double power = -2.0 + 2 * i_add_ksq;
         const int this_Lmax = Lmax - 2 * i_add_ksq; // calculate Lmax at current lp+lq
@@ -100,45 +98,44 @@ RI::Tensor<std::complex<double>> Gaussian_Abfs::get_Vq(
     return Vq;
 }
 
-Numerical_Orbital_Lm
-Gaussian_Abfs::Gauss(const Numerical_Orbital_Lm& orb, const double& gamma)
+Numerical_Orbital_Lm Gaussian_Abfs::Gauss(const Numerical_Orbital_Lm& orb, const double& gamma)
 {
-	Numerical_Orbital_Lm gaussian;
+    Numerical_Orbital_Lm gaussian;
     const int angular_momentum_l = orb.getL();
     const int Nr = orb.getNr();
-	const double dr = orb.get_rab().back();
-    const double frac = std::pow(gamma, angular_momentum_l+1.5) / double_factorial(2 * angular_momentum_l - 1) / sqrt(ModuleBase::PI * 0.5);
+    const double dr = orb.get_rab().back();
+    const double frac = std::pow(gamma, angular_momentum_l + 1.5) / double_factorial(2 * angular_momentum_l - 1)
+                        / sqrt(ModuleBase::PI * 0.5);
 
-	std::vector<double> rab(Nr);
-	std::vector<double> r_radial(Nr);
-	std::vector<double> psi(Nr);
+    std::vector<double> rab(Nr);
+    std::vector<double> r_radial(Nr);
+    std::vector<double> psi(Nr);
 
-	for( size_t ir=0; ir!=Nr; ++ir )
-	{
-		rab[ir] = orb.getRab(ir);
-		r_radial[ir] = ir*rab[ir];
-		psi[ir] = frac * std::pow(r_radial[ir], angular_momentum_l) * std::exp(- gamma * r_radial[ir] * r_radial[ir] * 0.5);
-	}
-					
-	gaussian.set_orbital_info(
-		orb.getLabel(),
-		orb.getType(),
-		angular_momentum_l,
-		orb.getChi(),
-		orb.getNr(),
-		ModuleBase::GlobalFunc::VECTOR_TO_PTR(rab),
-		ModuleBase::GlobalFunc::VECTOR_TO_PTR(r_radial),
-		Numerical_Orbital_Lm::Psi_Type::Psi,
-		ModuleBase::GlobalFunc::VECTOR_TO_PTR(psi),
-		orb.getNk(),
-		orb.getDk(),
-		orb.getDruniform(),
-		false,
-		true, 
-		GlobalV::CAL_FORCE
-	);
+    for (size_t ir = 0; ir != Nr; ++ir)
+    {
+        rab[ir] = orb.getRab(ir);
+        r_radial[ir] = ir * rab[ir];
+        psi[ir]
+            = frac * std::pow(r_radial[ir], angular_momentum_l) * std::exp(-gamma * r_radial[ir] * r_radial[ir] * 0.5);
+    }
 
-	return gaussian;
+    gaussian.set_orbital_info(orb.getLabel(),
+                              orb.getType(),
+                              angular_momentum_l,
+                              orb.getChi(),
+                              orb.getNr(),
+                              ModuleBase::GlobalFunc::VECTOR_TO_PTR(rab),
+                              ModuleBase::GlobalFunc::VECTOR_TO_PTR(r_radial),
+                              Numerical_Orbital_Lm::Psi_Type::Psi,
+                              ModuleBase::GlobalFunc::VECTOR_TO_PTR(psi),
+                              orb.getNk(),
+                              orb.getDk(),
+                              orb.getDruniform(),
+                              false,
+                              true,
+                              GlobalV::CAL_FORCE);
+
+    return gaussian;
 }
 
 double Gaussian_Abfs::double_factorial(const int& n)
@@ -187,8 +184,7 @@ std::vector<std::complex<double>> Gaussian_Abfs::get_lattice_sum(
                 if (exclude_Gamma && gk_vec.norm2() < 1e-10)
                     continue;
                 std::complex<double> phase = std::exp(ModuleBase::IMAG_UNIT * (gk_vec * tau));
-                val_s += std::exp(-gamma * gk_vec.norm2()) * std::pow(gk_vec.norm(), power+L) * phase
-                         * ylm(lm, ig); 
+                val_s += std::exp(-gamma * gk_vec.norm2()) * std::pow(gk_vec.norm(), power + L) * phase * ylm(lm, ig);
             }
             result[lm] = val_s;
         }

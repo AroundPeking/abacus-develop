@@ -17,18 +17,13 @@
 class Gaussian_Abfs
 {
   public:
-    Gaussian_Abfs(const ORB_gaunt_table& MGT_in);
-
-  private:
-    ORB_gaunt_table MGT;
-
-  public:
     RI::Tensor<std::complex<double>> get_Vq(const int& lp_max,
                                             const int& lq_max, // Maximum L for which to calculate interaction.
                                             const std::vector<ModuleBase::Vector3<double>>& gk,
                                             const double& chi, // Singularity corrected value at q=0.
                                             const double& gamma,
-                                            const ModuleBase::Vector3<double>& tau);
+                                            const ModuleBase::Vector3<double>& tau,
+                                            const ORB_gaunt_table& MGT);
 
   private:
     // construct gaussian basis based on original NAO
