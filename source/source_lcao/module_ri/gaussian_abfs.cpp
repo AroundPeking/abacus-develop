@@ -17,50 +17,7 @@ Gaussian_Abfs::Gaussian_Abfs(const ORB_gaunt_table& MGT_in) : MGT(MGT_in)
 {
 }
 
-std::vector<std::complex<double>> Gaussian_Abfs::get_lattice_sum(
-    const std::vector<ModuleBase::Vector3<double>>& gk,
-    const double& power, // Will be 0. for straight GTOs and -2. for Coulomb interaction
-    const double& gamma,
-    const bool& exclude_Gamma, // The R==0. can be excluded by this flag.
-    const int& lmax,           // Maximum angular momentum the sum is needed for.
-    const ModuleBase::Vector3<double>& tau)
-{
-    ModuleBase::TITLE("Gaussian_Abfs", "lattice_sum");
-    ModuleBase::timer::tick("Gaussian_Abfs", "lattice_sum");
-    if (power < 0.0 && !exclude_Gamma)
-        ModuleBase::WARNING_QUIT("Gaussian_Abfs::lattice_sum", "Gamma point for power<0.0 cannot be evaluated!");
-
-    const int npw = gk.size();
-    const int total_lm = (lmax + 1) * (lmax + 1);
-    ModuleBase::matrix ylm(total_lm, npw);
-    ModuleBase::YlmReal::Ylm_Real(total_lm, npw, gk.data(), ylm);
-
-    std::vector<std::complex<double>> result;
-    result.resize(total_lm);
-    for (int L = 0; L != lmax + 1; ++L)
-    {
-        for (int m = 0; m != 2 * L + 1; ++m)
-        {
-            const int lm = L * L + m;
-            std::complex<double> val_s(0.0, 0.0);
-            for (size_t ig = 0; ig != npw; ++ig)
-            {
-                ModuleBase::Vector3<double> gk_vec = gk[ig] * GlobalC::ucell.tpiba;
-                if (exclude_Gamma && gk_vec.norm2() < 1e-10)
-                    continue;
-                std::complex<double> phase = std::exp(ModuleBase::IMAG_UNIT * (gk_vec * tau));
-                val_s += std::exp(-gamma * gk_vec.norm2()) * std::pow(gk_vec.norm(), power+L) * phase
-                         * ylm(lm, ig); 
-            }
-            result[lm] = val_s;
-        }
-    }
-
-    ModuleBase::timer::tick("Gaussian_Abfs", "lattice_sum");
-    return result;
-}
-
-std::vector<std::vector<std::complex<double>>> Gaussian_Abfs::get_Vq(
+RI::Tensor<std::complex<double>> Gaussian_Abfs::get_Vq(
     const int& lp_max,
     const int& lq_max, // Maximum L for which to calculate interaction.
     const std::vector<ModuleBase::Vector3<double>>& gk,
@@ -112,10 +69,10 @@ std::vector<std::vector<std::complex<double>>> Gaussian_Abfs::get_Vq(
 
     for (int lp = 0; lp != lp_max + 1; ++lp)
     {
-        double norm_1 = double_factorial(2 * lp - 1) * sqrt(ModuleBase::PI / 2.0);
+        double norm_1 = double_factorial(2 * lp - 1) * sqrt(ModuleBase::PI * 0.5);
         for (int lq = 0; lq != lq_max + 1; ++lq)
         {
-            double norm_2 = double_factorial(2 * lq - 1) * sqrt(ModuleBase::PI / 2.0);
+            double norm_2 = double_factorial(2 * lq - 1) * sqrt(ModuleBase::PI * 0.5);
             std::complex<double> phase = std::pow(ModuleBase::IMAG_UNIT, lq - lp);
             std::complex<double> cfac = ModuleBase::FOUR_PI * phase / (norm_1 * norm_2);
             for (int L = std::abs(lp - lq); L != lp + lq + 1; L += 2) // if lp+lq-L == odd, then Gaunt_Coefficients = 0
@@ -143,6 +100,47 @@ std::vector<std::vector<std::complex<double>>> Gaussian_Abfs::get_Vq(
     return Vq;
 }
 
+Numerical_Orbital_Lm
+Gaussian_Abfs::Gauss(const Numerical_Orbital_Lm& orb, const double& gamma)
+{
+	Numerical_Orbital_Lm gaussian;
+    const int angular_momentum_l = orb.getL();
+    const int Nr = orb.getNr();
+	const double dr = orb.get_rab().back();
+    const double frac = std::pow(gamma, angular_momentum_l+1.5) / double_factorial(2 * angular_momentum_l - 1) / sqrt(ModuleBase::PI * 0.5);
+
+	std::vector<double> rab(Nr);
+	std::vector<double> r_radial(Nr);
+	std::vector<double> psi(Nr);
+
+	for( size_t ir=0; ir!=Nr; ++ir )
+	{
+		rab[ir] = orb.getRab(ir);
+		r_radial[ir] = ir*rab[ir];
+		psi[ir] = frac * std::pow(r_radial[ir], angular_momentum_l) * std::exp(- gamma * r_radial[ir] * r_radial[ir] * 0.5);
+	}
+					
+	gaussian.set_orbital_info(
+		orb.getLabel(),
+		orb.getType(),
+		angular_momentum_l,
+		orb.getChi(),
+		orb.getNr(),
+		ModuleBase::GlobalFunc::VECTOR_TO_PTR(rab),
+		ModuleBase::GlobalFunc::VECTOR_TO_PTR(r_radial),
+		Numerical_Orbital_Lm::Psi_Type::Psi,
+		ModuleBase::GlobalFunc::VECTOR_TO_PTR(psi),
+		orb.getNk(),
+		orb.getDk(),
+		orb.getDruniform(),
+		false,
+		true, 
+		GlobalV::CAL_FORCE
+	);
+
+	return gaussian;
+}
+
 double Gaussian_Abfs::double_factorial(const int& n)
 {
     assert(n >= 0);
@@ -154,6 +152,49 @@ double Gaussian_Abfs::double_factorial(const int& n)
         else
             result *= static_cast<double>(i);
     }
+    return result;
+}
+
+std::vector<std::complex<double>> Gaussian_Abfs::get_lattice_sum(
+    const std::vector<ModuleBase::Vector3<double>>& gk,
+    const double& power, // Will be 0. for straight GTOs and -2. for Coulomb interaction
+    const double& gamma,
+    const bool& exclude_Gamma, // The R==0. can be excluded by this flag.
+    const int& lmax,           // Maximum angular momentum the sum is needed for.
+    const ModuleBase::Vector3<double>& tau)
+{
+    ModuleBase::TITLE("Gaussian_Abfs", "lattice_sum");
+    ModuleBase::timer::tick("Gaussian_Abfs", "lattice_sum");
+    if (power < 0.0 && !exclude_Gamma)
+        ModuleBase::WARNING_QUIT("Gaussian_Abfs::lattice_sum", "Gamma point for power<0.0 cannot be evaluated!");
+
+    const int npw = gk.size();
+    const int total_lm = (lmax + 1) * (lmax + 1);
+    ModuleBase::matrix ylm(total_lm, npw);
+    ModuleBase::YlmReal::Ylm_Real(total_lm, npw, gk.data(), ylm);
+
+    std::vector<std::complex<double>> result;
+    result.resize(total_lm);
+    for (int L = 0; L != lmax + 1; ++L)
+    {
+        for (int m = 0; m != 2 * L + 1; ++m)
+        {
+            const int lm = L * L + m;
+            std::complex<double> val_s(0.0, 0.0);
+            for (size_t ig = 0; ig != npw; ++ig)
+            {
+                ModuleBase::Vector3<double> gk_vec = gk[ig] * GlobalC::ucell.tpiba;
+                if (exclude_Gamma && gk_vec.norm2() < 1e-10)
+                    continue;
+                std::complex<double> phase = std::exp(ModuleBase::IMAG_UNIT * (gk_vec * tau));
+                val_s += std::exp(-gamma * gk_vec.norm2()) * std::pow(gk_vec.norm(), power+L) * phase
+                         * ylm(lm, ig); 
+            }
+            result[lm] = val_s;
+        }
+    }
+
+    ModuleBase::timer::tick("Gaussian_Abfs", "lattice_sum");
     return result;
 }
 
