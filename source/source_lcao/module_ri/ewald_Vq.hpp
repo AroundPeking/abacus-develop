@@ -51,14 +51,17 @@ void Ewald_Vq<Tdata>::init(std::vector<std::vector<std::vector<Numerical_Orbital
 }
 
 template <typename Tdata>
-auto Ewald_Vq<Tdata>::cal_Vs_minus_gauss(std::map<TA, std::map<TAC, RI::Tensor<Tdata>>>& Vs_in,
-                                         const std::map<std::string, bool>& flags)
-    -> std::map<TA, std::map<TAC, RI::Tensor<Tdata>>> Vs
+auto Ewald_Vq<Tdata>::cal_Vq(std::map<TA, std::map<TAC, RI::Tensor<Tdata>>>& Vs_in, )
+    -> std::vector<std::map<TA, std::map<TA, RI::Tensor<std::complex<double>>>>>
+
+    template <typename Tdata>
+    auto Ewald_Vq<Tdata>::cal_Vs_minus_gauss(std::map<TA, std::map<TAC, RI::Tensor<Tdata>>>& Vs_in)
+        -> std::map<TA, std::map<TAC, RI::Tensor<Tdata>>> Vs
 {
     ModuleBase::TITLE("Ewald_Vq", "cal_Vs_minus_gauss");
     ModuleBase::timer::tick("Ewald_Vq", "cal_Vs_minus_gauss");
 
-    std::map<TA, std::map<TAC, RI::Tensor<Tdata>>> Vs_gauss = this->cal_Vs_gauss(list_A0, list_A1, flags);
+    std::map<TA, std::map<TAC, RI::Tensor<Tdata>>> Vs_gauss = this->cal_Vs_gauss(list_A0, list_A1);
     std::map<TA, std::map<TAC, RI::Tensor<Tdata>>> Vs;
 
     std::map<TA, std::map<TAC, Tresult>> Datas;
@@ -109,13 +112,15 @@ auto Ewald_Vq<Tdata>::cal_Vs_minus_gauss(std::map<TA, std::map<TAC, RI::Tensor<T
 }
 
 template <typename Tdata>
-auto Ewald_Vq<Tdata>::cal_Vs_gauss(const std::vector<TA>& list_A0,
-                                   const std::vector<TAC>& list_A1,
-                                   const std::map<std::string, bool>& flags)
+auto Ewald_Vq<Tdata>::cal_Vs_gauss(const std::vector<TA>& list_A0, const std::vector<TAC>& list_A1)
     -> std::map<TA, std::map<TAC, RI::Tensor<Tdata>>>
 {
     ModuleBase::TITLE("Ewald_Vq", "cal_Vs_gauss");
     ModuleBase::timer::tick("Ewald_Vq", "cal_Vs_gauss");
+
+    std::map<std::string, bool> flags = {
+        {"writable_Vws", false}
+    };
 
     std::map<TA, std::map<TAC, RI::Tensor<Tdata>>> Vs = this->cv.cal_Vs(list_A0, list_A1, flags);
 
