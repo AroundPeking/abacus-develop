@@ -32,7 +32,8 @@ class Ewald_Vq
               const K_Vectors& kv_in,
               const double& gauss_gamma);
 
-    void cal_Vs(std::map<TA, std::map<TAC, RI::Tensor<Tdata>>>& Vs, const std::map<std::string, bool>& flags);
+    void cal_Vs_minus_gauss(std::map<TA, std::map<TAC, RI::Tensor<Tdata>>>& Vs, const std::map<std::string, bool>& flags);
+    void 
 
   private:
     const Exx_Info::Exx_Info_RI& info;

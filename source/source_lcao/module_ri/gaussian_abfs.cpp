@@ -26,6 +26,7 @@ RI::Tensor<std::complex<double>> Gaussian_Abfs::get_Vq(
     ModuleBase::timer::tick("Gaussian_Abfs", "get_Vq");
 
     const int Lmax = lp_max + lq_max;
+    MGT.init_Gaunt(Lmax);
     RI::Tensor<std::complex<double>> Vq({(lp_max + 1) * (lp_max + 1), (lq_max + 1) * (lq_max + 1)});
 
     /*

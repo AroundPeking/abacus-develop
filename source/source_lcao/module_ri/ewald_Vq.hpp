@@ -44,11 +44,11 @@ void Ewald_Vq<Tdata>::init(std::vector<std::vector<std::vector<Numerical_Orbital
 }
 
 template <typename Tdata>
-void Ewald_Vq<Tdata>::cal_Vs(std::map<TA, std::map<TAC, RI::Tensor<Tdata>>>& Vs,
+void Ewald_Vq<Tdata>::cal_Vs_minus_gauss(std::map<TA, std::map<TAC, RI::Tensor<Tdata>>>& Vs,
                              const std::map<std::string, bool>& flags)
 {
-    ModuleBase::TITLE("Ewald_Vq", "cal_Vs");
-    ModuleBase::timer::tick("Ewald_Vq", "cal_Vs");
+    ModuleBase::TITLE("Ewald_Vq", "cal_Vs_minus_gauss");
+    ModuleBase::timer::tick("Ewald_Vq", "cal_Vs_minus_gauss");
 
     std::map<TA, std::map<TAC, RI::Tensor<Tdata>>> Vs_gauss = this->cal_Vs_gauss(list_A0, list_A1, flags);
 
@@ -88,7 +88,7 @@ void Ewald_Vq<Tdata>::cal_Vs(std::map<TA, std::map<TAC, RI::Tensor<Tdata>>>& Vs,
         }
     }
 
-    ModuleBase::timer::tick("Ewald_Vq", "cal_Vs");
+    ModuleBase::timer::tick("Ewald_Vq", "cal_Vs_minus_gauss");
 }
 
 template <typename Tdata>
