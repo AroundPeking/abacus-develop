@@ -6,7 +6,14 @@
 #ifndef EWALD_VQ_HPP
 #define EWALD_VQ_HPP
 
+#include <RI/global/Global_Func-1.h>
+
+#include <cmath>
+
+#include "RI_Util.h"
 #include "module_base/element_basis_index.h"
+#include "module_base/timer.h"
+#include "module_base/tool_title.h"
 #include "module_ri/conv_coulomb_pot_k-template.h"
 #include "module_ri/conv_coulomb_pot_k.h"
 #include "module_ri/exx_abfs-construct_orbs.h"
@@ -117,24 +124,20 @@ auto Ewald_Vq<Tdata>::cal_Vs_gauss(const std::vector<TA>& list_A0,
 }
 
 template <typename Tdata>
-auto Ewald_Vq<Tdata>::cal_Vq2(const K_Vectors* kv, std::map<TA, std::map<TAC, RI::Tensor<Tdata>>>& Vs)
+auto Ewald_Vq<Tdata>::cal_Vq_minus_gauss(const K_Vectors* kv,
+                                         std::map<TA, std::map<TAC, RI::Tensor<Tdata>>>& Vs_minus_gauss)
     -> std::vector<std::map<TA, std::map<TA, RI::Tensor<std::complex<double>>>>>
 {
-    ModuleBase::TITLE("Ewald_Vq", "cal_Vq2");
-    ModuleBase::timer::tick("Ewald_Vq", "cal_Vq2");
+    ModuleBase::TITLE("Ewald_Vq", "cal_Vq_minus_gauss");
+    ModuleBase::timer::tick("Ewald_Vq", "cal_Vq_minus_gauss");
 
-    const int nspin0 = std::map<int, int>{
-        {1, 1},
-        {2, 2},
-        {4, 1}
-    }.at(GlobalV::NSPIN);
-    const int nks0 = kv->nks / nspin0;
+    const int nks0 = kv->nks / this->nspin0;
     std::vector<std::map<TA, std::map<TA, RI::Tensor<std::complex<double>>>>> datas;
     datas.resize(nks0);
 
     for (size_t ik = 0; ik != nks0; ++ik)
     {
-        for (const auto& Vs_tmpA: Vs)
+        for (const auto& Vs_tmpA: Vs_minus_gauss)
         {
             const TA& iat0 = Vs_tmpA.first;
             for (const auto& Vs_tmpB: Vs_tmpA.second)
@@ -146,16 +149,16 @@ auto Ewald_Vq<Tdata>::cal_Vq2(const K_Vectors* kv, std::map<TA, std::map<TAC, RI
                                * (kv->kvec_c[ik] * (RI_Util::array3_to_Vector3(cell1) * GlobalC::ucell.latvec)));
                 if (datas[ik][iat0][iat1].empty())
                     datas[ik][iat0][iat1]
-                        = RI::Global_Func::convert<std::complex<double>>(Vs[iat0][Vs_tmpB.first]) * phase;
+                        = RI::Global_Func::convert<std::complex<double>>(Vs_minus_gauss[iat0][Vs_tmpB.first]) * phase;
                 else
                     datas[ik][iat0][iat1]
                         = datas[ik][iat0][iat1]
-                          + RI::Global_Func::convert<std::complex<double>>(Vs[iat0][Vs_tmpB.first]) * phase;
+                          + RI::Global_Func::convert<std::complex<double>>(Vs_minus_gauss[iat0][Vs_tmpB.first]) * phase;
             }
         }
     }
 
-    ModuleBase::timer::tick("Ewald_Vq", "cal_Vq2");
+    ModuleBase::timer::tick("Ewald_Vq", "cal_Vq_minus_gauss");
     return datas;
 }
 

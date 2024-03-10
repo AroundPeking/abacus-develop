@@ -35,10 +35,6 @@ class Ewald_Vq
               const K_Vectors& kv_in,
               const double& gauss_gamma);
 
-    std::map<TA, std::map<TAC, RI::Tensor<Tdata>>> cal_Vs_minus_gauss(
-        std::map<TA, std::map<TAC, RI::Tensor<Tdata>>>& Vs_in,
-        const std::map<std::string, bool>& flags);
-
   private:
     const Exx_Info::Exx_Info_RI& info;
     const Exx_Info::Exx_Info_Ewald& info_ewald;
@@ -63,6 +59,14 @@ class Ewald_Vq
     std::map<TA, std::map<TAC, RI::Tensor<Tdata>>> cal_Vs_gauss(const std::vector<TA>& list_A0,
                                                                 const std::vector<TAC>& list_A1,
                                                                 const std::map<std::string, bool>& flags);
+
+    std::map<TA, std::map<TAC, RI::Tensor<Tdata>>> cal_Vs_minus_gauss(
+        std::map<TA, std::map<TAC, RI::Tensor<Tdata>>>& Vs_in,
+        const std::map<std::string, bool>& flags);
+
+    std::vector<std::map<TA, std::map<TA, RI::Tensor<std::complex<double>>>>> cal_Vq_minus_gauss(
+        const K_Vectors* kv,
+        std::map<TA, std::map<TAC, RI::Tensor<Tdata>>>& Vs_minus_gauss);
 
     std::vector<std::vector<std::vector<Numerical_Orbital_Lm>>> init_gauss(
         std::vector<std::vector<std::vector<Numerical_Orbital_Lm>>>& orb_in);
