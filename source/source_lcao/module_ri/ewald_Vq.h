@@ -65,7 +65,6 @@ class Ewald_Vq
         const std::map<std::string, bool>& flags);
 
     std::vector<std::map<TA, std::map<TA, RI::Tensor<std::complex<double>>>>> cal_Vq_minus_gauss(
-        const K_Vectors* kv,
         std::map<TA, std::map<TAC, RI::Tensor<Tdata>>>& Vs_minus_gauss);
 
     std::vector<std::vector<std::vector<Numerical_Orbital_Lm>>> init_gauss(

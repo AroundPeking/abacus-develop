@@ -37,7 +37,7 @@ void Ewald_Vq<Tdata>::init(std::vector<std::vector<std::vector<Numerical_Orbital
                                                         Conv_Coulomb_Pot_K::Ccp_Type::Ccp,
                                                         {},
                                                         this->info.ccp_rmesh_times,
-                                                        p_kv->nkstot_full);
+                                                        this->p_kv->nkstot_full);
     this->cv.set_orbitals(this->g_lcaos,
                           this->g_abfs,
                           this->g_abfs_ccp,
@@ -124,14 +124,13 @@ auto Ewald_Vq<Tdata>::cal_Vs_gauss(const std::vector<TA>& list_A0,
 }
 
 template <typename Tdata>
-auto Ewald_Vq<Tdata>::cal_Vq_minus_gauss(const K_Vectors* kv,
-                                         std::map<TA, std::map<TAC, RI::Tensor<Tdata>>>& Vs_minus_gauss)
+auto Ewald_Vq<Tdata>::cal_Vq_minus_gauss(std::map<TA, std::map<TAC, RI::Tensor<Tdata>>>& Vs_minus_gauss)
     -> std::vector<std::map<TA, std::map<TA, RI::Tensor<std::complex<double>>>>>
 {
     ModuleBase::TITLE("Ewald_Vq", "cal_Vq_minus_gauss");
     ModuleBase::timer::tick("Ewald_Vq", "cal_Vq_minus_gauss");
 
-    const int nks0 = kv->nks / this->nspin0;
+    const int nks0 = this->p_kv->nks / this->nspin0;
     std::vector<std::map<TA, std::map<TA, RI::Tensor<std::complex<double>>>>> datas;
     datas.resize(nks0);
 
