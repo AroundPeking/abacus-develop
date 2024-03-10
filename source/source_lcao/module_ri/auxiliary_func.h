@@ -43,7 +43,9 @@ class Auxiliary_Func
     static double cal_type_1(const std::vector<ModuleBase::Vector3<double>>& kvec_c,
                              const int& qdiv,
                              const ModulePW::PW_Basis_K* wfc_basis,
-                             const double& lambda);
+                             const double& start_lambda,
+                             const int& niter,
+                             const double& eps);
 
   private:
     static double solve_chi(const std::vector<ModuleBase::Vector3<double>>& kvec_c,
