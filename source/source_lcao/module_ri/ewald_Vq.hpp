@@ -16,7 +16,6 @@ void Ewald_Vq<Tdata>::init(std::vector<std::vector<std::vector<Numerical_Orbital
                            std::vector<std::vector<std::vector<Numerical_Orbital_Lm>>>& abfs_in,
                            ModuleBase::Element_Basis_Index::IndexLNM& index_abfs_in,
                            const K_Vectors& kv_in,
-                           const double rmesh_times,
                            const double& gauss_gamma)
 {
     ModuleBase::TITLE("Ewald_Vq", "init");

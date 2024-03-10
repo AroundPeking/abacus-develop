@@ -30,7 +30,6 @@ class Ewald_Vq
               std::vector<std::vector<std::vector<Numerical_Orbital_Lm>>>& abfs_in,
               ModuleBase::Element_Basis_Index::IndexLNM& index_abfs_in,
               const K_Vectors& kv_in,
-              const double rmesh_times,
               const double& gauss_gamma);
 
     void cal_Vs(std::map<TA, std::map<TAC, RI::Tensor<Tdata>>>& Vs, const std::map<std::string, bool>& flags);
