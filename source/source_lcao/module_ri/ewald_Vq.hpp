@@ -44,13 +44,15 @@ void Ewald_Vq<Tdata>::init(std::vector<std::vector<std::vector<Numerical_Orbital
 }
 
 template <typename Tdata>
-void Ewald_Vq<Tdata>::cal_Vs_minus_gauss(std::map<TA, std::map<TAC, RI::Tensor<Tdata>>>& Vs,
-                             const std::map<std::string, bool>& flags)
+auto Ewald_Vq<Tdata>::cal_Vs_minus_gauss(std::map<TA, std::map<TAC, RI::Tensor<Tdata>>>& Vs_in,
+                                         const std::map<std::string, bool>& flags)
+    -> std::map<TA, std::map<TAC, RI::Tensor<Tdata>>> Vs
 {
     ModuleBase::TITLE("Ewald_Vq", "cal_Vs_minus_gauss");
     ModuleBase::timer::tick("Ewald_Vq", "cal_Vs_minus_gauss");
 
     std::map<TA, std::map<TAC, RI::Tensor<Tdata>>> Vs_gauss = this->cal_Vs_gauss(list_A0, list_A1, flags);
+    std::map<TA, std::map<TAC, RI::Tensor<Tdata>>> Vs;
 
     std::map<TA, std::map<TAC, Tresult>> Datas;
     for (const auto& Vs_tmpA: Vs)
@@ -61,34 +63,42 @@ void Ewald_Vq<Tdata>::cal_Vs_minus_gauss(std::map<TA, std::map<TAC, RI::Tensor<T
         {
             const TA& iat1 = Vs_tmpB.first.first;
             const int it1 = GlobalC::ucell.iat2it[iat1];
+            const size_t size0 = this->index_abfs[it0].count_size;
+            const size_t size1 = this->index_abfs[it1].count_size;
+            RI::Tensor<std::complex<double>> data({size0, size1});
+
             // V(R) = V(R) - pA * pB * V(R)_gauss
-            for (int LA = 0; LA != this->g_abfs_ccp[it0].size(); ++LA)
+            for (int l0 = 0; l0 != this->g_abfs_ccp[it0].size(); ++l0)
             {
-                for (size_t NA = 0; NA != this->g_abfs_ccp[it0][LA].size(); ++NA)
+                for (int l1 = 0; l1 != this->g_abfs[it1].size(); ++l1)
                 {
-                    const double pA = this->multipole[it0][LA][NA];
-                    for (size_t MA = 0; MA != 2 * LA + 1; ++MA)
+                    for (size_t n0 = 0; n0 != this->g_abfs_ccp[it0][l0].size(); ++n0)
                     {
-                        for (int LB = 0; LB != this->g_abfs[it1].size(); ++LB)
+                        const double pA = this->multipole[it0][l0][n0];
+                        for (size_t n1 = 0; n1 != this->g_abfs[it1][l1].size(); ++n1)
                         {
-                            for (size_t NB = 0; NB != this->g_abfs[it1][LB].size(); ++NB)
+                            const double pB = this->multipole[it1][l1][n1];
+                            for (size_t m0 = 0; m0 != 2 * l0 + 1; ++m0)
                             {
-                                const double pB = this->multipole[it1][LB][NB];
-                                for (size_t MB = 0; MB != 2 * LB + 1; ++MB)
+                                for (size_t m1 = 0; m1 != 2 * l1 + 1; ++m1)
                                 {
-                                    const size_t iA = this->index_abfs[it0][LA][NA][MA];
-                                    const size_t iB = this->index_abfs[it1][LB][NB][MB];
-                                    Vs[iat0][Vs_tmpB.first](iA, iB) -= pA * pB * Vs_gauss[iat0][Vs_tmpB.first](iA, iB);
+                                    const size_t i0 = this->index_abfs[it0][l0][n0][m0];
+                                    const size_t i1 = this->index_abfs[it1][l1][n1][m1];
+                                    data(i0, i1) = Vs_in[iat0][Vs_tmpB.first](i0, i1)
+                                                   - pA * pB * Vs_gauss[iat0][Vs_tmpB.first](i0, i1);
                                 }
                             }
                         }
                     }
                 }
             }
+
+            Vs[iat0][Vs_tmpB.first] = data;
         }
     }
 
     ModuleBase::timer::tick("Ewald_Vq", "cal_Vs_minus_gauss");
+    return Vs;
 }
 
 template <typename Tdata>
@@ -104,6 +114,49 @@ auto Ewald_Vq<Tdata>::cal_Vs_gauss(const std::vector<TA>& list_A0,
 
     ModuleBase::timer::tick("Ewald_Vq", "cal_Vs_gauss");
     return Vs;
+}
+
+template <typename Tdata>
+auto Ewald_Vq<Tdata>::cal_Vq2(const K_Vectors* kv, std::map<TA, std::map<TAC, RI::Tensor<Tdata>>>& Vs)
+    -> std::vector<std::map<TA, std::map<TA, RI::Tensor<std::complex<double>>>>>
+{
+    ModuleBase::TITLE("Ewald_Vq", "cal_Vq2");
+    ModuleBase::timer::tick("Ewald_Vq", "cal_Vq2");
+
+    const int nspin0 = std::map<int, int>{
+        {1, 1},
+        {2, 2},
+        {4, 1}
+    }.at(GlobalV::NSPIN);
+    const int nks0 = kv->nks / nspin0;
+    std::vector<std::map<TA, std::map<TA, RI::Tensor<std::complex<double>>>>> datas;
+    datas.resize(nks0);
+
+    for (size_t ik = 0; ik != nks0; ++ik)
+    {
+        for (const auto& Vs_tmpA: Vs)
+        {
+            const TA& iat0 = Vs_tmpA.first;
+            for (const auto& Vs_tmpB: Vs_tmpA.second)
+            {
+                const TA& iat1 = Vs_tmpB.first.first;
+                const TC& cell1 = Vs_tmpB.first.second;
+                std::complex<double> phase
+                    = std::exp(ModuleBase::TWO_PI * ModuleBase::IMAG_UNIT
+                               * (kv->kvec_c[ik] * (RI_Util::array3_to_Vector3(cell1) * GlobalC::ucell.latvec)));
+                if (datas[ik][iat0][iat1].empty())
+                    datas[ik][iat0][iat1]
+                        = RI::Global_Func::convert<std::complex<double>>(Vs[iat0][Vs_tmpB.first]) * phase;
+                else
+                    datas[ik][iat0][iat1]
+                        = datas[ik][iat0][iat1]
+                          + RI::Global_Func::convert<std::complex<double>>(Vs[iat0][Vs_tmpB.first]) * phase;
+            }
+        }
+    }
+
+    ModuleBase::timer::tick("Ewald_Vq", "cal_Vq2");
+    return datas;
 }
 
 template <typename Tdata>

@@ -6,11 +6,14 @@
 #ifndef EWALD_VQ_H
 #define EWALD_VQ_H
 
+#include <RI/global/Tensor.h>
+
 #include <array>
 #include <map>
 
 #include "gaussian_abfs.h"
 #include "module_base/element_basis_index.h"
+#include "module_cell/klist.h"
 
 template <typename Tdata>
 class Ewald_Vq
@@ -32,8 +35,9 @@ class Ewald_Vq
               const K_Vectors& kv_in,
               const double& gauss_gamma);
 
-    void cal_Vs_minus_gauss(std::map<TA, std::map<TAC, RI::Tensor<Tdata>>>& Vs, const std::map<std::string, bool>& flags);
-    void 
+    std::map<TA, std::map<TAC, RI::Tensor<Tdata>>> cal_Vs_minus_gauss(
+        std::map<TA, std::map<TAC, RI::Tensor<Tdata>>>& Vs_in,
+        const std::map<std::string, bool>& flags);
 
   private:
     const Exx_Info::Exx_Info_RI& info;
