@@ -12,7 +12,7 @@
 #include "module_basis/module_pw/pw_basis_k.h"
 #include "module_cell/klist.h"
 
-class Auxiliary_Func
+class Singular_Value
 {
   public:
     enum class Kernal_Type
@@ -31,9 +31,6 @@ class Auxiliary_Func
     using T_cal_fq_type = std::function<double(const ModuleBase::Vector3<double>& gk)>;
 
   public:
-    static std::vector<double> cal_hf_kernel(const std::vector<ModuleBase::Vector3<double>>& gk, const double& chi);
-    static std::vector<double> cal_erfc_kernel(const std::vector<ModuleBase::Vector3<double>>& gk, const double& omega);
-
     static double cal_type_0(const std::vector<ModuleBase::Vector3<double>>& kvec,
                              const int& qdiv,
                              const double& qdense,

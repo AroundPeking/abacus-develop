@@ -6,7 +6,7 @@
 #ifndef AUXILIARY_FUNC_CPP
 #define AUXILIARY_FUNC_CPP
 
-#include "auxiliary_func.h"
+#include "singular_value.h"
 
 #include <algorithm>
 #include <cmath>
@@ -17,35 +17,9 @@
 #include "module_base/tool_title.h"
 #include "module_hamilt_pw/hamilt_pwdft/global.h"
 
-std::vector<double> Auxiliary_Func::cal_erfc_kernel(const std::vector<ModuleBase::Vector3<double>>& gk,
-                                                    const double& omega)
-{
-    const int npw = gk.size();
-    std::vector<double> vg(npw);
-    const double prefactor = ModuleBase::FOUR_PI;
-
-    for (size_t ig = 0; ig != npw; ++ig)
-        vg[ig] = gk[ig].norm2() ? (prefactor / (gk[ig].norm2() * GlobalC::ucell.tpiba2))
-                                      * (1 - std::exp(-gk[ig].norm2() * GlobalC::ucell.tpiba2 / (4 * omega * omega)))
-                                : prefactor / (4 * omega * omega);
-
-    return vg;
-}
-
-std::vector<double> Auxiliary_Func::cal_hf_kernel(const std::vector<ModuleBase::Vector3<double>>& gk, const double& chi)
-{
-    const int npw = gk.size();
-    std::vector<double> vg(npw);
-
-    // set 0 for add Auxiliary functions to eliminate singularities later
-    for (size_t ig = 0; ig != npw; ++ig)
-        vg[ig] = gk[ig].norm2() ? (ModuleBase::FOUR_PI / (gk[ig].norm2() * GlobalC::ucell.tpiba2)) : chi;
-
-    return vg;
-}
 
 // for analytic integral of fq
-double Auxiliary_Func::sum_for_solve_chi(const std::vector<ModuleBase::Vector3<double>>& kvec_c,
+double Singular_Value::sum_for_solve_chi(const std::vector<ModuleBase::Vector3<double>>& kvec_c,
                                          const T_cal_fq_type& func_cal_fq,
                                          const double& fq_int)
 {
@@ -62,7 +36,7 @@ double Auxiliary_Func::sum_for_solve_chi(const std::vector<ModuleBase::Vector3<d
 }
 
 // for numerical integral of fq
-double Auxiliary_Func::solve_chi(const std::vector<ModuleBase::Vector3<double>>& kvec_c,
+double Singular_Value::solve_chi(const std::vector<ModuleBase::Vector3<double>>& kvec_c,
                                  const T_cal_fq_type& func_cal_fq,
                                  const std::array<int, 3>& nq_arr,
                                  const int& niter,
@@ -76,14 +50,14 @@ double Auxiliary_Func::solve_chi(const std::vector<ModuleBase::Vector3<double>>&
 }
 
 // for analytic integral of fq
-double Auxiliary_Func::solve_chi(const std::vector<ModuleBase::Vector3<double>>& kvec_c,
+double Singular_Value::solve_chi(const std::vector<ModuleBase::Vector3<double>>& kvec_c,
                                  const T_cal_fq_type& func_cal_fq,
                                  const double& fq_int)
 {
     return sum_for_solve_chi(kvec_c, func_cal_fq, fq_int);
 }
 
-double Auxiliary_Func::fq_type_0(const ModuleBase::Vector3<double>& qvec,
+double Singular_Value::fq_type_0(const ModuleBase::Vector3<double>& qvec,
                                  const int& qdiv,
                                  std::vector<ModuleBase::Vector3<double>>& avec,
                                  std::vector<ModuleBase::Vector3<double>>& bvec)
@@ -116,15 +90,15 @@ double Auxiliary_Func::fq_type_0(const ModuleBase::Vector3<double>& qvec,
     return fq;
 }
 
-double Auxiliary_Func::cal_type_0(const std::vector<ModuleBase::Vector3<double>>& kvec_c,
+double Singular_Value::cal_type_0(const std::vector<ModuleBase::Vector3<double>>& kvec_c,
                                   const int& qdiv,
                                   const double& qdense,
                                   const int& niter,
                                   const double& eps,
                                   const int& a_rate)
 {
-    ModuleBase::TITLE("Ewald_Vq", "cal_type_0");
-    ModuleBase::timer::tick("Ewald_Vq", "cal_type_0");
+    ModuleBase::TITLE("Singular_Value", "cal_type_0");
+    ModuleBase::timer::tick("Singular_Value", "cal_type_0");
 
     std::vector<ModuleBase::Vector3<double>> avec = {GlobalC::ucell.a1, GlobalC::ucell.a2, GlobalC::ucell.a3};
     std::vector<ModuleBase::Vector3<double>> bvec;
@@ -152,11 +126,11 @@ double Auxiliary_Func::cal_type_0(const std::vector<ModuleBase::Vector3<double>>
     const T_cal_fq_type func_cal_fq_type_0 = std::bind(&fq_type_0, std::placeholders::_1, qdiv, avec, bvec);
 
     double val = solve_chi(kvec_c, func_cal_fq_type_0, nq_arr, niter, eps, a_rate);
-    ModuleBase::timer::tick("Ewald_Vq", "cal_type_0");
+    ModuleBase::timer::tick("Singular_Value", "cal_type_0");
     return val;
 }
 
-double Auxiliary_Func::fq_type_1(const ModuleBase::Vector3<double>& qvec,
+double Singular_Value::fq_type_1(const ModuleBase::Vector3<double>& qvec,
                                  const int& qdiv,
                                  const ModulePW::PW_Basis_K* wfc_basis,
                                  const double& lambda)
@@ -189,15 +163,15 @@ double Auxiliary_Func::fq_type_1(const ModuleBase::Vector3<double>& qvec,
     return fq;
 }
 
-double Auxiliary_Func::cal_type_1(const std::vector<ModuleBase::Vector3<double>>& kvec_c,
+double Singular_Value::cal_type_1(const std::vector<ModuleBase::Vector3<double>>& kvec_c,
                                   const int& qdiv,
                                   const ModulePW::PW_Basis_K* wfc_basis,
                                   const double& start_lambda,
                                   const int& niter,
                                   const double& eps)
 {
-    ModuleBase::TITLE("Ewald_Vq", "cal_type_1");
-    ModuleBase::timer::tick("Ewald_Vq", "cal_type_1");
+    ModuleBase::TITLE("Singular_Value", "cal_type_1");
+    ModuleBase::timer::tick("Singular_Value", "cal_type_1");
 
     auto cal_chi = [&qdiv, &wfc_basis, &kvec_c](const double& lambda)
     {
@@ -209,7 +183,7 @@ double Auxiliary_Func::cal_type_1(const std::vector<ModuleBase::Vector3<double>>
         else if (qdiv == 1)
             fq_int = prefactor;
         else
-            ModuleBase::WARNING_QUIT("Ewald_Vq::cal_type_1", "Type 1 fq only supports qdiv=1 or qdiv=2!");
+            ModuleBase::WARNING_QUIT("Singular_Value::cal_type_1", "Type 1 fq only supports qdiv=1 or qdiv=2!");
         return solve_chi(kvec_c, func_cal_fq_type_1, fq_int);
     }
 
@@ -232,13 +206,13 @@ double Auxiliary_Func::cal_type_1(const std::vector<ModuleBase::Vector3<double>>
     }
 
     if (tot_iter == niter)
-        ModuleBase::WARNING_QUIT("Ewald_Vq::cal_type_1", "Integral not converged!");
+        ModuleBase::WARNING_QUIT("Singular_Value::cal_type_1", "not converged!");
 
-    ModuleBase::timer::tick("Ewald_Vq", "cal_type_1");
+    ModuleBase::timer::tick("Singular_Value", "cal_type_1");
     return val;
 }
 
-double Auxiliary_Func::Iter_Integral(const T_cal_fq_type& func_cal_fq,
+double Singular_Value::Iter_Integral(const T_cal_fq_type& func_cal_fq,
                                      const std::array<int, 3>& nq_arr,
                                      const int& niter,
                                      const double& eps,
@@ -247,11 +221,11 @@ double Auxiliary_Func::Iter_Integral(const T_cal_fq_type& func_cal_fq,
     bool any_negative = std::any_of(nq_arr.begin(), nq_arr.end(), [](int i) { return i < 0; });
     bool any_nthree = std::any_of(nq_arr.begin(), nq_arr.end(), [&a_rate](int i) { return i % a_rate != 0; });
     if (any_negative || any_nthree)
-        ModuleBase::WARNING_QUIT("Ewald_Vq::Iter_Integral",
+        ModuleBase::WARNING_QUIT("Singular_Value::Iter_Integral",
                                  "The elements of `nq_arr` should be non-negative and multiples of a_rate!");
     bool all_zero = std::all_of(nq_arr.begin(), nq_arr.end(), [](int i) { return i == 0; });
     if (all_zero)
-        ModuleBase::WARNING_QUIT("Ewald_Vq::Iter_Integral", "At least one element of `nq_arr` should be non-zero!");
+        ModuleBase::WARNING_QUIT("Singular_Value::Iter_Integral", "At least one element of `nq_arr` should be non-zero!");
 
     const int nqs = std::accumulate(nq_arr.begin(), nq_arr.end(), 1, [](int a, int b) { return a * (2 * b + 1); });
     std::array<double, 3> qstep{};
@@ -293,7 +267,7 @@ double Auxiliary_Func::Iter_Integral(const T_cal_fq_type& func_cal_fq,
     }
 
     if (tot_iter == niter)
-        ModuleBase::WARNING_QUIT("Ewald_Vq::Iter_Integral", "Integral not converged!");
+        ModuleBase::WARNING_QUIT("Singular_Value::Iter_Integral", "not converged!");
 
     return integ;
 }
