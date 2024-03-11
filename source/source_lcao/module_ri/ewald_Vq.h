@@ -31,7 +31,15 @@ class Ewald_Vq
 
     std::vector<std::map<TA, std::map<TA, RI::Tensor<std::complex<double>>>>> cal_Vq(
         std::map<TA, std::map<TAC, RI::Tensor<Tdata>>>& Vs_in,
+        const std::vector<TA>& list_A0,
+        const std::vector<TAC>& list_A1,
         const ModulePW::PW_Basis_K* wfc_basis);
+
+    std::map<TA, std::map<TAC, RI::Tensor<Tdata>>> cal_Vs(
+        std::vector<std::map<TA, std::map<TA, RI::Tensor<std::complex<double>>>>>& Vq_in,
+        const std::vector<TA>& list_A0,
+        const std::vector<TAC>& list_A1,
+        const double& ccp_rmesh_times);
 
     void init(std::vector<std::vector<std::vector<Numerical_Orbital_Lm>>>& lcaos_in,
               std::vector<std::vector<std::vector<Numerical_Orbital_Lm>>>& abfs_in,
@@ -64,7 +72,9 @@ class Ewald_Vq
                                                                 const std::vector<TAC>& list_A1);
 
     std::map<TA, std::map<TAC, RI::Tensor<Tdata>>> cal_Vs_minus_gauss(
-        std::map<TA, std::map<TAC, RI::Tensor<Tdata>>>& Vs_in);
+        std::map<TA, std::map<TAC, RI::Tensor<Tdata>>>& Vs_in,
+        const std::vector<TA>& list_A0,
+        const std::vector<TAC>& list_A1);
 
     std::vector<std::map<TA, std::map<TA, RI::Tensor<std::complex<double>>>>> cal_Vq_minus_gauss(
         std::map<TA, std::map<TAC, RI::Tensor<Tdata>>>& Vs_minus_gauss);
