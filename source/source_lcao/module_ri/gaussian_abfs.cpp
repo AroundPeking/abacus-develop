@@ -8,15 +8,45 @@
 
 #include "gaussian_abfs.h"
 
+#include <algorithm>
+
 #include "module_base/global_variable.h"
 #include "module_base/math_ylmreal.h"
 #include "module_base/timer.h"
 #include "module_base/tool_title.h"
 
+void Gaussian_Abfs::init(const ModulePW::PW_Basis_K* wfc_basis)
+{
+    ModuleBase::TITLE("Gaussian_Abfs", "init");
+    ModuleBase::timer::tick("Gaussian_Abfs", "init");
+
+    for (size_t ig = 0; ig != wfc_basis->npw; ++ig)
+    {
+        int isz = wfc_basis->ig2isz[ig];
+        int iz = isz % wfc_basis->nz;
+        int is = isz / wfc_basis->nz;
+        int ix = wfc_basis->is2fftixy[is] / wfc_basis->fftny;
+        int iy = wfc_basis->is2fftixy[is] % wfc_basis->fftny;
+        if (ix >= int(wfc_basis->nx / 2) + 1)
+            ix -= wfc_basis->nx;
+        if (iy >= int(wfc_basis->ny / 2) + 1)
+            iy -= wfc_basis->ny;
+        if (iz >= int(wfc_basis->nz / 2) + 1)
+            iz -= wfc_basis->nz;
+        ModuleBase::Vector3<double> f;
+        f.x = ix;
+        f.y = iy;
+        f.z = iz;
+        this->gcar[ig] = f * wfc_basis->G;
+    }
+
+    ModuleBase::timer::tick("Gaussian_Abfs", "init");
+}
+
 RI::Tensor<std::complex<double>> Gaussian_Abfs::get_Vq(
     const int& lp_max,
     const int& lq_max, // Maximum L for which to calculate interaction.
-    const std::vector<ModuleBase::Vector3<double>>& gk,
+    const ModuleBase::Vector3<double>& qvec,
     const double& chi, // Singularity corrected value at q=0.
     const double& gamma,
     const ModuleBase::Vector3<double>& tau,
@@ -52,9 +82,9 @@ RI::Tensor<std::complex<double>> Gaussian_Abfs::get_Vq(
         const double power = -2.0 + 2 * i_add_ksq;
         const int this_Lmax = Lmax - 2 * i_add_ksq; // calculate Lmax at current lp+lq
         const bool exclude_Gamma
-            = (gk_vec.norm2() < 1d - 10 && i_add_ksq == 0) // only Gamma point and lq+lp-2>0 need to be corrected
+            = (qvec.norm2() < 1e-10 && i_add_ksq == 0) // only Gamma point and lq+lp-2>0 need to be corrected
             lattice_sum[i_add_ksq]
-            = get_lattice_sum(gk, power, exponent, exclude_Gamma, this_Lmax, tau);
+            = get_lattice_sum(qvec, power, exponent, exclude_Gamma, this_Lmax, tau);
     }
 
     /* The exponent term comes in from Taylor expanding the
@@ -153,7 +183,7 @@ double Gaussian_Abfs::double_factorial(const int& n)
 }
 
 std::vector<std::complex<double>> Gaussian_Abfs::get_lattice_sum(
-    const std::vector<ModuleBase::Vector3<double>>& gk,
+    const ModuleBase::Vector3<double>& qvec,
     const double& power, // Will be 0. for straight GTOs and -2. for Coulomb interaction
     const double& gamma,
     const bool& exclude_Gamma, // The R==0. can be excluded by this flag.
@@ -164,6 +194,12 @@ std::vector<std::complex<double>> Gaussian_Abfs::get_lattice_sum(
     ModuleBase::timer::tick("Gaussian_Abfs", "lattice_sum");
     if (power < 0.0 && !exclude_Gamma)
         ModuleBase::WARNING_QUIT("Gaussian_Abfs::lattice_sum", "Gamma point for power<0.0 cannot be evaluated!");
+
+    std::vector<ModuleBase::Vector3<double>> gk;
+    std::transform(this->gcar.begin(),
+                   this->gcar.end(),
+                   gk.begin(),
+                   [&qvec](ModuleBase::Vector3<double>& vec) -> ModuleBase::Vector3<double> { return vec + qvec; });
 
     const int npw = gk.size();
     const int total_lm = (lmax + 1) * (lmax + 1);
