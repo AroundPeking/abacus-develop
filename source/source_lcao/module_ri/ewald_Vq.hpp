@@ -35,9 +35,38 @@ void Ewald_Vq<Tdata>::init(std::vector<std::vector<std::vector<Numerical_Orbital
 
     this->g_lcaos = this->init_gauss(lcaos_in);
     this->g_abfs = this->init_gauss(abfs_in);
+
+    auto get_ccp_parameter = [this]() -> std::map<std::string, double> {
+        switch (this->info.ccp_type)
+        {
+        case Conv_Coulomb_Pot_K::Ccp_Type::Ccp:
+            return {};
+        case Conv_Coulomb_Pot_K::Ccp_Type::Hf:
+            return {};
+        case Conv_Coulomb_Pot_K::Ccp_Type::Hse:
+            return {
+                {"hse_omega", this->info.hse_omega}
+            };
+        case Conv_Coulomb_Pot_K::Ccp_Type::Cam:
+            return {
+                {"hse_omega", this->info.hse_omega},
+                {"cam_alpha", this->info.cam_alpha},
+                {"cam_beta",  this->info.cam_beta }
+            };
+        case Conv_Coulomb_Pot_K::Ccp_Type::Ccp_Cam:
+            return {
+                {"hse_omega", this->info.hse_omega},
+                {"cam_alpha", this->info.cam_alpha},
+                {"cam_beta",  this->info.cam_beta }
+            };
+        default:
+            throw std::domain_error(std::string(__FILE__) + " line " + std::to_string(__LINE__));
+            break;
+        }
+    };
     this->g_abfs_ccp = Conv_Coulomb_Pot_K::cal_orbs_ccp(this->g_abfs,
-                                                        Conv_Coulomb_Pot_K::Ccp_Type::Ccp,
-                                                        {},
+                                                        this->info.ccp_type,
+                                                        get_ccp_parameter(),
                                                         this->info.ccp_rmesh_times,
                                                         this->p_kv->nkstot_full);
     this->cv.set_orbitals(this->g_lcaos,
