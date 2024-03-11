@@ -30,7 +30,6 @@ void Ewald_Vq<Tdata>::init(std::vector<std::vector<std::vector<Numerical_Orbital
 
     this->p_kv = kv_in;
     this->nks0 = this->p_kv->nkstot_full / this->nspin0;
-    this->lambda = this->info_ewald.gauss_lambda;
 
     this->g_lcaos = this->init_gauss(lcaos_in);
     this->g_abfs = this->init_gauss(abfs_in);
@@ -195,7 +194,7 @@ auto Ewald_Vq<Tdata>::cal_Vq(std::map<TA, std::map<TAC, RI::Tensor<Tdata>>>& Vs_
                                                  GlobalC::exx_info.info_ri.abfs_Lmax,
                                                  this->p_kv->kvec_c[ik],
                                                  chi,
-                                                 this->lambda,
+                                                 this->info_ewald.ewald_lambda,
                                                  tau);
 
                 RI::Tensor<std::complex<double>> data;
@@ -361,7 +360,7 @@ std::vector<std::vector<std::vector<Numerical_Orbital_Lm>>> Ewald_Vq<Tdata>::ini
             gauss[T][L].resize(orb_in[T][L].size());
             for (size_t N = 0; N != orb_in[T][L].size(); ++N)
             {
-                gauss[T][L][N] = this->gaussian_abfs.Gauss(orb_in[T][L][N], this->lambda);
+                gauss[T][L][N] = this->gaussian_abfs.Gauss(orb_in[T][L][N], this->info_ewald.ewald_lambda);
             }
         }
     }

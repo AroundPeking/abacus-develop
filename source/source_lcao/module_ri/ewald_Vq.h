@@ -50,7 +50,6 @@ class Ewald_Vq
     LRI_CV<Tdata> cv;
     Gaussian_Abfs gaussian_abfs;
     const K_Vectors* p_kv;
-    const double lambda;
     std::vector<std::vector<std::vector<double>>> multipole;
     ModuleBase::Element_Basis_Index::IndexLNM index_abfs;
 
