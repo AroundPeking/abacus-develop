@@ -18,7 +18,7 @@
 class Gaussian_Abfs
 {
   public:
-    void init(const ModulePW::PW_Basis_K* wfc_basis)
+    void init(const ModulePW::PW_Basis_K* wfc_basis);
 
     RI::Tensor<std::complex<double>> get_Vq(const int& lp_max,
                                             const int& lq_max, // Maximum L for which to calculate interaction.
