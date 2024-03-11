@@ -12,11 +12,11 @@
 #include <cmath>
 #include <numeric>
 
+#include "gaussian_abfs.h"
 #include "module_base/global_variable.h"
 #include "module_base/timer.h"
 #include "module_base/tool_title.h"
 #include "module_hamilt_pw/hamilt_pwdft/global.h"
-
 
 // for analytic integral of fq
 double Singular_Value::sum_for_solve_chi(const std::vector<ModuleBase::Vector3<double>>& kvec_c,
@@ -137,28 +137,11 @@ double Singular_Value::fq_type_1(const ModuleBase::Vector3<double>& qvec,
 {
     double fq = 0.0;
     const int qexpo = -abs(qdiv);
+    const bool exclude_Gamma = true;
+    const int lmax = 0;
+    const ModuleBase::Vector3<double> tau(0, 0, 0);
 
-    for (size_t ig = 0; ig != wfc_basis->npw; ++ig)
-    {
-        int isz = wfc_basis->ig2isz[ig];
-        int iz = isz % wfc_basis->nz;
-        int is = isz / wfc_basis->nz;
-        int ix = wfc_basis->is2fftixy[is] / wfc_basis->fftny;
-        int iy = wfc_basis->is2fftixy[is] % wfc_basis->fftny;
-        if (ix >= int(wfc_basis->nx / 2) + 1)
-            ix -= wfc_basis->nx;
-        if (iy >= int(wfc_basis->ny / 2) + 1)
-            iy -= wfc_basis->ny;
-        if (iz >= int(wfc_basis->nz / 2) + 1)
-            iz -= wfc_basis->nz;
-        ModuleBase::Vector3<double> f;
-        f.x = ix;
-        f.y = iy;
-        f.z = iz;
-        ModuleBase::Vector3<double> qg = qvec + f * wfc_basis->G;
-
-        fq += std::exp(-lambda * qg.norm2()) * std::pow(qg.norm(), qexpo);
-    }
+    Gaussian_Abfs::get_lattice_sum(qvec, wfc_basis, qexpo, lambda, exclude_Gamma, lmax, tau);
 
     return fq;
 }
@@ -173,21 +156,23 @@ double Singular_Value::cal_type_1(const std::vector<ModuleBase::Vector3<double>>
     ModuleBase::TITLE("Singular_Value", "cal_type_1");
     ModuleBase::timer::tick("Singular_Value", "cal_type_1");
 
-    auto cal_chi = [&qdiv, &wfc_basis, &kvec_c](const double& lambda)
-    {
-        const T_cal_fq_type func_cal_fq_type_1 = std::bind(&fq_type_1, std::placeholders::_1, qdiv, wfc_basis, lambda);
-        double prefactor = ModuleBase::TWO_PI * std::pow(lambda, -1 / qdiv);
-        double fq_int;
-        if (qdiv == 2)
-            fq_int = prefactor * std::sqrt(ModuleBase::PI);
-        else if (qdiv == 1)
-            fq_int = prefactor;
-        else
-            ModuleBase::WARNING_QUIT("Singular_Value::cal_type_1", "Type 1 fq only supports qdiv=1 or qdiv=2!");
-        return solve_chi(kvec_c, func_cal_fq_type_1, fq_int);
-    }
+    auto cal_chi =
+        [&qdiv, &wfc_basis, &kvec_c](const double& lambda) {
+            const T_cal_fq_type func_cal_fq_type_1
+                = std::bind(&fq_type_1, std::placeholders::_1, qdiv, wfc_basis, lambda);
+            double prefactor = ModuleBase::TWO_PI * std::pow(lambda, -1 / qdiv);
+            double fq_int;
+            if (qdiv == 2)
+                fq_int = prefactor * std::sqrt(ModuleBase::PI);
+            else if (qdiv == 1)
+                fq_int = prefactor;
+            else
+                ModuleBase::WARNING_QUIT("Singular_Value::cal_type_1", "Type 1 fq only supports qdiv=1 or qdiv=2!");
+            return solve_chi(kvec_c, func_cal_fq_type_1, fq_int);
+        }
 
-    int tot_iter = 0;
+    int tot_iter
+        = 0;
     double val_extra_old = 0.5 * std::numeric_limits<double>::max();
     double lammda_old = start_lambda;
     double val_old = cal_chi(lammda_old);
@@ -197,8 +182,9 @@ double Singular_Value::cal_type_1(const std::vector<ModuleBase::Vector3<double>>
         double lammda_new = lammda_old * 0.5;
         double val_new = cal_chi(lammda_new);
         double dval = (val_new - val_old) / (lammda_new - lammda_old);
-        val_extra = val_new + dval * (0.0-lammda_new);
-        if (std::abs(val_extra - val_extra_old) < eps) break;
+        val_extra = val_new + dval * (0.0 - lammda_new);
+        if (std::abs(val_extra - val_extra_old) < eps)
+            break;
         lammda_old = lammda_new;
         val_old = val_new;
         val_extra_old = val_extra;
@@ -225,7 +211,8 @@ double Singular_Value::Iter_Integral(const T_cal_fq_type& func_cal_fq,
                                  "The elements of `nq_arr` should be non-negative and multiples of a_rate!");
     bool all_zero = std::all_of(nq_arr.begin(), nq_arr.end(), [](int i) { return i == 0; });
     if (all_zero)
-        ModuleBase::WARNING_QUIT("Singular_Value::Iter_Integral", "At least one element of `nq_arr` should be non-zero!");
+        ModuleBase::WARNING_QUIT("Singular_Value::Iter_Integral",
+                                 "At least one element of `nq_arr` should be non-zero!");
 
     const int nqs = std::accumulate(nq_arr.begin(), nq_arr.end(), 1, [](int a, int b) { return a * (2 * b + 1); });
     std::array<double, 3> qstep{};
