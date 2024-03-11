@@ -31,7 +31,7 @@ class Singular_Value
     using T_cal_fq_type = std::function<double(const ModuleBase::Vector3<double>& gk)>;
 
   public:
-    static double cal_type_0(const std::vector<ModuleBase::Vector3<double>>& kvec,
+    static double cal_type_0(const std::vector<ModuleBase::Vector3<double>>& kvec_c,
                              const int& qdiv,
                              const double& qdense,
                              const int& niter,

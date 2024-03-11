@@ -20,7 +20,7 @@ RI::Tensor<std::complex<double>> Gaussian_Abfs::get_Vq(
     const int& lq_max, // Maximum L for which to calculate interaction.
     const ModuleBase::Vector3<double>& qvec,
     const double& chi, // Singularity corrected value at q=0.
-    const double& gamma,
+    const double& lambda,
     const ModuleBase::Vector3<double>& tau,
     const ORB_gaunt_table& MGT)
 {
@@ -47,7 +47,7 @@ RI::Tensor<std::complex<double>> Gaussian_Abfs::get_Vq(
     std::vector<std::vector<std::complex<double>>> lattice_sum(n_add_ksq + 1,
                                                                std::vector<std::complex<double>>(n_LM, {0.0, 0.0}));
 
-    const double exponent = 1.0 / gamma;
+    const double exponent = 1.0 / lambda;
     for (int i_add_ksq = 0; i_add_ksq != n_add_ksq + 1;
          ++i_add_ksq) // integrate lp, lq, L to one index i_add_ksq, i.e. (lp+lq-L)/2
     {
@@ -63,7 +63,7 @@ RI::Tensor<std::complex<double>> Gaussian_Abfs::get_Vq(
         Gaussian at zero to first order in k^2, which cancels the k^-2 from the
         Coulomb interaction.  While terms of this order are in principle
         neglected, we make one exception here.  Without this, the final result
-        would (slightly) depend on the Ewald gamma.*/
+        would (slightly) depend on the Ewald lambda.*/
     if (gk_vec.norm2() < 1e-10)
         lattice_sum[0][0] += chi - exponent;
 
@@ -100,13 +100,13 @@ RI::Tensor<std::complex<double>> Gaussian_Abfs::get_Vq(
     return Vq;
 }
 
-Numerical_Orbital_Lm Gaussian_Abfs::Gauss(const Numerical_Orbital_Lm& orb, const double& gamma)
+Numerical_Orbital_Lm Gaussian_Abfs::Gauss(const Numerical_Orbital_Lm& orb, const double& lambda)
 {
     Numerical_Orbital_Lm gaussian;
     const int angular_momentum_l = orb.getL();
     const int Nr = orb.getNr();
     const double dr = orb.get_rab().back();
-    const double frac = std::pow(gamma, angular_momentum_l + 1.5) / double_factorial(2 * angular_momentum_l - 1)
+    const double frac = std::pow(lambda, angular_momentum_l + 1.5) / double_factorial(2 * angular_momentum_l - 1)
                         / sqrt(ModuleBase::PI * 0.5);
 
     std::vector<double> rab(Nr);
@@ -118,7 +118,7 @@ Numerical_Orbital_Lm Gaussian_Abfs::Gauss(const Numerical_Orbital_Lm& orb, const
         rab[ir] = orb.getRab(ir);
         r_radial[ir] = ir * rab[ir];
         psi[ir]
-            = frac * std::pow(r_radial[ir], angular_momentum_l) * std::exp(-gamma * r_radial[ir] * r_radial[ir] * 0.5);
+            = frac * std::pow(r_radial[ir], angular_momentum_l) * std::exp(-lambda * r_radial[ir] * r_radial[ir] * 0.5);
     }
 
     gaussian.set_orbital_info(orb.getLabel(),
@@ -158,7 +158,7 @@ std::vector<std::complex<double>> Gaussian_Abfs::get_lattice_sum(
     const ModuleBase::Vector3<double>& qvec,
     const ModulePW::PW_Basis_K* wfc_basis,
     const double& power, // Will be 0. for straight GTOs and -2. for Coulomb interaction
-    const double& gamma,
+    const double& lambda,
     const bool& exclude_Gamma, // The R==0. can be excluded by this flag.
     const int& lmax,           // Maximum angular momentum the sum is needed for.
     const ModuleBase::Vector3<double>& tau)
@@ -208,7 +208,7 @@ std::vector<std::complex<double>> Gaussian_Abfs::get_lattice_sum(
                 if (exclude_Gamma && gk_vec.norm2() < 1e-10)
                     continue;
                 std::complex<double> phase = std::exp(ModuleBase::IMAG_UNIT * (gk_vec * tau));
-                val_s += std::exp(-gamma * gk_vec.norm2()) * std::pow(gk_vec.norm(), power + L) * phase * ylm(lm, ig);
+                val_s += std::exp(-lambda * gk_vec.norm2()) * std::pow(gk_vec.norm(), power + L) * phase * ylm(lm, ig);
             }
             result[lm] = val_s;
         }
