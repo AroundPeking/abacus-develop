@@ -11,28 +11,30 @@
 #include <cmath>
 
 #include "RI_Util.h"
+#include "conv_coulomb_pot_k-template.h"
+#include "conv_coulomb_pot_k.h"
+#include "exx_abfs-abfs_index.h"
+#include "exx_abfs-construct_orbs.h"
 #include "module_base/element_basis_index.h"
 #include "module_base/timer.h"
 #include "module_base/tool_title.h"
-#include "module_ri/conv_coulomb_pot_k-template.h"
-#include "module_ri/conv_coulomb_pot_k.h"
-#include "module_ri/exx_abfs-construct_orbs.h"
+#include "singular_value.h"
 
 template <typename Tdata>
 void Ewald_Vq<Tdata>::init(std::vector<std::vector<std::vector<Numerical_Orbital_Lm>>>& lcaos_in,
                            std::vector<std::vector<std::vector<Numerical_Orbital_Lm>>>& abfs_in,
-                           ModuleBase::Element_Basis_Index::IndexLNM& index_abfs_in,
-                           const K_Vectors& kv_in,
-                           const double& gauss_gamma)
+                           const K_Vectors* kv_in,
+                           const double& gauss_lambda)
 {
     ModuleBase::TITLE("Ewald_Vq", "init");
     ModuleBase::timer::tick("Ewald_Vq", "init");
 
-    this->p_kv = &kv_in;
-    this->gamma = gauss_gamma;
+    this->p_kv = kv_in;
+    this->nks0 = this->p_kv->nkstot_full / this->nspin0;
+    this->lambda = gauss_lambda;
+
     this->g_lcaos = this->init_gauss(lcaos_in);
     this->g_abfs = this->init_gauss(abfs_in);
-
     this->g_abfs_ccp = Conv_Coulomb_Pot_K::cal_orbs_ccp(this->g_abfs,
                                                         Conv_Coulomb_Pot_K::Ccp_Type::Ccp,
                                                         {},
@@ -45,18 +47,111 @@ void Ewald_Vq<Tdata>::init(std::vector<std::vector<std::vector<Numerical_Orbital
                           this->info.ccp_rmesh_times);
     this->multipole = Exx_Abfs::Construct_Orbs::get_multipole(abfs_in);
 
-    this->index_abfs = index_abfs_in;
+    const ModuleBase::Element_Basis_Index::Range range_abfs = Exx_Abfs::Abfs_Index::construct_range(abfs_in);
+    this->index_abfs = ModuleBase::Element_Basis_Index::construct_index(range_abfs);
 
     ModuleBase::timer::tick("Ewald_Vq", "init");
 }
 
 template <typename Tdata>
-auto Ewald_Vq<Tdata>::cal_Vq(std::map<TA, std::map<TAC, RI::Tensor<Tdata>>>& Vs_in, )
+auto Ewald_Vq<Tdata>::cal_Vq(std::map<TA, std::map<TAC, RI::Tensor<Tdata>>>& Vs_in,
+                             const ModulePW::PW_Basis_K* wfc_basis)
     -> std::vector<std::map<TA, std::map<TA, RI::Tensor<std::complex<double>>>>>
+{
+    ModuleBase::TITLE("Ewald_Vq", "cal_Vq");
+    ModuleBase::timer::tick("Ewald_Vq", "cal_Vq");
 
-    template <typename Tdata>
-    auto Ewald_Vq<Tdata>::cal_Vs_minus_gauss(std::map<TA, std::map<TAC, RI::Tensor<Tdata>>>& Vs_in)
-        -> std::map<TA, std::map<TAC, RI::Tensor<Tdata>>> Vs
+    std::map<TA, std::map<TAC, RI::Tensor<Tdata>>> Vs_minus_gauss = this->cal_Vs_minus_gauss(Vs_in);
+    std::vector<std::map<TA, std::map<TA, RI::Tensor<std::complex<double>>>>> Vq_minus_gauss
+        = this->cal_Vq_minus_gauss(Vs_minus_gauss);
+    std::vector<std::map<TA, std::map<TA, RI::Tensor<std::complex<double>>>>> Vq;
+    Vq.resize(this->nks0);
+
+    double chi;
+    switch (this->info_ewald.fq_type)
+    {
+    case Singular_Value::Fq_type::Type_0:
+        chi = Singular_Value::cal_type_0(kvec_c,
+                                         this->info_ewald.ewald_qdiv,
+                                         this->info_ewald.ewald_qdense,
+                                         this->info_ewald.ewald_niter,
+                                         this->info_ewald.ewald_eps,
+                                         this->info_ewald.ewald_arate);
+    case Singular_Value::Fq_type::Type_1:
+        chi = Singular_Value::cal_type_1(kvec_c,
+                                         this->info_ewald.ewald_qdiv,
+                                         wfc_basis,
+                                         this->info_ewald.ewald_lambda,
+                                         this->info_ewald.ewald_niter,
+                                         this->info_ewald.ewald_eps);
+    default:
+        throw std::domain_error(std::string(__FILE__) + " line " + std::to_string(__LINE__));
+        break;
+    }
+
+    for (size_t ik = 0; ik != this->nks0; ++ik)
+    {
+        for (const auto& Vs_tmpA: Vs)
+        {
+            const TA& iat0 = Vs_tmpA.first;
+            const int it0 = GlobalC::ucell.iat2it[iat0];
+            const int ia0 = GlobalC::ucell.iat2ia[iat0];
+            const ModuleBase::Vector3<double> tau0 = GlobalC::ucell.atoms[it0].tau[ia0];
+            for (const auto& Vs_tmpB: Vs_tmpA.second)
+            {
+                const TA& iat1 = Vs_tmpB.first.first;
+                const int it1 = GlobalC::ucell.iat2it[iat1];
+                const int ia1 = GlobalC::ucell.iat2ia[iat1];
+                const ModuleBase::Vector3<double> tau1 = GlobalC::ucell.atoms[it1].tau[ia1];
+
+                const ModuleBase::Vector3<double> tau = tau0 - tau1;
+                RI::Tensor<std::complex<double>> Vq_gauss
+                    = this->gaussian_abfs.get_Vq(GlobalC::exx_info.info_ri.abfs_Lmax,
+                                                 GlobalC::exx_info.info_ri.abfs_Lmax,
+                                                 this->p_kv->kvec_c[ik],
+                                                 chi,
+                                                 this->lambda,
+                                                 tau);
+
+                RI::Tensor<std::complex<double>> data;
+                for (int l0 = 0; l0 != this->g_abfs_ccp[it0].size(); ++l0)
+                {
+                    for (int l1 = 0; l1 != this->g_abfs[it1].size(); ++l1)
+                    {
+                        for (size_t n0 = 0; n0 != this->g_abfs_ccp[it0][l0].size(); ++n0)
+                        {
+                            const double pA = this->multipole[it0][l0][n0];
+                            for (size_t n1 = 0; n1 != this->g_abfs[it1][l1].size(); ++n1)
+                            {
+                                const double pB = this->multipole[it1][l1][n1];
+                                for (size_t m0 = 0; m0 != 2 * l0 + 1; ++m0)
+                                {
+                                    const size_t i0 = this->index_abfs[it0][l0][n0][m0];
+                                    const size_t lm0 = l0 * l0 + m0;
+                                    for (size_t m1 = 0; m1 != 2 * l1 + 1; ++m1)
+                                    {
+                                        const size_t i1 = this->index_abfs[it1][l1][n1][m1];
+                                        const size_t lm1 = l1 * l1 + m1;
+                                        data = Vq_minus_gauss[ik][iat0][iat1](i0, i1) + pA * pB * Vq_gauss(lm0, lm1);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                Vq[ik][iat0][iat1] = data;
+            }
+        }
+    }
+
+    ModuleBase::timer::tick("Ewald_Vq", "cal_Vq");
+    return Vq;
+}
+
+template <typename Tdata>
+auto Ewald_Vq<Tdata>::cal_Vs_minus_gauss(std::map<TA, std::map<TAC, RI::Tensor<Tdata>>>& Vs_in)
+    -> std::map<TA, std::map<TAC, RI::Tensor<Tdata>>>
 {
     ModuleBase::TITLE("Ewald_Vq", "cal_Vs_minus_gauss");
     ModuleBase::timer::tick("Ewald_Vq", "cal_Vs_minus_gauss");
@@ -135,11 +230,10 @@ auto Ewald_Vq<Tdata>::cal_Vq_minus_gauss(std::map<TA, std::map<TAC, RI::Tensor<T
     ModuleBase::TITLE("Ewald_Vq", "cal_Vq_minus_gauss");
     ModuleBase::timer::tick("Ewald_Vq", "cal_Vq_minus_gauss");
 
-    const int nks0 = this->p_kv->nks / this->nspin0;
     std::vector<std::map<TA, std::map<TA, RI::Tensor<std::complex<double>>>>> datas;
-    datas.resize(nks0);
+    datas.resize(this->nks0);
 
-    for (size_t ik = 0; ik != nks0; ++ik)
+    for (size_t ik = 0; ik != this->nks0; ++ik)
     {
         for (const auto& Vs_tmpA: Vs_minus_gauss)
         {
@@ -148,9 +242,9 @@ auto Ewald_Vq<Tdata>::cal_Vq_minus_gauss(std::map<TA, std::map<TAC, RI::Tensor<T
             {
                 const TA& iat1 = Vs_tmpB.first.first;
                 const TC& cell1 = Vs_tmpB.first.second;
-                std::complex<double> phase
-                    = std::exp(ModuleBase::TWO_PI * ModuleBase::IMAG_UNIT
-                               * (kv->kvec_c[ik] * (RI_Util::array3_to_Vector3(cell1) * GlobalC::ucell.latvec)));
+                std::complex<double> phase = std::exp(
+                    ModuleBase::TWO_PI * ModuleBase::IMAG_UNIT
+                    * (this->p_kv->kvec_c[ik] * (RI_Util::array3_to_Vector3(cell1) * GlobalC::ucell.latvec)));
                 if (datas[ik][iat0][iat1].empty())
                     datas[ik][iat0][iat1]
                         = RI::Global_Func::convert<std::complex<double>>(Vs_minus_gauss[iat0][Vs_tmpB.first]) * phase;
@@ -180,7 +274,7 @@ std::vector<std::vector<std::vector<Numerical_Orbital_Lm>>> Ewald_Vq<Tdata>::ini
             gauss[T][L].resize(orb_in[T][L].size());
             for (size_t N = 0; N != orb_in[T][L].size(); ++N)
             {
-                gauss[T][L][N] = this->gaussian_abfs.Gauss(orb_in[T][L][N], this->gamma);
+                gauss[T][L][N] = this->gaussian_abfs.Gauss(orb_in[T][L][N], this->lambda);
             }
         }
     }
