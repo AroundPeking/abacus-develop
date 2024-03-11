@@ -38,8 +38,7 @@ class Ewald_Vq
     std::map<TA, std::map<TAC, RI::Tensor<Tdata>>> cal_Vs(
         std::vector<std::map<TA, std::map<TA, RI::Tensor<std::complex<double>>>>>& Vq_in,
         const std::vector<TA>& list_A0,
-        const std::vector<TAC>& list_A1,
-        const double& ccp_rmesh_times);
+        const std::vector<TAC>& list_A1);
 
     void init(std::vector<std::vector<std::vector<Numerical_Orbital_Lm>>>& lcaos_in,
               std::vector<std::vector<std::vector<Numerical_Orbital_Lm>>>& abfs_in,

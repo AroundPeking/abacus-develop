@@ -84,8 +84,7 @@ void Ewald_Vq<Tdata>::init(std::vector<std::vector<std::vector<Numerical_Orbital
 template <typename Tdata>
 auto Ewald_Vq<Tdata>::cal_Vs(std::vector<std::map<TA, std::map<TA, RI::Tensor<std::complex<double>>>>>& Vq_in,
                              const std::vector<TA>& list_A0,
-                             const std::vector<TAC>& list_A1,
-                             const double& ccp_rmesh_times) -> std::map<TA, std::map<TAC, RI::Tensor<Tdata>>>
+                             const std::vector<TAC>& list_A1) -> std::map<TA, std::map<TAC, RI::Tensor<Tdata>>>
 {
     ModuleBase::TITLE("Ewald_Vq", "cal_Vs");
     ModuleBase::timer::tick("Ewald_Vq", "cal_Vs");
@@ -110,9 +109,9 @@ auto Ewald_Vq<Tdata>::cal_Vs(std::vector<std::map<TA, std::map<TA, RI::Tensor<st
             const int ia1 = GlobalC::ucell.iat2ia[iat1];
             const ModuleBase::Vector3<double> tau0 = GlobalC::ucell.atoms[it0].tau[ia0];
             const ModuleBase::Vector3<double> tau1 = GlobalC::ucell.atoms[it1].tau[ia1];
-            const double Rcut
-                = std::min(GlobalC::ORB.Phi[it0].getRcut() * ccp_rmesh_times + GlobalC::ORB.Phi[it1].getRcut(),
-                           GlobalC::ORB.Phi[it1].getRcut() * ccp_rmesh_times + GlobalC::ORB.Phi[it0].getRcut());
+            const double Rcut = std::min(
+                GlobalC::ORB.Phi[it0].getRcut() * this->info.ccp_rmesh_times + GlobalC::ORB.Phi[it1].getRcut(),
+                GlobalC::ORB.Phi[it1].getRcut() * this->info.ccp_rmesh_times + GlobalC::ORB.Phi[it0].getRcut());
             const Abfs::Vector3_Order<double> R_delta
                 = -tau0 + tau1 + (RI_Util::array3_to_Vector3(cell1) * GlobalC::ucell.latvec);
             if (R_delta.norm() * GlobalC::ucell.lat0 < Rcut)
