@@ -15,34 +15,6 @@
 #include "module_base/timer.h"
 #include "module_base/tool_title.h"
 
-void Gaussian_Abfs::init(const ModulePW::PW_Basis_K* wfc_basis)
-{
-    ModuleBase::TITLE("Gaussian_Abfs", "init");
-    ModuleBase::timer::tick("Gaussian_Abfs", "init");
-
-    for (size_t ig = 0; ig != wfc_basis->npw; ++ig)
-    {
-        int isz = wfc_basis->ig2isz[ig];
-        int iz = isz % wfc_basis->nz;
-        int is = isz / wfc_basis->nz;
-        int ix = wfc_basis->is2fftixy[is] / wfc_basis->fftny;
-        int iy = wfc_basis->is2fftixy[is] % wfc_basis->fftny;
-        if (ix >= int(wfc_basis->nx / 2) + 1)
-            ix -= wfc_basis->nx;
-        if (iy >= int(wfc_basis->ny / 2) + 1)
-            iy -= wfc_basis->ny;
-        if (iz >= int(wfc_basis->nz / 2) + 1)
-            iz -= wfc_basis->nz;
-        ModuleBase::Vector3<double> f;
-        f.x = ix;
-        f.y = iy;
-        f.z = iz;
-        this->gcar[ig] = f * wfc_basis->G;
-    }
-
-    ModuleBase::timer::tick("Gaussian_Abfs", "init");
-}
-
 RI::Tensor<std::complex<double>> Gaussian_Abfs::get_Vq(
     const int& lp_max,
     const int& lq_max, // Maximum L for which to calculate interaction.
@@ -184,6 +156,7 @@ double Gaussian_Abfs::double_factorial(const int& n)
 
 std::vector<std::complex<double>> Gaussian_Abfs::get_lattice_sum(
     const ModuleBase::Vector3<double>& qvec,
+    const ModulePW::PW_Basis_K* wfc_basis,
     const double& power, // Will be 0. for straight GTOs and -2. for Coulomb interaction
     const double& gamma,
     const bool& exclude_Gamma, // The R==0. can be excluded by this flag.
@@ -196,10 +169,25 @@ std::vector<std::complex<double>> Gaussian_Abfs::get_lattice_sum(
         ModuleBase::WARNING_QUIT("Gaussian_Abfs::lattice_sum", "Gamma point for power<0.0 cannot be evaluated!");
 
     std::vector<ModuleBase::Vector3<double>> gk;
-    std::transform(this->gcar.begin(),
-                   this->gcar.end(),
-                   gk.begin(),
-                   [&qvec](ModuleBase::Vector3<double>& vec) -> ModuleBase::Vector3<double> { return vec + qvec; });
+    for (size_t ig = 0; ig != wfc_basis->npw; ++ig)
+    {
+        int isz = wfc_basis->ig2isz[ig];
+        int iz = isz % wfc_basis->nz;
+        int is = isz / wfc_basis->nz;
+        int ix = wfc_basis->is2fftixy[is] / wfc_basis->fftny;
+        int iy = wfc_basis->is2fftixy[is] % wfc_basis->fftny;
+        if (ix >= int(wfc_basis->nx / 2) + 1)
+            ix -= wfc_basis->nx;
+        if (iy >= int(wfc_basis->ny / 2) + 1)
+            iy -= wfc_basis->ny;
+        if (iz >= int(wfc_basis->nz / 2) + 1)
+            iz -= wfc_basis->nz;
+        ModuleBase::Vector3<double> f;
+        f.x = ix;
+        f.y = iy;
+        f.z = iz;
+        gk[ig] = f * wfc_basis->G + qvec;
+    }
 
     const int npw = gk.size();
     const int total_lm = (lmax + 1) * (lmax + 1);
