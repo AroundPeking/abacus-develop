@@ -23,10 +23,11 @@ class Gaussian_Abfs
                                             const ModuleBase::Vector3<double>& qvec,
                                             const double& chi, // Singularity corrected value at q=0.
                                             const double& lambda,
-                                            const ModuleBase::Vector3<double>& tau,
-                                            const ORB_gaunt_table& MGT);
+                                            const ModuleBase::Vector3<double>& tau);
 
   private:
+    const ORB_gaunt_table MGT;
+
     // construct gaussian basis based on original NAO
     Numerical_Orbital_Lm Gauss(const Numerical_Orbital_Lm& orb, const double& lambda);
 

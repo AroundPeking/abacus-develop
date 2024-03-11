@@ -21,14 +21,13 @@ RI::Tensor<std::complex<double>> Gaussian_Abfs::get_Vq(
     const ModuleBase::Vector3<double>& qvec,
     const double& chi, // Singularity corrected value at q=0.
     const double& lambda,
-    const ModuleBase::Vector3<double>& tau,
-    const ORB_gaunt_table& MGT)
+    const ModuleBase::Vector3<double>& tau)
 {
     ModuleBase::TITLE("Gaussian_Abfs", "get_Vq");
     ModuleBase::timer::tick("Gaussian_Abfs", "get_Vq");
 
     const int Lmax = lp_max + lq_max;
-    MGT.init_Gaunt(Lmax);
+    this->MGT.init_Gaunt(Lmax);
     RI::Tensor<std::complex<double>> Vq({(lp_max + 1) * (lp_max + 1), (lq_max + 1) * (lq_max + 1)});
 
     /*
@@ -80,15 +79,15 @@ RI::Tensor<std::complex<double>> Gaussian_Abfs::get_Vq(
                 const int i_add_ksq = (lp + lq - L) / 2;
                 for (int mp = 0; mp != 2 * lp + 1; ++mp)
                 {
-                    const int lmp = MGT.get_lm_index(lp, mp);
+                    const int lmp = this->MGT.get_lm_index(lp, mp);
                     for (int mq = 0; mq != 2 * lq + 1; ++mq)
                     {
-                        const int lmq = MGT.get_lm_index(lq, mq);
+                        const int lmq = this->MGT.get_lm_index(lq, mq);
                         for (int m = 0; m != 2 * L + 1; ++m)
                         {
-                            const int lm = MGT.get_lm_index(L, m);
-                            double triple_Y = MGT.Gaunt_Coefficients(lmp, lmq, lm);
-                            Vq[lmp][lmq] += triple_Y * cfac * lattice_sum[i_add_ksq][lm];
+                            const int lm = this->MGT.get_lm_index(L, m);
+                            double triple_Y = this->MGT.Gaunt_Coefficients(lmp, lmq, lm);
+                            Vq(lmp, lmq) += triple_Y * cfac * lattice_sum[i_add_ksq][lm];
                         }
                     }
                 }
