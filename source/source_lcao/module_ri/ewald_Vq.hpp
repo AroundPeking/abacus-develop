@@ -23,15 +23,14 @@
 template <typename Tdata>
 void Ewald_Vq<Tdata>::init(std::vector<std::vector<std::vector<Numerical_Orbital_Lm>>>& lcaos_in,
                            std::vector<std::vector<std::vector<Numerical_Orbital_Lm>>>& abfs_in,
-                           const K_Vectors* kv_in,
-                           const double& gauss_lambda)
+                           const K_Vectors* kv_in)
 {
     ModuleBase::TITLE("Ewald_Vq", "init");
     ModuleBase::timer::tick("Ewald_Vq", "init");
 
     this->p_kv = kv_in;
     this->nks0 = this->p_kv->nkstot_full / this->nspin0;
-    this->lambda = gauss_lambda;
+    this->lambda = this->info_ewald.gauss_lambda;
 
     this->g_lcaos = this->init_gauss(lcaos_in);
     this->g_abfs = this->init_gauss(abfs_in);

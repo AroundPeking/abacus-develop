@@ -43,8 +43,7 @@ class Ewald_Vq
 
     void init(std::vector<std::vector<std::vector<Numerical_Orbital_Lm>>>& lcaos_in,
               std::vector<std::vector<std::vector<Numerical_Orbital_Lm>>>& abfs_in,
-              const K_Vectors* kv_in,
-              const double& gauss_lambda);
+              const K_Vectors* kv_in);
 
   private:
     const Exx_Info::Exx_Info_RI& info;
