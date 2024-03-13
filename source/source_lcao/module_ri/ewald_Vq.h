@@ -11,9 +11,11 @@
 #include <array>
 #include <map>
 
+#include "LRI_CV.h"
 #include "gaussian_abfs.h"
 #include "module_base/element_basis_index.h"
 #include "module_cell/klist.h"
+#include "module_hamilt_general/module_xc/exx_info.h"
 
 template <typename Tdata>
 class Ewald_Vq
@@ -62,7 +64,7 @@ class Ewald_Vq
         {2, 2},
         {4, 1}
     }.at(GlobalV::NSPIN);
-    const int nks0;
+    int nks0;
 
   private:
     std::map<TA, std::map<TAC, RI::Tensor<Tdata>>> cal_Vs_gauss(const std::vector<TA>& list_A0,
@@ -78,7 +80,7 @@ class Ewald_Vq
 
     std::vector<std::vector<std::vector<Numerical_Orbital_Lm>>> init_gauss(
         std::vector<std::vector<std::vector<Numerical_Orbital_Lm>>>& orb_in);
-}
+};
 #include "ewald_Vq.hpp"
 
 #endif

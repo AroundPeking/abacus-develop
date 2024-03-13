@@ -107,9 +107,9 @@ auto Ewald_Vq<Tdata>::cal_Vs(std::vector<std::map<TA, std::map<TA, RI::Tensor<st
                 {
                     const std::complex<double> frac
                         = std::exp(-ModuleBase::TWO_PI * ModuleBase::IMAG_UNIT
-                                   * (kv->kvec_c[ik] * (RI_Util::array3_to_Vector3(cell1) * GlobalC::ucell.latvec)))
+                                   * (this->p_kv->kvec_c[ik] * (RI_Util::array3_to_Vector3(cell1) * GlobalC::ucell.latvec)))
                           * this->p_kv->wk[ik] * SPIN_multiple;
-                    RI::Tensor<Tdata> Vs_tmp = RI::Global_Func::convert<Tdata>(Vq[ik][iat0][iat1] * frac);
+                    RI::Tensor<Tdata> Vs_tmp = RI::Global_Func::convert<Tdata>(Vq_in[ik][iat0][iat1] * frac);
                     if (datas[list_A0[i0]][list_A1[i1]].empty())
                         datas[list_A0[i0]][list_A1[i1]] = Vs_tmp;
                     else
@@ -143,14 +143,14 @@ auto Ewald_Vq<Tdata>::cal_Vq(std::map<TA, std::map<TAC, RI::Tensor<Tdata>>>& Vs_
     switch (this->info_ewald.fq_type)
     {
     case Singular_Value::Fq_type::Type_0:
-        chi = Singular_Value::cal_type_0(kvec_c,
+        chi = Singular_Value::cal_type_0(this->p_kv.kvec_c,
                                          this->info_ewald.ewald_qdiv,
                                          this->info_ewald.ewald_qdense,
                                          this->info_ewald.ewald_niter,
                                          this->info_ewald.ewald_eps,
                                          this->info_ewald.ewald_arate);
     case Singular_Value::Fq_type::Type_1:
-        chi = Singular_Value::cal_type_1(kvec_c,
+        chi = Singular_Value::cal_type_1(this->p_kv.kvec_c,
                                          this->info_ewald.ewald_qdiv,
                                          wfc_basis,
                                          this->info_ewald.ewald_lambda,
@@ -163,7 +163,7 @@ auto Ewald_Vq<Tdata>::cal_Vq(std::map<TA, std::map<TAC, RI::Tensor<Tdata>>>& Vs_
 
     for (size_t ik = 0; ik != this->nks0; ++ik)
     {
-        for (const auto& Vs_tmpA: Vs)
+        for (const auto& Vs_tmpA: Vs_in)
         {
             const TA& iat0 = Vs_tmpA.first;
             const int it0 = GlobalC::ucell.iat2it[iat0];
@@ -181,6 +181,7 @@ auto Ewald_Vq<Tdata>::cal_Vq(std::map<TA, std::map<TAC, RI::Tensor<Tdata>>>& Vs_
                     = this->gaussian_abfs.get_Vq(GlobalC::exx_info.info_ri.abfs_Lmax,
                                                  GlobalC::exx_info.info_ri.abfs_Lmax,
                                                  this->p_kv->kvec_c[ik],
+                                                 wfc_basis,
                                                  chi,
                                                  this->info_ewald.ewald_lambda,
                                                  tau);
@@ -204,7 +205,7 @@ auto Ewald_Vq<Tdata>::cal_Vq(std::map<TA, std::map<TAC, RI::Tensor<Tdata>>>& Vs_
                                     {
                                         const size_t i1 = this->index_abfs[it1][l1][n1][m1];
                                         const size_t lm1 = l1 * l1 + m1;
-                                        data = Vq_minus_gauss[ik][iat0][iat1](i0, i1) + pA * pB * Vq_gauss(lm0, lm1);
+                                        data(i0, i1) = Vq_minus_gauss[ik][iat0][iat1](i0, i1) + pA * pB * Vq_gauss(lm0, lm1);
                                     }
                                 }
                             }
@@ -231,10 +232,9 @@ auto Ewald_Vq<Tdata>::cal_Vs_minus_gauss(std::map<TA, std::map<TAC, RI::Tensor<T
     ModuleBase::timer::tick("Ewald_Vq", "cal_Vs_minus_gauss");
 
     std::map<TA, std::map<TAC, RI::Tensor<Tdata>>> Vs_gauss = this->cal_Vs_gauss(list_A0, list_A1);
-    std::map<TA, std::map<TAC, RI::Tensor<Tdata>>> Vs;
+    std::map<TA, std::map<TAC, RI::Tensor<Tdata>>> Vs_minus_gauss;
 
-    std::map<TA, std::map<TAC, Tresult>> Datas;
-    for (const auto& Vs_tmpA: Vs)
+    for (const auto& Vs_tmpA: Vs_in)
     {
         const TA& iat0 = Vs_tmpA.first;
         const int it0 = GlobalC::ucell.iat2it[iat0];
@@ -272,12 +272,12 @@ auto Ewald_Vq<Tdata>::cal_Vs_minus_gauss(std::map<TA, std::map<TAC, RI::Tensor<T
                 }
             }
 
-            Vs[iat0][Vs_tmpB.first] = data;
+            Vs_minus_gauss[iat0][Vs_tmpB.first] = data;
         }
     }
 
     ModuleBase::timer::tick("Ewald_Vq", "cal_Vs_minus_gauss");
-    return Vs;
+    return Vs_minus_gauss;
 }
 
 template <typename Tdata>

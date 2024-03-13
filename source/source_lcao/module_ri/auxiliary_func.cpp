@@ -156,23 +156,20 @@ double Singular_Value::cal_type_1(const std::vector<ModuleBase::Vector3<double>>
     ModuleBase::TITLE("Singular_Value", "cal_type_1");
     ModuleBase::timer::tick("Singular_Value", "cal_type_1");
 
-    auto cal_chi =
-        [&qdiv, &wfc_basis, &kvec_c](const double& lambda) {
-            const T_cal_fq_type func_cal_fq_type_1
-                = std::bind(&fq_type_1, std::placeholders::_1, qdiv, wfc_basis, lambda);
-            double prefactor = ModuleBase::TWO_PI * std::pow(lambda, -1 / qdiv);
-            double fq_int;
-            if (qdiv == 2)
-                fq_int = prefactor * std::sqrt(ModuleBase::PI);
-            else if (qdiv == 1)
-                fq_int = prefactor;
-            else
-                ModuleBase::WARNING_QUIT("Singular_Value::cal_type_1", "Type 1 fq only supports qdiv=1 or qdiv=2!");
-            return solve_chi(kvec_c, func_cal_fq_type_1, fq_int);
-        }
+    auto cal_chi = [&qdiv, &wfc_basis, &kvec_c](const double& lambda) {
+        const T_cal_fq_type func_cal_fq_type_1 = std::bind(&fq_type_1, std::placeholders::_1, qdiv, wfc_basis, lambda);
+        double prefactor = ModuleBase::TWO_PI * std::pow(lambda, -1 / qdiv);
+        double fq_int;
+        if (qdiv == 2)
+            fq_int = prefactor * std::sqrt(ModuleBase::PI);
+        else if (qdiv == 1)
+            fq_int = prefactor;
+        else
+            ModuleBase::WARNING_QUIT("Singular_Value::cal_type_1", "Type 1 fq only supports qdiv=1 or qdiv=2!");
+        return solve_chi(kvec_c, func_cal_fq_type_1, fq_int);
+    };
 
-    int tot_iter
-        = 0;
+    int tot_iter = 0;
     double val_extra_old = 0.5 * std::numeric_limits<double>::max();
     double lammda_old = start_lambda;
     double val_old = cal_chi(lammda_old);

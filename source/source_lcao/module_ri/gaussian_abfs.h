@@ -25,19 +25,10 @@ class Gaussian_Abfs
                                             const double& lambda,
                                             const ModuleBase::Vector3<double>& tau);
 
-  private:
-    const ORB_gaunt_table MGT;
-
-    // construct gaussian basis based on original NAO
-    Numerical_Orbital_Lm Gauss(const Numerical_Orbital_Lm& orb, const double& lambda);
-
-    // calculates the double factorial n!! of n
-    static double double_factorial(const int& n);
-
     /*
-    Calculate the lattice sum over a Gaussian:
-      S(k) := \sum_G |k+G|^{power+L} \exp(-lambda*|k+G|^2) Y_{LM}(k+G) * \exp(i(k+G)\tau)
-    */
+Calculate the lattice sum over a Gaussian:
+  S(k) := \sum_G |k+G|^{power+L} \exp(-lambda*|k+G|^2) Y_{LM}(k+G) * \exp(i(k+G)\tau)
+*/
     static std::vector<std::complex<double>> get_lattice_sum(
         const ModuleBase::Vector3<double>& qvec,
         const ModulePW::PW_Basis_K* wfc_basis,
@@ -46,6 +37,15 @@ class Gaussian_Abfs
         const bool& exclude_Gamma, // The R==0. can be excluded by this flag.
         const int& lmax,           // Maximum angular momentum the sum is needed for.
         const ModuleBase::Vector3<double>& tau);
-}
+
+    // construct gaussian basis based on original NAO
+    Numerical_Orbital_Lm Gauss(const Numerical_Orbital_Lm& orb, const double& lambda);
+
+  private:
+    const ORB_gaunt_table MGT;
+
+    // calculates the double factorial n!! of n
+    static double double_factorial(const int& n);
+};
 
 #endif

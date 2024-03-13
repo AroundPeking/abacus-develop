@@ -19,6 +19,7 @@ RI::Tensor<std::complex<double>> Gaussian_Abfs::get_Vq(
     const int& lp_max,
     const int& lq_max, // Maximum L for which to calculate interaction.
     const ModuleBase::Vector3<double>& qvec,
+    const ModulePW::PW_Basis_K* wfc_basis,
     const double& chi, // Singularity corrected value at q=0.
     const double& lambda,
     const ModuleBase::Vector3<double>& tau)
@@ -53,9 +54,8 @@ RI::Tensor<std::complex<double>> Gaussian_Abfs::get_Vq(
         const double power = -2.0 + 2 * i_add_ksq;
         const int this_Lmax = Lmax - 2 * i_add_ksq; // calculate Lmax at current lp+lq
         const bool exclude_Gamma
-            = (qvec.norm2() < 1e-10 && i_add_ksq == 0) // only Gamma point and lq+lp-2>0 need to be corrected
-            lattice_sum[i_add_ksq]
-            = get_lattice_sum(qvec, power, exponent, exclude_Gamma, this_Lmax, tau);
+            = (qvec.norm2() < 1e-10 && i_add_ksq == 0); // only Gamma point and lq+lp-2>0 need to be corrected
+        lattice_sum[i_add_ksq] = get_lattice_sum(qvec, wfc_basis, power, exponent, exclude_Gamma, this_Lmax, tau);
     }
 
     /* The exponent term comes in from Taylor expanding the
@@ -63,7 +63,7 @@ RI::Tensor<std::complex<double>> Gaussian_Abfs::get_Vq(
         Coulomb interaction.  While terms of this order are in principle
         neglected, we make one exception here.  Without this, the final result
         would (slightly) depend on the Ewald lambda.*/
-    if (gk_vec.norm2() < 1e-10)
+    if (qvec.norm2() < 1e-10)
         lattice_sum[0][0] += chi - exponent;
 
     for (int lp = 0; lp != lp_max + 1; ++lp)
@@ -203,11 +203,11 @@ std::vector<std::complex<double>> Gaussian_Abfs::get_lattice_sum(
             std::complex<double> val_s(0.0, 0.0);
             for (size_t ig = 0; ig != npw; ++ig)
             {
-                ModuleBase::Vector3<double> gk_vec = gk[ig] * GlobalC::ucell.tpiba;
-                if (exclude_Gamma && gk_vec.norm2() < 1e-10)
+                ModuleBase::Vector3<double> qvec = gk[ig] * GlobalC::ucell.tpiba;
+                if (exclude_Gamma && qvec.norm2() < 1e-10)
                     continue;
-                std::complex<double> phase = std::exp(ModuleBase::IMAG_UNIT * (gk_vec * tau));
-                val_s += std::exp(-lambda * gk_vec.norm2()) * std::pow(gk_vec.norm(), power + L) * phase * ylm(lm, ig);
+                std::complex<double> phase = std::exp(ModuleBase::IMAG_UNIT * (qvec * tau));
+                val_s += std::exp(-lambda * qvec.norm2()) * std::pow(qvec.norm(), power + L) * phase * ylm(lm, ig);
             }
             result[lm] = val_s;
         }
