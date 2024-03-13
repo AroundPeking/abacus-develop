@@ -532,7 +532,7 @@ std::vector<std::vector<std::vector<double>>> Exx_Abfs::Construct_Orbs::get_mult
             multipole[T][L].resize(orb_in[T][L].size());
             for (size_t N = 0; N != orb_in[T][L].size(); ++N)
             {
-                Numerical_Orbital_Lm& orb_lm = orb_in[T][L][N];
+                const Numerical_Orbital_Lm& orb_lm = orb_in[T][L][N];
                 const int nr = orb_lm.getNr();
                 double* integrated_func = new double[nr];
                 for (size_t ir = 0; ir != nr; ++ir)

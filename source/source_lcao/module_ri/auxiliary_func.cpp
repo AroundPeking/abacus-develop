@@ -192,7 +192,7 @@ double Singular_Value::cal_type_1(const std::vector<ModuleBase::Vector3<double>>
         ModuleBase::WARNING_QUIT("Singular_Value::cal_type_1", "not converged!");
 
     ModuleBase::timer::tick("Singular_Value", "cal_type_1");
-    return val;
+    return val_extra;
 }
 
 double Singular_Value::Iter_Integral(const T_cal_fq_type& func_cal_fq,

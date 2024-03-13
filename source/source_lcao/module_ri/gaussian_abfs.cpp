@@ -14,6 +14,7 @@
 #include "module_base/math_ylmreal.h"
 #include "module_base/timer.h"
 #include "module_base/tool_title.h"
+#include "module_hamilt_pw/hamilt_pwdft/global.h"
 
 RI::Tensor<std::complex<double>> Gaussian_Abfs::get_Vq(
     const int& lp_max,
@@ -29,7 +30,9 @@ RI::Tensor<std::complex<double>> Gaussian_Abfs::get_Vq(
 
     const int Lmax = lp_max + lq_max;
     this->MGT.init_Gaunt(Lmax);
-    RI::Tensor<std::complex<double>> Vq({(lp_max + 1) * (lp_max + 1), (lq_max + 1) * (lq_max + 1)});
+    const size_t vq_ndim0 = (lp_max + 1) * (lp_max + 1);
+    const size_t vq_ndim1 = (lq_max + 1) * (lq_max + 1);
+    RI::Tensor<std::complex<double>> Vq({vq_ndim0, vq_ndim1});
 
     /*
      n_add_ksq * 2 = lp_max + lq_max - abs(lp_max - lq_max)

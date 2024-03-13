@@ -21,6 +21,7 @@ class Gaussian_Abfs
     RI::Tensor<std::complex<double>> get_Vq(const int& lp_max,
                                             const int& lq_max, // Maximum L for which to calculate interaction.
                                             const ModuleBase::Vector3<double>& qvec,
+                                            const ModulePW::PW_Basis_K* wfc_basis,
                                             const double& chi, // Singularity corrected value at q=0.
                                             const double& lambda,
                                             const ModuleBase::Vector3<double>& tau);
@@ -42,7 +43,7 @@ Calculate the lattice sum over a Gaussian:
     Numerical_Orbital_Lm Gauss(const Numerical_Orbital_Lm& orb, const double& lambda);
 
   private:
-    const ORB_gaunt_table MGT;
+    ORB_gaunt_table MGT;
 
     // calculates the double factorial n!! of n
     static double double_factorial(const int& n);
