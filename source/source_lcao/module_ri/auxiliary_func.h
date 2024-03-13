@@ -15,12 +15,6 @@
 class Singular_Value
 {
   public:
-    enum class Kernal_Type
-    {
-        Bare,
-        Erfc, //  	"hse_omega"
-    };
-
     enum class Fq_type
     {
         Type_0, // Phys. Rev. B, 75:205126, May 2007.

@@ -39,18 +39,6 @@ void Ewald_Vq<Tdata>::init(std::vector<std::vector<std::vector<Numerical_Orbital
         {
         case Conv_Coulomb_Pot_K::Ccp_Type::Ccp:
             return {};
-        case Conv_Coulomb_Pot_K::Ccp_Type::Hf:
-            return {};
-        case Conv_Coulomb_Pot_K::Ccp_Type::Hse:
-            return {
-                {"hse_omega", this->info.hse_omega}
-            };
-        case Conv_Coulomb_Pot_K::Ccp_Type::Cam:
-            return {
-                {"hse_omega", this->info.hse_omega},
-                {"cam_alpha", this->info.cam_alpha},
-                {"cam_beta",  this->info.cam_beta }
-            };
         case Conv_Coulomb_Pot_K::Ccp_Type::Ccp_Cam:
             return {
                 {"hse_omega", this->info.hse_omega},
