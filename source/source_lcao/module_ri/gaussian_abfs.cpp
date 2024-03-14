@@ -107,20 +107,15 @@ Numerical_Orbital_Lm Gaussian_Abfs::Gauss(const Numerical_Orbital_Lm& orb, const
     Numerical_Orbital_Lm gaussian;
     const int angular_momentum_l = orb.getL();
     const int Nr = orb.getNr();
-    const double dr = orb.get_rab().back();
     const double frac = std::pow(lambda, angular_momentum_l + 1.5) / double_factorial(2 * angular_momentum_l - 1)
                         / sqrt(ModuleBase::PI * 0.5);
 
-    std::vector<double> rab(Nr);
-    std::vector<double> r_radial(Nr);
     std::vector<double> psi(Nr);
 
     for (size_t ir = 0; ir != Nr; ++ir)
     {
-        rab[ir] = orb.getRab(ir);
-        r_radial[ir] = ir * rab[ir];
-        psi[ir]
-            = frac * std::pow(r_radial[ir], angular_momentum_l) * std::exp(-lambda * r_radial[ir] * r_radial[ir] * 0.5);
+        psi[ir] = frac * std::pow(orb.getRadial(ir), angular_momentum_l)
+                  * std::exp(-lambda * orb.getRadial(ir) * orb.getRadial(ir) * 0.5);
     }
 
     gaussian.set_orbital_info(orb.getLabel(),
@@ -128,8 +123,8 @@ Numerical_Orbital_Lm Gaussian_Abfs::Gauss(const Numerical_Orbital_Lm& orb, const
                               angular_momentum_l,
                               orb.getChi(),
                               orb.getNr(),
-                              ModuleBase::GlobalFunc::VECTOR_TO_PTR(rab),
-                              ModuleBase::GlobalFunc::VECTOR_TO_PTR(r_radial),
+                              orb.getRab(),
+                              orb.getRadial(),
                               Numerical_Orbital_Lm::Psi_Type::Psi,
                               ModuleBase::GlobalFunc::VECTOR_TO_PTR(psi),
                               orb.getNk(),
@@ -144,12 +139,11 @@ Numerical_Orbital_Lm Gaussian_Abfs::Gauss(const Numerical_Orbital_Lm& orb, const
 
 double Gaussian_Abfs::double_factorial(const int& n)
 {
-    assert(n >= 0);
     double result = 1.0;
-    for (int i = (n % 2); i <= n; i += 2)
+    for (int i = n; i > 0; i -= 2)
     {
-        if (i == 0)
-            result = 1.0;
+        if (i == 1)
+            result *= 1.0;
         else
             result *= static_cast<double>(i);
     }

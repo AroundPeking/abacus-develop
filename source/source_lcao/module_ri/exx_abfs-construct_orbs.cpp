@@ -536,7 +536,7 @@ std::vector<std::vector<std::vector<double>>> Exx_Abfs::Construct_Orbs::get_mult
                 const int nr = orb_lm.getNr();
                 double* integrated_func = new double[nr];
                 for (size_t ir = 0; ir != nr; ++ir)
-                    integrated_func[ir] = orb_lm.getPsi_r(ir) * std::pow(orb_lm.getRadial(ir), 1 + L);
+                    integrated_func[ir] = orb_lm.getPsi(ir) * std::pow(orb_lm.getRadial(ir), 2 + L);
 
                 ModuleBase::Integral::Simpson_Integral(nr, integrated_func, orb_lm.getRab(), multipole[T][L][N]);
             }
