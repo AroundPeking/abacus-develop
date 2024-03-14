@@ -150,6 +150,7 @@ auto Ewald_Vq<Tdata>::cal_Vq(std::map<TA, std::map<TAC, RI::Tensor<Tdata>>>& Vs_
                                          this->info_ewald.ewald_niter,
                                          this->info_ewald.ewald_eps,
                                          this->info_ewald.ewald_arate);
+        break;
     case Singular_Value::Fq_type::Type_1:
         chi = Singular_Value::cal_type_1(this->p_kv->kvec_c,
                                          this->info_ewald.ewald_qdiv,
@@ -157,6 +158,7 @@ auto Ewald_Vq<Tdata>::cal_Vq(std::map<TA, std::map<TAC, RI::Tensor<Tdata>>>& Vs_
                                          this->info_ewald.ewald_lambda,
                                          this->info_ewald.ewald_niter,
                                          this->info_ewald.ewald_eps);
+        break;
     default:
         throw std::domain_error(std::string(__FILE__) + " line " + std::to_string(__LINE__));
         break;
