@@ -189,7 +189,10 @@ auto Ewald_Vq<Tdata>::cal_Vq(std::map<TA, std::map<TAC, RI::Tensor<Tdata>>>& Vs_
                                                  this->info_ewald.ewald_lambda,
                                                  tau);
 
-                RI::Tensor<std::complex<double>> data;
+                const size_t size0 = this->index_abfs[it0].count_size;
+                const size_t size1 = this->index_abfs[it1].count_size;
+                RI::Tensor<std::complex<double>> data({size0, size1});
+
                 for (int l0 = 0; l0 != this->g_abfs_ccp[it0].size(); ++l0)
                 {
                     for (int l1 = 0; l1 != this->g_abfs[it1].size(); ++l1)
