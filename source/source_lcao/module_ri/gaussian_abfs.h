@@ -24,7 +24,8 @@ class Gaussian_Abfs
                                             const ModulePW::PW_Basis_K* wfc_basis,
                                             const double& chi, // Singularity corrected value at q=0.
                                             const double& lambda,
-                                            const ModuleBase::Vector3<double>& tau);
+                                            const ModuleBase::Vector3<double>& tau,
+                                            const ORB_gaunt_table& MGT);
 
     /*
 Calculate the lattice sum over a Gaussian:
@@ -43,8 +44,6 @@ Calculate the lattice sum over a Gaussian:
     Numerical_Orbital_Lm Gauss(const Numerical_Orbital_Lm& orb, const double& lambda);
 
   private:
-    ORB_gaunt_table MGT;
-
     // calculates the double factorial n!! of n
     static double double_factorial(const int& n);
 };

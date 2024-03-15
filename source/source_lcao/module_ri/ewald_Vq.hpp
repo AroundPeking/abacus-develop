@@ -65,6 +65,8 @@ void Ewald_Vq<Tdata>::init(std::vector<std::vector<std::vector<Numerical_Orbital
     const ModuleBase::Element_Basis_Index::Range range_abfs = Exx_Abfs::Abfs_Index::construct_range(abfs_in);
     this->index_abfs = ModuleBase::Element_Basis_Index::construct_index(range_abfs);
 
+    this->MGT.init_Gaunt(GlobalC::exx_info.info_ri.abfs_Lmax);
+
     ModuleBase::timer::tick("Ewald_Vq", "init");
 }
 
@@ -93,6 +95,7 @@ auto Ewald_Vq<Tdata>::cal_Vs(std::vector<std::map<TA, std::map<TAC, RI::Tensor<s
             for (const auto& Vq_tmpB: Vq_tmpA.second)
             {
                 const TA& iat1 = Vq_tmpB.first.first;
+                const TC& cell1 = Vq_tmpB.first.second;
                 const int it1 = GlobalC::ucell.iat2it[iat1];
                 const int ia1 = GlobalC::ucell.iat2ia[iat1];
                 const ModuleBase::Vector3<double> tau1 = GlobalC::ucell.atoms[it1].tau[ia1];
@@ -164,7 +167,7 @@ auto Ewald_Vq<Tdata>::cal_Vq(std::map<TA, std::map<TAC, RI::Tensor<Tdata>>>& Vs_
             for (const auto& Vs_tmpB: Vs_tmpA.second)
             {
                 const TA& iat1 = Vs_tmpB.first.first;
-                const TC& cell1 = Vq_tmpB.first.second;
+                const TC& cell1 = Vs_tmpB.first.second;
                 const int it1 = GlobalC::ucell.iat2it[iat1];
                 const int ia1 = GlobalC::ucell.iat2ia[iat1];
                 const ModuleBase::Vector3<double> tau1 = GlobalC::ucell.atoms[it1].tau[ia1];
@@ -177,7 +180,8 @@ auto Ewald_Vq<Tdata>::cal_Vq(std::map<TA, std::map<TAC, RI::Tensor<Tdata>>>& Vs_
                                                  wfc_basis,
                                                  chi,
                                                  this->info_ewald.ewald_lambda,
-                                                 tau);
+                                                 tau,
+                                                 this->MGT);
 
                 const size_t size0 = this->index_abfs[it0].count_size;
                 const size_t size1 = this->index_abfs[it1].count_size;

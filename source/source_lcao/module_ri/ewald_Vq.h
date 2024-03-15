@@ -62,6 +62,8 @@ class Ewald_Vq
     }.at(GlobalV::NSPIN);
     int nks0;
 
+    ORB_gaunt_table MGT;
+
   private:
     std::map<TA, std::map<TAC, RI::Tensor<Tdata>>> cal_Vs_minus_gauss(
         std::map<TA, std::map<TAC, RI::Tensor<Tdata>>>& Vs_in);
