@@ -35,11 +35,12 @@ class Ewald_Vq
               std::vector<std::vector<std::vector<Numerical_Orbital_Lm>>>& abfs_in,
               const K_Vectors* kv_in);
 
+    void init_atoms_from_Vs(const std::map<TA, std::map<TAC, RI::Tensor<Tdata>>>& Vs_in);
+
     std::map<TA, std::map<TAC, RI::Tensor<Tdata>>> cal_Vs(
         std::vector<std::map<TA, std::map<TAC, RI::Tensor<std::complex<double>>>>>& Vq_in);
 
     std::vector<std::map<TA, std::map<TAC, RI::Tensor<std::complex<double>>>>> cal_Vq(
-        std::map<TA, std::map<TAC, RI::Tensor<Tdata>>>& Vs_in,
         const ModulePW::PW_Basis_K* wfc_basis);
 
   private:
@@ -48,9 +49,10 @@ class Ewald_Vq
     LRI_CV<Tdata> cv;
     Gaussian_Abfs gaussian_abfs;
     const K_Vectors* p_kv;
+    ORB_gaunt_table MGT;
+
     std::vector<std::vector<std::vector<double>>> multipole;
     ModuleBase::Element_Basis_Index::IndexLNM index_abfs;
-
     std::vector<std::vector<std::vector<Numerical_Orbital_Lm>>> g_lcaos;
     std::vector<std::vector<std::vector<Numerical_Orbital_Lm>>> g_abfs;
     std::vector<std::vector<std::vector<Numerical_Orbital_Lm>>> g_abfs_ccp;
@@ -62,13 +64,14 @@ class Ewald_Vq
     }.at(GlobalV::NSPIN);
     int nks0;
 
-    ORB_gaunt_table MGT;
+    std::map<TA, std::map<TAC, RI::Tensor<Tdata>>> Vs;
+    std::vector<TA> list_A0;
+    std::vector<TAC> list_A1;
 
   private:
-    std::map<TA, std::map<TAC, RI::Tensor<Tdata>>> cal_Vs_minus_gauss(
-        std::map<TA, std::map<TAC, RI::Tensor<Tdata>>>& Vs_in);
+    std::map<TA, std::map<TAC, RI::Tensor<Tdata>>> cal_Vs_minus_gauss();
 
-    std::map<TA, std::map<TAC, RI::Tensor<Tdata>>> cal_Vs_gauss(std::map<TA, std::map<TAC, RI::Tensor<Tdata>>>& Vs_in);
+    std::map<TA, std::map<TAC, RI::Tensor<Tdata>>> cal_Vs_gauss();
 
     std::vector<std::map<TA, std::map<TAC, RI::Tensor<std::complex<double>>>>> cal_Vq_minus_gauss(
         std::map<TA, std::map<TAC, RI::Tensor<Tdata>>>& Vs_minus_gauss);
