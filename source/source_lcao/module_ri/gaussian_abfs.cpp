@@ -161,7 +161,7 @@ std::vector<std::complex<double>> Gaussian_Abfs::get_lattice_sum(
 {
     ModuleBase::TITLE("Gaussian_Abfs", "lattice_sum");
     ModuleBase::timer::tick("Gaussian_Abfs", "lattice_sum");
-    if (power < 0.0 && !exclude_Gamma)
+    if (power < 0.0 && !exclude_Gamma && qvec.norm2() < 1e-10)
         ModuleBase::WARNING_QUIT("Gaussian_Abfs::lattice_sum", "Gamma point for power<0.0 cannot be evaluated!");
 
     std::vector<ModuleBase::Vector3<double>> gk;
