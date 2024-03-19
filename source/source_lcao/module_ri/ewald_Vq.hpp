@@ -88,6 +88,15 @@ void Ewald_Vq<Tdata>::init_atoms_from_Vs(const std::map<TA, std::map<TAC, RI::Te
 }
 
 template <typename Tdata>
+auto Ewald_Vq<Tdata>::cal_Vs(const ModulePW::PW_Basis_K* wfc_basis) -> std::map<TA, std::map<TAC, RI::Tensor<Tdata>>>
+{
+    std::vector<std::map<TA, std::map<TAC, RI::Tensor<std::complex<double>>>>> Vq = this->cal_Vq(wfc_basis);
+    std::map<TA, std::map<TAC, RI::Tensor<Tdata>>> res = this->cal_Vs(Vq);
+
+    return res;
+}
+
+template <typename Tdata>
 auto Ewald_Vq<Tdata>::cal_Vs(std::vector<std::map<TA, std::map<TAC, RI::Tensor<std::complex<double>>>>>& Vq_in)
     -> std::map<TA, std::map<TAC, RI::Tensor<Tdata>>>
 {
@@ -148,8 +157,6 @@ auto Ewald_Vq<Tdata>::cal_Vq(const ModulePW::PW_Basis_K* wfc_basis)
     ModuleBase::timer::tick("Ewald_Vq", "cal_Vq");
 
     std::map<TA, std::map<TAC, RI::Tensor<Tdata>>> Vs_minus_gauss = this->cal_Vs_minus_gauss();
-    std::vector<std::map<TA, std::map<TAC, RI::Tensor<std::complex<double>>>>> Vq_minus_gauss
-        = this->cal_Vq_minus_gauss(Vs_minus_gauss);
     std::vector<std::map<TA, std::map<TAC, RI::Tensor<std::complex<double>>>>> Vq;
     Vq.resize(this->nks0);
 
@@ -179,6 +186,8 @@ auto Ewald_Vq<Tdata>::cal_Vq(const ModulePW::PW_Basis_K* wfc_basis)
 
     for (size_t ik = 0; ik != this->nks0; ++ik)
     {
+        std::map<TA, std::map<TAC, RI::Tensor<std::complex<double>>>> Vq_minus_gauss
+            = this->cal_Vq_minus_gauss(Vs_minus_gauss, this->p_kv->kvec_c[ik]);
 #pragma omp parallel
         for (auto i0_ptr = this->list_A_cut.begin(); i0_ptr != this->list_A_cut.end(); ++i0_ptr)
         {
@@ -229,9 +238,8 @@ auto Ewald_Vq<Tdata>::cal_Vq(const ModulePW::PW_Basis_K* wfc_basis)
                                     {
                                         const size_t index1 = this->index_abfs[it1][l1][n1][m1];
                                         const size_t lm1 = l1 * l1 + m1;
-                                        data(index0, index1)
-                                            = Vq_minus_gauss[ik][iat0][i0_ptr->second[i1]](index0, index1)
-                                              + pA * pB * Vq_gauss(lm0, lm1);
+                                        data(index0, index1) = Vq_minus_gauss[iat0][i0_ptr->second[i1]](index0, index1)
+                                                               + pA * pB * Vq_gauss(lm0, lm1);
                                     }
                                 }
                             }
@@ -244,7 +252,6 @@ auto Ewald_Vq<Tdata>::cal_Vq(const ModulePW::PW_Basis_K* wfc_basis)
             }
         }
     }
-
     ModuleBase::timer::tick("Ewald_Vq", "cal_Vq");
     return Vq;
 }
@@ -303,7 +310,6 @@ auto Ewald_Vq<Tdata>::cal_Vs_minus_gauss() -> std::map<TA, std::map<TAC, RI::Ten
             Vs_minus_gauss[iat0][i0_ptr->second[i1]] = data;
         }
     }
-
     ModuleBase::timer::tick("Ewald_Vq", "cal_Vs_minus_gauss");
     return Vs_minus_gauss;
 }
@@ -325,41 +331,38 @@ auto Ewald_Vq<Tdata>::cal_Vs_gauss() -> std::map<TA, std::map<TAC, RI::Tensor<Td
 }
 
 template <typename Tdata>
-auto Ewald_Vq<Tdata>::cal_Vq_minus_gauss(std::map<TA, std::map<TAC, RI::Tensor<Tdata>>>& Vs_minus_gauss)
-    -> std::vector<std::map<TA, std::map<TAC, RI::Tensor<std::complex<double>>>>>
+auto Ewald_Vq<Tdata>::cal_Vq_minus_gauss(std::map<TA, std::map<TAC, RI::Tensor<Tdata>>>& Vs_minus_gauss,
+                                         const ModuleBase::Vector3<double>& qvec)
+    -> std::map<TA, std::map<TAC, RI::Tensor<std::complex<double>>>>
 {
     ModuleBase::TITLE("Ewald_Vq", "cal_Vq_minus_gauss");
     ModuleBase::timer::tick("Ewald_Vq", "cal_Vq_minus_gauss");
 
-    std::vector<std::map<TA, std::map<TAC, RI::Tensor<std::complex<double>>>>> datas;
-    datas.resize(this->nks0);
+    std::map<TA, std::map<TAC, RI::Tensor<std::complex<double>>>> datas;
 
-    for (size_t ik = 0; ik != this->nks0; ++ik)
-    {
 #pragma omp parallel
-        for (auto i0_ptr = this->list_A_cut.begin(); i0_ptr != this->list_A_cut.end(); ++i0_ptr)
-        {
+    for (auto i0_ptr = this->list_A_cut.begin(); i0_ptr != this->list_A_cut.end(); ++i0_ptr)
+    {
 #pragma omp for schedule(dynamic) nowait
-            for (size_t i1 = 0; i1 < i0_ptr->second.size(); ++i1)
-            {
-                const TA iat0 = i0_ptr->first;
-                const TA iat1 = i0_ptr->second[i1].first;
-                const TC& cell1 = i0_ptr->second[i1].second;
-                std::complex<double> phase = std::exp(
-                    ModuleBase::TWO_PI * ModuleBase::IMAG_UNIT
-                    * (this->p_kv->kvec_c[ik] * (RI_Util::array3_to_Vector3(cell1) * GlobalC::ucell.latvec)));
+        for (size_t i1 = 0; i1 < i0_ptr->second.size(); ++i1)
+        {
+            const TA iat0 = i0_ptr->first;
+            const TA iat1 = i0_ptr->second[i1].first;
+            const TC& cell1 = i0_ptr->second[i1].second;
+            std::complex<double> phase
+                = std::exp(ModuleBase::TWO_PI * ModuleBase::IMAG_UNIT
+                           * (qvec * (RI_Util::array3_to_Vector3(cell1) * GlobalC::ucell.latvec)));
 #pragma omp critical(Ewald_Vq_cal_Vq_minus_gauss)
-                {
-                    if (datas[ik][iat0][i0_ptr->second[i1]].empty())
-                        datas[ik][iat0][i0_ptr->second[i1]]
-                            = RI::Global_Func::convert<std::complex<double>>(Vs_minus_gauss[iat0][i0_ptr->second[i1]])
-                              * phase;
-                    else
-                        datas[ik][iat0][i0_ptr->second[i1]]
-                            = datas[ik][iat0][i0_ptr->second[i1]]
-                              + RI::Global_Func::convert<std::complex<double>>(Vs_minus_gauss[iat0][i0_ptr->second[i1]])
-                                    * phase;
-                }
+            {
+                if (datas[iat0][i0_ptr->second[i1]].empty())
+                    datas[iat0][i0_ptr->second[i1]]
+                        = RI::Global_Func::convert<std::complex<double>>(Vs_minus_gauss[iat0][i0_ptr->second[i1]])
+                          * phase;
+                else
+                    datas[iat0][i0_ptr->second[i1]]
+                        = datas[iat0][i0_ptr->second[i1]]
+                          + RI::Global_Func::convert<std::complex<double>>(Vs_minus_gauss[iat0][i0_ptr->second[i1]])
+                                * phase;
             }
         }
     }
