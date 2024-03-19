@@ -35,7 +35,9 @@ class Ewald_Vq
               std::vector<std::vector<std::vector<Numerical_Orbital_Lm>>>& abfs_in,
               const K_Vectors* kv_in);
 
-    void init_atoms_from_Vs(const std::map<TA, std::map<TAC, RI::Tensor<Tdata>>>& Vs_in);
+    void init_atoms_from_Vs(const std::map<TA, std::map<TAC, RI::Tensor<Tdata>>>& Vs_in,
+                            const std::vector<TA>& list_A0_in,
+                            const std::vector<TAC>& list_A1_in);
 
     std::map<TA, std::map<TAC, RI::Tensor<Tdata>>> cal_Vs(
         std::vector<std::map<TA, std::map<TAC, RI::Tensor<std::complex<double>>>>>& Vq_in);
@@ -67,6 +69,7 @@ class Ewald_Vq
     std::map<TA, std::map<TAC, RI::Tensor<Tdata>>> Vs;
     std::vector<TA> list_A0;
     std::vector<TAC> list_A1;
+    std::map<TA, std::vector<TAC>> list_A_cut;
 
   private:
     std::map<TA, std::map<TAC, RI::Tensor<Tdata>>> cal_Vs_minus_gauss();
