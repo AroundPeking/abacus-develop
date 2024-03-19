@@ -103,10 +103,10 @@ auto Ewald_Vq<Tdata>::cal_Vs(std::vector<std::map<TA, std::map<TAC, RI::Tensor<s
     std::map<TA, std::map<TAC, RI::Tensor<Tdata>>> datas;
     for (size_t ik = 0; ik != this->nks0; ++ik)
     {
-        // #pragma omp parallel
+#pragma omp parallel
         for (auto i0_ptr = this->list_A_cut.begin(); i0_ptr != this->list_A_cut.end(); ++i0_ptr)
         {
-            // #pragma omp for schedule(dynamic) nowait
+#pragma omp for schedule(dynamic) nowait
             for (size_t i1 = 0; i1 < i0_ptr->second.size(); ++i1)
             {
                 const TA iat0 = i0_ptr->first;
@@ -125,7 +125,7 @@ auto Ewald_Vq<Tdata>::cal_Vs(std::vector<std::map<TA, std::map<TAC, RI::Tensor<s
 
                 RI::Tensor<Tdata> Vs_tmp = RI::Global_Func::convert<Tdata>(Vq_in[ik][iat0][i0_ptr->second[i1]] * frac);
 
-                // #pragma omp critical(Ewald_Vq_cal_Vs)
+#pragma omp critical(Ewald_Vq_cal_Vs)
                 {
                     if (datas[iat0][i0_ptr->second[i1]].empty())
                         datas[iat0][i0_ptr->second[i1]] = Vs_tmp;
@@ -179,10 +179,10 @@ auto Ewald_Vq<Tdata>::cal_Vq(const ModulePW::PW_Basis_K* wfc_basis)
 
     for (size_t ik = 0; ik != this->nks0; ++ik)
     {
-        // #pragma omp parallel
+#pragma omp parallel
         for (auto i0_ptr = this->list_A_cut.begin(); i0_ptr != this->list_A_cut.end(); ++i0_ptr)
         {
-            // #pragma omp for schedule(dynamic) nowait
+#pragma omp for schedule(dynamic) nowait
             for (size_t i1 = 0; i1 < i0_ptr->second.size(); ++i1)
             {
                 const TA iat0 = i0_ptr->first;
@@ -239,7 +239,7 @@ auto Ewald_Vq<Tdata>::cal_Vq(const ModulePW::PW_Basis_K* wfc_basis)
                     }
                 }
 
-                // #pragma omp critical(Ewald_Vq_cal_Vq)
+#pragma omp critical(Ewald_Vq_cal_Vq)
                 Vq[ik][iat0][i0_ptr->second[i1]] = data;
             }
         }
@@ -258,10 +258,10 @@ auto Ewald_Vq<Tdata>::cal_Vs_minus_gauss() -> std::map<TA, std::map<TAC, RI::Ten
     std::map<TA, std::map<TAC, RI::Tensor<Tdata>>> Vs_gauss = this->cal_Vs_gauss();
     std::map<TA, std::map<TAC, RI::Tensor<Tdata>>> Vs_minus_gauss;
 
-    // #pragma omp parallel
+#pragma omp parallel
     for (auto i0_ptr = this->list_A_cut.begin(); i0_ptr != this->list_A_cut.end(); ++i0_ptr)
     {
-        // #pragma omp for schedule(dynamic) nowait
+#pragma omp for schedule(dynamic) nowait
         for (size_t i1 = 0; i1 < i0_ptr->second.size(); ++i1)
         {
             const TA iat0 = i0_ptr->first;
@@ -299,7 +299,7 @@ auto Ewald_Vq<Tdata>::cal_Vs_minus_gauss() -> std::map<TA, std::map<TAC, RI::Ten
                     }
                 }
             }
-            // #pragma omp critical(Ewald_Vq_cal_Vs_minus_gauss)
+#pragma omp critical(Ewald_Vq_cal_Vs_minus_gauss)
             Vs_minus_gauss[iat0][i0_ptr->second[i1]] = data;
         }
     }
@@ -336,10 +336,10 @@ auto Ewald_Vq<Tdata>::cal_Vq_minus_gauss(std::map<TA, std::map<TAC, RI::Tensor<T
 
     for (size_t ik = 0; ik != this->nks0; ++ik)
     {
-        // #pragma omp parallel
+#pragma omp parallel
         for (auto i0_ptr = this->list_A_cut.begin(); i0_ptr != this->list_A_cut.end(); ++i0_ptr)
         {
-            // #pragma omp for schedule(dynamic) nowait
+#pragma omp for schedule(dynamic) nowait
             for (size_t i1 = 0; i1 < i0_ptr->second.size(); ++i1)
             {
                 const TA iat0 = i0_ptr->first;
@@ -348,7 +348,7 @@ auto Ewald_Vq<Tdata>::cal_Vq_minus_gauss(std::map<TA, std::map<TAC, RI::Tensor<T
                 std::complex<double> phase = std::exp(
                     ModuleBase::TWO_PI * ModuleBase::IMAG_UNIT
                     * (this->p_kv->kvec_c[ik] * (RI_Util::array3_to_Vector3(cell1) * GlobalC::ucell.latvec)));
-                // #pragma omp critical(Ewald_Vq_cal_Vq_minus_gauss)
+#pragma omp critical(Ewald_Vq_cal_Vq_minus_gauss)
                 {
                     if (datas[ik][iat0][i0_ptr->second[i1]].empty())
                         datas[ik][iat0][i0_ptr->second[i1]]
