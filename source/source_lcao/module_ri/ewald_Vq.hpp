@@ -126,7 +126,8 @@ auto Ewald_Vq<Tdata>::cal_Vs(const ModulePW::PW_Basis_K* wfc_basis) -> std::map<
     std::map<TA, std::map<TAC, RI::Tensor<Tdata>>> datas;
     for (size_t ik = 0; ik != this->nks0; ++ik)
     {
-        std::map<TA, std::map<TAC, RI::Tensor<std::complex<double>>>> Vq = this->cal_Vq(this->p_kv->kvec_c[ik], wfc_basis, chi);
+        std::map<TA, std::map<TAC, RI::Tensor<std::complex<double>>>> Vq
+            = this->cal_Vq(this->p_kv->kvec_c[ik], wfc_basis, chi);
 #pragma omp parallel
         for (auto i0_ptr = this->list_A_cut.begin(); i0_ptr != this->list_A_cut.end(); ++i0_ptr)
         {
@@ -167,8 +168,7 @@ auto Ewald_Vq<Tdata>::cal_Vs(const ModulePW::PW_Basis_K* wfc_basis) -> std::map<
 template <typename Tdata>
 auto Ewald_Vq<Tdata>::cal_Vq(const ModuleBase::Vector3<double>& qvec,
                              const ModulePW::PW_Basis_K* wfc_basis,
-                             const double& chi)
-    -> std::map<TA, std::map<TAC, RI::Tensor<std::complex<double>>>>
+                             const double& chi) -> std::map<TA, std::map<TAC, RI::Tensor<std::complex<double>>>>
 {
     ModuleBase::TITLE("Ewald_Vq", "cal_Vq");
     ModuleBase::timer::tick("Ewald_Vq", "cal_Vq");
@@ -196,8 +196,8 @@ auto Ewald_Vq<Tdata>::cal_Vq(const ModuleBase::Vector3<double>& qvec,
             const ModuleBase::Vector3<double> tau1 = GlobalC::ucell.atoms[it1].tau[ia1];
 
             const ModuleBase::Vector3<double> tau = tau0 - tau1;
-            RI::Tensor<std::complex<double>> Vq_gauss = this->gaussian_abfs.get_Vq(GlobalC::exx_info.info_ri.abfs_Lmax,
-                                                                                   GlobalC::exx_info.info_ri.abfs_Lmax,
+            RI::Tensor<std::complex<double>> Vq_gauss = this->gaussian_abfs.get_Vq(this->g_abfs_ccp[it0].size() - 1,
+                                                                                   this->g_abfs[it1].size() - 1,
                                                                                    qvec,
                                                                                    wfc_basis,
                                                                                    chi,

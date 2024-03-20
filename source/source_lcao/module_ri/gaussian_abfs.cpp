@@ -58,7 +58,7 @@ RI::Tensor<std::complex<double>> Gaussian_Abfs::get_Vq(
         const int this_Lmax = Lmax - 2 * i_add_ksq; // calculate Lmax at current lp+lq
         const bool exclude_Gamma
             = (qvec.norm2() < 1e-10 && i_add_ksq == 0); // only Gamma point and lq+lp-2>0 need to be corrected
-        lattice_sum[i_add_ksq] = get_lattice_sum(qvec, wfc_basis, power, exponent, exclude_Gamma, this_Lmax, tau);
+        lattice_sum[i_add_ksq] = get_lattice_sum(-qvec, wfc_basis, power, exponent, exclude_Gamma, this_Lmax, tau);
     }
 
     /* The exponent term comes in from Taylor expanding the
