@@ -41,11 +41,9 @@ class Ewald_Vq
 
     std::map<TA, std::map<TAC, RI::Tensor<Tdata>>> cal_Vs(const ModulePW::PW_Basis_K* wfc_basis);
 
-    std::map<TA, std::map<TAC, RI::Tensor<Tdata>>> cal_Vs(
-        std::vector<std::map<TA, std::map<TAC, RI::Tensor<std::complex<double>>>>>& Vq_in);
-
-    std::vector<std::map<TA, std::map<TAC, RI::Tensor<std::complex<double>>>>> cal_Vq(
-        const ModulePW::PW_Basis_K* wfc_basis);
+    std::map<TA, std::map<TAC, RI::Tensor<std::complex<double>>>> cal_Vq(const ModuleBase::Vector3<double>& qvec,
+                                                                         const ModulePW::PW_Basis_K* wfc_basis,
+                                                                         const double& chi);
 
   private:
     const Exx_Info::Exx_Info_RI& info;

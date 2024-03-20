@@ -90,16 +90,6 @@ void Ewald_Vq<Tdata>::init_atoms_from_Vs(const std::map<TA, std::map<TAC, RI::Te
 template <typename Tdata>
 auto Ewald_Vq<Tdata>::cal_Vs(const ModulePW::PW_Basis_K* wfc_basis) -> std::map<TA, std::map<TAC, RI::Tensor<Tdata>>>
 {
-    std::vector<std::map<TA, std::map<TAC, RI::Tensor<std::complex<double>>>>> Vq = this->cal_Vq(wfc_basis);
-    std::map<TA, std::map<TAC, RI::Tensor<Tdata>>> res = this->cal_Vs(Vq);
-
-    return res;
-}
-
-template <typename Tdata>
-auto Ewald_Vq<Tdata>::cal_Vs(std::vector<std::map<TA, std::map<TAC, RI::Tensor<std::complex<double>>>>>& Vq_in)
-    -> std::map<TA, std::map<TAC, RI::Tensor<Tdata>>>
-{
     ModuleBase::TITLE("Ewald_Vq", "cal_Vs");
     ModuleBase::timer::tick("Ewald_Vq", "cal_Vs");
 
@@ -109,58 +99,7 @@ auto Ewald_Vq<Tdata>::cal_Vs(std::vector<std::map<TA, std::map<TAC, RI::Tensor<s
         {4, 1  }
     }.at(GlobalV::NSPIN);
 
-    std::map<TA, std::map<TAC, RI::Tensor<Tdata>>> datas;
-    for (size_t ik = 0; ik != this->nks0; ++ik)
-    {
-#pragma omp parallel
-        for (auto i0_ptr = this->list_A_cut.begin(); i0_ptr != this->list_A_cut.end(); ++i0_ptr)
-        {
-#pragma omp for schedule(dynamic) nowait
-            for (size_t i1 = 0; i1 < i0_ptr->second.size(); ++i1)
-            {
-                const TA iat0 = i0_ptr->first;
-                const int it0 = GlobalC::ucell.iat2it[iat0];
-                const int ia0 = GlobalC::ucell.iat2ia[iat0];
-
-                const TA iat1 = i0_ptr->second[i1].first;
-                const TC& cell1 = i0_ptr->second[i1].second;
-                const int it1 = GlobalC::ucell.iat2it[iat1];
-                const int ia1 = GlobalC::ucell.iat2ia[iat1];
-
-                const std::complex<double> frac
-                    = std::exp(-ModuleBase::TWO_PI * ModuleBase::IMAG_UNIT
-                               * (this->p_kv->kvec_c[ik] * (RI_Util::array3_to_Vector3(cell1) * GlobalC::ucell.latvec)))
-                      * this->p_kv->wk[ik] * SPIN_multiple;
-
-                RI::Tensor<Tdata> Vs_tmp = RI::Global_Func::convert<Tdata>(Vq_in[ik][iat0][i0_ptr->second[i1]] * frac);
-
-#pragma omp critical(Ewald_Vq_cal_Vs)
-                {
-                    if (datas[iat0][i0_ptr->second[i1]].empty())
-                        datas[iat0][i0_ptr->second[i1]] = Vs_tmp;
-                    else
-                        datas[iat0][i0_ptr->second[i1]] = datas[iat0][i0_ptr->second[i1]] + Vs_tmp;
-                }
-            }
-        }
-    }
-
-    ModuleBase::timer::tick("Ewald_Vq", "cal_Vs");
-    return datas;
-}
-
-template <typename Tdata>
-auto Ewald_Vq<Tdata>::cal_Vq(const ModulePW::PW_Basis_K* wfc_basis)
-    -> std::vector<std::map<TA, std::map<TAC, RI::Tensor<std::complex<double>>>>>
-{
-    ModuleBase::TITLE("Ewald_Vq", "cal_Vq");
-    ModuleBase::timer::tick("Ewald_Vq", "cal_Vq");
-
-    std::map<TA, std::map<TAC, RI::Tensor<Tdata>>> Vs_minus_gauss = this->cal_Vs_minus_gauss();
-    std::vector<std::map<TA, std::map<TAC, RI::Tensor<std::complex<double>>>>> Vq;
-    Vq.resize(this->nks0);
-
-    double chi;
+    double chi = 0.0;
     switch (this->info_ewald.fq_type)
     {
     case Singular_Value::Fq_type::Type_0:
@@ -184,10 +123,10 @@ auto Ewald_Vq<Tdata>::cal_Vq(const ModulePW::PW_Basis_K* wfc_basis)
         break;
     }
 
+    std::map<TA, std::map<TAC, RI::Tensor<Tdata>>> datas;
     for (size_t ik = 0; ik != this->nks0; ++ik)
     {
-        std::map<TA, std::map<TAC, RI::Tensor<std::complex<double>>>> Vq_minus_gauss
-            = this->cal_Vq_minus_gauss(Vs_minus_gauss, this->p_kv->kvec_c[ik]);
+        std::map<TA, std::map<TAC, RI::Tensor<std::complex<double>>>> Vq = this->cal_Vq(this->p_kv->kvec_c[ik], wfc_basis, chi);
 #pragma omp parallel
         for (auto i0_ptr = this->list_A_cut.begin(); i0_ptr != this->list_A_cut.end(); ++i0_ptr)
         {
@@ -197,59 +136,108 @@ auto Ewald_Vq<Tdata>::cal_Vq(const ModulePW::PW_Basis_K* wfc_basis)
                 const TA iat0 = i0_ptr->first;
                 const int it0 = GlobalC::ucell.iat2it[iat0];
                 const int ia0 = GlobalC::ucell.iat2ia[iat0];
-                const ModuleBase::Vector3<double> tau0 = GlobalC::ucell.atoms[it0].tau[ia0];
 
                 const TA iat1 = i0_ptr->second[i1].first;
                 const TC& cell1 = i0_ptr->second[i1].second;
                 const int it1 = GlobalC::ucell.iat2it[iat1];
                 const int ia1 = GlobalC::ucell.iat2ia[iat1];
-                const ModuleBase::Vector3<double> tau1 = GlobalC::ucell.atoms[it1].tau[ia1];
 
-                const ModuleBase::Vector3<double> tau = tau0 - tau1;
-                RI::Tensor<std::complex<double>> Vq_gauss
-                    = this->gaussian_abfs.get_Vq(GlobalC::exx_info.info_ri.abfs_Lmax,
-                                                 GlobalC::exx_info.info_ri.abfs_Lmax,
-                                                 this->p_kv->kvec_c[ik],
-                                                 wfc_basis,
-                                                 chi,
-                                                 this->info_ewald.ewald_lambda,
-                                                 tau,
-                                                 this->MGT);
+                const std::complex<double> frac
+                    = std::exp(-ModuleBase::TWO_PI * ModuleBase::IMAG_UNIT
+                               * (this->p_kv->kvec_c[ik] * (RI_Util::array3_to_Vector3(cell1) * GlobalC::ucell.latvec)))
+                      * this->p_kv->wk[ik] * SPIN_multiple;
 
-                const size_t size0 = this->index_abfs[it0].count_size;
-                const size_t size1 = this->index_abfs[it1].count_size;
-                RI::Tensor<std::complex<double>> data({size0, size1});
+                RI::Tensor<Tdata> Vs_tmp = RI::Global_Func::convert<Tdata>(Vq[iat0][i0_ptr->second[i1]] * frac);
 
-                for (int l0 = 0; l0 != this->g_abfs_ccp[it0].size(); ++l0)
+#pragma omp critical(Ewald_Vq_cal_Vs)
                 {
-                    for (int l1 = 0; l1 != this->g_abfs[it1].size(); ++l1)
+                    if (datas[iat0][i0_ptr->second[i1]].empty())
+                        datas[iat0][i0_ptr->second[i1]] = Vs_tmp;
+                    else
+                        datas[iat0][i0_ptr->second[i1]] = datas[iat0][i0_ptr->second[i1]] + Vs_tmp;
+                }
+            }
+        }
+    }
+
+    ModuleBase::timer::tick("Ewald_Vq", "cal_Vs");
+    return datas;
+}
+
+template <typename Tdata>
+auto Ewald_Vq<Tdata>::cal_Vq(const ModuleBase::Vector3<double>& qvec,
+                             const ModulePW::PW_Basis_K* wfc_basis,
+                             const double& chi)
+    -> std::map<TA, std::map<TAC, RI::Tensor<std::complex<double>>>>
+{
+    ModuleBase::TITLE("Ewald_Vq", "cal_Vq");
+    ModuleBase::timer::tick("Ewald_Vq", "cal_Vq");
+
+    std::map<TA, std::map<TAC, RI::Tensor<Tdata>>> Vs_minus_gauss = this->cal_Vs_minus_gauss();
+    std::map<TA, std::map<TAC, RI::Tensor<std::complex<double>>>> Vq;
+
+    std::map<TA, std::map<TAC, RI::Tensor<std::complex<double>>>> Vq_minus_gauss
+        = this->cal_Vq_minus_gauss(Vs_minus_gauss, qvec);
+#pragma omp parallel
+    for (auto i0_ptr = this->list_A_cut.begin(); i0_ptr != this->list_A_cut.end(); ++i0_ptr)
+    {
+#pragma omp for schedule(dynamic) nowait
+        for (size_t i1 = 0; i1 < i0_ptr->second.size(); ++i1)
+        {
+            const TA iat0 = i0_ptr->first;
+            const int it0 = GlobalC::ucell.iat2it[iat0];
+            const int ia0 = GlobalC::ucell.iat2ia[iat0];
+            const ModuleBase::Vector3<double> tau0 = GlobalC::ucell.atoms[it0].tau[ia0];
+
+            const TA iat1 = i0_ptr->second[i1].first;
+            const TC& cell1 = i0_ptr->second[i1].second;
+            const int it1 = GlobalC::ucell.iat2it[iat1];
+            const int ia1 = GlobalC::ucell.iat2ia[iat1];
+            const ModuleBase::Vector3<double> tau1 = GlobalC::ucell.atoms[it1].tau[ia1];
+
+            const ModuleBase::Vector3<double> tau = tau0 - tau1;
+            RI::Tensor<std::complex<double>> Vq_gauss = this->gaussian_abfs.get_Vq(GlobalC::exx_info.info_ri.abfs_Lmax,
+                                                                                   GlobalC::exx_info.info_ri.abfs_Lmax,
+                                                                                   qvec,
+                                                                                   wfc_basis,
+                                                                                   chi,
+                                                                                   this->info_ewald.ewald_lambda,
+                                                                                   tau,
+                                                                                   this->MGT);
+
+            const size_t size0 = this->index_abfs[it0].count_size;
+            const size_t size1 = this->index_abfs[it1].count_size;
+            RI::Tensor<std::complex<double>> data({size0, size1});
+
+            for (int l0 = 0; l0 != this->g_abfs_ccp[it0].size(); ++l0)
+            {
+                for (int l1 = 0; l1 != this->g_abfs[it1].size(); ++l1)
+                {
+                    for (size_t n0 = 0; n0 != this->g_abfs_ccp[it0][l0].size(); ++n0)
                     {
-                        for (size_t n0 = 0; n0 != this->g_abfs_ccp[it0][l0].size(); ++n0)
+                        const double pA = this->multipole[it0][l0][n0];
+                        for (size_t n1 = 0; n1 != this->g_abfs[it1][l1].size(); ++n1)
                         {
-                            const double pA = this->multipole[it0][l0][n0];
-                            for (size_t n1 = 0; n1 != this->g_abfs[it1][l1].size(); ++n1)
+                            const double pB = this->multipole[it1][l1][n1];
+                            for (size_t m0 = 0; m0 != 2 * l0 + 1; ++m0)
                             {
-                                const double pB = this->multipole[it1][l1][n1];
-                                for (size_t m0 = 0; m0 != 2 * l0 + 1; ++m0)
+                                const size_t index0 = this->index_abfs[it0][l0][n0][m0];
+                                const size_t lm0 = l0 * l0 + m0;
+                                for (size_t m1 = 0; m1 != 2 * l1 + 1; ++m1)
                                 {
-                                    const size_t index0 = this->index_abfs[it0][l0][n0][m0];
-                                    const size_t lm0 = l0 * l0 + m0;
-                                    for (size_t m1 = 0; m1 != 2 * l1 + 1; ++m1)
-                                    {
-                                        const size_t index1 = this->index_abfs[it1][l1][n1][m1];
-                                        const size_t lm1 = l1 * l1 + m1;
-                                        data(index0, index1) = Vq_minus_gauss[iat0][i0_ptr->second[i1]](index0, index1)
-                                                               + pA * pB * Vq_gauss(lm0, lm1);
-                                    }
+                                    const size_t index1 = this->index_abfs[it1][l1][n1][m1];
+                                    const size_t lm1 = l1 * l1 + m1;
+                                    data(index0, index1) = Vq_minus_gauss[iat0][i0_ptr->second[i1]](index0, index1)
+                                                           + pA * pB * Vq_gauss(lm0, lm1);
                                 }
                             }
                         }
                     }
                 }
+            }
 
 #pragma omp critical(Ewald_Vq_cal_Vq)
-                Vq[ik][iat0][i0_ptr->second[i1]] = data;
-            }
+            Vq[iat0][i0_ptr->second[i1]] = data;
         }
     }
     ModuleBase::timer::tick("Ewald_Vq", "cal_Vq");
