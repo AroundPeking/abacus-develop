@@ -129,11 +129,13 @@ auto Ewald_Vq<Tdata>::cal_Vs(const ModulePW::PW_Basis_K* wfc_basis) -> std::map<
         break;
     }
 
+    std::map<TA, std::map<TAC, RI::Tensor<Tdata>>> Vs_minus_gauss = this->cal_Vs_minus_gauss();
+
     std::map<TA, std::map<TAC, RI::Tensor<Tdata>>> datas;
     for (size_t ik = 0; ik != this->nks0; ++ik)
     {
         std::map<TA, std::map<TA, RI::Tensor<std::complex<double>>>> Vq
-            = this->cal_Vq(this->p_kv->kvec_c[ik], wfc_basis, chi);
+            = this->cal_Vq(this->p_kv->kvec_c[ik], wfc_basis, chi, Vs_minus_gauss);
 #pragma omp parallel
         for (auto i0_ptr = this->list_A_cut.begin(); i0_ptr != this->list_A_cut.end(); ++i0_ptr)
         {
@@ -174,16 +176,18 @@ auto Ewald_Vq<Tdata>::cal_Vs(const ModulePW::PW_Basis_K* wfc_basis) -> std::map<
 template <typename Tdata>
 auto Ewald_Vq<Tdata>::cal_Vq(const ModuleBase::Vector3<double>& qvec,
                              const ModulePW::PW_Basis_K* wfc_basis,
-                             const double& chi) -> std::map<TA, std::map<TA, RI::Tensor<std::complex<double>>>>
+                             const double& chi,
+                             std::map<TA, std::map<TAC, RI::Tensor<Tdata>>>& Vs_minus_gauss)
+    -> std::map<TA, std::map<TA, RI::Tensor<std::complex<double>>>>
 {
     ModuleBase::TITLE("Ewald_Vq", "cal_Vq");
     ModuleBase::timer::tick("Ewald_Vq", "cal_Vq");
 
-    std::map<TA, std::map<TAC, RI::Tensor<Tdata>>> Vs_minus_gauss = this->cal_Vs_minus_gauss();
     std::map<TA, std::map<TA, RI::Tensor<std::complex<double>>>> Vq;
 
     std::map<TA, std::map<TA, RI::Tensor<std::complex<double>>>> Vq_minus_gauss
         = this->cal_Vq_minus_gauss(Vs_minus_gauss, qvec);
+
 #pragma omp parallel
     for (auto i0_ptr = this->list_B.begin(); i0_ptr != this->list_B.end(); ++i0_ptr)
     {

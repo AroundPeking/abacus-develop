@@ -41,9 +41,13 @@ class Ewald_Vq
 
     std::map<TA, std::map<TAC, RI::Tensor<Tdata>>> cal_Vs(const ModulePW::PW_Basis_K* wfc_basis);
 
-    std::map<TA, std::map<TA, RI::Tensor<std::complex<double>>>> cal_Vq(const ModuleBase::Vector3<double>& qvec,
-                                                                        const ModulePW::PW_Basis_K* wfc_basis,
-                                                                        const double& chi);
+    std::map<TA, std::map<TAC, RI::Tensor<Tdata>>> cal_Vs_minus_gauss();
+
+    std::map<TA, std::map<TA, RI::Tensor<std::complex<double>>>> cal_Vq(
+        const ModuleBase::Vector3<double>& qvec,
+        const ModulePW::PW_Basis_K* wfc_basis,
+        const double& chi,
+        std::map<TA, std::map<TAC, RI::Tensor<Tdata>>>& Vs_minus_gauss);
 
   private:
     const Exx_Info::Exx_Info_RI& info;
@@ -73,8 +77,6 @@ class Ewald_Vq
     std::map<TA, std::vector<TA>> list_B;
 
   private:
-    std::map<TA, std::map<TAC, RI::Tensor<Tdata>>> cal_Vs_minus_gauss();
-
     std::map<TA, std::map<TAC, RI::Tensor<Tdata>>> cal_Vs_gauss();
 
     std::map<TA, std::map<TA, RI::Tensor<std::complex<double>>>> cal_Vq_minus_gauss(
