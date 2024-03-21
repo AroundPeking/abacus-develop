@@ -8,6 +8,7 @@
 
 #include <RI/global/Global_Func-1.h>
 
+//#include <chrono>
 #include <cmath>
 
 #include "RI_Util.h"
@@ -136,6 +137,8 @@ auto Ewald_Vq<Tdata>::cal_Vs(const ModulePW::PW_Basis_K* wfc_basis) -> std::map<
     {
         std::map<TA, std::map<TA, RI::Tensor<std::complex<double>>>> Vq
             = this->cal_Vq(this->p_kv->kvec_c[ik], wfc_basis, chi, Vs_minus_gauss);
+
+        // auto start = std::chrono::system_clock::now();
 #pragma omp parallel
         for (auto i0_ptr = this->list_A_cut.begin(); i0_ptr != this->list_A_cut.end(); ++i0_ptr)
         {
@@ -167,6 +170,13 @@ auto Ewald_Vq<Tdata>::cal_Vs(const ModulePW::PW_Basis_K* wfc_basis) -> std::map<
                 }
             }
         }
+
+        // auto end = std::chrono::system_clock::now();
+        // auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end - start);
+        // std::cout << "cal_Vs_minus_gauss Time: "
+        //           << double(duration.count()) * std::chrono::microseconds::period::num
+        //                  / std::chrono::microseconds::period::den
+        //           << " s" << std::endl;
     }
 
     ModuleBase::timer::tick("Ewald_Vq", "cal_Vs");
@@ -205,6 +215,7 @@ auto Ewald_Vq<Tdata>::cal_Vq(const ModuleBase::Vector3<double>& qvec,
             const ModuleBase::Vector3<double> tau1 = GlobalC::ucell.atoms[it1].tau[ia1];
 
             const ModuleBase::Vector3<double> tau = tau0 - tau1;
+
             RI::Tensor<std::complex<double>> Vq_gauss = this->gaussian_abfs.get_Vq(this->g_abfs_ccp[it0].size() - 1,
                                                                                    this->g_abfs[it1].size() - 1,
                                                                                    qvec,
@@ -249,6 +260,7 @@ auto Ewald_Vq<Tdata>::cal_Vq(const ModuleBase::Vector3<double>& qvec,
             Vq[iat0][iat1] = data;
         }
     }
+
     ModuleBase::timer::tick("Ewald_Vq", "cal_Vq");
     return Vq;
 }
@@ -337,6 +349,8 @@ auto Ewald_Vq<Tdata>::cal_Vq_minus_gauss(std::map<TA, std::map<TAC, RI::Tensor<T
 
     std::map<TA, std::map<TA, RI::Tensor<std::complex<double>>>> datas;
 
+    // auto start = std::chrono::system_clock::now();
+
 #pragma omp parallel
     for (auto i0_ptr = this->list_A_cut.begin(); i0_ptr != this->list_A_cut.end(); ++i0_ptr)
     {
@@ -362,6 +376,13 @@ auto Ewald_Vq<Tdata>::cal_Vq_minus_gauss(std::map<TA, std::map<TAC, RI::Tensor<T
             }
         }
     }
+
+    // auto end = std::chrono::system_clock::now();
+    // auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end - start);
+    // std::cout << "cal_Vq_minus_gauss Time: "
+    //           << double(duration.count()) * std::chrono::microseconds::period::num
+    //                  / std::chrono::microseconds::period::den
+    //           << " s" << std::endl;
 
     ModuleBase::timer::tick("Ewald_Vq", "cal_Vq_minus_gauss");
     return datas;
