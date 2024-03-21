@@ -349,17 +349,16 @@ auto Ewald_Vq<Tdata>::cal_Vq_minus_gauss(std::map<TA, std::map<TAC, RI::Tensor<T
             std::complex<double> phase
                 = std::exp(ModuleBase::TWO_PI * ModuleBase::IMAG_UNIT
                            * (qvec * (RI_Util::array3_to_Vector3(cell1) * GlobalC::ucell.latvec)));
+
+            RI::Tensor<std::complex<double>> Vs_tmp
+                = RI::Global_Func::convert<std::complex<double>>(Vs_minus_gauss[iat0][i0_ptr->second[i1]]) * phase;
+
 #pragma omp critical(Ewald_Vq_cal_Vq_minus_gauss)
             {
                 if (datas[iat0][iat1].empty())
-                    datas[iat0][iat1]
-                        = RI::Global_Func::convert<std::complex<double>>(Vs_minus_gauss[iat0][i0_ptr->second[i1]])
-                          * phase;
+                    datas[iat0][iat1] = Vs_tmp;
                 else
-                    datas[iat0][iat1]
-                        = datas[iat0][iat1]
-                          + RI::Global_Func::convert<std::complex<double>>(Vs_minus_gauss[iat0][i0_ptr->second[i1]])
-                                * phase;
+                    datas[iat0][iat1] = datas[iat0][iat1] + Vs_tmp;
             }
         }
     }
