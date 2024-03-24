@@ -57,7 +57,7 @@ RI::Tensor<std::complex<double>> Gaussian_Abfs::get_Vq(
         const double power = -2.0 + 2 * i_add_ksq;
         const int this_Lmax = Lmax - 2 * i_add_ksq; // calculate Lmax at current lp+lq
         const bool exclude_Gamma
-            = (qvec.norm() < 1e-10 && i_add_ksq == 0); // only Gamma point and lq+lp-2>0 need to be corrected
+            = (qvec.norm2() < 1e-10 && i_add_ksq == 0); // only Gamma point and lq+lp-2>0 need to be corrected
         lattice_sum[i_add_ksq] = get_lattice_sum(-qvec, wfc_basis, power, exponent, exclude_Gamma, this_Lmax, tau);
     }
 
@@ -66,7 +66,7 @@ RI::Tensor<std::complex<double>> Gaussian_Abfs::get_Vq(
         Coulomb interaction.  While terms of this order are in principle
         neglected, we make one exception here.  Without this, the final result
         would (slightly) depend on the Ewald lambda.*/
-    if (qvec.norm() < 1e-10)
+    if (qvec.norm2() < 1e-10)
         lattice_sum[0][0] += chi - exponent;
 
     for (int lp = 0; lp != lp_max + 1; ++lp)
@@ -90,7 +90,6 @@ RI::Tensor<std::complex<double>> Gaussian_Abfs::get_Vq(
                         {
                             const int lm = MGT.get_lm_index(L, m);
                             double triple_Y = MGT.Gaunt_Coefficients(lmp, lmq, lm);
-                            if( 0==triple_Y )	continue;
                             Vq(lmp, lmq) += triple_Y * cfac * lattice_sum[i_add_ksq][lm];
                         }
                     }
@@ -160,7 +159,7 @@ std::vector<std::complex<double>> Gaussian_Abfs::get_lattice_sum(
     const int& lmax,           // Maximum angular momentum the sum is needed for.
     const ModuleBase::Vector3<double>& tau)
 {
-    if (power < 0.0 && !exclude_Gamma && qvec.norm() < 1e-10)
+    if (power < 0.0 && !exclude_Gamma && qvec.norm2() < 1e-10)
         ModuleBase::WARNING_QUIT("Gaussian_Abfs::lattice_sum", "Gamma point for power<0.0 cannot be evaluated!");
 
     std::vector<ModuleBase::Vector3<double>> gk;
