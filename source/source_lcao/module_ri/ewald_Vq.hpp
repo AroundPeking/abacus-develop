@@ -60,7 +60,8 @@ void Ewald_Vq<Tdata>::init(std::vector<std::vector<std::vector<Numerical_Orbital
                           this->g_abfs,
                           this->g_abfs_ccp,
                           this->info.kmesh_times,
-                          this->info.ccp_rmesh_times);
+                          this->info.ccp_rmesh_times,
+                          false);
     this->multipole = Exx_Abfs::Construct_Orbs::get_multipole(abfs_in);
 
     const ModuleBase::Element_Basis_Index::Range range_abfs = Exx_Abfs::Abfs_Index::construct_range(abfs_in);
