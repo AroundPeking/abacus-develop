@@ -8,7 +8,7 @@
 
 #include <RI/global/Global_Func-1.h>
 
-//#include <chrono>
+// #include <chrono>
 #include <cmath>
 
 #include "RI_Util.h"
@@ -236,9 +236,19 @@ auto Ewald_Vq<Tdata>::cal_Vq(const ModuleBase::Vector3<double>& qvec,
                     for (size_t n0 = 0; n0 != this->g_abfs_ccp[it0][l0].size(); ++n0)
                     {
                         const double pA = this->multipole[it0][l0][n0];
+                        if (std::fabs(pA) < 1e-10)
+                        {
+                            data = Vq_minus_gauss[iat0][iat1];
+                            continue;
+                        }
                         for (size_t n1 = 0; n1 != this->g_abfs[it1][l1].size(); ++n1)
                         {
                             const double pB = this->multipole[it1][l1][n1];
+                            if (std::fabs(pB) < 1e-10)
+                            {
+                                data = Vq_minus_gauss[iat0][iat1];
+                                continue;
+                            }
                             for (size_t m0 = 0; m0 != 2 * l0 + 1; ++m0)
                             {
                                 const size_t index0 = this->index_abfs[it0][l0][n0][m0];
@@ -297,9 +307,19 @@ auto Ewald_Vq<Tdata>::cal_Vs_minus_gauss() -> std::map<TA, std::map<TAC, RI::Ten
                     for (size_t n0 = 0; n0 != this->g_abfs_ccp[it0][l0].size(); ++n0)
                     {
                         const double pA = this->multipole[it0][l0][n0];
+                        if (std::fabs(pA) < 1e-10)
+                        {
+                            data = this->Vs[iat0][i0_ptr->second[i1]];
+                            continue;
+                        }
                         for (size_t n1 = 0; n1 != this->g_abfs[it1][l1].size(); ++n1)
                         {
                             const double pB = this->multipole[it1][l1][n1];
+                            if (std::fabs(pB) < 1e-10)
+                            {
+                                data = this->Vs[iat0][i0_ptr->second[i1]];
+                                continue;
+                            }
                             for (size_t m0 = 0; m0 != 2 * l0 + 1; ++m0)
                             {
                                 for (size_t m1 = 0; m1 != 2 * l1 + 1; ++m1)
