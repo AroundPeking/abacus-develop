@@ -198,11 +198,11 @@ std::vector<std::complex<double>> Gaussian_Abfs::get_lattice_sum(
             std::complex<double> val_s(0.0, 0.0);
             for (size_t ig = 0; ig != npw; ++ig)
             {
-                ModuleBase::Vector3<double> qvec = gk[ig] * GlobalC::ucell.tpiba;
-                if (exclude_Gamma && qvec.norm2() < 1e-10)
+                ModuleBase::Vector3<double> gk_vec = gk[ig] * GlobalC::ucell.tpiba;
+                if (exclude_Gamma && gk_vec.norm2() < 1e-10)
                     continue;
-                std::complex<double> phase = std::exp(ModuleBase::IMAG_UNIT * (qvec * tau));
-                val_s += std::exp(-lambda * qvec.norm2()) * std::pow(qvec.norm(), power + L) * phase * ylm(lm, ig);
+                std::complex<double> phase = std::exp(ModuleBase::IMAG_UNIT * (gk_vec * tau));
+                val_s += std::exp(-lambda * gk_vec.norm2()) * std::pow(gk_vec.norm(), power + L) * phase * ylm(lm, ig);
             }
             result[lm] = val_s;
         }
