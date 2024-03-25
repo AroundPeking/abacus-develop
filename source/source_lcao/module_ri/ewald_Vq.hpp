@@ -67,6 +67,7 @@ void Ewald_Vq<Tdata>::init(std::vector<std::vector<std::vector<Numerical_Orbital
     const ModuleBase::Element_Basis_Index::Range range_abfs = Exx_Abfs::Abfs_Index::construct_range(abfs_in);
     this->index_abfs = ModuleBase::Element_Basis_Index::construct_index(range_abfs);
 
+    this->MGT.init_Gaunt_CH(GlobalC::exx_info.info_ri.abfs_Lmax);
     this->MGT.init_Gaunt(GlobalC::exx_info.info_ri.abfs_Lmax);
 
     ModuleBase::timer::tick("Ewald_Vq", "init");
