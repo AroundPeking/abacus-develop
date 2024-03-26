@@ -30,7 +30,7 @@ double Singular_Value::sum_for_solve_chi(const std::vector<ModuleBase::Vector3<d
     for (size_t ik = 0; ik != nks; ++ik)
         fq_sum += kvec_c[ik].norm2() ? func_cal_fq(kvec_c[ik]) : 0;
 
-    double chi = ModuleBase::FOUR_PI * (fq_int - fq_sum / nks);
+    double chi = fq_int - fq_sum / nks;
 
     return chi;
 }
