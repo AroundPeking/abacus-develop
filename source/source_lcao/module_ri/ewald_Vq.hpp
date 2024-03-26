@@ -109,9 +109,9 @@ auto Ewald_Vq<Tdata>::cal_Vs(const ModulePW::PW_Basis_K* wfc_basis) -> std::map<
     }.at(GlobalV::NSPIN);
 
     double chi = 0.0;
-    std::vector<ModuleBase::Vector3<double>> new_kvec;
+    std::vector<ModuleBase::Vector3<double>> new_kvec(this->nks0);
     std::transform(this->p_kv->kvec_c.begin(),
-                   this->p_kv->kvec_c.begin() + nks0,
+                   this->p_kv->kvec_c.begin() + this->nks0,
                    new_kvec.begin(),
                    [](const ModuleBase::Vector3<double>& vec) { return vec; });
     switch (this->info_ewald.fq_type)
