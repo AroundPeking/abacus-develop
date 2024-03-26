@@ -163,6 +163,7 @@ std::vector<std::complex<double>> Gaussian_Abfs::get_lattice_sum(
         ModuleBase::WARNING_QUIT("Gaussian_Abfs::lattice_sum", "Gamma point for power<0.0 cannot be evaluated!");
 
     std::vector<ModuleBase::Vector3<double>> gk;
+    gk.resize(wfc_basis->npw);
     for (size_t ig = 0; ig != wfc_basis->npw; ++ig)
     {
         int isz = wfc_basis->ig2isz[ig];
@@ -183,10 +184,9 @@ std::vector<std::complex<double>> Gaussian_Abfs::get_lattice_sum(
         gk[ig] = f * wfc_basis->G + qvec;
     }
 
-    const int npw = gk.size();
     const int total_lm = (lmax + 1) * (lmax + 1);
-    ModuleBase::matrix ylm(total_lm, npw);
-    ModuleBase::YlmReal::Ylm_Real(total_lm, npw, gk.data(), ylm);
+    ModuleBase::matrix ylm(total_lm, wfc_basis->npw);
+    ModuleBase::YlmReal::Ylm_Real(total_lm, wfc_basis->npw, gk.data(), ylm);
 
     std::vector<std::complex<double>> result;
     result.resize(total_lm);
@@ -196,7 +196,7 @@ std::vector<std::complex<double>> Gaussian_Abfs::get_lattice_sum(
         {
             const int lm = L * L + m;
             std::complex<double> val_s(0.0, 0.0);
-            for (size_t ig = 0; ig != npw; ++ig)
+            for (size_t ig = 0; ig != wfc_basis->npw; ++ig)
             {
                 ModuleBase::Vector3<double> gk_vec = gk[ig] * GlobalC::ucell.tpiba;
                 if (exclude_Gamma && gk_vec.norm() < 1e-10)
