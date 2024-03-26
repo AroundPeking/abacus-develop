@@ -162,8 +162,11 @@ std::vector<std::complex<double>> Gaussian_Abfs::get_lattice_sum(
     if (power < 0.0 && !exclude_Gamma && qvec.norm2() < 1e-10)
         ModuleBase::WARNING_QUIT("Gaussian_Abfs::lattice_sum", "Gamma point for power<0.0 cannot be evaluated!");
 
-    std::vector<ModuleBase::Vector3<double>> gk;
-    gk.resize(wfc_basis->npw);
+    const int total_lm = (lmax + 1) * (lmax + 1);
+    ModuleBase::matrix ylm(total_lm, wfc_basis->npw);
+
+    std::vector<std::complex<double>> result(total_lm, {0.0, 0.0});
+
     for (size_t ig = 0; ig != wfc_basis->npw; ++ig)
     {
         int isz = wfc_basis->ig2isz[ig];
@@ -181,30 +184,27 @@ std::vector<std::complex<double>> Gaussian_Abfs::get_lattice_sum(
         f.x = ix;
         f.y = iy;
         f.z = iz;
-        gk[ig] = f * wfc_basis->G + qvec;
-    }
 
-    const int total_lm = (lmax + 1) * (lmax + 1);
-    ModuleBase::matrix ylm(total_lm, wfc_basis->npw);
-    ModuleBase::YlmReal::Ylm_Real(total_lm, wfc_basis->npw, gk.data(), ylm);
+        if (exclude_Gamma && f.x == 0 && f.y == 0 && f.z == 0)
+            continue;
 
-    std::vector<std::complex<double>> result;
-    result.resize(total_lm);
-    for (int L = 0; L != lmax + 1; ++L)
-    {
-        for (int m = 0; m != 2 * L + 1; ++m)
+        std::vector<ModuleBase::Vector3<double>> gk(1, f * wfc_basis->G + qvec);
+        ModuleBase::YlmReal::Ylm_Real(total_lm, 1, gk.data(), ylm);
+        ModuleBase::Vector3<double> gk_vec = gk[0];
+
+        const double val_s = std::exp(-lambda * gk_vec.norm2() * GlobalC::ucell.tpiba2)
+                             * std::pow(gk_vec.norm() * GlobalC::ucell.tpiba, power);
+
+        for (int L = 0; L != lmax + 1; ++L)
         {
-            const int lm = L * L + m;
-            std::complex<double> val_s(0.0, 0.0);
-            for (size_t ig = 0; ig != wfc_basis->npw; ++ig)
+            const double val_l = val_s * std::pow(gk_vec.norm() * GlobalC::ucell.tpiba, L);
+            for (int m = 0; m != 2 * L + 1; ++m)
             {
-                ModuleBase::Vector3<double> gk_vec = gk[ig] * GlobalC::ucell.tpiba;
-                if (exclude_Gamma && gk_vec.norm() < 1e-10)
-                    continue;
-                std::complex<double> phase = std::exp(ModuleBase::IMAG_UNIT * (gk_vec * tau));
-                val_s += std::exp(-lambda * gk_vec.norm2()) * std::pow(gk_vec.norm(), power + L) * phase * ylm(lm, ig);
+                const int lm = L * L + m;
+                const double val_lm = val_l * ylm(lm, 0);
+                std::complex<double> phase = std::exp(ModuleBase::TWO_PI * ModuleBase::IMAG_UNIT * (gk_vec * tau));
+                result[lm] += val_lm * phase;
             }
-            result[lm] = val_s;
         }
     }
 

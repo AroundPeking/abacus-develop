@@ -109,10 +109,15 @@ auto Ewald_Vq<Tdata>::cal_Vs(const ModulePW::PW_Basis_K* wfc_basis) -> std::map<
     }.at(GlobalV::NSPIN);
 
     double chi = 0.0;
+    std::vector<ModuleBase::Vector3<double>> new_kvec;
+    std::transform(this->p_kv->kvec_c.begin(),
+                   this->p_kv->kvec_c.begin() + nks0,
+                   new_kvec.begin(),
+                   [](const ModuleBase::Vector3<double>& vec) { return vec; });
     switch (this->info_ewald.fq_type)
     {
     case Singular_Value::Fq_type::Type_0:
-        chi = Singular_Value::cal_type_0(this->p_kv->kvec_c,
+        chi = Singular_Value::cal_type_0(new_kvec,
                                          this->info_ewald.ewald_qdiv,
                                          this->info_ewald.ewald_qdense,
                                          this->info_ewald.ewald_niter,
@@ -120,7 +125,7 @@ auto Ewald_Vq<Tdata>::cal_Vs(const ModulePW::PW_Basis_K* wfc_basis) -> std::map<
                                          this->info_ewald.ewald_arate);
         break;
     case Singular_Value::Fq_type::Type_1:
-        chi = Singular_Value::cal_type_1(this->p_kv->kvec_c,
+        chi = Singular_Value::cal_type_1(new_kvec,
                                          this->info_ewald.ewald_qdiv,
                                          wfc_basis,
                                          this->info_ewald.ewald_lambda,
