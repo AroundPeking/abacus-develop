@@ -135,13 +135,16 @@ double Singular_Value::fq_type_1(const ModuleBase::Vector3<double>& qvec,
                                  const ModulePW::PW_Basis_K* wfc_basis,
                                  const double& lambda)
 {
-    double fq = 0.0;
     const int qexpo = -abs(qdiv);
     const bool exclude_Gamma = true;
     const int lmax = 0;
     const ModuleBase::Vector3<double> tau(0, 0, 0);
 
-    Gaussian_Abfs::get_lattice_sum(qvec, wfc_basis, qexpo, lambda, exclude_Gamma, lmax, tau);
+    std::vector<std::complex<double>> lattice_sum = Gaussian_Abfs::get_lattice_sum(qvec, wfc_basis, qexpo, lambda, exclude_Gamma, lmax, tau);
+    assert(lattice_sum[0].imag() < 1e-10);
+    double fq = lattice_sum[0].real();
+
+    return fq;
 
     return fq;
 }
