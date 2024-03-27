@@ -145,8 +145,6 @@ double Singular_Value::fq_type_1(const ModuleBase::Vector3<double>& qvec,
     double fq = lattice_sum[0].real();
 
     return fq;
-
-    return fq;
 }
 
 double Singular_Value::cal_type_1(const std::vector<ModuleBase::Vector3<double>>& kvec_c,
