@@ -67,7 +67,8 @@ RI::Tensor<std::complex<double>> Gaussian_Abfs::get_Vq(
         neglected, we make one exception here.  Without this, the final result
         would (slightly) depend on the Ewald lambda.*/
     if (qvec.norm2() < 1e-10)
-        lattice_sum[0][0] += chi - exponent;
+        for (auto &sub: lattice_sum[0])
+            sub += chi - exponent;
 
     for (int lp = 0; lp != lp_max + 1; ++lp)
     {
