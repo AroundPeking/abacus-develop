@@ -20,7 +20,7 @@ RI::Tensor<std::complex<double>> Gaussian_Abfs::get_Vq(
     const int& lp_max,
     const int& lq_max, // Maximum L for which to calculate interaction.
     const ModuleBase::Vector3<double>& qvec,
-    const ModulePW::PW_Basis_K* wfc_basis,
+    const std::vector<ModuleBase::Vector3<double>>& Gvec,
     const double& chi, // Singularity corrected value at q=0.
     const double& lambda,
     const ModuleBase::Vector3<double>& tau,
@@ -30,9 +30,17 @@ RI::Tensor<std::complex<double>> Gaussian_Abfs::get_Vq(
     ModuleBase::timer::tick("Gaussian_Abfs", "get_Vq");
 
     const int Lmax = lp_max + lq_max;
+    const int n_LM = (Lmax + 1) * (Lmax + 1);
     const size_t vq_ndim0 = (lp_max + 1) * (lp_max + 1);
     const size_t vq_ndim1 = (lq_max + 1) * (lq_max + 1);
     RI::Tensor<std::complex<double>> Vq({vq_ndim0, vq_ndim1});
+
+    const int npw = Gvec.size();
+    std::vector<ModuleBase::Vector3<double>> gk(npw);
+    std::transform(Gvec.begin(), Gvec.end(), gk.begin(), [&](const ModuleBase::Vector3<double>& g) { return qvec - g; });
+
+    ModuleBase::matrix ylm(n_LM, npw);
+    ModuleBase::YlmReal::Ylm_Real(n_LM, npw, gk.data(), ylm);
 
     /*
      n_add_ksq * 2 = lp_max + lq_max - abs(lp_max - lq_max)
@@ -46,7 +54,6 @@ RI::Tensor<std::complex<double>> Gaussian_Abfs::get_Vq(
             n_add_ksq = min(lp_max, lq_max)
     */
     const int n_add_ksq = std::min(lp_max, lq_max);
-    const int n_LM = (Lmax + 1) * (Lmax + 1);
     std::vector<std::vector<std::complex<double>>> lattice_sum(n_add_ksq + 1,
                                                                std::vector<std::complex<double>>(n_LM, {0.0, 0.0}));
 
@@ -58,7 +65,7 @@ RI::Tensor<std::complex<double>> Gaussian_Abfs::get_Vq(
         const int this_Lmax = Lmax - 2 * i_add_ksq; // calculate Lmax at current lp+lq
         const bool exclude_Gamma
             = (qvec.norm2() < 1e-10 && i_add_ksq == 0); // only Gamma point and lq+lp-2>0 need to be corrected
-        lattice_sum[i_add_ksq] = get_lattice_sum(-qvec, wfc_basis, power, exponent, exclude_Gamma, this_Lmax, tau);
+        lattice_sum[i_add_ksq] = get_lattice_sum(gk, power, exponent, exclude_Gamma, this_Lmax, tau, ylm);
     }
 
     /* The exponent term comes in from Taylor expanding the
@@ -67,7 +74,7 @@ RI::Tensor<std::complex<double>> Gaussian_Abfs::get_Vq(
         neglected, we make one exception here.  Without this, the final result
         would (slightly) depend on the Ewald lambda.*/
     if (qvec.norm2() < 1e-10)
-        for (auto &sub: lattice_sum[0])
+        for (auto& sub: lattice_sum[0])
             sub += chi - exponent;
 
     for (int lp = 0; lp != lp_max + 1; ++lp)
@@ -152,22 +159,47 @@ double Gaussian_Abfs::double_factorial(const int& n)
 }
 
 std::vector<std::complex<double>> Gaussian_Abfs::get_lattice_sum(
-    const ModuleBase::Vector3<double>& qvec,
-    const ModulePW::PW_Basis_K* wfc_basis,
+    const std::vector<ModuleBase::Vector3<double>>& gk,
     const double& power, // Will be 0. for straight GTOs and -2. for Coulomb interaction
     const double& lambda,
     const bool& exclude_Gamma, // The R==0. can be excluded by this flag.
     const int& lmax,           // Maximum angular momentum the sum is needed for.
-    const ModuleBase::Vector3<double>& tau)
+    const ModuleBase::Vector3<double>& tau,
+    ModuleBase::matrix& ylm)
 {
-    if (power < 0.0 && !exclude_Gamma && qvec.norm2() < 1e-10)
-        ModuleBase::WARNING_QUIT("Gaussian_Abfs::lattice_sum", "Gamma point for power<0.0 cannot be evaluated!");
-
     const int total_lm = (lmax + 1) * (lmax + 1);
-    ModuleBase::matrix ylm(total_lm, wfc_basis->npw);
-
     std::vector<std::complex<double>> result(total_lm, {0.0, 0.0});
+    const int npw = gk.size();
 
+    for (size_t ig = 0; ig != npw; ++ig)
+    {
+        if (power < 0.0 && !exclude_Gamma && gk[ig].norm2() < 1e-10)
+            ModuleBase::WARNING_QUIT("Gaussian_Abfs::lattice_sum", "Gamma point for power<0.0 cannot be evaluated!");
+        if (exclude_Gamma && gk[ig].norm2() < 1e-10)
+            continue;
+
+        const double val_s = std::exp(-lambda * gk[ig].norm2() * GlobalC::ucell.tpiba2)
+                             * std::pow(gk[ig].norm() * GlobalC::ucell.tpiba, power);
+
+        for (int L = 0; L != lmax + 1; ++L)
+        {
+            const double val_l = val_s * std::pow(gk[ig].norm() * GlobalC::ucell.tpiba, L);
+            for (int m = 0; m != 2 * L + 1; ++m)
+            {
+                const int lm = L * L + m;
+                const double val_lm = val_l * ylm(lm, ig);
+                std::complex<double> phase = std::exp(ModuleBase::TWO_PI * ModuleBase::IMAG_UNIT * (gk[ig] * tau));
+                result[lm] += val_lm * phase;
+            }
+        }
+    }
+
+    return result;
+}
+
+std::vector<ModuleBase::Vector3<double>> Gaussian_Abfs::get_Gvec(const ModulePW::PW_Basis_K* wfc_basis)
+{
+    std::vector<ModuleBase::Vector3<double>> Gvec;
     for (size_t ig = 0; ig != wfc_basis->npw; ++ig)
     {
         int isz = wfc_basis->ig2isz[ig];
@@ -186,30 +218,10 @@ std::vector<std::complex<double>> Gaussian_Abfs::get_lattice_sum(
         f.y = iy;
         f.z = iz;
 
-        if (exclude_Gamma && f.x == 0 && f.y == 0 && f.z == 0)
-            continue;
-
-        std::vector<ModuleBase::Vector3<double>> gk(1, f * wfc_basis->G + qvec);
-        ModuleBase::YlmReal::Ylm_Real(total_lm, 1, gk.data(), ylm);
-        ModuleBase::Vector3<double> gk_vec = gk[0];
-
-        const double val_s = std::exp(-lambda * gk_vec.norm2() * GlobalC::ucell.tpiba2)
-                             * std::pow(gk_vec.norm() * GlobalC::ucell.tpiba, power);
-
-        for (int L = 0; L != lmax + 1; ++L)
-        {
-            const double val_l = val_s * std::pow(gk_vec.norm() * GlobalC::ucell.tpiba, L);
-            for (int m = 0; m != 2 * L + 1; ++m)
-            {
-                const int lm = L * L + m;
-                const double val_lm = val_l * ylm(lm, 0);
-                std::complex<double> phase = std::exp(ModuleBase::TWO_PI * ModuleBase::IMAG_UNIT * (gk_vec * tau));
-                result[lm] += val_lm * phase;
-            }
-        }
+        Gvec[ig] = f * wfc_basis->G;
     }
 
-    return result;
+    return Gvec;
 }
 
 #endif

@@ -45,7 +45,7 @@ class Ewald_Vq
 
     std::map<TA, std::map<TA, RI::Tensor<std::complex<double>>>> cal_Vq(
         const ModuleBase::Vector3<double>& qvec,
-        const ModulePW::PW_Basis_K* wfc_basis,
+        const std::vector<ModuleBase::Vector3<double>>& Gvec,
         const double& chi,
         std::map<TA, std::map<TAC, RI::Tensor<Tdata>>>& Vs_minus_gauss);
 

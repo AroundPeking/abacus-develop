@@ -140,10 +140,11 @@ auto Ewald_Vq<Tdata>::cal_Vs(const ModulePW::PW_Basis_K* wfc_basis) -> std::map<
     std::map<TA, std::map<TAC, RI::Tensor<Tdata>>> Vs_minus_gauss = this->cal_Vs_minus_gauss();
 
     std::map<TA, std::map<TAC, RI::Tensor<Tdata>>> datas;
+    std::vector<ModuleBase::Vector3<double>> Gvec = Gaussian_Abfs::get_Gvec(wfc_basis);
     for (size_t ik = 0; ik != this->nks0; ++ik)
     {
         std::map<TA, std::map<TA, RI::Tensor<std::complex<double>>>> Vq
-            = this->cal_Vq(this->p_kv->kvec_c[ik], wfc_basis, chi, Vs_minus_gauss);
+            = this->cal_Vq(this->p_kv->kvec_c[ik], Gvec, chi, Vs_minus_gauss);
 
         // auto start = std::chrono::system_clock::now();
 #pragma omp parallel
@@ -192,7 +193,7 @@ auto Ewald_Vq<Tdata>::cal_Vs(const ModulePW::PW_Basis_K* wfc_basis) -> std::map<
 
 template <typename Tdata>
 auto Ewald_Vq<Tdata>::cal_Vq(const ModuleBase::Vector3<double>& qvec,
-                             const ModulePW::PW_Basis_K* wfc_basis,
+                             const std::vector<ModuleBase::Vector3<double>>& Gvec,
                              const double& chi,
                              std::map<TA, std::map<TAC, RI::Tensor<Tdata>>>& Vs_minus_gauss)
     -> std::map<TA, std::map<TA, RI::Tensor<std::complex<double>>>>
@@ -226,7 +227,7 @@ auto Ewald_Vq<Tdata>::cal_Vq(const ModuleBase::Vector3<double>& qvec,
             RI::Tensor<std::complex<double>> Vq_gauss = this->gaussian_abfs.get_Vq(this->g_abfs_ccp[it0].size() - 1,
                                                                                    this->g_abfs[it1].size() - 1,
                                                                                    qvec,
-                                                                                   wfc_basis,
+                                                                                   Gvec,
                                                                                    chi,
                                                                                    this->info_ewald.ewald_lambda,
                                                                                    tau,

@@ -14,6 +14,7 @@
 
 #include "gaussian_abfs.h"
 #include "module_base/global_variable.h"
+#include "module_base/math_ylmreal.h"
 #include "module_base/timer.h"
 #include "module_base/tool_title.h"
 #include "module_hamilt_pw/hamilt_pwdft/global.h"
@@ -135,12 +136,21 @@ double Singular_Value::fq_type_1(const ModuleBase::Vector3<double>& qvec,
                                  const ModulePW::PW_Basis_K* wfc_basis,
                                  const double& lambda)
 {
+    std::vector<ModuleBase::Vector3<double>> Gvec = Gaussian_Abfs::get_Gvec(wfc_basis);
+    const int npw = Gvec.size();
+    std::vector<ModuleBase::Vector3<double>> gk(npw);
+    std::transform(Gvec.begin(), Gvec.end(), gk.begin(), [&](const ModuleBase::Vector3<double>& g) { return qvec + g; });
+
     const int qexpo = -abs(qdiv);
     const bool exclude_Gamma = true;
     const int lmax = 0;
     const ModuleBase::Vector3<double> tau(0, 0, 0);
+    const int n_LM = (lmax + 1) * (lmax + 1);
+    ModuleBase::matrix ylm(n_LM, npw);
+    ModuleBase::YlmReal::Ylm_Real(n_LM, npw, gk.data(), ylm);
 
-    std::vector<std::complex<double>> lattice_sum = Gaussian_Abfs::get_lattice_sum(qvec, wfc_basis, qexpo, lambda, exclude_Gamma, lmax, tau);
+    std::vector<std::complex<double>> lattice_sum
+        = Gaussian_Abfs::get_lattice_sum(gk, qexpo, lambda, exclude_Gamma, lmax, tau, ylm);
     assert(lattice_sum[0].imag() < 1e-10);
     double fq = lattice_sum[0].real();
 
