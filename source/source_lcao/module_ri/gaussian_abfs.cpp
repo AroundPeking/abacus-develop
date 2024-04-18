@@ -83,7 +83,7 @@ RI::Tensor<std::complex<double>> Gaussian_Abfs::get_Vq(
         for (int lq = 0; lq != lq_max + 1; ++lq)
         {
             double norm_2 = double_factorial(2 * lq - 1) * sqrt(ModuleBase::PI * 0.5);
-            std::complex<double> phase = std::pow(ModuleBase::IMAG_UNIT, lq - lp);
+            std::complex<double> phase = std::pow(ModuleBase::IMAG_UNIT, lp - lq);
             std::complex<double> cfac = ModuleBase::FOUR_PI * phase / (norm_1 * norm_2);
             for (int L = std::abs(lp - lq); L <= lp + lq; L += 2) // if lp+lq-L == odd, then Gaunt_Coefficients = 0
             {
