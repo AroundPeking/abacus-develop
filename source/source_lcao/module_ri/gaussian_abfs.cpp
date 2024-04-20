@@ -200,6 +200,7 @@ std::vector<std::complex<double>> Gaussian_Abfs::get_lattice_sum(
 std::vector<ModuleBase::Vector3<double>> Gaussian_Abfs::get_Gvec(const ModulePW::PW_Basis_K* wfc_basis)
 {
     std::vector<ModuleBase::Vector3<double>> Gvec;
+    Gvec.resize(wfc_basis->npw);
     for (size_t ig = 0; ig != wfc_basis->npw; ++ig)
     {
         int isz = wfc_basis->ig2isz[ig];
