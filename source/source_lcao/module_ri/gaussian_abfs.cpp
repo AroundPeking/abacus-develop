@@ -34,14 +34,6 @@ RI::Tensor<std::complex<double>> Gaussian_Abfs::get_Vq(
     const size_t vq_ndim0 = (lp_max + 1) * (lp_max + 1);
     const size_t vq_ndim1 = (lq_max + 1) * (lq_max + 1);
     RI::Tensor<std::complex<double>> Vq({vq_ndim0, vq_ndim1});
-
-    const int npw = Gvec.size();
-    std::vector<ModuleBase::Vector3<double>> gk(npw);
-    std::transform(Gvec.begin(), Gvec.end(), gk.begin(), [&](const ModuleBase::Vector3<double>& g) { return qvec - g; });
-
-    ModuleBase::matrix ylm(n_LM, npw);
-    ModuleBase::YlmReal::Ylm_Real(n_LM, npw, gk.data(), ylm);
-
     /*
      n_add_ksq * 2 = lp_max + lq_max - abs(lp_max - lq_max)
         if lp_max < lq_max
@@ -64,8 +56,8 @@ RI::Tensor<std::complex<double>> Gaussian_Abfs::get_Vq(
         const double power = -2.0 + 2 * i_add_ksq;
         const int this_Lmax = Lmax - 2 * i_add_ksq; // calculate Lmax at current lp+lq
         const bool exclude_Gamma
-            = (qvec.norm2() < 1e-10 && i_add_ksq == 0); // only Gamma point and lq+lp-2>0 need to be corrected
-        lattice_sum[i_add_ksq] = get_lattice_sum(gk, power, exponent, exclude_Gamma, this_Lmax, tau, ylm);
+            = (qvec.norm() < 1e-10 && i_add_ksq == 0); // only Gamma point and lq+lp-2>0 need to be corrected
+        lattice_sum[i_add_ksq] = get_lattice_sum(-qvec, Gvec, power, exponent, exclude_Gamma, this_Lmax, tau);
     }
 
     /* The exponent term comes in from Taylor expanding the
@@ -73,18 +65,18 @@ RI::Tensor<std::complex<double>> Gaussian_Abfs::get_Vq(
         Coulomb interaction.  While terms of this order are in principle
         neglected, we make one exception here.  Without this, the final result
         would (slightly) depend on the Ewald lambda.*/
-    if (qvec.norm2() < 1e-10)
-        for (auto& sub: lattice_sum[0])
-            sub += chi - exponent;
+    // if (qvec.norm() < 1e-10)
+    //     for (auto& sub: lattice_sum[0])
+    //         sub += chi - exponent;
 
     for (int lp = 0; lp != lp_max + 1; ++lp)
     {
-        double norm_1 = double_factorial(2 * lp - 1) * sqrt(ModuleBase::PI * 0.5);
+        double norm_1 = double_factorial(2 * lp - 1) * std::sqrt(ModuleBase::PI * 0.5);
         for (int lq = 0; lq != lq_max + 1; ++lq)
         {
-            double norm_2 = double_factorial(2 * lq - 1) * sqrt(ModuleBase::PI * 0.5);
+            double norm_2 = double_factorial(2 * lq - 1) * std::sqrt(ModuleBase::PI * 0.5);
             std::complex<double> phase = std::pow(ModuleBase::IMAG_UNIT, lp - lq);
-            std::complex<double> cfac = ModuleBase::FOUR_PI * phase / (norm_1 * norm_2);
+            std::complex<double> cfac = ModuleBase::FOUR_PI * phase * std::pow(ModuleBase::TWO_PI, 3) / (norm_1 * norm_2) / GlobalC::ucell.omega;
             for (int L = std::abs(lp - lq); L <= lp + lq; L += 2) // if lp+lq-L == odd, then Gaunt_Coefficients = 0
             {
                 const int i_add_ksq = (lp + lq - L) / 2;
@@ -116,7 +108,7 @@ Numerical_Orbital_Lm Gaussian_Abfs::Gauss(const Numerical_Orbital_Lm& orb, const
     const int angular_momentum_l = orb.getL();
     const int Nr = orb.getNr();
     const double frac = std::pow(lambda, angular_momentum_l + 1.5) / double_factorial(2 * angular_momentum_l - 1)
-                        / sqrt(ModuleBase::PI * 0.5);
+                        / std::sqrt(ModuleBase::PI * 0.5);
 
     std::vector<double> psi(Nr);
 
@@ -159,37 +151,56 @@ double Gaussian_Abfs::double_factorial(const int& n)
 }
 
 std::vector<std::complex<double>> Gaussian_Abfs::get_lattice_sum(
-    const std::vector<ModuleBase::Vector3<double>>& gk,
+    const ModuleBase::Vector3<double>& qvec,
+    const std::vector<ModuleBase::Vector3<double>>& Gvec,
     const double& power, // Will be 0. for straight GTOs and -2. for Coulomb interaction
-    const double& lambda,
+    const double& exponent,
     const bool& exclude_Gamma, // The R==0. can be excluded by this flag.
     const int& lmax,           // Maximum angular momentum the sum is needed for.
-    const ModuleBase::Vector3<double>& tau,
-    ModuleBase::matrix& ylm)
+    const ModuleBase::Vector3<double>& tau)
 {
+    if (power < 0.0 && !exclude_Gamma && qvec.norm() < 1e-10)
+        ModuleBase::WARNING_QUIT("Gaussian_Abfs::lattice_sum", "Gamma point for power<0.0 cannot be evaluated!");
+
+    const double eta = 45;
+    const double Rmax = std::sqrt(eta / exponent) + qvec.norm() * GlobalC::ucell.tpiba;
+    std::vector<int> n_supercells = get_n_supercells(Rmax);
+
     const int total_lm = (lmax + 1) * (lmax + 1);
     std::vector<std::complex<double>> result(total_lm, {0.0, 0.0});
-    const int npw = gk.size();
 
-    for (size_t ig = 0; ig != npw; ++ig)
+    for (int G0 = -n_supercells[0]; G0 <= n_supercells[0]; ++G0)
     {
-        if (power < 0.0 && !exclude_Gamma && gk[ig].norm2() < 1e-10)
-            ModuleBase::WARNING_QUIT("Gaussian_Abfs::lattice_sum", "Gamma point for power<0.0 cannot be evaluated!");
-        if (exclude_Gamma && gk[ig].norm2() < 1e-10)
-            continue;
-
-        const double val_s = std::exp(-lambda * gk[ig].norm2() * GlobalC::ucell.tpiba2)
-                             * std::pow(gk[ig].norm() * GlobalC::ucell.tpiba, power);
-
-        for (int L = 0; L != lmax + 1; ++L)
+        for (int G1 = -n_supercells[1]; G1 <= n_supercells[1]; ++G1)
         {
-            const double val_l = val_s * std::pow(gk[ig].norm() * GlobalC::ucell.tpiba, L);
-            for (int m = 0; m != 2 * L + 1; ++m)
+            for (int G2 = -n_supercells[2]; G2 <= n_supercells[2]; ++G2)
             {
-                const int lm = L * L + m;
-                const double val_lm = val_l * ylm(lm, ig);
-                std::complex<double> phase = std::exp(ModuleBase::TWO_PI * ModuleBase::IMAG_UNIT * (gk[ig] * tau));
-                result[lm] += val_lm * phase;
+                if (exclude_Gamma && G0 == 0 && G1 == 0 && G2 == 0)
+                    continue;
+                ModuleBase::Vector3<double> Gxyz = Gvec[0] * static_cast<double>(G0) + Gvec[1] * static_cast<double>(G1) + Gvec[2] * static_cast<double>(G2);
+                std::vector<ModuleBase::Vector3<double>> vec;
+                vec.resize(1);
+                vec[0] = -(qvec + Gxyz);
+                const double vec_sq = vec[0].norm2() * GlobalC::ucell.tpiba2;
+                const double vec_abs = std::sqrt(vec_sq);
+
+                const double val_s = std::exp(-exponent * vec_sq) * std::pow(vec_abs, power);
+
+                ModuleBase::matrix ylm(total_lm, 1);
+                ModuleBase::YlmReal::Ylm_Real(total_lm, 1, vec.data(), ylm);
+
+                std::complex<double> phase = std::exp(ModuleBase::TWO_PI * ModuleBase::IMAG_UNIT * (vec[0] * tau));
+
+                for (int L = 0; L != lmax + 1; ++L)
+                {
+                    const double val_l = val_s * std::pow(vec_abs, L);
+                    for (int m = 0; m != 2 * L + 1; ++m)
+                    {
+                        const int lm = L * L + m;
+                        const double val_lm = val_l * ylm(lm, 0);
+                        result[lm] += val_lm * phase;
+                    }
+                }
             }
         }
     }
@@ -197,32 +208,17 @@ std::vector<std::complex<double>> Gaussian_Abfs::get_lattice_sum(
     return result;
 }
 
-std::vector<ModuleBase::Vector3<double>> Gaussian_Abfs::get_Gvec(const ModulePW::PW_Basis_K* wfc_basis)
+std::vector<int> Gaussian_Abfs::get_n_supercells(const double& Rmax)
 {
-    std::vector<ModuleBase::Vector3<double>> Gvec;
-    Gvec.resize(wfc_basis->npw);
-    for (size_t ig = 0; ig != wfc_basis->npw; ++ig)
-    {
-        int isz = wfc_basis->ig2isz[ig];
-        int iz = isz % wfc_basis->nz;
-        int is = isz / wfc_basis->nz;
-        int ix = wfc_basis->is2fftixy[is] / wfc_basis->fftny;
-        int iy = wfc_basis->is2fftixy[is] % wfc_basis->fftny;
-        if (ix >= int(wfc_basis->nx / 2) + 1)
-            ix -= wfc_basis->nx;
-        if (iy >= int(wfc_basis->ny / 2) + 1)
-            iy -= wfc_basis->ny;
-        if (iz >= int(wfc_basis->nz / 2) + 1)
-            iz -= wfc_basis->nz;
-        ModuleBase::Vector3<double> f;
-        f.x = ix;
-        f.y = iy;
-        f.z = iz;
+    std::vector<int> n_supercells(3);
+    n_supercells[0] = static_cast<int>(
+        std::floor(GlobalC::ucell.a1.norm() * GlobalC::ucell.lat0 * Rmax / ModuleBase::TWO_PI + 1e-5));
+    n_supercells[1] = static_cast<int>(
+        std::floor(GlobalC::ucell.a2.norm() * GlobalC::ucell.lat0 * Rmax / ModuleBase::TWO_PI + 1e-5));
+    n_supercells[2] = static_cast<int>(
+        std::floor(GlobalC::ucell.a3.norm() * GlobalC::ucell.lat0 * Rmax / ModuleBase::TWO_PI + 1e-5));
 
-        Gvec[ig] = f * wfc_basis->G;
-    }
-
-    return Gvec;
+    return n_supercells;
 }
 
 #endif

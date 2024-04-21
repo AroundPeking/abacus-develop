@@ -33,7 +33,6 @@ class Singular_Value
                              const int& a_rate);
     static double cal_type_1(const std::vector<ModuleBase::Vector3<double>>& kvec_c,
                              const int& qdiv,
-                             const ModulePW::PW_Basis_K* wfc_basis,
                              const double& start_lambda,
                              const int& niter,
                              const double& eps);
@@ -68,7 +67,7 @@ class Singular_Value
     // gamma: chosen as the radius of sphere which has the same volume as the Brillouin zone.
     static double fq_type_1(const ModuleBase::Vector3<double>& qvec,
                             const int& qdiv,
-                            const ModulePW::PW_Basis_K* wfc_basis,
+                            const std::vector<ModuleBase::Vector3<double>>& Gvec,
                             const double& lambda);
 };
 

@@ -39,7 +39,7 @@ class Ewald_Vq
                             const std::vector<TA>& list_A0_in,
                             const std::vector<TAC>& list_A1_in);
 
-    std::map<TA, std::map<TAC, RI::Tensor<Tdata>>> cal_Vs(const ModulePW::PW_Basis_K* wfc_basis);
+    std::map<TA, std::map<TAC, RI::Tensor<Tdata>>> cal_Vs();
 
     std::map<TA, std::map<TAC, RI::Tensor<Tdata>>> cal_Vs_minus_gauss();
 

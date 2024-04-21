@@ -16,6 +16,7 @@
 #include "conv_coulomb_pot_k.h"
 #include "exx_abfs-abfs_index.h"
 #include "exx_abfs-construct_orbs.h"
+#include "gaussian_abfs.h"
 #include "module_base/element_basis_index.h"
 #include "module_base/timer.h"
 #include "module_base/tool_title.h"
@@ -97,7 +98,7 @@ void Ewald_Vq<Tdata>::init_atoms_from_Vs(const std::map<TA, std::map<TAC, RI::Te
 }
 
 template <typename Tdata>
-auto Ewald_Vq<Tdata>::cal_Vs(const ModulePW::PW_Basis_K* wfc_basis) -> std::map<TA, std::map<TAC, RI::Tensor<Tdata>>>
+auto Ewald_Vq<Tdata>::cal_Vs() -> std::map<TA, std::map<TAC, RI::Tensor<Tdata>>>
 {
     ModuleBase::TITLE("Ewald_Vq", "cal_Vs");
     ModuleBase::timer::tick("Ewald_Vq", "cal_Vs");
@@ -127,7 +128,6 @@ auto Ewald_Vq<Tdata>::cal_Vs(const ModulePW::PW_Basis_K* wfc_basis) -> std::map<
     case Singular_Value::Fq_type::Type_1:
         chi = Singular_Value::cal_type_1(new_kvec,
                                          this->info_ewald.ewald_qdiv,
-                                         wfc_basis,
                                          this->info_ewald.ewald_lambda,
                                          this->info_ewald.ewald_niter,
                                          this->info_ewald.ewald_eps);
@@ -140,7 +140,20 @@ auto Ewald_Vq<Tdata>::cal_Vs(const ModulePW::PW_Basis_K* wfc_basis) -> std::map<
     std::map<TA, std::map<TAC, RI::Tensor<Tdata>>> Vs_minus_gauss = this->cal_Vs_minus_gauss();
 
     std::map<TA, std::map<TAC, RI::Tensor<Tdata>>> datas;
-    std::vector<ModuleBase::Vector3<double>> Gvec = Gaussian_Abfs::get_Gvec(wfc_basis);
+    std::vector<ModuleBase::Vector3<double>> Gvec;
+    Gvec.resize(3);
+    Gvec[0].x = GlobalC::ucell.G.e11;
+    Gvec[0].y = GlobalC::ucell.G.e12;
+    Gvec[0].z = GlobalC::ucell.G.e13;
+
+    Gvec[1].x = GlobalC::ucell.G.e21;
+    Gvec[1].y = GlobalC::ucell.G.e22;
+    Gvec[1].z = GlobalC::ucell.G.e23;
+
+    Gvec[2].x = GlobalC::ucell.G.e31;
+    Gvec[2].y = GlobalC::ucell.G.e32;
+    Gvec[2].z = GlobalC::ucell.G.e33;
+
     for (size_t ik = 0; ik != this->nks0; ++ik)
     {
         std::map<TA, std::map<TA, RI::Tensor<std::complex<double>>>> Vq

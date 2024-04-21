@@ -32,22 +32,21 @@ Calculate the lattice sum over a Gaussian:
   S(k) := \sum_G |k+G|^{power+L} \exp(-lambda*|k+G|^2) Y_{LM}(k+G) * \exp(i(k+G)\tau)
 */
     static std::vector<std::complex<double>> get_lattice_sum(
-        const std::vector<ModuleBase::Vector3<double>>& gk,
+        const ModuleBase::Vector3<double>& qvec,
+        const std::vector<ModuleBase::Vector3<double>>& Gvec,
         const double& power, // Will be 0. for straight GTOs and -2. for Coulomb interaction
-        const double& lambda,
+        const double& exponent,
         const bool& exclude_Gamma, // The R==0. can be excluded by this flag.
         const int& lmax,           // Maximum angular momentum the sum is needed for.
-        const ModuleBase::Vector3<double>& tau,
-        ModuleBase::matrix& ylm);
+        const ModuleBase::Vector3<double>& tau);
 
     // construct gaussian basis based on original NAO
     Numerical_Orbital_Lm Gauss(const Numerical_Orbital_Lm& orb, const double& lambda);
 
-    static std::vector<ModuleBase::Vector3<double>> get_Gvec(const ModulePW::PW_Basis_K* wfc_basis);
-
   private:
     // calculates the double factorial n!! of n
     static double double_factorial(const int& n);
+    static std::vector<int> get_n_supercells(const double& Rmax);
 };
 
 #endif

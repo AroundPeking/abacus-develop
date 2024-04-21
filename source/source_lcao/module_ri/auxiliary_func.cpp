@@ -29,7 +29,7 @@ double Singular_Value::sum_for_solve_chi(const std::vector<ModuleBase::Vector3<d
     // cal fq sum except q=0
     double fq_sum = 0;
     for (size_t ik = 0; ik != nks; ++ik)
-        fq_sum += kvec_c[ik].norm2() ? func_cal_fq(kvec_c[ik]) : 0;
+        fq_sum += kvec_c[ik].norm() ? func_cal_fq(kvec_c[ik]) : 0;
 
     double chi = fq_int - fq_sum / nks;
 
@@ -133,24 +133,17 @@ double Singular_Value::cal_type_0(const std::vector<ModuleBase::Vector3<double>>
 
 double Singular_Value::fq_type_1(const ModuleBase::Vector3<double>& qvec,
                                  const int& qdiv,
-                                 const ModulePW::PW_Basis_K* wfc_basis,
+                                 const std::vector<ModuleBase::Vector3<double>>& Gvec,
                                  const double& lambda)
 {
-    std::vector<ModuleBase::Vector3<double>> Gvec = Gaussian_Abfs::get_Gvec(wfc_basis);
-    const int npw = Gvec.size();
-    std::vector<ModuleBase::Vector3<double>> gk(npw);
-    std::transform(Gvec.begin(), Gvec.end(), gk.begin(), [&](const ModuleBase::Vector3<double>& g) { return qvec + g; });
-
     const int qexpo = -abs(qdiv);
     const bool exclude_Gamma = true;
     const int lmax = 0;
     const ModuleBase::Vector3<double> tau(0, 0, 0);
     const int n_LM = (lmax + 1) * (lmax + 1);
-    ModuleBase::matrix ylm(n_LM, npw);
-    ModuleBase::YlmReal::Ylm_Real(n_LM, npw, gk.data(), ylm);
 
     std::vector<std::complex<double>> lattice_sum
-        = Gaussian_Abfs::get_lattice_sum(gk, qexpo, lambda, exclude_Gamma, lmax, tau, ylm);
+        = Gaussian_Abfs::get_lattice_sum(qvec, Gvec, qexpo, lambda, exclude_Gamma, lmax, tau);
     assert(lattice_sum[0].imag() < 1e-10);
     double fq = lattice_sum[0].real();
 
@@ -159,7 +152,6 @@ double Singular_Value::fq_type_1(const ModuleBase::Vector3<double>& qvec,
 
 double Singular_Value::cal_type_1(const std::vector<ModuleBase::Vector3<double>>& kvec_c,
                                   const int& qdiv,
-                                  const ModulePW::PW_Basis_K* wfc_basis,
                                   const double& start_lambda,
                                   const int& niter,
                                   const double& eps)
@@ -167,8 +159,22 @@ double Singular_Value::cal_type_1(const std::vector<ModuleBase::Vector3<double>>
     ModuleBase::TITLE("Singular_Value", "cal_type_1");
     ModuleBase::timer::tick("Singular_Value", "cal_type_1");
 
-    auto cal_chi = [&qdiv, &wfc_basis, &kvec_c](const double& lambda) {
-        const T_cal_fq_type func_cal_fq_type_1 = std::bind(&fq_type_1, std::placeholders::_1, qdiv, wfc_basis, lambda);
+    std::vector<ModuleBase::Vector3<double>> bvec;
+    bvec.resize(3);
+    bvec[0].x = GlobalC::ucell.G.e11;
+    bvec[0].y = GlobalC::ucell.G.e12;
+    bvec[0].z = GlobalC::ucell.G.e13;
+
+    bvec[1].x = GlobalC::ucell.G.e21;
+    bvec[1].y = GlobalC::ucell.G.e22;
+    bvec[1].z = GlobalC::ucell.G.e23;
+
+    bvec[2].x = GlobalC::ucell.G.e31;
+    bvec[2].y = GlobalC::ucell.G.e32;
+    bvec[2].z = GlobalC::ucell.G.e33;
+
+    auto cal_chi = [&qdiv, &bvec, &kvec_c](const double& lambda) {
+        const T_cal_fq_type func_cal_fq_type_1 = std::bind(&fq_type_1, std::placeholders::_1, qdiv, bvec, lambda);
         double prefactor = ModuleBase::TWO_PI * std::pow(lambda, -1 / qdiv);
         double fq_int;
         if (qdiv == 2)
