@@ -58,6 +58,16 @@ double Singular_Value::solve_chi(const std::vector<ModuleBase::Vector3<double>>&
     return sum_for_solve_chi(kvec_c, func_cal_fq, fq_int);
 }
 
+// for analytic integral of fq with gaussian sum
+double Singular_Value::solve_chi(const int& nks,
+                                const T_cal_fq_type_no& func_cal_fq,
+                                 const double& fq_int)
+{
+    double chi = fq_int * nks - func_cal_fq();
+
+    return chi;
+}
+
 double Singular_Value::fq_type_0(const ModuleBase::Vector3<double>& qvec,
                                  const int& qdiv,
                                  std::vector<ModuleBase::Vector3<double>>& avec,
@@ -131,8 +141,7 @@ double Singular_Value::cal_type_0(const std::vector<ModuleBase::Vector3<double>>
     return val;
 }
 
-double Singular_Value::fq_type_1(const ModuleBase::Vector3<double>& qvec,
-                                 const int& qdiv,
+double Singular_Value::fq_type_1(const int& qdiv,
                                  const std::vector<ModuleBase::Vector3<double>>& Gvec,
                                  const double& lambda)
 {
@@ -140,7 +149,7 @@ double Singular_Value::fq_type_1(const ModuleBase::Vector3<double>& qvec,
     const bool exclude_Gamma = true;
     const int lmax = 0;
     const ModuleBase::Vector3<double> tau(0, 0, 0);
-    const int n_LM = (lmax + 1) * (lmax + 1);
+    const ModuleBase::Vector3<double> qvec(0, 0, 0);
 
     std::vector<std::complex<double>> lattice_sum
         = Gaussian_Abfs::get_lattice_sum(qvec, Gvec, qexpo, lambda, exclude_Gamma, lmax, tau);
@@ -159,22 +168,23 @@ double Singular_Value::cal_type_1(const std::vector<ModuleBase::Vector3<double>>
     ModuleBase::TITLE("Singular_Value", "cal_type_1");
     ModuleBase::timer::tick("Singular_Value", "cal_type_1");
 
+    const int nks = kvec_c.size();
     std::vector<ModuleBase::Vector3<double>> bvec;
     bvec.resize(3);
-    bvec[0].x = GlobalC::ucell.G.e11;
-    bvec[0].y = GlobalC::ucell.G.e12;
-    bvec[0].z = GlobalC::ucell.G.e13;
+    bvec[0].x = GlobalC::ucell.G.e11 / nks;
+    bvec[0].y = GlobalC::ucell.G.e12 / nks;
+    bvec[0].z = GlobalC::ucell.G.e13 / nks;
 
-    bvec[1].x = GlobalC::ucell.G.e21;
-    bvec[1].y = GlobalC::ucell.G.e22;
-    bvec[1].z = GlobalC::ucell.G.e23;
+    bvec[1].x = GlobalC::ucell.G.e21 / nks;
+    bvec[1].y = GlobalC::ucell.G.e22 / nks;
+    bvec[1].z = GlobalC::ucell.G.e23 / nks;
 
-    bvec[2].x = GlobalC::ucell.G.e31;
-    bvec[2].y = GlobalC::ucell.G.e32;
-    bvec[2].z = GlobalC::ucell.G.e33;
+    bvec[2].x = GlobalC::ucell.G.e31 / nks;
+    bvec[2].y = GlobalC::ucell.G.e32 / nks;
+    bvec[2].z = GlobalC::ucell.G.e33 / nks;
 
-    auto cal_chi = [&qdiv, &bvec, &kvec_c](const double& lambda) {
-        const T_cal_fq_type func_cal_fq_type_1 = std::bind(&fq_type_1, std::placeholders::_1, qdiv, bvec, lambda);
+    auto cal_chi = [&qdiv, &bvec, &nks](const double& lambda) {
+        const T_cal_fq_type_no func_cal_fq_type_1 = std::bind(&fq_type_1, qdiv, bvec, lambda);
         double prefactor = ModuleBase::TWO_PI * std::pow(lambda, -1 / qdiv);
         double fq_int;
         if (qdiv == 2)
@@ -183,7 +193,7 @@ double Singular_Value::cal_type_1(const std::vector<ModuleBase::Vector3<double>>
             fq_int = prefactor;
         else
             ModuleBase::WARNING_QUIT("Singular_Value::cal_type_1", "Type 1 fq only supports qdiv=1 or qdiv=2!");
-        return solve_chi(kvec_c, func_cal_fq_type_1, fq_int);
+        return solve_chi(nks, func_cal_fq_type_1, fq_int);
     };
 
     int tot_iter = 0;

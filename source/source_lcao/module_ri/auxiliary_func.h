@@ -23,6 +23,7 @@ class Singular_Value
 
   private:
     using T_cal_fq_type = std::function<double(const ModuleBase::Vector3<double>& gk)>;
+    using T_cal_fq_type_no = std::function<double()>;
 
   public:
     static double cal_type_0(const std::vector<ModuleBase::Vector3<double>>& kvec_c,
@@ -47,6 +48,7 @@ class Singular_Value
     static double solve_chi(const std::vector<ModuleBase::Vector3<double>>& kvec_c,
                             const T_cal_fq_type& func_cal_fq,
                             const double& fq_int);
+    static double solve_chi(const int& nks, const T_cal_fq_type_no& func_cal_fq, const double& fq_int);
     static double sum_for_solve_chi(const std::vector<ModuleBase::Vector3<double>>& kvec_c,
                                     const T_cal_fq_type& func_cal_fq,
                                     const double& fq_int);
@@ -65,8 +67,7 @@ class Singular_Value
                             std::vector<ModuleBase::Vector3<double>>& avec,
                             std::vector<ModuleBase::Vector3<double>>& bvec);
     // gamma: chosen as the radius of sphere which has the same volume as the Brillouin zone.
-    static double fq_type_1(const ModuleBase::Vector3<double>& qvec,
-                            const int& qdiv,
+    static double fq_type_1(const int& qdiv,
                             const std::vector<ModuleBase::Vector3<double>>& Gvec,
                             const double& lambda);
 };
