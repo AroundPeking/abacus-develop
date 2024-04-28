@@ -75,7 +75,8 @@ RI::Tensor<std::complex<double>> Gaussian_Abfs::get_Vq(
         {
             double norm_2 = double_factorial(2 * lq - 1) * std::sqrt(ModuleBase::PI * 0.5);
             std::complex<double> phase = std::pow(ModuleBase::IMAG_UNIT, lp - lq);
-            std::complex<double> cfac = ModuleBase::FOUR_PI * phase * std::pow(ModuleBase::TWO_PI, 3) / (norm_1 * norm_2) / GlobalC::ucell.omega;
+            std::complex<double> cfac = ModuleBase::FOUR_PI * phase * std::pow(ModuleBase::TWO_PI, 3)
+                                        / (norm_1 * norm_2) / GlobalC::ucell.omega;
             for (int L = std::abs(lp - lq); L <= lp + lq; L += 2) // if lp+lq-L == odd, then Gaunt_Coefficients = 0
             {
                 const int i_add_ksq = (lp + lq - L) / 2;
@@ -164,42 +165,50 @@ std::vector<std::complex<double>> Gaussian_Abfs::get_lattice_sum(
     const double eta = 45;
     const double Rmax = std::sqrt(eta / exponent) + qvec.norm() * GlobalC::ucell.tpiba;
     std::vector<int> n_supercells = get_n_supercells(Rmax);
+    const int total_cells = (2 * n_supercells[0] + 1) * (2 * n_supercells[1] + 1) * (2 * n_supercells[2] + 1);
 
     const int total_lm = (lmax + 1) * (lmax + 1);
     std::vector<std::complex<double>> result(total_lm, {0.0, 0.0});
 
-    for (int G0 = -n_supercells[0]; G0 <= n_supercells[0]; ++G0)
+#pragma omp declare reduction(vec_plus : std::vector<std::complex<double>> : std::transform(omp_out.begin(),                        \
+                                                                                   omp_out.end(),                      \
+                                                                                   omp_in.begin(),                     \
+                                                                                   omp_out.begin(),                    \
+                                                                                   std::plus<std::complex<double>>()))                \
+    initializer(omp_priv = decltype(omp_orig)(omp_orig.size()))
+
+#pragma omp parallel for reduction(vec_plus : result)
+    for (int idx = 0; idx < total_cells; ++idx)
     {
-        for (int G1 = -n_supercells[1]; G1 <= n_supercells[1]; ++G1)
+        int G0 = (idx / ((2 * n_supercells[1] + 1) * (2 * n_supercells[2] + 1))) - n_supercells[0];
+        int G1 = ((idx / (2 * n_supercells[2] + 1)) % (2 * n_supercells[1] + 1)) - n_supercells[1];
+        int G2 = (idx % (2 * n_supercells[2] + 1)) - n_supercells[2];
+
+        if (exclude_Gamma && G0 == 0 && G1 == 0 && G2 == 0)
+            continue;
+        ModuleBase::Vector3<double> Gxyz
+            = Gvec[0] * static_cast<double>(G0) + Gvec[1] * static_cast<double>(G1) + Gvec[2] * static_cast<double>(G2);
+        std::vector<ModuleBase::Vector3<double>> vec;
+        vec.resize(1);
+        vec[0] = -(qvec + Gxyz);
+        const double vec_sq = vec[0].norm2() * GlobalC::ucell.tpiba2;
+        const double vec_abs = std::sqrt(vec_sq);
+
+        const double val_s = std::exp(-exponent * vec_sq) * std::pow(vec_abs, power);
+
+        ModuleBase::matrix ylm(total_lm, 1);
+        ModuleBase::YlmReal::Ylm_Real(total_lm, 1, vec.data(), ylm);
+
+        std::complex<double> phase = std::exp(ModuleBase::TWO_PI * ModuleBase::IMAG_UNIT * (vec[0] * tau));
+
+        for (int L = 0; L != lmax + 1; ++L)
         {
-            for (int G2 = -n_supercells[2]; G2 <= n_supercells[2]; ++G2)
+            const double val_l = val_s * std::pow(vec_abs, L);
+            for (int m = 0; m != 2 * L + 1; ++m)
             {
-                if (exclude_Gamma && G0 == 0 && G1 == 0 && G2 == 0)
-                    continue;
-                ModuleBase::Vector3<double> Gxyz = Gvec[0] * static_cast<double>(G0) + Gvec[1] * static_cast<double>(G1) + Gvec[2] * static_cast<double>(G2);
-                std::vector<ModuleBase::Vector3<double>> vec;
-                vec.resize(1);
-                vec[0] = -(qvec + Gxyz);
-                const double vec_sq = vec[0].norm2() * GlobalC::ucell.tpiba2;
-                const double vec_abs = std::sqrt(vec_sq);
-
-                const double val_s = std::exp(-exponent * vec_sq) * std::pow(vec_abs, power);
-
-                ModuleBase::matrix ylm(total_lm, 1);
-                ModuleBase::YlmReal::Ylm_Real(total_lm, 1, vec.data(), ylm);
-
-                std::complex<double> phase = std::exp(ModuleBase::TWO_PI * ModuleBase::IMAG_UNIT * (vec[0] * tau));
-
-                for (int L = 0; L != lmax + 1; ++L)
-                {
-                    const double val_l = val_s * std::pow(vec_abs, L);
-                    for (int m = 0; m != 2 * L + 1; ++m)
-                    {
-                        const int lm = L * L + m;
-                        const double val_lm = val_l * ylm(lm, 0);
-                        result[lm] += val_lm * phase;
-                    }
-                }
+                const int lm = L * L + m;
+                const double val_lm = val_l * ylm(lm, 0);
+                result[lm] += val_lm * phase;
             }
         }
     }
