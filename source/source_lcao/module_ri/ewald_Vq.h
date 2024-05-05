@@ -45,15 +45,23 @@ class Ewald_Vq
         const std::vector<TAC>& list_A1,
         const std::vector<TA>& list_A0_k,
         const std::vector<TAK>& list_A1_k,
+        const std::vector<TA>& list_A0_pair_R,
+        const std::vector<TAC>& list_A1_pair_R,
+        const std::vector<TA>& list_A0_pair_k,
+        const std::vector<TAK>& list_A1_pair_k,
         const double& chi,
-        const std::map<TA, std::map<TAC, RI::Tensor<Tdata>>>& Vs_in);
+        std::map<TA, std::map<TAC, RI::Tensor<Tdata>>>& Vs_in);
 
     std::map<TA, std::map<TAC, RI::Tensor<Tdata>>> cal_Vs(const std::vector<TA>& list_A0,
                                                           const std::vector<TAC>& list_A1,
                                                           const std::vector<TA>& list_A0_k,
                                                           const std::vector<TAK>& list_A1_k,
+                                                          const std::vector<TA>& list_A0_pair_R,
+                                                          const std::vector<TAC>& list_A1_pair_R,
+                                                          const std::vector<TA>& list_A0_pair_k,
+                                                          const std::vector<TAK>& list_A1_pair_k,
                                                           const double& chi,
-                                                          const std::map<TA, std::map<TAC, RI::Tensor<Tdata>>>& Vs_in);
+                                                          std::map<TA, std::map<TAC, RI::Tensor<Tdata>>>& Vs_in);
 
   private:
     const Exx_Info::Exx_Info_RI& info;
@@ -76,11 +84,12 @@ class Ewald_Vq
         {4, 1}
     }.at(GlobalV::NSPIN);
     int nks0;
+    std::set<TA> atoms;
 
   private:
     std::map<TA, std::map<TAC, RI::Tensor<Tdata>>> set_Vs(const std::vector<TA>& list_A0,
                                                           const std::vector<TAC>& list_A1,
-                                                          const std::map<TA, std::map<TAC, RI::Tensor<Tdata>>>& Vs_in);
+                                                          std::map<TA, std::map<TAC, RI::Tensor<Tdata>>>& Vs_in);
 
     std::map<TA, std::map<TAC, RI::Tensor<Tdata>>> cal_Vs_gauss(const std::vector<TA>& list_A0,
                                                                 const std::vector<TAC>& list_A1);
@@ -88,14 +97,18 @@ class Ewald_Vq
     std::map<TA, std::map<TAC, RI::Tensor<Tdata>>> cal_Vs_minus_gauss(
         const std::vector<TA>& list_A0,
         const std::vector<TAC>& list_A1,
-        const std::map<TA, std::map<TAC, RI::Tensor<Tdata>>>& Vs_in,
-        const std::map<TA, std::map<TAC, RI::Tensor<Tdata>>>& Vs_gauss_in);
+        std::map<TA, std::map<TAC, RI::Tensor<Tdata>>>& Vs_in,
+        std::map<TA, std::map<TAC, RI::Tensor<Tdata>>>& Vs_gauss_in);
 
     std::map<TA, std::map<TAK, RI::Tensor<std::complex<double>>>> set_Vq(
         const std::vector<TA>& list_A0_k,
         const std::vector<TAK>& list_A1_k,
+        const std::vector<TA>& list_A0_pair_R,
+        const std::vector<TAC>& list_A1_pair_R,
+        const std::vector<TA>& list_A0_pair_k,
+        const std::vector<TAK>& list_A1_pair_k,
         const double& chi,
-        const std::map<TA, std::map<TAC, RI::Tensor<Tdata>>>& Vs_minus_gauss_in);
+        std::map<TA, std::map<TAC, RI::Tensor<Tdata>>>& Vs_minus_gauss_in);
 
     std::map<TA, std::map<TAK, RI::Tensor<std::complex<double>>>> cal_Vq_gauss(const std::vector<TA>& list_A0_k,
                                                                                const std::vector<TAK>& list_A1_k,
@@ -104,7 +117,7 @@ class Ewald_Vq
     std::map<TA, std::map<TAK, RI::Tensor<std::complex<double>>>> cal_Vq_minus_gauss(
         const std::vector<TA>& list_A0,
         const std::vector<TAC>& list_A1,
-        const std::map<TA, std::map<TAC, RI::Tensor<Tdata>>>& Vs_minus_gauss);
+        std::map<TA, std::map<TAC, RI::Tensor<Tdata>>>& Vs_minus_gauss);
 
     std::vector<std::vector<std::vector<Numerical_Orbital_Lm>>> init_gauss(
         std::vector<std::vector<std::vector<Numerical_Orbital_Lm>>>& orb_in);
