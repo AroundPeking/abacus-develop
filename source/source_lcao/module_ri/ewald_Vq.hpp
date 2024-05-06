@@ -160,8 +160,8 @@ auto Ewald_Vq<Tdata>::cal_Vs_minus_gauss(const std::vector<TA>& list_A0,
                                     const size_t index0 = this->index_abfs[it0][l0][n0][m0];
                                     const size_t index1 = this->index_abfs[it1][l1][n1][m1];
                                     data(index0, index1)
-                                        = Vs_in[list_A0[i0]][list_A0[i1]](index0, index1)
-                                          - pA * pB * Vs_gauss_in[list_A0[i0]][list_A0[i1]](index0, index1);
+                                        = Vs_in[list_A0[i0]][list_A1[i1]](index0, index1)
+                                          - pA * pB * Vs_gauss_in[list_A0[i0]][list_A1[i1]](index0, index1);
                                 }
                             }
                         }
@@ -169,7 +169,7 @@ auto Ewald_Vq<Tdata>::cal_Vs_minus_gauss(const std::vector<TA>& list_A0,
                 }
             }
 #pragma omp critical(Ewald_Vq_cal_Vs_minus_gauss)
-            Vs_minus_gauss[list_A0[i0]][list_A0[i1]] = data;
+            Vs_minus_gauss[list_A0[i0]][list_A1[i1]] = data;
         }
     }
     ModuleBase::timer::tick("Ewald_Vq", "cal_Vs_minus_gauss");
@@ -204,7 +204,7 @@ auto Ewald_Vq<Tdata>::set_Vq(const std::vector<TA>& list_A0_k,
     // MPI: {ia0, {ia1, k}} to {ia0, ia1}
     std::map<TA, std::map<TAK, RI::Tensor<std::complex<double>>>> Vq_gauss_out
         = this->cal_Vq_gauss(list_A0_k, list_A1_k, chi); //{ia0, {ia1, k}}
-    std::map<TA, std::map<TAK, RI::Tensor<Tdata>>> Vq_gauss
+    std::map<TA, std::map<TAK, RI::Tensor<std::complex<double>>>> Vq_gauss
         = RI::Communicate_Tensors_Map_Judge::comm_map2_first(this->mpi_comm,
                                                              Vq_gauss_out,
                                                              this->atoms,
