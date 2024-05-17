@@ -170,7 +170,7 @@ std::vector<std::complex<double>> Gaussian_Abfs::get_lattice_sum(
 
     const int total_lm = (lmax + 1) * (lmax + 1);
     std::vector<std::complex<double>> result(total_lm, {0.0, 0.0});
-    std::vector<ModuleBase::Vector3<double>> Gxyzs;
+    std::vector<ModuleBase::Vector3<double>> qGvecs;
     for (int idx = 0; idx < total_cells; ++idx)
     {
         int G0 = (idx / ((2 * n_supercells[1] + 1) * (2 * n_supercells[2] + 1))) - n_supercells[0];
@@ -178,13 +178,13 @@ std::vector<std::complex<double>> Gaussian_Abfs::get_lattice_sum(
         int G2 = (idx % (2 * n_supercells[2] + 1)) - n_supercells[2];
         if (exclude_Gamma && G0 == 0 && G1 == 0 && G2 == 0)
             continue;
-        ModuleBase::Vector3<double> Gxyz
-            = Gvec[0] * static_cast<double>(G0) + Gvec[1] * static_cast<double>(G1) + Gvec[2] * static_cast<double>(G2);
-        Gxyzs.push_back(Gxyz);
+        ModuleBase::Vector3<double> qGvec
+            = -(qvec + Gvec[0] * static_cast<double>(G0) + Gvec[1] * static_cast<double>(G1) + Gvec[2] * static_cast<double>(G2));
+        qGvecs.push_back(qGvec);
     }
-    const int npw = Gxyzs.size();
+    const int npw = qGvecs.size();
     ModuleBase::matrix ylm(total_lm, npw);
-    ModuleBase::YlmReal::Ylm_Real(total_lm, npw, Gxyzs.data(), ylm);
+    ModuleBase::YlmReal::Ylm_Real(total_lm, npw, qGvecs.data(), ylm);
 
 #pragma omp declare reduction(vec_plus : std::vector<std::complex<double>> : std::transform(                           \
         omp_out.begin(),                                                                                               \
@@ -196,8 +196,7 @@ std::vector<std::complex<double>> Gaussian_Abfs::get_lattice_sum(
 #pragma omp parallel for reduction(vec_plus : result)
     for (int idx = 0; idx < npw; ++idx)
     {
-        ModuleBase::Vector3<double> Gxyz = Gxyzs[idx];
-        ModuleBase::Vector3<double> vec = -(qvec + Gxyz);
+        ModuleBase::Vector3<double> vec = qGvecs[idx];
         const double vec_sq = vec.norm2() * GlobalC::ucell.tpiba2;
         const double vec_abs = std::sqrt(vec_sq);
 
