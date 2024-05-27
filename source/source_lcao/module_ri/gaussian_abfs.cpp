@@ -107,7 +107,22 @@ Numerical_Orbital_Lm Gaussian_Abfs::Gauss(const Numerical_Orbital_Lm& orb, const
 {
     Numerical_Orbital_Lm gaussian;
     const int angular_momentum_l = orb.getL();
-    const int Nr = orb.getNr();
+    const double eta = 45;
+    const double rcut = std::sqrt(eta / lambda);
+    const double dr = orb.get_rab().back();
+    const int Nr = rcut > orb.get_r_radial().back() ? orb.getNr() + std::ceil((rcut - orb.get_r_radial().back()) / dr)
+                                                    : orb.getNr();
+    std::vector<double> rab(Nr);
+    for (size_t ir = 0; ir < std::min(orb.getNr(), Nr); ++ir)
+        rab[ir] = orb.getRab(ir);
+    for (size_t ir = orb.getNr(); ir < Nr; ++ir)
+        rab[ir] = dr;
+    std::vector<double> r_radial(Nr);
+    for (size_t ir = 0; ir < std::min(orb.getNr(), Nr); ++ir)
+        r_radial[ir] = orb.getRadial(ir);
+    for (size_t ir = orb.getNr(); ir < Nr; ++ir)
+        r_radial[ir] = orb.get_r_radial().back() + (ir - orb.getNr() + 1) * dr;
+
     const double frac = std::pow(lambda, angular_momentum_l + 1.5) / double_factorial(2 * angular_momentum_l - 1)
                         / std::sqrt(ModuleBase::PI * 0.5);
 
@@ -123,9 +138,9 @@ Numerical_Orbital_Lm Gaussian_Abfs::Gauss(const Numerical_Orbital_Lm& orb, const
                               orb.getType(),
                               angular_momentum_l,
                               orb.getChi(),
-                              orb.getNr(),
-                              orb.getRab(),
-                              orb.getRadial(),
+                              Nr,
+                              ModuleBase::GlobalFunc::VECTOR_TO_PTR(rab),
+                              ModuleBase::GlobalFunc::VECTOR_TO_PTR(r_radial),
                               Numerical_Orbital_Lm::Psi_Type::Psi,
                               ModuleBase::GlobalFunc::VECTOR_TO_PTR(psi),
                               orb.getNk(),
@@ -178,8 +193,8 @@ std::vector<std::complex<double>> Gaussian_Abfs::get_lattice_sum(
         int G2 = (idx % (2 * n_supercells[2] + 1)) - n_supercells[2];
         if (exclude_Gamma && G0 == 0 && G1 == 0 && G2 == 0)
             continue;
-        ModuleBase::Vector3<double> qGvec
-            = -(qvec + Gvec[0] * static_cast<double>(G0) + Gvec[1] * static_cast<double>(G1) + Gvec[2] * static_cast<double>(G2));
+        ModuleBase::Vector3<double> qGvec = -(qvec + Gvec[0] * static_cast<double>(G0)
+                                              + Gvec[1] * static_cast<double>(G1) + Gvec[2] * static_cast<double>(G2));
         qGvecs.push_back(qGvec);
     }
     const int npw = qGvecs.size();
