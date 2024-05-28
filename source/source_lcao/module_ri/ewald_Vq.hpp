@@ -37,6 +37,7 @@ void Ewald_Vq<Tdata>::init(const MPI_Comm& mpi_comm_in,
     this->nks0 = this->p_kv->nkstot_full / this->nspin0;
 
     this->g_lcaos = this->init_gauss(lcaos_in);
+    this->g_lcaos_rcut = Exx_Abfs::Construct_Orbs::get_Rcut(this->g_lcaos);
     this->g_abfs = this->init_gauss(abfs_in);
 
     auto get_ccp_parameter = [this]() -> std::map<std::string, double> {
@@ -99,8 +100,8 @@ auto Ewald_Vq<Tdata>::cal_Vs_minus_gauss(const std::vector<TA>& list_A0,
 }
 
 template <typename Tdata>
-auto Ewald_Vq<Tdata>::cal_Vs_gauss(const std::vector<TA>& list_A0, const std::vector<TAC>& list_A1)
-    -> std::map<TA, std::map<TAC, RI::Tensor<Tdata>>>
+auto Ewald_Vq<Tdata>::cal_Vs_gauss(const std::vector<TA>& list_A0,
+                                   const std::vector<TAC>& list_A1) -> std::map<TA, std::map<TAC, RI::Tensor<Tdata>>>
 {
     ModuleBase::TITLE("Ewald_Vq", "cal_Vs_gauss");
     ModuleBase::timer::tick("Ewald_Vq", "cal_Vs_gauss");
@@ -141,9 +142,9 @@ auto Ewald_Vq<Tdata>::set_Vs_minus_gauss(const std::vector<TA>& list_A0,
 
             const ModuleBase::Vector3<double> tau0 = GlobalC::ucell.atoms[it0].tau[iat0];
             const ModuleBase::Vector3<double> tau1 = GlobalC::ucell.atoms[it1].tau[iat1];
-            const double Rcut = std::min(
-                GlobalC::ORB.Phi[it0].getRcut() * this->info.ccp_rmesh_times + GlobalC::ORB.Phi[it1].getRcut(),
-                GlobalC::ORB.Phi[it1].getRcut() * this->info.ccp_rmesh_times + GlobalC::ORB.Phi[it0].getRcut());
+            const double Rcut
+                = std::min(this->g_lcaos_rcut[it0] * this->info.ccp_rmesh_times + this->g_lcaos_rcut[it1],
+                           this->g_lcaos_rcut[it1] * this->info.ccp_rmesh_times + this->g_lcaos_rcut[it0]);
             const Abfs::Vector3_Order<double> R_delta
                 = -tau0 + tau1 + (RI_Util::array3_to_Vector3(cell1) * GlobalC::ucell.latvec);
 
@@ -374,9 +375,9 @@ auto Ewald_Vq<Tdata>::cal_Vq_minus_gauss(const std::vector<TA>& list_A0,
 
                 const ModuleBase::Vector3<double> tau0 = GlobalC::ucell.atoms[it0].tau[iat0];
                 const ModuleBase::Vector3<double> tau1 = GlobalC::ucell.atoms[it1].tau[iat1];
-                const double Rcut = std::min(
-                    GlobalC::ORB.Phi[it0].getRcut() * this->info.ccp_rmesh_times + GlobalC::ORB.Phi[it1].getRcut(),
-                    GlobalC::ORB.Phi[it1].getRcut() * this->info.ccp_rmesh_times + GlobalC::ORB.Phi[it0].getRcut());
+                const double Rcut
+                    = std::min(this->g_lcaos_rcut[it0] * this->info.ccp_rmesh_times + this->g_lcaos_rcut[it1],
+                               this->g_lcaos_rcut[it1] * this->info.ccp_rmesh_times + this->g_lcaos_rcut[it0]);
                 const Abfs::Vector3_Order<double> R_delta
                     = -tau0 + tau1 + (RI_Util::array3_to_Vector3(cell1) * GlobalC::ucell.latvec);
 
@@ -450,9 +451,9 @@ auto Ewald_Vq<Tdata>::set_Vs(const std::vector<TA>& list_A0_pair_R,
 
                 const ModuleBase::Vector3<double> tau0 = GlobalC::ucell.atoms[it0].tau[iat0];
                 const ModuleBase::Vector3<double> tau1 = GlobalC::ucell.atoms[it1].tau[iat1];
-                const double Rcut = std::min(
-                    GlobalC::ORB.Phi[it0].getRcut() * this->info.ccp_rmesh_times + GlobalC::ORB.Phi[it1].getRcut(),
-                    GlobalC::ORB.Phi[it1].getRcut() * this->info.ccp_rmesh_times + GlobalC::ORB.Phi[it0].getRcut());
+                const double Rcut
+                    = std::min(this->g_lcaos_rcut[it0] * this->info.ccp_rmesh_times + this->g_lcaos_rcut[it1],
+                               this->g_lcaos_rcut[it1] * this->info.ccp_rmesh_times + this->g_lcaos_rcut[it0]);
                 const Abfs::Vector3_Order<double> R_delta
                     = -tau0 + tau1 + (RI_Util::array3_to_Vector3(cell1) * GlobalC::ucell.latvec);
 

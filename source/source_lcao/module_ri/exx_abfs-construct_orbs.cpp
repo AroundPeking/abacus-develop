@@ -24,22 +24,23 @@ std::vector<std::vector<std::vector<Numerical_Orbital_Lm>>> Exx_Abfs::Construct_
             for (int N = 0; N < orbs_in.Phi[T].getNchi(L); ++N)
             {
                 const auto& orb_origin = orbs_in.Phi[T].PhiLN(L, N);
-                orbs[T][L][N].set_orbital_info(orb_origin.getLabel(),
-                                               orb_origin.getType(),
-                                               orb_origin.getL(),
-                                               orb_origin.getChi(),
-                                               orb_origin.getNr(),
-                                               orb_origin.getRab(),
-                                               orb_origin.getRadial(),
-                                               Numerical_Orbital_Lm::Psi_Type::Psi,
-                                               orb_origin.getPsi(),
-                                               static_cast<int>(orb_origin.getNk() * kmesh_times) | 1, // Nk must be odd
-                                               orb_origin.getDk(), // Peize Lin change 2017-04-16
-                                                                   //					orb_origin.getDk() / kmesh_times,
-                                               orb_origin.getDruniform(),
-                                               false,
-                                               true,
-                                               GlobalV::CAL_FORCE);
+                orbs[T][L][N].set_orbital_info(
+                    orb_origin.getLabel(),
+                    orb_origin.getType(),
+                    orb_origin.getL(),
+                    orb_origin.getChi(),
+                    orb_origin.getNr(),
+                    orb_origin.getRab(),
+                    orb_origin.getRadial(),
+                    Numerical_Orbital_Lm::Psi_Type::Psi,
+                    orb_origin.getPsi(),
+                    static_cast<int>(orb_origin.getNk() * kmesh_times) | 1, // Nk must be odd
+                    orb_origin.getDk(),                                     // Peize Lin change 2017-04-16
+                                                                            //					orb_origin.getDk() / kmesh_times,
+                    orb_origin.getDruniform(),
+                    false,
+                    true,
+                    GlobalV::CAL_FORCE);
             }
         }
     }
@@ -483,41 +484,42 @@ void Exx_Abfs::Construct_Orbs::print_orbs_size(const std::vector<std::vector<std
     }
 }
 
-std::map<int, int> Exx_Abfs::Construct_Orbs::get_nw(
-    const std::vector<std::vector<std::vector<Numerical_Orbital_Lm>>>& orb_in)
-{
-    std::map<int, int> data;
-    for (size_t T = 0; T != orb_in.size(); ++T)
-    {
-        int num = 0;
-        for (size_t L = 0; L != orb_in[T].size(); ++L)
-        {
-            for (size_t N = 0; N != orb_in[T][L].size(); ++N)
-            {
-                for (size_t m = 0; m != 2 * L + 1; ++m)
-                    ++num;
-            }
-        }
-        data[T] = num;
-    }
-    return data;
-}
+// std::map<int, int> Exx_Abfs::Construct_Orbs::get_nw(
+//     const std::vector<std::vector<std::vector<Numerical_Orbital_Lm>>>& orb_in)
+// {
+//     std::map<int, int> data;
+//     for (size_t T = 0; T != orb_in.size(); ++T)
+//     {
+//         int num = 0;
+//         for (size_t L = 0; L != orb_in[T].size(); ++L)
+//         {
+//             for (size_t N = 0; N != orb_in[T][L].size(); ++N)
+//             {
+//                 for (size_t m = 0; m != 2 * L + 1; ++m)
+//                     ++num;
+//             }
+//         }
+//         data[T] = num;
+//     }
+//     return data;
+// }
 
-int Exx_Abfs::Construct_Orbs::get_nmax_total(const std::vector<std::vector<std::vector<Numerical_Orbital_Lm>>>& orb_in)
-{
-    std::vector<int> nmax_vec(orb_in.size());
-    for (size_t T = 0; T != orb_in.size(); ++T)
-    {
-        for (size_t L = 0; L != orb_in[T].size(); ++L)
-        {
-            for (size_t N = 0; N != orb_in[T][L].size(); ++N)
-                ++nmax_vec[T];
-        }
-    }
-    int nmax_total = *max_element(nmax_vec.begin(), nmax_vec.end());
+// int Exx_Abfs::Construct_Orbs::get_nmax_total(const std::vector<std::vector<std::vector<Numerical_Orbital_Lm>>>&
+// orb_in)
+// {
+//     std::vector<int> nmax_vec(orb_in.size());
+//     for (size_t T = 0; T != orb_in.size(); ++T)
+//     {
+//         for (size_t L = 0; L != orb_in[T].size(); ++L)
+//         {
+//             for (size_t N = 0; N != orb_in[T][L].size(); ++N)
+//                 ++nmax_vec[T];
+//         }
+//     }
+//     int nmax_total = *max_element(nmax_vec.begin(), nmax_vec.end());
 
-    return nmax_total;
-}
+//     return nmax_total;
+// }
 
 std::vector<std::vector<std::vector<double>>> Exx_Abfs::Construct_Orbs::get_multipole(
     const std::vector<std::vector<std::vector<Numerical_Orbital_Lm>>>& orb_in)
@@ -543,5 +545,26 @@ std::vector<std::vector<std::vector<double>>> Exx_Abfs::Construct_Orbs::get_mult
         }
     }
 
-	return multipole;
+    return multipole;
+}
+
+std::vector<double> Exx_Abfs::Construct_Orbs::get_Rcut(const std::vector<std::vector<std::vector<Numerical_Orbital_Lm>>>& orb_in)
+{
+    std::vector<double> Rcut(orb_in.size());
+    for (size_t T = 0; T != orb_in.size(); ++T)
+    {
+        double rmax = std::numeric_limits<double>::min();
+        for (size_t L = 0; L != orb_in[T].size(); ++L)
+        {
+            for (size_t N = 0; N != orb_in[T][L].size(); ++N)
+            {
+                const double rcut = orb_in[T][L][N].getRcut();
+                if (rcut > rmax)
+                    rmax = rcut;
+            }
+        }
+        Rcut[T] = rmax;
+    }
+
+    return Rcut;
 }
