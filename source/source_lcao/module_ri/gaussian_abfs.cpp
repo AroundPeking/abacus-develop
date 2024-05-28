@@ -107,21 +107,17 @@ Numerical_Orbital_Lm Gaussian_Abfs::Gauss(const Numerical_Orbital_Lm& orb, const
 {
     Numerical_Orbital_Lm gaussian;
     const int angular_momentum_l = orb.getL();
-    const double eta = 15;
+    const double eta = 20;
     const double rcut = std::sqrt(eta / lambda);
     const double dr = orb.get_rab().back();
-    const int Nr = rcut > orb.get_r_radial().back() ? orb.getNr() + std::ceil((rcut - orb.get_r_radial().back()) / dr)
-                                                    : orb.getNr();
+    const int Nr = std::ceil(rcut / dr);
+
     std::vector<double> rab(Nr);
-    for (size_t ir = 0; ir < std::min(orb.getNr(), Nr); ++ir)
-        rab[ir] = orb.getRab(ir);
-    for (size_t ir = orb.getNr(); ir < Nr; ++ir)
+    for (size_t ir = 0; ir < Nr; ++ir)
         rab[ir] = dr;
     std::vector<double> r_radial(Nr);
-    for (size_t ir = 0; ir < std::min(orb.getNr(), Nr); ++ir)
-        r_radial[ir] = orb.getRadial(ir);
-    for (size_t ir = orb.getNr(); ir < Nr; ++ir)
-        r_radial[ir] = orb.get_r_radial().back() + (ir - orb.getNr() + 1) * dr;
+    for (size_t ir = 0; ir < Nr; ++ir)
+        r_radial[ir] = ir * dr;
 
     const double frac = std::pow(lambda, angular_momentum_l + 1.5) / double_factorial(2 * angular_momentum_l - 1)
                         / std::sqrt(ModuleBase::PI * 0.5);

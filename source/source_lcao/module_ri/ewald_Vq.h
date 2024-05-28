@@ -87,7 +87,7 @@ class Ewald_Vq
     std::vector<std::vector<std::vector<Numerical_Orbital_Lm>>> g_abfs;
     std::vector<std::vector<std::vector<Numerical_Orbital_Lm>>> g_abfs_ccp;
 
-    std::vector<double> g_lcaos_rcut;
+    std::vector<double> lcaos_rcut;
 
     const int nspin0 = std::map<int, int>{
         {1, 1},
