@@ -107,7 +107,7 @@ Numerical_Orbital_Lm Gaussian_Abfs::Gauss(const Numerical_Orbital_Lm& orb, const
 {
     Numerical_Orbital_Lm gaussian;
     const int angular_momentum_l = orb.getL();
-    const double eta = 45;
+    const double eta = 15;
     const double rcut = std::sqrt(eta / lambda);
     const double dr = orb.get_rab().back();
     const int Nr = rcut > orb.get_r_radial().back() ? orb.getNr() + std::ceil((rcut - orb.get_r_radial().back()) / dr)
@@ -129,10 +129,8 @@ Numerical_Orbital_Lm Gaussian_Abfs::Gauss(const Numerical_Orbital_Lm& orb, const
     std::vector<double> psi(Nr);
 
     for (size_t ir = 0; ir != Nr; ++ir)
-    {
-        psi[ir] = frac * std::pow(orb.getRadial(ir), angular_momentum_l)
-                  * std::exp(-lambda * orb.getRadial(ir) * orb.getRadial(ir) * 0.5);
-    }
+        psi[ir]
+            = frac * std::pow(r_radial[ir], angular_momentum_l) * std::exp(-lambda * r_radial[ir] * r_radial[ir] * 0.5);
 
     gaussian.set_orbital_info(orb.getLabel(),
                               orb.getType(),
