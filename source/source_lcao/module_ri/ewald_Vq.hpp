@@ -8,6 +8,7 @@
 
 #include <RI/comm/mix/Communicate_Tensors_Map_Judge.h>
 #include <RI/global/Global_Func-1.h>
+#include <RI/global/Map_Operator.h>
 
 // #include <chrono>
 #include <cmath>
@@ -38,7 +39,9 @@ void Ewald_Vq<Tdata>::init(const MPI_Comm& mpi_comm_in,
 
     this->g_lcaos = this->init_gauss(lcaos_in);
     this->g_abfs = this->init_gauss(abfs_in);
+
     this->lcaos_rcut = Exx_Abfs::Construct_Orbs::get_Rcut(lcaos_in);
+    this->g_lcaos_rcut = Exx_Abfs::Construct_Orbs::get_Rcut(this->g_lcaos);
 
     auto get_ccp_parameter = [this]() -> std::map<std::string, double> {
         switch (this->info.ccp_type)
@@ -61,12 +64,7 @@ void Ewald_Vq<Tdata>::init(const MPI_Comm& mpi_comm_in,
                                                         get_ccp_parameter(),
                                                         this->info.ccp_rmesh_times,
                                                         this->p_kv->nkstot_full);
-    this->cv.set_orbitals(this->g_lcaos,
-                          this->g_abfs,
-                          this->g_abfs_ccp,
-                          this->info.kmesh_times,
-                          this->info.ccp_rmesh_times,
-                          false);
+    this->cv.set_orbitals(this->g_lcaos, this->g_abfs, this->g_abfs_ccp, this->info.kmesh_times, false);
     this->multipole = Exx_Abfs::Construct_Orbs::get_multipole(abfs_in);
 
     const ModuleBase::Element_Basis_Index::Range range_abfs = Exx_Abfs::Abfs_Index::construct_range(abfs_in);
@@ -126,8 +124,7 @@ auto Ewald_Vq<Tdata>::set_Vs_minus_gauss(const std::vector<TA>& list_A0,
     ModuleBase::TITLE("Ewald_Vq", "set_Vs_minus_gauss");
     ModuleBase::timer::tick("Ewald_Vq", "set_Vs_minus_gauss");
 
-    std::map<TA, std::map<TAC, RI::Tensor<Tdata>>> Vs_minus_gauss;
-
+    std::map<TA, std::map<TAC, RI::Tensor<Tdata>>> pVs_gauss;
 #pragma omp parallel
     for (size_t i0 = 0; i0 < list_A0.size(); ++i0)
     {
@@ -142,19 +139,19 @@ auto Ewald_Vq<Tdata>::set_Vs_minus_gauss(const std::vector<TA>& list_A0,
 
             const ModuleBase::Vector3<double> tau0 = GlobalC::ucell.atoms[it0].tau[iat0];
             const ModuleBase::Vector3<double> tau1 = GlobalC::ucell.atoms[it1].tau[iat1];
+
             const double Rcut
-                = std::min(this->lcaos_rcut[it0] * this->info.ccp_rmesh_times + this->lcaos_rcut[it1],
-                           this->lcaos_rcut[it1] * this->info.ccp_rmesh_times + this->lcaos_rcut[it0]);
+                = std::min(this->g_lcaos_rcut[it0] * this->info.ccp_rmesh_times + this->g_lcaos_rcut[it1],
+                           this->g_lcaos_rcut[it1] * this->info.ccp_rmesh_times + this->g_lcaos_rcut[it0]);
             const Abfs::Vector3_Order<double> R_delta
                 = -tau0 + tau1 + (RI_Util::array3_to_Vector3(cell1) * GlobalC::ucell.latvec);
-
             if (R_delta.norm() * GlobalC::ucell.lat0 < Rcut)
             {
                 const size_t size0 = this->index_abfs[it0].count_size;
                 const size_t size1 = this->index_abfs[it1].count_size;
                 RI::Tensor<Tdata> data({size0, size1});
 
-                // V(R) = V(R) - pA * pB * V(R)_gauss
+                // pA * pB * V(R)_gauss
                 for (int l0 = 0; l0 != this->g_abfs_ccp[it0].size(); ++l0)
                 {
                     for (int l1 = 0; l1 != this->g_abfs[it1].size(); ++l1)
@@ -172,8 +169,7 @@ auto Ewald_Vq<Tdata>::set_Vs_minus_gauss(const std::vector<TA>& list_A0,
                                         const size_t index0 = this->index_abfs[it0][l0][n0][m0];
                                         const size_t index1 = this->index_abfs[it1][l1][n1][m1];
                                         data(index0, index1)
-                                            = Vs_in[list_A0[i0]][list_A1[i1]](index0, index1)
-                                              - pA * pB * Vs_gauss_in[list_A0[i0]][list_A1[i1]](index0, index1);
+                                            = pA * pB * Vs_gauss_in[list_A0[i0]][list_A1[i1]](index0, index1);
                                     }
                                 }
                             }
@@ -181,10 +177,17 @@ auto Ewald_Vq<Tdata>::set_Vs_minus_gauss(const std::vector<TA>& list_A0,
                     }
                 }
 #pragma omp critical(Ewald_Vq_cal_Vs_minus_gauss)
-                Vs_minus_gauss[list_A0[i0]][list_A1[i1]] = data;
+                pVs_gauss[list_A0[i0]][list_A1[i1]] = data;
             }
         }
     }
+
+    using namespace RI::Map_Operator;
+
+    std::map<TA, std::map<TAC, RI::Tensor<Tdata>>> Vs_minus_gauss;
+    for (size_t i0 = 0; i0 < list_A0.size(); ++i0)
+        Vs_minus_gauss[list_A0[i0]] = Vs_in[list_A0[i0]] - pVs_gauss[list_A0[i0]];
+
     ModuleBase::timer::tick("Ewald_Vq", "set_Vs_minus_gauss");
     return Vs_minus_gauss;
 }
@@ -375,9 +378,7 @@ auto Ewald_Vq<Tdata>::cal_Vq_minus_gauss(const std::vector<TA>& list_A0,
 
                 const ModuleBase::Vector3<double> tau0 = GlobalC::ucell.atoms[it0].tau[iat0];
                 const ModuleBase::Vector3<double> tau1 = GlobalC::ucell.atoms[it1].tau[iat1];
-                const double Rcut
-                    = std::min(this->lcaos_rcut[it0] * this->info.ccp_rmesh_times + this->lcaos_rcut[it1],
-                               this->lcaos_rcut[it1] * this->info.ccp_rmesh_times + this->lcaos_rcut[it0]);
+                const double Rcut = std::min(this->get_Rcut_max(it0, it1), this->get_Rcut_max(it1, it0));
                 const Abfs::Vector3_Order<double> R_delta
                     = -tau0 + tau1 + (RI_Util::array3_to_Vector3(cell1) * GlobalC::ucell.latvec);
 
@@ -451,9 +452,7 @@ auto Ewald_Vq<Tdata>::set_Vs(const std::vector<TA>& list_A0_pair_R,
 
                 const ModuleBase::Vector3<double> tau0 = GlobalC::ucell.atoms[it0].tau[iat0];
                 const ModuleBase::Vector3<double> tau1 = GlobalC::ucell.atoms[it1].tau[iat1];
-                const double Rcut
-                    = std::min(this->lcaos_rcut[it0] * this->info.ccp_rmesh_times + this->lcaos_rcut[it1],
-                               this->lcaos_rcut[it1] * this->info.ccp_rmesh_times + this->lcaos_rcut[it0]);
+                const double Rcut = std::min(this->get_Rcut_max(it0, it1), this->get_Rcut_max(it1, it0));
                 const Abfs::Vector3_Order<double> R_delta
                     = -tau0 + tau1 + (RI_Util::array3_to_Vector3(cell1) * GlobalC::ucell.latvec);
 
@@ -575,6 +574,15 @@ std::vector<std::vector<std::vector<Numerical_Orbital_Lm>>> Ewald_Vq<Tdata>::ini
     }
 
     return gauss;
+}
+
+template <typename Tdata>
+double Ewald_Vq<Tdata>::get_Rcut_max(const int it0, const int it1)
+{
+    double lcaos_rmax = this->lcaos_rcut[it0] * this->info.ccp_rmesh_times + this->lcaos_rcut[it1];
+    double g_lcaos_rmax = this->g_lcaos_rcut[it0] * this->info.ccp_rmesh_times + this->g_lcaos_rcut[it1];
+
+    return std::max(lcaos_rmax, g_lcaos_rmax);
 }
 
 #endif

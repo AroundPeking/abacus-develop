@@ -88,6 +88,7 @@ class Ewald_Vq
     std::vector<std::vector<std::vector<Numerical_Orbital_Lm>>> g_abfs_ccp;
 
     std::vector<double> lcaos_rcut;
+    std::vector<double> g_lcaos_rcut;
 
     const int nspin0 = std::map<int, int>{
         {1, 1},
@@ -127,9 +128,10 @@ class Ewald_Vq
         const double& chi,
         std::map<TA, std::map<TAC, RI::Tensor<Tdata>>>& Vs_minus_gauss_in); // return Vq [0, Nk)
 
-    std::map<TA, std::map<TAK, RI::Tensor<std::complex<double>>>> cal_Vq_gauss(const std::vector<TA>& list_A0_k,
-                                                                               const std::vector<TAK>& list_A1_k,
-                                                                               const double& chi);  // return Vq [-Nk/2, Nk/2)
+    std::map<TA, std::map<TAK, RI::Tensor<std::complex<double>>>> cal_Vq_gauss(
+        const std::vector<TA>& list_A0_k,
+        const std::vector<TAK>& list_A1_k,
+        const double& chi); // return Vq [-Nk/2, Nk/2)
 
     std::map<TA, std::map<TAK, RI::Tensor<std::complex<double>>>> cal_Vq_minus_gauss(
         const std::vector<TA>& list_A0,
@@ -138,6 +140,8 @@ class Ewald_Vq
 
     std::vector<std::vector<std::vector<Numerical_Orbital_Lm>>> init_gauss(
         std::vector<std::vector<std::vector<Numerical_Orbital_Lm>>>& orb_in);
+
+    inline double get_Rcut_max(const int it0, const int it1);
 };
 #include "ewald_Vq.hpp"
 
