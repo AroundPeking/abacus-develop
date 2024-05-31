@@ -336,7 +336,7 @@ auto Ewald_Vq<Tdata>::cal_Vq_gauss(const std::vector<TA>& list_A0_k,
                                                                                this->p_kv->kvec_c[ik],
                                                                                Gvec,
                                                                                chi,
-                                                                               this->info_ewald.ewald_lambda,
+                                                                               this->ewald_lambda,
                                                                                tau,
                                                                                this->MGT);
 
@@ -568,7 +568,7 @@ std::vector<std::vector<std::vector<Numerical_Orbital_Lm>>> Ewald_Vq<Tdata>::ini
             gauss[T][L].resize(orb_in[T][L].size());
             for (size_t N = 0; N != orb_in[T][L].size(); ++N)
             {
-                gauss[T][L][N] = this->gaussian_abfs.Gauss(orb_in[T][L][N], this->info_ewald.ewald_lambda);
+                gauss[T][L][N] = this->gaussian_abfs.Gauss(orb_in[T][L][N], this->ewald_lambda);
             }
         }
     }

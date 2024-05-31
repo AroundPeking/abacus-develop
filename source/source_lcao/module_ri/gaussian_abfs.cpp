@@ -107,7 +107,7 @@ Numerical_Orbital_Lm Gaussian_Abfs::Gauss(const Numerical_Orbital_Lm& orb, const
 {
     Numerical_Orbital_Lm gaussian;
     const int angular_momentum_l = orb.getL();
-    const double eta = 30;
+    const double eta = 35;
     const double rcut = std::sqrt(eta / lambda);
     const double dr = orb.get_rab().back();
     const int Nr = std::ceil(rcut / dr);
@@ -172,7 +172,7 @@ std::vector<std::complex<double>> Gaussian_Abfs::get_lattice_sum(
     if (power < 0.0 && !exclude_Gamma && qvec.norm() < 1e-10)
         ModuleBase::WARNING_QUIT("Gaussian_Abfs::lattice_sum", "Gamma point for power<0.0 cannot be evaluated!");
 
-    const double eta = 45;
+    const double eta = 35;
     const double Rmax = std::sqrt(eta / exponent) + qvec.norm() * GlobalC::ucell.tpiba;
     std::vector<int> n_supercells = get_n_supercells(Rmax);
     const int total_cells = (2 * n_supercells[0] + 1) * (2 * n_supercells[1] + 1) * (2 * n_supercells[2] + 1);
