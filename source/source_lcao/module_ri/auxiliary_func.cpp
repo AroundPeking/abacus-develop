@@ -59,9 +59,7 @@ double Singular_Value::solve_chi(const std::vector<ModuleBase::Vector3<double>>&
 }
 
 // for analytic integral of fq with gaussian sum
-double Singular_Value::solve_chi(const int& nks,
-                                const T_cal_fq_type_no& func_cal_fq,
-                                 const double& fq_int)
+double Singular_Value::solve_chi(const int& nks, const T_cal_fq_type_no& func_cal_fq, const double& fq_int)
 {
     double chi = fq_int * nks - func_cal_fq();
 
@@ -154,7 +152,7 @@ double Singular_Value::fq_type_1(const int& qdiv,
     std::vector<std::complex<double>> lattice_sum
         = Gaussian_Abfs::get_lattice_sum(qvec, Gvec, qexpo, lambda, exclude_Gamma, lmax, tau);
     assert(lattice_sum[0].imag() < 1e-10);
-    double fq = lattice_sum[0].real();
+    double fq = lattice_sum[0].real() * std::sqrt(ModuleBase::FOUR_PI);
 
     return fq;
 }
@@ -186,7 +184,8 @@ double Singular_Value::cal_type_1(const std::vector<int>& nmp,
 
     auto cal_chi = [&qdiv, &bvec, &nks](const double& lambda) {
         const T_cal_fq_type_no func_cal_fq_type_1 = std::bind(&fq_type_1, qdiv, bvec, lambda);
-        double prefactor = ModuleBase::TWO_PI * std::pow(lambda, -1 / qdiv);
+        double prefactor
+            = ModuleBase::TWO_PI * std::pow(lambda, -1.0 / qdiv) * GlobalC::ucell.omega / std::pow(ModuleBase::TWO_PI, 3);
         double fq_int;
         if (qdiv == 2)
             fq_int = prefactor * std::sqrt(ModuleBase::PI);
