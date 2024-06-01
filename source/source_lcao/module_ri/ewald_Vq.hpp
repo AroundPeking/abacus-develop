@@ -294,20 +294,6 @@ auto Ewald_Vq<Tdata>::cal_Vq_gauss(const std::vector<TA>& list_A0_k,
 
     std::map<TA, std::map<TAK, RI::Tensor<std::complex<double>>>> Vq_gauss_out;
 
-    std::vector<ModuleBase::Vector3<double>> Gvec;
-    Gvec.resize(3);
-    Gvec[0].x = GlobalC::ucell.G.e11;
-    Gvec[0].y = GlobalC::ucell.G.e12;
-    Gvec[0].z = GlobalC::ucell.G.e13;
-
-    Gvec[1].x = GlobalC::ucell.G.e21;
-    Gvec[1].y = GlobalC::ucell.G.e22;
-    Gvec[1].z = GlobalC::ucell.G.e23;
-
-    Gvec[2].x = GlobalC::ucell.G.e31;
-    Gvec[2].y = GlobalC::ucell.G.e32;
-    Gvec[2].z = GlobalC::ucell.G.e33;
-
     auto min_elem = std::min_element(list_A1_k.begin(), list_A1_k.end(), [](const TAK& a, const TAK& b) {
         return a.second[0] < b.second[0];
     });
@@ -334,7 +320,7 @@ auto Ewald_Vq<Tdata>::cal_Vq_gauss(const std::vector<TA>& list_A0_k,
             RI::Tensor<std::complex<double>> data = this->gaussian_abfs.get_Vq(this->g_abfs_ccp[it0].size() - 1,
                                                                                this->g_abfs[it1].size() - 1,
                                                                                this->p_kv->kvec_c[ik],
-                                                                               Gvec,
+                                                                               GlobalC::ucell.G,
                                                                                chi,
                                                                                this->ewald_lambda,
                                                                                tau,

@@ -21,7 +21,7 @@ RI::Tensor<std::complex<double>> Gaussian_Abfs::get_Vq(
     const int& lp_max,
     const int& lq_max, // Maximum L for which to calculate interaction.
     const ModuleBase::Vector3<double>& qvec,
-    const std::vector<ModuleBase::Vector3<double>>& Gvec,
+    const ModuleBase::Matrix3& G, 
     const double& chi, // Singularity corrected value at q=0.
     const double& lambda,
     const ModuleBase::Vector3<double>& tau,
@@ -58,7 +58,7 @@ RI::Tensor<std::complex<double>> Gaussian_Abfs::get_Vq(
         const int this_Lmax = Lmax - 2 * i_add_ksq; // calculate Lmax at current lp+lq
         const bool exclude_Gamma
             = (qvec.norm() < 1e-10 && i_add_ksq == 0); // only Gamma point and lq+lp-2>0 need to be corrected
-        lattice_sum[i_add_ksq] = get_lattice_sum(-qvec, Gvec, power, exponent, exclude_Gamma, this_Lmax, tau);
+        lattice_sum[i_add_ksq] = get_lattice_sum(-qvec, G, power, exponent, exclude_Gamma, this_Lmax, tau);
     }
 
     /* The exponent term comes in from Taylor expanding the
@@ -162,7 +162,7 @@ double Gaussian_Abfs::double_factorial(const int& n)
 
 std::vector<std::complex<double>> Gaussian_Abfs::get_lattice_sum(
     const ModuleBase::Vector3<double>& qvec,
-    const std::vector<ModuleBase::Vector3<double>>& Gvec,
+    const ModuleBase::Matrix3& G, 
     const double& power, // Will be 0. for straight GTOs and -2. for Coulomb interaction
     const double& exponent,
     const bool& exclude_Gamma, // The R==0. can be excluded by this flag.
@@ -173,9 +173,23 @@ std::vector<std::complex<double>> Gaussian_Abfs::get_lattice_sum(
         ModuleBase::WARNING_QUIT("Gaussian_Abfs::lattice_sum", "Gamma point for power<0.0 cannot be evaluated!");
 
     const double eta = 35;
-    const double Rmax = std::sqrt(eta / exponent) + qvec.norm() * GlobalC::ucell.tpiba;
-    std::vector<int> n_supercells = get_n_supercells(Rmax);
+    const double Gmax = std::sqrt(eta / exponent) + qvec.norm() * GlobalC::ucell.tpiba;
+    std::vector<int> n_supercells = get_n_supercells(G, Gmax);
     const int total_cells = (2 * n_supercells[0] + 1) * (2 * n_supercells[1] + 1) * (2 * n_supercells[2] + 1);
+
+    std::vector<ModuleBase::Vector3<double>> Gvec;
+    Gvec.resize(3);
+    Gvec[0].x = G.e11;
+    Gvec[0].y = G.e12;
+    Gvec[0].z = G.e13;
+
+    Gvec[1].x = G.e21;
+    Gvec[1].y = G.e22;
+    Gvec[1].z = G.e23;
+
+    Gvec[2].x = G.e31;
+    Gvec[2].y = G.e32;
+    Gvec[2].z = G.e33;
 
     const int total_lm = (lmax + 1) * (lmax + 1);
     std::vector<std::complex<double>> result(total_lm, {0.0, 0.0});
@@ -234,15 +248,27 @@ std::vector<std::complex<double>> Gaussian_Abfs::get_lattice_sum(
     return result;
 }
 
-std::vector<int> Gaussian_Abfs::get_n_supercells(const double& Rmax)
+std::vector<int> Gaussian_Abfs::get_n_supercells(const ModuleBase::Matrix3& G, const double& Gmax)
 {
     std::vector<int> n_supercells(3);
-    n_supercells[0] = static_cast<int>(
-        std::floor(GlobalC::ucell.a1.norm() * GlobalC::ucell.lat0 * Rmax / ModuleBase::TWO_PI + 1e-5));
-    n_supercells[1] = static_cast<int>(
-        std::floor(GlobalC::ucell.a2.norm() * GlobalC::ucell.lat0 * Rmax / ModuleBase::TWO_PI + 1e-5));
-    n_supercells[2] = static_cast<int>(
-        std::floor(GlobalC::ucell.a3.norm() * GlobalC::ucell.lat0 * Rmax / ModuleBase::TWO_PI + 1e-5));
+    ModuleBase::Matrix3 GI = G.Inverse();
+    ModuleBase::Matrix3 latvec = GI.Transpose();
+    latvec *= GlobalC::ucell.lat0;
+    std::vector<ModuleBase::Vector3<double>> lat;
+    lat.resize(3);
+    lat[0].x = latvec.e11;
+    lat[0].y = latvec.e12;
+    lat[0].z = latvec.e13;
+    lat[1].x = latvec.e21;
+    lat[1].y = latvec.e22;
+    lat[1].z = latvec.e23;
+    lat[2].x = latvec.e31;
+    lat[2].y = latvec.e32;
+    lat[2].z = latvec.e33;
+
+    n_supercells[0] = static_cast<int>(std::floor(lat[0].norm() * Gmax / ModuleBase::TWO_PI + 1e-5));
+    n_supercells[1] = static_cast<int>(std::floor(lat[1].norm() * Gmax / ModuleBase::TWO_PI + 1e-5));
+    n_supercells[2] = static_cast<int>(std::floor(lat[2].norm() * Gmax / ModuleBase::TWO_PI + 1e-5));
 
     return n_supercells;
 }

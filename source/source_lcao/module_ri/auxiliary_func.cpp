@@ -140,7 +140,7 @@ double Singular_Value::cal_type_0(const std::vector<ModuleBase::Vector3<double>>
 }
 
 double Singular_Value::fq_type_1(const int& qdiv,
-                                 const std::vector<ModuleBase::Vector3<double>>& Gvec,
+                                 const ModuleBase::Matrix3& Gvec,
                                  const double& lambda)
 {
     const int qexpo = -abs(qdiv);
@@ -166,19 +166,18 @@ double Singular_Value::cal_type_1(const std::vector<int>& nmp,
     ModuleBase::TITLE("Singular_Value", "cal_type_1");
     ModuleBase::timer::tick("Singular_Value", "cal_type_1");
 
-    std::vector<ModuleBase::Vector3<double>> bvec;
-    bvec.resize(3);
-    bvec[0].x = GlobalC::ucell.G.e11 / nmp[0];
-    bvec[0].y = GlobalC::ucell.G.e12 / nmp[0];
-    bvec[0].z = GlobalC::ucell.G.e13 / nmp[0];
+    ModuleBase::Matrix3 bvec;
+    bvec.e11 = GlobalC::ucell.G.e11 / nmp[0];
+    bvec.e12 = GlobalC::ucell.G.e12 / nmp[0];
+    bvec.e13 = GlobalC::ucell.G.e13 / nmp[0];
 
-    bvec[1].x = GlobalC::ucell.G.e21 / nmp[1];
-    bvec[1].y = GlobalC::ucell.G.e22 / nmp[1];
-    bvec[1].z = GlobalC::ucell.G.e23 / nmp[1];
+    bvec.e21 = GlobalC::ucell.G.e21 / nmp[1];
+    bvec.e22 = GlobalC::ucell.G.e22 / nmp[1];
+    bvec.e23 = GlobalC::ucell.G.e23 / nmp[1];
 
-    bvec[2].x = GlobalC::ucell.G.e31 / nmp[2];
-    bvec[2].y = GlobalC::ucell.G.e32 / nmp[2];
-    bvec[2].z = GlobalC::ucell.G.e33 / nmp[2];
+    bvec.e31 = GlobalC::ucell.G.e31 / nmp[2];
+    bvec.e32 = GlobalC::ucell.G.e32 / nmp[2];
+    bvec.e33 = GlobalC::ucell.G.e33 / nmp[2];
 
     const int nks = nmp[0] * nmp[1] * nmp[2];
 

@@ -21,7 +21,7 @@ class Gaussian_Abfs
     RI::Tensor<std::complex<double>> get_Vq(const int& lp_max,
                                             const int& lq_max, // Maximum L for which to calculate interaction.
                                             const ModuleBase::Vector3<double>& qvec,
-                                            const std::vector<ModuleBase::Vector3<double>>& Gvec,
+                                            const ModuleBase::Matrix3& G,
                                             const double& chi, // Singularity corrected value at q=0.
                                             const double& lambda,
                                             const ModuleBase::Vector3<double>& tau,
@@ -33,7 +33,7 @@ Calculate the lattice sum over a Gaussian:
 */
     static std::vector<std::complex<double>> get_lattice_sum(
         const ModuleBase::Vector3<double>& qvec,
-        const std::vector<ModuleBase::Vector3<double>>& Gvec,
+        const ModuleBase::Matrix3& G,
         const double& power, // Will be 0. for straight GTOs and -2. for Coulomb interaction
         const double& exponent,
         const bool& exclude_Gamma, // The R==0. can be excluded by this flag.
@@ -46,7 +46,7 @@ Calculate the lattice sum over a Gaussian:
   private:
     // calculates the double factorial n!! of n
     static double double_factorial(const int& n);
-    static std::vector<int> get_n_supercells(const double& Rmax);
+    static std::vector<int> get_n_supercells(const ModuleBase::Matrix3& G, const double& Gmax);
 };
 
 #endif
