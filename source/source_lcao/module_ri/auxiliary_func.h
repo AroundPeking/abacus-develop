@@ -38,7 +38,7 @@ class Singular_Value
                              const int& niter,
                              const double& eps);
 
-  private:
+  private: 
     static double solve_chi(const std::vector<ModuleBase::Vector3<double>>& kvec_c,
                             const T_cal_fq_type& func_cal_fq,
                             const std::array<int, 3>& nq_arr,

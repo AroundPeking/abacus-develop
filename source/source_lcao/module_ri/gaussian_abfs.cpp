@@ -175,7 +175,7 @@ std::vector<std::complex<double>> Gaussian_Abfs::get_lattice_sum(
     const double eta = 35;
     const double Gmax = std::sqrt(eta / exponent) + qvec.norm() * GlobalC::ucell.tpiba;
     std::vector<int> n_supercells = get_n_supercells(G, Gmax);
-    const int total_cells = (2 * n_supercells[0] + 1) * (2 * n_supercells[1] + 1) * (2 * n_supercells[2] + 1);
+    const int total_cells = std::accumulate(n_supercells.begin(), n_supercells.end(), 1, [](int a, int b) { return a * (2 * b + 1); });
 
     std::vector<ModuleBase::Vector3<double>> Gvec;
     Gvec.resize(3);
