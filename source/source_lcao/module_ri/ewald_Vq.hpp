@@ -207,6 +207,7 @@ auto Ewald_Vq<Tdata>::set_Vq(const std::vector<TA>& list_A0_k,
     ModuleBase::timer::tick("Ewald_Vq", "set_Vq");
 
     std::map<TA, std::map<TAK, RI::Tensor<std::complex<double>>>> Vq;
+    const int shift_for_mpi = std::floor(this->nks0 / 2.0);
 
     // MPI: {ia0, {ia1, R}} to {ia0, ia1}
     std::map<TA, std::map<TAC, RI::Tensor<Tdata>>> Vs_minus_gauss
@@ -219,16 +220,12 @@ auto Ewald_Vq<Tdata>::set_Vq(const std::vector<TA>& list_A0_k,
 
     // MPI: {ia0, {ia1, k}} to {ia0, ia1}
     std::map<TA, std::map<TAK, RI::Tensor<std::complex<double>>>> Vq_gauss_out
-        = this->cal_Vq_gauss(list_A0_k, list_A1_k, chi); //{ia0, {ia1, k}}
+        = this->cal_Vq_gauss(list_A0_k, list_A1_k, chi, shift_for_mpi); //{ia0, {ia1, k}}
     std::map<TA, std::map<TAK, RI::Tensor<std::complex<double>>>> Vq_gauss
         = RI::Communicate_Tensors_Map_Judge::comm_map2_first(this->mpi_comm,
                                                              Vq_gauss_out,
                                                              this->atoms,
                                                              this->atoms); //{ia0, ia1}
-
-    auto min_elem = std::min_element(list_A1_pair_k.begin(), list_A1_pair_k.end(), [](const TAK& a, const TAK& b) {
-        return a.second[0] < b.second[0];
-    });
 
 #pragma omp parallel
     for (size_t i0 = 0; i0 < list_A0_pair_k.size(); ++i0)
@@ -240,7 +237,7 @@ auto Ewald_Vq<Tdata>::set_Vq(const std::vector<TA>& list_A0_k,
             const int it0 = GlobalC::ucell.iat2it[iat0];
             const TA iat1 = list_A1_pair_k[i1].first;
             const int it1 = GlobalC::ucell.iat2it[iat1];
-            const int ik = list_A1_pair_k[i1].second[0] + std::abs(min_elem->second[0]);
+            const int ik = list_A1_pair_k[i1].second[0] + shift_for_mpi;
             const TAK re_index = std::make_pair(iat1, std::array<int, 1>{ik});
 
             const size_t size0 = this->index_abfs[it0].count_size;
@@ -287,16 +284,14 @@ auto Ewald_Vq<Tdata>::set_Vq(const std::vector<TA>& list_A0_k,
 template <typename Tdata>
 auto Ewald_Vq<Tdata>::cal_Vq_gauss(const std::vector<TA>& list_A0_k,
                                    const std::vector<TAK>& list_A1_k,
-                                   const double& chi) -> std::map<TA, std::map<TAK, RI::Tensor<std::complex<double>>>>
+                                   const double& chi,
+                                   const int& shift_for_mpi)
+    -> std::map<TA, std::map<TAK, RI::Tensor<std::complex<double>>>>
 {
     ModuleBase::TITLE("Ewald_Vq", "cal_Vq_gauss");
     ModuleBase::timer::tick("Ewald_Vq", "cal_Vq_gauss");
 
     std::map<TA, std::map<TAK, RI::Tensor<std::complex<double>>>> Vq_gauss_out;
-
-    auto min_elem = std::min_element(list_A1_k.begin(), list_A1_k.end(), [](const TAK& a, const TAK& b) {
-        return a.second[0] < b.second[0];
-    });
 
 #pragma omp parallel
     for (size_t i0 = 0; i0 < list_A0_k.size(); ++i0)
@@ -313,7 +308,7 @@ auto Ewald_Vq<Tdata>::cal_Vq_gauss(const std::vector<TA>& list_A0_k,
             const int it1 = GlobalC::ucell.iat2it[iat1];
             const int ia1 = GlobalC::ucell.iat2ia[iat1];
             const ModuleBase::Vector3<double> tau1 = GlobalC::ucell.atoms[it1].tau[ia1];
-            const int ik = list_A1_k[i1].second[0] + std::abs(min_elem->second[0]);
+            const int ik = list_A1_k[i1].second[0] + shift_for_mpi;
 
             const ModuleBase::Vector3<double> tau = tau0 - tau1;
 

@@ -132,7 +132,8 @@ class Ewald_Vq
     std::map<TA, std::map<TAK, RI::Tensor<std::complex<double>>>> cal_Vq_gauss(
         const std::vector<TA>& list_A0_k,
         const std::vector<TAK>& list_A1_k,
-        const double& chi); // return Vq [-Nk/2, Nk/2)
+        const double& chi,
+        const int& shift_for_mpi); // return Vq [-Nk/2, Nk/2)
 
     std::map<TA, std::map<TAK, RI::Tensor<std::complex<double>>>> cal_Vq_minus_gauss(
         const std::vector<TA>& list_A0,
