@@ -110,7 +110,8 @@ Numerical_Orbital_Lm Gaussian_Abfs::Gauss(const Numerical_Orbital_Lm& orb, const
     const double eta = 35;
     const double rcut = std::sqrt(eta / lambda);
     const double dr = orb.get_rab().back();
-    const int Nr = std::ceil(rcut / dr);
+    int Nr = std::ceil(rcut / dr);
+    if (Nr % 2==0) Nr += 1;
 
     std::vector<double> rab(Nr);
     for (size_t ir = 0; ir < Nr; ++ir)
