@@ -23,7 +23,8 @@ class Ewald_Vq
 {
   private:
     using TA = int;
-    using TC = std::array<int, 3>;
+    static constexpr std::size_t Ndim = 3;
+    using TC = std::array<int, Ndim>;
     using TAC = std::pair<TA, TC>;
 
     using TK = std::array<int, 1>;
@@ -40,36 +41,17 @@ class Ewald_Vq
               std::vector<std::vector<std::vector<Numerical_Orbital_Lm>>>& abfs_in,
               const K_Vectors* kv_in);
 
-    /*
-    MPI distribute
-      distribute_atoms_periods:
-        list_A0 / list_A1 : {ia0, {ia1, R}}
-        list_A0_k / list_A1_k : {ia0, {ia1, ik}} ; range -> [-Nk/2, Nk/2)
-      distribute_atoms:
-        list_A0_pair_R / list_A1_pair_R : {ia0, ia1} for R
-        list_A0_pair_k / list_A1_pair_k : {ia0, ia1} for k ; range -> [-Nk/2, Nk/2)
-    */
+    void init_parallel(
+        const std::array<Tcell, Ndim>& period_Vs,
+        const std::pair<std::vector<TA>, std::vector<std::vector<std::pair<TA, std::array<Tcell, Ndim>>>>>& list_As_Vs);
+
+    double get_singular_chi();
+
     std::map<TA, std::map<TAK, RI::Tensor<std::complex<double>>>> cal_Vq(
-        const std::vector<TA>& list_A0,
-        const std::vector<TAC>& list_A1,
-        const std::vector<TA>& list_A0_k,
-        const std::vector<TAK>& list_A1_k,
-        const std::vector<TA>& list_A0_pair_R,
-        const std::vector<TAC>& list_A1_pair_R,
-        const std::vector<TA>& list_A0_pair_k,
-        const std::vector<TAK>& list_A1_pair_k,
         const double& chi,
         std::map<TA, std::map<TAC, RI::Tensor<Tdata>>>& Vs_in); // return Vq [0, Nk)
 
-    std::map<TA, std::map<TAC, RI::Tensor<Tdata>>> cal_Vs(const std::vector<TA>& list_A0,
-                                                          const std::vector<TAC>& list_A1,
-                                                          const std::vector<TA>& list_A0_k,
-                                                          const std::vector<TAK>& list_A1_k,
-                                                          const std::vector<TA>& list_A0_pair_R,
-                                                          const std::vector<TAC>& list_A1_pair_R,
-                                                          const std::vector<TA>& list_A0_pair_k,
-                                                          const std::vector<TAK>& list_A1_pair_k,
-                                                          const double& chi,
+    std::map<TA, std::map<TAC, RI::Tensor<Tdata>>> cal_Vs(const double& chi,
                                                           std::map<TA, std::map<TAC, RI::Tensor<Tdata>>>& Vs_in);
 
   private:
@@ -98,6 +80,24 @@ class Ewald_Vq
     }.at(GlobalV::NSPIN);
     int nks0;
     std::set<TA> atoms;
+
+    /*
+  MPI distribute
+    distribute_atoms_periods:
+      list_A0 / list_A1 : {ia0, {ia1, R}}
+      list_A0_k / list_A1_k : {ia0, {ia1, ik}} ; range -> [-Nk/2, Nk/2)
+    distribute_atoms:
+      list_A0_pair_R / list_A1_pair_R : {ia0, ia1} for R
+      list_A0_pair_k / list_A1_pair_k : {ia0, ia1} for k ; range -> [-Nk/2, Nk/2)
+  */
+    std::vector<TA> list_A0;
+    std::vector<TAC> list_A1;
+    std::vector<TA> list_A0_k;
+    std::vector<TAK> list_A1_k;
+    std::vector<TA> list_A0_pair_R;
+    std::vector<TAC> list_A1_pair_R;
+    std::vector<TA> list_A0_pair_k;
+    std::vector<TAK> list_A1_pair_k;
 
   private:
     std::map<TA, std::map<TAC, RI::Tensor<Tdata>>> set_Vs(
