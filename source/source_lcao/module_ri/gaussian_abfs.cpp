@@ -17,15 +17,16 @@
 #include "module_base/tool_title.h"
 #include "module_hamilt_pw/hamilt_pwdft/global.h"
 
-RI::Tensor<std::complex<double>> Gaussian_Abfs::get_Vq(
-    const int& lp_max,
-    const int& lq_max, // Maximum L for which to calculate interaction.
-    const ModuleBase::Vector3<double>& qvec,
-    const ModuleBase::Matrix3& G, 
-    const double& chi, // Singularity corrected value at q=0.
-    const double& lambda,
-    const ModuleBase::Vector3<double>& tau,
-    const ORB_gaunt_table& MGT)
+auto Gaussian_Abfs::get_Vq(const int& lp_max,
+                           const int& lq_max, // Maximum L for which to calculate interaction.
+                           const ModuleBase::Vector3<double>& qvec,
+                           const ModuleBase::Matrix3& G,
+                           const double& chi, // Singularity corrected value at q=0.
+                           const double& lambda,
+                           const ModuleBase::Vector3<double>& tau,
+                           const ORB_gaunt_table& MGT,
+                           const bool& cal_deriv)
+    -> std::pair<RI::Tensor<std::complex<double>>, std::vector<RI::Tensor<std::complex<double>>>>
 {
     ModuleBase::TITLE("Gaussian_Abfs", "get_Vq");
     ModuleBase::timer::tick("Gaussian_Abfs", "get_Vq");
@@ -35,6 +36,7 @@ RI::Tensor<std::complex<double>> Gaussian_Abfs::get_Vq(
     const size_t vq_ndim0 = (lp_max + 1) * (lp_max + 1);
     const size_t vq_ndim1 = (lq_max + 1) * (lq_max + 1);
     RI::Tensor<std::complex<double>> Vq({vq_ndim0, vq_ndim1});
+    std::vector<RI::Tensor<std::complex<double>>> d_Vq(3, RI::Tensor<std::complex<double>>({vq_ndim0, vq_ndim1}));
     /*
      n_add_ksq * 2 = lp_max + lq_max - abs(lp_max - lq_max)
         if lp_max < lq_max
@@ -49,6 +51,9 @@ RI::Tensor<std::complex<double>> Gaussian_Abfs::get_Vq(
     const int n_add_ksq = std::min(lp_max, lq_max);
     std::vector<std::vector<std::complex<double>>> lattice_sum(n_add_ksq + 1,
                                                                std::vector<std::complex<double>>(n_LM, {0.0, 0.0}));
+    std::vector<std::vector<std::vector<std::complex<double>>>> d_lattice_sum(
+        n_add_ksq + 1,
+        std::vector<std::vector<std::complex<double>>>(n_LM, std::vector<std::complex<double>>(3, {0.0, 0.0})));
 
     const double exponent = 1.0 / lambda;
     for (int i_add_ksq = 0; i_add_ksq != n_add_ksq + 1;
@@ -58,7 +63,9 @@ RI::Tensor<std::complex<double>> Gaussian_Abfs::get_Vq(
         const int this_Lmax = Lmax - 2 * i_add_ksq; // calculate Lmax at current lp+lq
         const bool exclude_Gamma
             = (qvec.norm() < 1e-10 && i_add_ksq == 0); // only Gamma point and lq+lp-2>0 need to be corrected
-        lattice_sum[i_add_ksq] = get_lattice_sum(-qvec, G, power, exponent, exclude_Gamma, this_Lmax, tau);
+        auto data = get_lattice_sum(-qvec, G, power, exponent, exclude_Gamma, this_Lmax, tau, cal_deriv);
+        lattice_sum[i_add_ksq] = data.first;
+        d_lattice_sum[i_add_ksq] = data.second;
     }
 
     /* The exponent term comes in from Taylor expanding the
@@ -92,15 +99,19 @@ RI::Tensor<std::complex<double>> Gaussian_Abfs::get_Vq(
                             const int lm = MGT.get_lm_index(L, m);
                             double triple_Y = MGT.Gaunt_Coefficients(lmp, lmq, lm);
                             Vq(lmp, lmq) += triple_Y * cfac * lattice_sum[i_add_ksq][lm];
+                            if (cal_deriv)
+                                for (int ip = 0; ip != 3; ++ip)
+                                    d_Vq[ip](lmp, lmq) += triple_Y * cfac * d_lattice_sum[i_add_ksq][lm][ip];
                         }
                     }
                 }
             }
         }
     }
+    auto data = std::make_pair(Vq, d_Vq);
 
     ModuleBase::timer::tick("Gaussian_Abfs", "get_Vq");
-    return Vq;
+    return data;
 }
 
 Numerical_Orbital_Lm Gaussian_Abfs::Gauss(const Numerical_Orbital_Lm& orb, const double& lambda)
@@ -111,7 +122,8 @@ Numerical_Orbital_Lm Gaussian_Abfs::Gauss(const Numerical_Orbital_Lm& orb, const
     const double rcut = std::sqrt(eta / lambda);
     const double dr = orb.get_rab().back();
     int Nr = std::ceil(rcut / dr);
-    if (Nr % 2==0) Nr += 1;
+    if (Nr % 2 == 0)
+        Nr += 1;
 
     std::vector<double> rab(Nr);
     for (size_t ir = 0; ir < Nr; ++ir)
@@ -161,14 +173,15 @@ double Gaussian_Abfs::double_factorial(const int& n)
     return result;
 }
 
-std::vector<std::complex<double>> Gaussian_Abfs::get_lattice_sum(
-    const ModuleBase::Vector3<double>& qvec,
-    const ModuleBase::Matrix3& G, 
-    const double& power, // Will be 0. for straight GTOs and -2. for Coulomb interaction
-    const double& exponent,
-    const bool& exclude_Gamma, // The R==0. can be excluded by this flag.
-    const int& lmax,           // Maximum angular momentum the sum is needed for.
-    const ModuleBase::Vector3<double>& tau)
+auto Gaussian_Abfs::get_lattice_sum(const ModuleBase::Vector3<double>& qvec,
+                                    const ModuleBase::Matrix3& G,
+                                    const double& power, // Will be 0. for straight GTOs and -2. for Coulomb interaction
+                                    const double& exponent,
+                                    const bool& exclude_Gamma, // The R==0. can be excluded by this flag.
+                                    const int& lmax,           // Maximum angular momentum the sum is needed for.
+                                    const ModuleBase::Vector3<double>& tau,
+                                    const bool& cal_deriv)
+    -> std::pair<std::vector<std::complex<double>>, std::vector<std::vector<std::complex<double>>>>
 {
     if (power < 0.0 && !exclude_Gamma && qvec.norm() < 1e-10)
         ModuleBase::WARNING_QUIT("Gaussian_Abfs::lattice_sum", "Gamma point for power<0.0 cannot be evaluated!");
@@ -176,7 +189,8 @@ std::vector<std::complex<double>> Gaussian_Abfs::get_lattice_sum(
     const double eta = 35;
     const double Gmax = std::sqrt(eta / exponent) + qvec.norm() * GlobalC::ucell.tpiba;
     std::vector<int> n_supercells = get_n_supercells(G, Gmax);
-    const int total_cells = std::accumulate(n_supercells.begin(), n_supercells.end(), 1, [](int a, int b) { return a * (2 * b + 1); });
+    const int total_cells
+        = std::accumulate(n_supercells.begin(), n_supercells.end(), 1, [](int a, int b) { return a * (2 * b + 1); });
 
     std::vector<ModuleBase::Vector3<double>> Gvec;
     Gvec.resize(3);
@@ -194,6 +208,9 @@ std::vector<std::complex<double>> Gaussian_Abfs::get_lattice_sum(
 
     const int total_lm = (lmax + 1) * (lmax + 1);
     std::vector<std::complex<double>> result(total_lm, {0.0, 0.0});
+    std::vector<std::vector<std::complex<double>>> d_result;
+    d_result.resize(total_lm);
+
     std::vector<ModuleBase::Vector3<double>> qGvecs;
     for (int idx = 0; idx < total_cells; ++idx)
     {
@@ -227,6 +244,10 @@ std::vector<std::complex<double>> Gaussian_Abfs::get_lattice_sum(
         const double val_s = std::exp(-exponent * vec_sq) * std::pow(vec_abs, power);
 
         std::complex<double> phase = std::exp(ModuleBase::TWO_PI * ModuleBase::IMAG_UNIT * (vec * tau));
+        std::vector<std::complex<double>> d_phase(3, {0.0, 0.0});
+        d_phase[0] = ModuleBase::IMAG_UNIT * phase * vec.x;
+        d_phase[1] = ModuleBase::IMAG_UNIT * phase * vec.y;
+        d_phase[2] = ModuleBase::IMAG_UNIT * phase * vec.z;
 
         for (int L = 0; L != lmax + 1; ++L)
         {
@@ -236,9 +257,14 @@ std::vector<std::complex<double>> Gaussian_Abfs::get_lattice_sum(
                 const int lm = L * L + m;
                 const double val_lm = val_l * ylm(lm, idx);
                 result[lm] += val_lm * phase;
+                if (cal_deriv)
+                    for (int ip = 0; ip != 3; ++ip)
+                        d_result[lm][ip] += val_lm * d_phase[ip];
             }
         }
     }
+
+    auto data = std::make_pair(result, d_result);
     // auto end0 = std::chrono::system_clock::now();
     // auto duration0 = std::chrono::duration_cast<std::chrono::microseconds>(end0 - start0);
     // std::cout << "lattice Time: "
@@ -246,7 +272,7 @@ std::vector<std::complex<double>> Gaussian_Abfs::get_lattice_sum(
     //                  / std::chrono::microseconds::period::den
     //           << " s" << std::endl;
 
-    return result;
+    return data;
 }
 
 std::vector<int> Gaussian_Abfs::get_n_supercells(const ModuleBase::Matrix3& G, const double& Gmax)

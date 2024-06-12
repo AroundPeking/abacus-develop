@@ -139,9 +139,7 @@ double Singular_Value::cal_type_0(const std::vector<ModuleBase::Vector3<double>>
     return val;
 }
 
-double Singular_Value::fq_type_1(const int& qdiv,
-                                 const ModuleBase::Matrix3& Gvec,
-                                 const double& lambda)
+double Singular_Value::fq_type_1(const int& qdiv, const ModuleBase::Matrix3& Gvec, const double& lambda)
 {
     const int qexpo = -abs(qdiv);
     const bool exclude_Gamma = true;
@@ -149,8 +147,8 @@ double Singular_Value::fq_type_1(const int& qdiv,
     const ModuleBase::Vector3<double> tau(0, 0, 0);
     const ModuleBase::Vector3<double> qvec(0, 0, 0);
 
-    std::vector<std::complex<double>> lattice_sum
-        = Gaussian_Abfs::get_lattice_sum(qvec, Gvec, qexpo, lambda, exclude_Gamma, lmax, tau);
+    auto data = Gaussian_Abfs::get_lattice_sum(qvec, Gvec, qexpo, lambda, exclude_Gamma, lmax, tau, false);
+    std::vector<std::complex<double>> lattice_sum = data.first;
     assert(lattice_sum[0].imag() < 1e-10);
     double fq = lattice_sum[0].real() * std::sqrt(ModuleBase::FOUR_PI);
 
@@ -183,8 +181,8 @@ double Singular_Value::cal_type_1(const std::vector<int>& nmp,
 
     auto cal_chi = [&qdiv, &bvec, &nks](const double& lambda) {
         const T_cal_fq_type_no func_cal_fq_type_1 = std::bind(&fq_type_1, qdiv, bvec, lambda);
-        double prefactor
-            = ModuleBase::TWO_PI * std::pow(lambda, -1.0 / qdiv) * GlobalC::ucell.omega / std::pow(ModuleBase::TWO_PI, 3);
+        double prefactor = ModuleBase::TWO_PI * std::pow(lambda, -1.0 / qdiv) * GlobalC::ucell.omega
+                           / std::pow(ModuleBase::TWO_PI, 3);
         double fq_int;
         if (qdiv == 2)
             fq_int = prefactor * std::sqrt(ModuleBase::PI);
