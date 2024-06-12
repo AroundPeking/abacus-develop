@@ -161,10 +161,11 @@ auto Ewald_Vq<Tdata>::cal_Vs_gauss(const std::vector<TA>& list_A0,
     ModuleBase::timer::tick("Ewald_Vq", "cal_Vs_gauss");
 
     std::map<std::string, bool> flags = {
-        {"writable_Vws", false}
+        {"writable_Vws", true}
     };
 
     std::map<TA, std::map<TAC, RI::Tensor<Tdata>>> Vs_gauss = this->cv.cal_Vs(list_A0, list_A1, flags);
+    this->cv.Vws = LRI_CV_Tools::get_CVws(Vs_gauss);
 
     ModuleBase::timer::tick("Ewald_Vq", "cal_Vs_gauss");
     return Vs_gauss;
