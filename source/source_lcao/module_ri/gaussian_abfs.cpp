@@ -25,8 +25,8 @@ auto Gaussian_Abfs::get_Vq(const int& lp_max,
                            const double& lambda,
                            const ModuleBase::Vector3<double>& tau,
                            const ORB_gaunt_table& MGT,
-                           const bool& cal_deriv) -> std::pair < RI::Tensor<std::complex<double>>,
-    std::array<RI::Tensor<std::complex<double>>, 3>
+                           const bool& cal_deriv)
+    -> std::pair<RI::Tensor<std::complex<double>>, std::array<RI::Tensor<std::complex<double>>, 3>>
 {
     ModuleBase::TITLE("Gaussian_Abfs", "get_Vq");
     ModuleBase::timer::tick("Gaussian_Abfs", "get_Vq");
