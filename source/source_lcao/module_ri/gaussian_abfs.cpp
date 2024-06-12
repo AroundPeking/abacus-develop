@@ -36,10 +36,9 @@ auto Gaussian_Abfs::get_Vq(const int& lp_max,
     const size_t vq_ndim0 = (lp_max + 1) * (lp_max + 1);
     const size_t vq_ndim1 = (lq_max + 1) * (lq_max + 1);
     RI::Tensor<std::complex<double>> Vq({vq_ndim0, vq_ndim1});
-    const std::array<RI::Tensor<std::complex<double>>, 3> d_Vq
-        = {RI::Tensor<std::complex<double>>({vq_ndim0, vq_ndim1}),
-           RI::Tensor<std::complex<double>>({vq_ndim0, vq_ndim1}),
-           RI::Tensor<std::complex<double>>({vq_ndim0, vq_ndim1})};
+    std::array<RI::Tensor<std::complex<double>>, 3> d_Vq = {RI::Tensor<std::complex<double>>({vq_ndim0, vq_ndim1}),
+                                                            RI::Tensor<std::complex<double>>({vq_ndim0, vq_ndim1}),
+                                                            RI::Tensor<std::complex<double>>({vq_ndim0, vq_ndim1})};
     /*
      n_add_ksq * 2 = lp_max + lq_max - abs(lp_max - lq_max)
         if lp_max < lq_max
