@@ -23,8 +23,9 @@ class Ewald_Vq
 {
   private:
     using TA = int;
+    using Tcell = int;
     static constexpr std::size_t Ndim = 3;
-    using TC = std::array<int, Ndim>;
+    using TC = std::array<Tcell, Ndim>;
     using TAC = std::pair<TA, TC>;
 
     using TK = std::array<int, 1>;
@@ -79,6 +80,7 @@ class Ewald_Vq
         {4, 1}
     }.at(GlobalV::NSPIN);
     int nks0;
+    std::vector<TA> atoms_vec;
     std::set<TA> atoms;
 
     /*

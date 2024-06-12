@@ -74,9 +74,9 @@ void Ewald_Vq<Tdata>::init(const MPI_Comm& mpi_comm_in,
     this->MGT.init_Gaunt_CH(GlobalC::exx_info.info_ri.abfs_Lmax);
     this->MGT.init_Gaunt(GlobalC::exx_info.info_ri.abfs_Lmax);
 
-    std::vector<int> values(GlobalC::ucell.nat);
-    std::iota(values.begin(), values.end(), 0);
-    this->atoms.insert(values.begin(), values.end());
+    this->atoms_vec.resize(GlobalC::ucell.nat);
+    std::iota(this->atoms_vec.begin(), this->atoms_vec.end(), 0);
+    this->atoms.insert(this->atoms_vec.begin(), this->atoms_vec.end());
 
     ModuleBase::timer::tick("Ewald_Vq", "init");
 }
@@ -94,17 +94,17 @@ void Ewald_Vq<Tdata>::init_parallel(
 
     const std::array<int, 1> Nks = {this->nks0};
     const std::pair<std::vector<TA>, std::vector<std::vector<std::pair<TA, TK>>>> list_As_Vq
-        = RI::Distribute_Equally::distribute_atoms_periods(this->mpi_comm, this->atoms, Nks, 2, false);
+        = RI::Distribute_Equally::distribute_atoms_periods(this->mpi_comm, this->atoms_vec, Nks, 2, false);
     this->list_A0_k = list_As_Vq.first;
     this->list_A1_k = list_As_Vq.second[0];
 
     const std::pair<std::vector<TA>, std::vector<std::vector<std::pair<TA, TC>>>> list_As_Vs_atoms
-        = RI::Distribute_Equally::distribute_atoms(this->mpi_comm, this->atoms, period_Vs, 2, false);
+        = RI::Distribute_Equally::distribute_atoms(this->mpi_comm, this->atoms_vec, period_Vs, 2, false);
     this->list_A0_pair_R = list_As_Vs_atoms.first;
     this->list_A1_pair_R = list_As_Vs_atoms.second[0];
 
     const std::pair<std::vector<TA>, std::vector<std::vector<std::pair<TA, TK>>>> list_As_Vq_atoms
-        = RI::Distribute_Equally::distribute_atoms(this->mpi_comm, this->atoms, Nks, 2, false);
+        = RI::Distribute_Equally::distribute_atoms(this->mpi_comm, this->atoms_vec, Nks, 2, false);
     this->list_A0_pair_k = list_As_Vq_atoms.first;
     this->list_A1_pair_k = list_As_Vq_atoms.second[0];
 
