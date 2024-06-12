@@ -370,14 +370,14 @@ auto Ewald_Vq<Tdata>::cal_Vq_gauss(const std::vector<TA>& list_A0_k,
             const ModuleBase::Vector3<double> tau = tau0 - tau1;
 
             auto data = this->gaussian_abfs.get_Vq(this->g_abfs_ccp[it0].size() - 1,
-                                                                               this->g_abfs[it1].size() - 1,
-                                                                               this->p_kv->kvec_c[ik],
-                                                                               GlobalC::ucell.G,
-                                                                               chi,
-                                                                               this->ewald_lambda,
-                                                                               tau,
-                                                                               this->MGT,
-                                                                               GlobalV::CAL_FORCE || GlobalV::CAL_STRESS);
+                                                   this->g_abfs[it1].size() - 1,
+                                                   this->p_kv->kvec_c[ik],
+                                                   GlobalC::ucell.G,
+                                                   chi,
+                                                   this->ewald_lambda,
+                                                   tau,
+                                                   this->MGT,
+                                                   GlobalV::CAL_FORCE || GlobalV::CAL_STRESS);
 
 #pragma omp critical(Ewald_Vq_cal_Vq_gauss)
             Vq_gauss_out[list_A0_k[i0]][list_A1_k[i1]] = data.first;

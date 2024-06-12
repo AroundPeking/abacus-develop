@@ -26,7 +26,7 @@ auto Gaussian_Abfs::get_Vq(const int& lp_max,
                            const ModuleBase::Vector3<double>& tau,
                            const ORB_gaunt_table& MGT,
                            const bool& cal_deriv)
-    -> std::pair<RI::Tensor<std::complex<double>>, std::vector<RI::Tensor<std::complex<double>>>>
+    -> std::pair<RI::Tensor<std::complex<double>>, std::array<RI::Tensor<std::complex<double>>>, 3>
 {
     ModuleBase::TITLE("Gaussian_Abfs", "get_Vq");
     ModuleBase::timer::tick("Gaussian_Abfs", "get_Vq");
@@ -36,7 +36,8 @@ auto Gaussian_Abfs::get_Vq(const int& lp_max,
     const size_t vq_ndim0 = (lp_max + 1) * (lp_max + 1);
     const size_t vq_ndim1 = (lq_max + 1) * (lq_max + 1);
     RI::Tensor<std::complex<double>> Vq({vq_ndim0, vq_ndim1});
-    std::vector<RI::Tensor<std::complex<double>>> d_Vq(3, RI::Tensor<std::complex<double>>({vq_ndim0, vq_ndim1}));
+    const std::array<RI::Tensor<Tdata>, 3> d_Vq
+            = {RI::Tensor<std::complex<double>>({vq_ndim0, vq_ndim1}), RI::Tensor<std::complex<double>>({vq_ndim0, vq_ndim1}), RI::Tensor<std::complex<double>>({vq_ndim0, vq_ndim1})};
     /*
      n_add_ksq * 2 = lp_max + lq_max - abs(lp_max - lq_max)
         if lp_max < lq_max

@@ -18,7 +18,7 @@
 class Gaussian_Abfs
 {
   public:
-    std::pair<RI::Tensor<std::complex<double>>, std::vector<RI::Tensor<std::complex<double>>>> get_Vq(
+    std::pair<RI::Tensor<std::complex<double>>, std::array<RI::Tensor<std::complex<double>>>, 3>> get_Vq(
         const int& lp_max,
         const int& lq_max, // Maximum L for which to calculate interaction.
         const ModuleBase::Vector3<double>& qvec,
