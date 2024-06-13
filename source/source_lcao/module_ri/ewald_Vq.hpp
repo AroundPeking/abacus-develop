@@ -470,6 +470,8 @@ auto Ewald_Vq<Tdata>::set_Vs(const std::vector<TA>& list_A0_pair_R,
         {4, 1  }
     }.at(GlobalV::NSPIN);
 
+    std::map<TA, std::map<TAC, RI::Tensor<Tdata>>> datas;
+
     const TC period = RI_Util::get_Born_vonKarmen_period(*this->p_kv);
 	std::vector<std::array<Tcell,Ndim>> cell_vec = RI_Util::get_Born_von_Karmen_cells(period);
     auto check_cell = [&cell_vec](const TC& cell) -> bool
