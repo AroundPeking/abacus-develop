@@ -63,6 +63,7 @@ class Ewald_Vq
     const K_Vectors* p_kv;
     MPI_Comm mpi_comm;
     ORB_gaunt_table MGT;
+    std::vector<int> nmp;
     const double ewald_lambda = 1.0;
 
     std::vector<std::vector<std::vector<double>>> multipole;

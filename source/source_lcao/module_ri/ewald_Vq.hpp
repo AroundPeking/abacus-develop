@@ -78,6 +78,8 @@ void Ewald_Vq<Tdata>::init(const MPI_Comm& mpi_comm_in,
     std::iota(this->atoms_vec.begin(), this->atoms_vec.end(), 0);
     this->atoms.insert(this->atoms_vec.begin(), this->atoms_vec.end());
 
+    this->nmp = {this->p_kv->nmp[0], this->p_kv->nmp[1], this->p_kv->nmp[2]};
+
     ModuleBase::timer::tick("Ewald_Vq", "init");
 }
 
@@ -117,7 +119,6 @@ double Ewald_Vq<Tdata>::get_singular_chi()
     ModuleBase::TITLE("Ewald_Vq", "get_singular_chi");
     ModuleBase::timer::tick("Ewald_Vq", "get_singular_chi");
 
-    std::vector<int> nmp = {this->p_kv->nmp[0], this->p_kv->nmp[1], this->p_kv->nmp[2]};
     double chi = 0.0;
     switch (this->info_ewald.fq_type)
     {
@@ -125,7 +126,7 @@ double Ewald_Vq<Tdata>::get_singular_chi()
         chi = Singular_Value::cal_type_0(this->p_kv->kvec_c, this->info_ewald.ewald_qdiv, 160, 30, 1e-6, 3);
         break;
     case Singular_Value::Fq_type::Type_1:
-        chi = Singular_Value::cal_type_1(nmp, this->info_ewald.ewald_qdiv, this->ewald_lambda, 5, 1e-4);
+        chi = Singular_Value::cal_type_1(this->nmp, this->info_ewald.ewald_qdiv, this->ewald_lambda, 5, 1e-4);
         break;
     default:
         throw std::domain_error(std::string(__FILE__) + " line " + std::to_string(__LINE__));
@@ -470,6 +471,17 @@ auto Ewald_Vq<Tdata>::set_Vs(const std::vector<TA>& list_A0_pair_R,
     }.at(GlobalV::NSPIN);
 
     std::map<TA, std::map<TAC, RI::Tensor<Tdata>>> datas;
+    auto check_cell = [this](TC cell) -> bool {
+        TC lower = {0, 0, 0};
+        TC upper = {this->nmp[0], this->nmp[1], this->nmp[2]};
+        std::array<bool, 3> res;
+        res.fill(false);
+        for (size_t i = 0; i != Ndim; ++i)
+            if (cell[i] >= lower[i] && cell[i] < upper[i])
+                res[i] = true;
+
+        return std::all_of(res.begin(), res.end(), [](bool v) { return v; });
+    };
 
     for (size_t ik = 0; ik != this->nks0; ++ik)
     {
@@ -489,15 +501,8 @@ auto Ewald_Vq<Tdata>::set_Vs(const std::vector<TA>& list_A0_pair_R,
                 const int it1 = GlobalC::ucell.iat2it[iat1];
                 const int ia1 = GlobalC::ucell.iat2ia[iat1];
 
-                const ModuleBase::Vector3<double> tau0 = GlobalC::ucell.atoms[it0].tau[iat0];
-                const ModuleBase::Vector3<double> tau1 = GlobalC::ucell.atoms[it1].tau[iat1];
-                const double Rcut = std::min(this->get_Rcut_max(it0, it1), this->get_Rcut_max(it1, it0));
-                const Abfs::Vector3_Order<double> R_delta
-                    = -tau0 + tau1 + (RI_Util::array3_to_Vector3(cell1) * GlobalC::ucell.latvec);
-
-                if (R_delta.norm() * GlobalC::ucell.lat0 < Rcut)
+                if (check_cell(cell1))
                 {
-
                     const std::complex<double> frac
                         = std::exp(
                               -ModuleBase::TWO_PI * ModuleBase::IMAG_UNIT
