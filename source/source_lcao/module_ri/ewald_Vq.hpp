@@ -470,17 +470,11 @@ auto Ewald_Vq<Tdata>::set_Vs(const std::vector<TA>& list_A0_pair_R,
         {4, 1  }
     }.at(GlobalV::NSPIN);
 
-    std::map<TA, std::map<TAC, RI::Tensor<Tdata>>> datas;
-    auto check_cell = [this](TC cell) -> bool {
-        TC lower = {0, 0, 0};
-        TC upper = {this->nmp[0], this->nmp[1], this->nmp[2]};
-        std::array<bool, 3> res;
-        res.fill(false);
-        for (size_t i = 0; i != Ndim; ++i)
-            if (cell[i] >= lower[i] && cell[i] < upper[i])
-                res[i] = true;
-
-        return std::all_of(res.begin(), res.end(), [](bool v) { return v; });
+    const TC period = RI_Util::get_Born_vonKarmen_period(*this->p_kv);
+	std::vector<std::array<Tcell,Ndim>> cell_vec = RI_Util::get_Born_von_Karmen_cells(period);
+    auto check_cell = [&cell_vec](const TC& cell) -> bool
+    {
+        return std::find(cell_vec.begin(), cell_vec.end(), cell) != cell_vec.end();
     };
 
     for (size_t ik = 0; ik != this->nks0; ++ik)
