@@ -175,18 +175,63 @@ double Gaussian_Abfs::double_factorial(const int& n)
     return result;
 }
 
-auto Gaussian_Abfs::get_lattice_sum(const ModuleBase::Vector3<double>& qvec,
+auto Gaussian_Abfs::get_lattice_sum(
+    const ModuleBase::Vector3<double>& qvec,
                                     const ModuleBase::Matrix3& G,
                                     const double& power, // Will be 0. for straight GTOs and -2. for Coulomb interaction
                                     const double& exponent,
                                     const bool& exclude_Gamma, // The R==0. can be excluded by this flag.
                                     const int& lmax,           // Maximum angular momentum the sum is needed for.
-                                    const ModuleBase::Vector3<double>& tau,
-                                    const bool& cal_deriv)
-    -> std::pair<std::vector<std::complex<double>>, std::vector<std::vector<std::complex<double>>>>
+                                    const ModuleBase::Vector3<double>& tau
+) -> std::vector<std::complex<double>>
+{
+    auto cal_phase = [&tau](const ModuleBase::Vector3<double>& vec) -> std::complex<double>
+    {
+        return std::exp(ModuleBase::TWO_PI * ModuleBase::IMAG_UNIT * (vec * tau));
+    };
+    const T_func_DPcal_lattice_sum<std::complex<double>> func_DPget_lattice_sum = std::bind(&cal_phase, std::placeholders::_1)
+
+    return DPcal_lattice_sum(qvec, G, power, exponent, exclude_Gamma, lmax, func_DPget_lattice_sum);
+}
+
+auto Gaussian_Abfs::get_d_lattice_sum(
+    const ModuleBase::Vector3<double>& qvec,
+                                    const ModuleBase::Matrix3& G,
+                                    const double& power, // Will be 0. for straight GTOs and -2. for Coulomb interaction
+                                    const double& exponent,
+                                    const bool& exclude_Gamma, // The R==0. can be excluded by this flag.
+                                    const int& lmax,           // Maximum angular momentum the sum is needed for.
+                                    const ModuleBase::Vector3<double>& tau
+) -> std::vector<std::array<std::complex<double>, 3>>
+{
+    auto cal_d_phase = [&tau](const ModuleBase::Vector3<double>& vec) -> std::complex<double>
+    {
+        using namespace RI::Array_Operator;
+        std::complex<double> phase = std::exp(ModuleBase::TWO_PI * ModuleBase::IMAG_UNIT * (vec * tau));
+        std::array<std::complex<double>, 3> vec =  {phase * vec.x, phase * vec.y, phase * vec.z};
+        std::array<std::complex<double>, 3> d_phase = GlobalC::ucell.lat0 * ModuleBase::IMAG_UNIT * ip_vec;
+
+        return d_phase;
+    };
+    const T_func_DPcal_lattice_sum<std::array<std::complex<double>, 3>> func_DPget_d_lattice_sum = std::bind(&cal_d_phase, std::placeholders::_1)
+
+    return DPcal_lattice_sum(qvec, G, power, exponent, exclude_Gamma, lmax, func_DPget_d_lattice_sum);
+}
+
+template <typename Tresult>
+auto Gaussian_Abfs::DPcal_lattice_sum(const ModuleBase::Vector3<double>& qvec,
+                                    const ModuleBase::Matrix3& G,
+                                    const double& power, // Will be 0. for straight GTOs and -2. for Coulomb interaction
+                                    const double& exponent,
+                                    const bool& exclude_Gamma, // The R==0. can be excluded by this flag.
+                                    const int& lmax,           // Maximum angular momentum the sum is needed for.
+                                    const T_func_DPcal_lattice_sum<Tresult>& func_DPcal_lattice_sum)
+    -> std::vector<Tresult>
 {
     if (power < 0.0 && !exclude_Gamma && qvec.norm() < 1e-10)
         ModuleBase::WARNING_QUIT("Gaussian_Abfs::lattice_sum", "Gamma point for power<0.0 cannot be evaluated!");
+
+    using namespace RI::Array_Operator;
 
     const double eta = 35;
     const double Gmax = std::sqrt(eta / exponent) + qvec.norm() * GlobalC::ucell.tpiba;
@@ -209,9 +254,7 @@ auto Gaussian_Abfs::get_lattice_sum(const ModuleBase::Vector3<double>& qvec,
     Gvec[2].z = G.e33;
 
     const int total_lm = (lmax + 1) * (lmax + 1);
-    std::vector<std::complex<double>> result(total_lm, {0.0, 0.0});
-    std::vector<std::vector<std::complex<double>>> d_result;
-    d_result.resize(total_lm);
+    std::vector<Tresult> result(total_lm, Tresult{});
 
     std::vector<ModuleBase::Vector3<double>> qGvecs;
     for (int idx = 0; idx < total_cells; ++idx)
@@ -223,7 +266,7 @@ auto Gaussian_Abfs::get_lattice_sum(const ModuleBase::Vector3<double>& qvec,
             continue;
         ModuleBase::Vector3<double> qGvec = -(qvec + Gvec[0] * static_cast<double>(G0)
                                               + Gvec[1] * static_cast<double>(G1) + Gvec[2] * static_cast<double>(G2));
-        qGvecs.push_back(qGvec);
+        qGvecs.emplace_back(qGvec);
     }
     const int npw = qGvecs.size();
     ModuleBase::matrix ylm(total_lm, npw);
@@ -245,11 +288,7 @@ auto Gaussian_Abfs::get_lattice_sum(const ModuleBase::Vector3<double>& qvec,
 
         const double val_s = std::exp(-exponent * vec_sq) * std::pow(vec_abs, power);
 
-        std::complex<double> phase = std::exp(ModuleBase::TWO_PI * ModuleBase::IMAG_UNIT * (vec * tau));
-        std::vector<std::complex<double>> d_phase(3, {0.0, 0.0});
-        d_phase[0] = ModuleBase::IMAG_UNIT * phase * vec.x;
-        d_phase[1] = ModuleBase::IMAG_UNIT * phase * vec.y;
-        d_phase[2] = ModuleBase::IMAG_UNIT * phase * vec.z;
+        Tresult phase = func_DPcal_lattice_sum(vec);
 
         for (int L = 0; L != lmax + 1; ++L)
         {
@@ -258,15 +297,10 @@ auto Gaussian_Abfs::get_lattice_sum(const ModuleBase::Vector3<double>& qvec,
             {
                 const int lm = L * L + m;
                 const double val_lm = val_l * ylm(lm, idx);
-                result[lm] += val_lm * phase;
-                if (cal_deriv)
-                    for (int ip = 0; ip != 3; ++ip)
-                        d_result[lm][ip] += val_lm * d_phase[ip];
+                result[lm] = result[lm] + val_lm * phase;
             }
         }
     }
-
-    auto data = std::make_pair(result, d_result);
     // auto end0 = std::chrono::system_clock::now();
     // auto duration0 = std::chrono::duration_cast<std::chrono::microseconds>(end0 - start0);
     // std::cout << "lattice Time: "
@@ -274,7 +308,7 @@ auto Gaussian_Abfs::get_lattice_sum(const ModuleBase::Vector3<double>& qvec,
     //                  / std::chrono::microseconds::period::den
     //           << " s" << std::endl;
 
-    return data;
+    return result;
 }
 
 std::vector<int> Gaussian_Abfs::get_n_supercells(const ModuleBase::Matrix3& G, const double& Gmax)
