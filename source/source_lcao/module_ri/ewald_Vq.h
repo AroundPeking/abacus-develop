@@ -115,6 +115,8 @@ class Ewald_Vq
 
     std::map<TA, std::map<TAC, RI::Tensor<Tdata>>> cal_Vs_gauss(const std::vector<TA>& list_A0,
                                                                 const std::vector<TAC>& list_A1);
+    std::array<std::map<TA, std::map<TAC, RI::Tensor<Tdata>>>, 3> cal_dVs_gauss(const std::vector<TA>& list_A0,
+                                                                                const std::vector<TAC>& list_A1);
 
     std::map<TA, std::map<TAC, RI::Tensor<Tdata>>> set_Vs_minus_gauss(
         const std::vector<TA>& list_A0,

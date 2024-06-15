@@ -22,11 +22,11 @@ class Gaussian_Abfs
     void init(const int& Lmax, const K_Vectors* kv_in, const ModuleBase::Matrix3& G, const double& lambda);
 
     inline RI::Tensor<std::complex<double>> get_Vq(const int& lp_max,
-                                            const int& lq_max, // Maximum L for which to calculate interaction.
-                                            const size_t& ik,
-                                            const double& chi, // Singularity corrected value at q=0.
-                                            const ModuleBase::Vector3<double>& tau,
-                                            const ORB_gaunt_table& MGT);
+                                                   const int& lq_max, // Maximum L for which to calculate interaction.
+                                                   const size_t& ik,
+                                                   const double& chi, // Singularity corrected value at q=0.
+                                                   const ModuleBase::Vector3<double>& tau,
+                                                   const ORB_gaunt_table& MGT);
 
     inline std::array<RI::Tensor<std::complex<double>>, 3> get_dVq(
         const int& lp_max,
@@ -40,7 +40,7 @@ Calculate the lattice sum over a Gaussian:
   S(k) := \sum_G |k+G|^{power+L} \exp(-lambda*|k+G|^2) Y_{LM}(k+G) * \exp(i(k+G)\tau)
   d_S(k) := S(k) * i * (k+G)
 */
-    inline RI::Tensor<std::complex<double>> get_lattice_sum(
+    inline std::vector<std::complex<double>> get_lattice_sum(
         const size_t& ik,
         const double& power, // Will be 0. for straight GTOs and -2. for Coulomb interaction
         const double& exponent,
@@ -48,8 +48,8 @@ Calculate the lattice sum over a Gaussian:
         const int& lmax,           // Maximum angular momentum the sum is needed for.
         const ModuleBase::Vector3<double>& tau);
 
-    inline RI::Tensor<std::array<std::complex<double>, 3>> get_d_lattice_sum(
-const size_t& ik,
+    inline std::vector<std::array<std::complex<double>, 3>> get_d_lattice_sum(
+        const size_t& ik,
         const double& power, // Will be 0. for straight GTOs and -2. for Coulomb interaction
         const double& exponent,
         const bool& exclude_Gamma, // The R==0. can be excluded by this flag.
@@ -65,53 +65,24 @@ const size_t& ik,
     using T_func_DPcal_phase = std::function<Tresult(const ModuleBase::Vector3<double>& vec)>;
     template <typename Tresult>
     using T_func_DPcal_lattice_sum
-        = std::function<Tresult(const size_t& ik,
+        = std::function<std::vector<Tresult>(const size_t& ik,
                                 const double& power, // Will be 0. for straight GTOs and -2. for Coulomb interaction
                                 const double& exponent,
                                 const bool& exclude_Gamma, // The R==0. can be excluded by this flag.
                                 const int& lmax,           // Maximum angular momentum the sum is needed for.
                                 const ModuleBase::Vector3<double>& tau)>;
 
-    inline void init_Vq_dVq(RI::Tensor<std::complex<double>>& data, const size_t vq_ndim0, const size_t vq_ndim1)
-    {
-        data({vq_ndim0, vq_ndim1});
-    }
-
-    inline void init_Vq_dVq(std::array<RI::Tensor<std::complex<double>>, 3>& data,
-                            const size_t vq_ndim0,
-                            const size_t vq_ndim1)
-    {
-        data.fill(RI::Tensor<std::complex<double>>({vq_ndim0, vq_ndim1}));
-    }
-
-    inline void add_Vq_dVq(RI::Tensor<std::complex<double>>& data,
-                           const int lmp,
-                           const int lmq,
-                           std::complex<double>& val)
-    {
-        data(lmp, lmq) += val;
-    }
-
-    inline void add_Vq_dVq(std::array<RI::Tensor<std::complex<double>>, 3>& data,
-                           const int lmp,
-                           const int lmq,
-                           std::array<std::complex<double>, 3>& val)
-    {
-        for (size_t i = 0; i != 3; ++i)
-            data[i](lmp, lmq) += val[i];
-    }
-
-    template <typename Tresult>
-    Tresult DPcal_Vq_dVq(const int& lp_max,
+    template <typename Tin, typename Tout>
+    Tout DPcal_Vq_dVq(const int& lp_max,
                          const int& lq_max, // Maximum L for which to calculate interaction.
                          const size_t& ik,
                          const double& chi, // Singularity corrected value at q=0.
                          const ModuleBase::Vector3<double>& tau,
                          const ORB_gaunt_table& MGT,
-                         const T_func_DPcal_lattice_sum<Tresult>& func_DPcal_lattice_sum);
+                         const T_func_DPcal_lattice_sum<std::vector<Tin>>& func_DPcal_lattice_sum);
 
     template <typename Tresult>
-    RI::Tensor<Tresult> DPcal_lattice_sum(
+    std::vector<Tresult> DPcal_lattice_sum(
         const size_t& ik,
         const double& power, // Will be 0. for straight GTOs and -2. for Coulomb interaction
         const double& exponent,

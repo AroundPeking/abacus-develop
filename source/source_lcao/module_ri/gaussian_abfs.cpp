@@ -11,6 +11,7 @@
 #include <algorithm>
 // #include <chrono>
 
+#include "LRI_CV_Tools.h"
 #include "module_base/global_variable.h"
 #include "module_base/math_ylmreal.h"
 #include "module_base/timer.h"
@@ -94,9 +95,10 @@ auto Gaussian_Abfs::get_Vq(const int& lp_max,
                     std::placeholders::_4,
                     std::placeholders::_5,
                     std::placeholders::_6);
+    RI::Tensor<std::complex<double>> res = this->DPcal_Vq_dVq(lp_max, lq_max, ik, chi, tau, MGT, func_DPcal_lattice_sum);
 
     ModuleBase::timer::tick("Gaussian_Abfs", "get_Vq");
-    return this->DPcal_Vq_dVq(lp_max, lq_max, ik, chi, tau, MGT, func_DPcal_lattice_sum);
+    return res;
 }
 
 auto Gaussian_Abfs::get_dVq(const int& lp_max,
@@ -108,7 +110,7 @@ auto Gaussian_Abfs::get_dVq(const int& lp_max,
     ModuleBase::TITLE("Gaussian_Abfs", "get_dVq");
     ModuleBase::timer::tick("Gaussian_Abfs", "get_dVq");
 
-    const T_func_DPcal_lattice_sum<std::vector<std::complex<double>>> func_DPcal_d_lattice_sum
+    const T_func_DPcal_lattice_sum<std::vector<std::array<std::complex<double>, 3>>> func_DPcal_d_lattice_sum
         = std::bind(&Gaussian_Abfs::get_d_lattice_sum,
                     std::placeholders::_1,
                     std::placeholders::_2,
@@ -117,29 +119,26 @@ auto Gaussian_Abfs::get_dVq(const int& lp_max,
                     std::placeholders::_5,
                     std::placeholders::_6);
     const double exponent = 1.0 / lambda;
-
+    std::array<RI::Tensor<std::complex<double>>, 3> res = this->DPcal_Vq_dVq(lp_max, lq_max, ik, exponent, tau, MGT, func_DPcal_d_lattice_sum);
+    
     ModuleBase::timer::tick("Gaussian_Abfs", "get_Vq");
-    return this->DPcal_Vq_dVq(lp_max, lq_max, ik, exponent, tau, MGT, func_DPcal_d_lattice_sum);
+    return res
 }
 
-template <typename Tresult>
+template <typename Tin, typename Tout>
 auto Gaussian_Abfs::DPcal_Vq_dVq(const int& lp_max,
                                  const int& lq_max, // Maximum L for which to calculate interaction.
                                  const size_t& ik,
                                  const double& chi, // Singularity corrected value at q=0.
                                  const ModuleBase::Vector3<double>& tau,
                                  const ORB_gaunt_table& MGT,
-                                 const T_func_DPcal_lattice_sum<Tresult>& func_DPcal_lattice_sum) -> Tresult
+                                 const T_func_DPcal_lattice_sum<std::vector<Tin>>& func_DPcal_lattice_sum) -> Tout
 {
-    ModuleBase::TITLE("Gaussian_Abfs", "get_Vq");
-    ModuleBase::timer::tick("Gaussian_Abfs", "get_Vq");
-
     const int Lmax = lp_max + lq_max;
     const int n_LM = (Lmax + 1) * (Lmax + 1);
     const size_t vq_ndim0 = (lp_max + 1) * (lp_max + 1);
     const size_t vq_ndim1 = (lq_max + 1) * (lq_max + 1);
-    Tresult Vq_dVq;
-    this->init_Vq_dVq(Vq_dVq, vq_ndim0, vq_ndim1);
+    Tout Vq_dVq = LRI_CV_Tools::init_elem(vq_ndim0, vq_ndim1);
     /*
      n_add_ksq * 2 = lp_max + lq_max - abs(lp_max - lq_max)
         if lp_max < lq_max
@@ -152,7 +151,7 @@ auto Gaussian_Abfs::DPcal_Vq_dVq(const int& lp_max,
             n_add_ksq = min(lp_max, lq_max)
     */
     const int n_add_ksq = std::min(lp_max, lq_max);
-    std::vector<RI::Tensor<Tresult>> lattice_sum;
+    std::vector<std::vector<Tin>> lattice_sum;
     lattice_sum.resize(n_add_ksq + 1);
 
     const double exponent = 1.0 / this->lambda;
@@ -165,7 +164,7 @@ auto Gaussian_Abfs::DPcal_Vq_dVq(const int& lp_max,
         const int this_Lmax = Lmax - 2 * i_add_ksq; // calculate Lmax at current lp+lq
         const bool exclude_Gamma
             = (qvec.norm() < 1e-10 && i_add_ksq == 0); // only Gamma point and lq+lp-2>0 need to be corrected
-        auto data = get_lattice_sum(ik, power, exponent, exclude_Gamma, this_Lmax, tau);
+        auto data = func_DPcal_lattice_sum(ik, power, exponent, exclude_Gamma, this_Lmax, tau);
         lattice_sum[i_add_ksq] = data;
     }
 
@@ -199,7 +198,7 @@ auto Gaussian_Abfs::DPcal_Vq_dVq(const int& lp_max,
                         {
                             const int lm = MGT.get_lm_index(L, m);
                             double triple_Y = MGT.Gaunt_Coefficients(lmp, lmq, lm);
-                            this->add_Vq_dVq(Vq_dVq, lmp, lmq, triple_Y * cfac * lattice_sum[i_add_ksq][lm]);
+                            LRI_CV_Tools::add_elem(Vq_dVq, lmp, lmq, triple_Y * cfac * lattice_sum[i_add_ksq][lm]);
                         }
                     }
                 }
@@ -207,7 +206,6 @@ auto Gaussian_Abfs::DPcal_Vq_dVq(const int& lp_max,
         }
     }
 
-    ModuleBase::timer::tick("Gaussian_Abfs", "get_Vq");
     return Vq_dVq;
 }
 
@@ -275,7 +273,7 @@ auto Gaussian_Abfs::get_lattice_sum(const size_t& ik,
                                     const double& exponent,
                                     const bool& exclude_Gamma, // The R==0. can be excluded by this flag.
                                     const int& lmax,           // Maximum angular momentum the sum is needed for.
-                                    const ModuleBase::Vector3<double>& tau) -> RI::Tensor<std::complex<double>>
+                                    const ModuleBase::Vector3<double>& tau) -> std::vector<std::complex<double>>
 {
     auto cal_phase = [&tau](const ModuleBase::Vector3<double>& vec) -> std::complex<double> {
         return std::exp(ModuleBase::TWO_PI * ModuleBase::IMAG_UNIT * (vec * tau));
@@ -291,7 +289,7 @@ auto Gaussian_Abfs::get_d_lattice_sum(
     const double& exponent,
     const bool& exclude_Gamma, // The R==0. can be excluded by this flag.
     const int& lmax,           // Maximum angular momentum the sum is needed for.
-    const ModuleBase::Vector3<double>& tau) -> RI::Tensor<std::array<std::complex<double>, 3>>
+    const ModuleBase::Vector3<double>& tau) -> std::vector<std::array<std::complex<double>, 3>>
 {
     auto cal_d_phase = [&tau](const ModuleBase::Vector3<double>& vec) -> std::complex<double> {
         using namespace RI::Array_Operator;
@@ -314,14 +312,14 @@ auto Gaussian_Abfs::DPcal_lattice_sum(
     const double& exponent,
     const bool& exclude_Gamma, // The R==0. can be excluded by this flag.
     const int& lmax,           // Maximum angular momentum the sum is needed for.
-    const T_func_DPcal_phase<Tresult>& func_DPcal_phase) -> RI::Tensor<Tresult>
+    const T_func_DPcal_phase<Tresult>& func_DPcal_phase) -> std::vector<Tresult>
 {
     if (power < 0.0 && !exclude_Gamma && qvec.norm() < 1e-10)
         ModuleBase::WARNING_QUIT("Gaussian_Abfs::lattice_sum", "Gamma point for power<0.0 cannot be evaluated!");
 
     using namespace RI::Array_Operator;
 
-    RI::Tensor<Tresult> result(total_lm, Tresult{});
+    std::vector<Tresult> result(total_lm, Tresult{});
     const int total_cells = this->n_cells[ik];
 
 #pragma omp declare reduction(vec_plus : std::vector<std::complex<double>> : std::transform(                           \

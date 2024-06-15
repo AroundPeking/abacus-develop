@@ -175,6 +175,27 @@ auto Ewald_Vq<Tdata>::cal_Vs_gauss(const std::vector<TA>& list_A0,
 }
 
 template <typename Tdata>
+auto Ewald_Vq<Tdata>::cal_dVs_gauss(const std::vector<TA>& list_A0, const std::vector<TAC>& list_A1)
+    -> std::array<std::map<TA, std::map<TAC, RI::Tensor<Tdata>>>, 3>
+{
+    ModuleBase::TITLE("Ewald_Vq", "cal_dVs_gauss");
+    ModuleBase::timer::tick("Ewald_Vq", "cal_dVs_gauss");
+
+    std::map<std::string, bool> flags = {
+        {"writable_Vws", true}
+    };
+
+    std::map<TA, std::map<TAC, RI::Tensor<Tdata>>> Vs_gauss = this->cv.cal_Vs(list_A0, list_A1, flags);
+    this->cv.Vws = LRI_CV_Tools::get_CVws(Vs_gauss);
+
+    std::array<std::map<TA, std::map<TAC, RI::Tensor<Tdata>>>, 3> dVs_gauss = this->cv.cal_dVs(list_A0, list_A1, flags);
+    this->cv.dVws = LRI_CV_Tools::get_dCVws(dVs);
+
+    ModuleBase::timer::tick("Ewald_Vq", "cal_dVs_gauss");
+    return dVs_gauss;
+}
+
+template <typename Tdata>
 auto Ewald_Vq<Tdata>::set_Vs_minus_gauss(const std::vector<TA>& list_A0,
                                          const std::vector<TAC>& list_A1,
                                          std::map<TA, std::map<TAC, RI::Tensor<Tdata>>>& Vs_in,
@@ -374,8 +395,7 @@ auto Ewald_Vq<Tdata>::cal_Vq_gauss(const std::vector<TA>& list_A0_k,
 
             auto data = this->gaussian_abfs.get_Vq(this->g_abfs_ccp[it0].size() - 1,
                                                    this->g_abfs[it1].size() - 1,
-                                                   ik
-                                                   chi,
+                                                   ik chi,
                                                    tau,
                                                    this->MGT);
 
@@ -472,9 +492,8 @@ auto Ewald_Vq<Tdata>::set_Vs(const std::vector<TA>& list_A0_pair_R,
     std::map<TA, std::map<TAC, RI::Tensor<Tdata>>> datas;
 
     const TC period = RI_Util::get_Born_vonKarmen_period(*this->p_kv);
-	std::vector<std::array<Tcell,Ndim>> cell_vec = RI_Util::get_Born_von_Karmen_cells(period);
-    auto check_cell = [&cell_vec](const TC& cell) -> bool
-    {
+    std::vector<std::array<Tcell, Ndim>> cell_vec = RI_Util::get_Born_von_Karmen_cells(period);
+    auto check_cell = [&cell_vec](const TC& cell) -> bool {
         return std::find(cell_vec.begin(), cell_vec.end(), cell) != cell_vec.end();
     };
 
