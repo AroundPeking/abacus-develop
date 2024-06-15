@@ -84,7 +84,7 @@ void Ewald_Vq<Tdata>::init(const MPI_Comm& mpi_comm_in,
 }
 
 template <typename Tdata>
-void Ewald_Vq<Tdata>::init_parallel(
+void Ewald_Vq<Tdata>::init_ions(
     const std::array<Tcell, Ndim>& period_Vs,
     const std::pair<std::vector<TA>, std::vector<std::vector<std::pair<TA, std::array<Tcell, Ndim>>>>>& list_As_Vs)
 {
@@ -109,6 +109,8 @@ void Ewald_Vq<Tdata>::init_parallel(
         = RI::Distribute_Equally::distribute_atoms(this->mpi_comm, this->atoms_vec, Nks, 2, false);
     this->list_A0_pair_k = list_As_Vq_atoms.first;
     this->list_A1_pair_k = list_As_Vq_atoms.second[0];
+
+    this->gaussian_abfs.init(GlobalC::exx_info.info_ri.abfs_Lmax, GlobalC::ucell.G, this->ewald_lambda);
 
     ModuleBase::timer::tick("Ewald_Vq", "init_parallel");
 }
@@ -372,16 +374,13 @@ auto Ewald_Vq<Tdata>::cal_Vq_gauss(const std::vector<TA>& list_A0_k,
 
             auto data = this->gaussian_abfs.get_Vq(this->g_abfs_ccp[it0].size() - 1,
                                                    this->g_abfs[it1].size() - 1,
-                                                   this->p_kv->kvec_c[ik],
-                                                   GlobalC::ucell.G,
+                                                   ik
                                                    chi,
-                                                   this->ewald_lambda,
                                                    tau,
-                                                   this->MGT,
-                                                   GlobalV::CAL_FORCE || GlobalV::CAL_STRESS);
+                                                   this->MGT);
 
 #pragma omp critical(Ewald_Vq_cal_Vq_gauss)
-            Vq_gauss_out[list_A0_k[i0]][list_A1_k[i1]] = data.first;
+            Vq_gauss_out[list_A0_k[i0]][list_A1_k[i1]] = data;
         }
     }
 

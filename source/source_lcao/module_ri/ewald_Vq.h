@@ -42,7 +42,7 @@ class Ewald_Vq
               std::vector<std::vector<std::vector<Numerical_Orbital_Lm>>>& abfs_in,
               const K_Vectors* kv_in);
 
-    void init_parallel(
+    void init_ions(
         const std::array<Tcell, Ndim>& period_Vs,
         const std::pair<std::vector<TA>, std::vector<std::vector<std::pair<TA, std::array<Tcell, Ndim>>>>>& list_As_Vs);
 
