@@ -379,6 +379,105 @@ auto Ewald_Vq<Tdata>::set_Vq_dVq_gauss(const std::vector<TA>& list_A0_k,
 }
 
 template <typename Tdata>
+auto Ewald_Vq<Tdata>::cal_Vq_minus_gauss(const std::vector<TA>& list_A0,
+                                         const std::vector<TAC>& list_A1,
+                                         std::map<TA, std::map<TAC, RI::Tensor<Tdata>>>& Vs_minus_gauss)
+    -> std::map<TA, std::map<TAK, RI::Tensor<std::complex<double>>>>
+{
+    ModuleBase::TITLE("Ewald_Vq", "cal_Vq_minus_gauss");
+    ModuleBase::timer::tick("Ewald_Vq", "cal_Vq_minus_gauss");
+
+    std::map<TA, std::map<TAK, RI::Tensor<std::complex<double>>>> Vq_minus_gauss
+        = this->set_Vq_dVq_minus_gauss(list_A0, list_A1, Vs_minus_gauss);
+
+    ModuleBase::timer::tick("Ewald_Vq", "cal_Vq_minus_gauss");
+    return Vq_minus_gauss;
+}
+
+template <typename Tdata>
+auto Ewald_Vq<Tdata>::cal_dVq_minus_gauss(
+    const std::vector<TA>& list_A0,
+    const std::vector<TAC>& list_A1,
+    std::map<TA, std::map<TAC, std::array<RI::Tensor<Tdata>>, 3>>& dVs_minus_gauss)
+    -> std::map<TA, std::map<TAK, std::array<RI::Tensor<std::complex<double>>, 3>>>
+{
+    ModuleBase::TITLE("Ewald_Vq", "cal_dVq_minus_gauss");
+    ModuleBase::timer::tick("Ewald_Vq", "cal_dVq_minus_gauss");
+
+    std::map<TA, std::map<TAK, std::array<RI::Tensor<std::complex<double>>, 3>>> dVq_minus_gauss
+        = this->set_Vq_dVq_minus_gauss(list_A0, list_A1, dVs_minus_gauss);
+
+    ModuleBase::timer::tick("Ewald_Vq", "cal_dVq_minus_gauss");
+    return dVq_minus_gauss;
+}
+
+template <typename Tdata, typename Tin, typename Tout>
+auto Ewald_Vq<Tdata>::set_Vq_dVq_minus_gauss(const std::vector<TA>& list_A0,
+                                             const std::vector<TAC>& list_A1,
+                                             std::map<TA, std::map<TAC, Tin>>& Vs_dVs_minus_gauss)
+    -> std::map<TA, std::map<TAK, Tout>>
+{
+    ModuleBase::TITLE("Ewald_Vq", "set_Vq_dVq_minus_gauss");
+    ModuleBase::timer::tick("Ewald_Vq", "set_Vq_dVq_minus_gauss");
+
+    using namespace RI::Array_Operator;
+    std::map<TA, std::map<TAK, Tout>> datas;
+
+    // auto start = std::chrono::system_clock::now();
+
+    for (size_t ik = 0; ik != this->nks0; ++ik)
+    {
+#pragma omp parallel
+        for (size_t i0 = 0; i0 < list_A0.size(); ++i0)
+        {
+#pragma omp for schedule(dynamic) nowait
+            for (size_t i1 = 0; i1 < list_A1.size(); ++i1)
+            {
+                const TA iat0 = list_A0[i0];
+                const int it0 = GlobalC::ucell.iat2it[iat0];
+                const TA iat1 = list_A1[i1].first;
+                const int it1 = GlobalC::ucell.iat2it[iat1];
+                const TC& cell1 = list_A1[i1].second;
+
+                const ModuleBase::Vector3<double> tau0 = GlobalC::ucell.atoms[it0].tau[iat0];
+                const ModuleBase::Vector3<double> tau1 = GlobalC::ucell.atoms[it1].tau[iat1];
+                const double Rcut = std::min(this->get_Rcut_max(it0, it1), this->get_Rcut_max(it1, it0));
+                const Abfs::Vector3_Order<double> R_delta
+                    = -tau0 + tau1 + (RI_Util::array3_to_Vector3(cell1) * GlobalC::ucell.latvec);
+
+                if (R_delta.norm() * GlobalC::ucell.lat0 < Rcut)
+                {
+                    std::complex<double> phase = std::exp(
+                        ModuleBase::TWO_PI * ModuleBase::IMAG_UNIT
+                        * (this->p_kv->kvec_c[ik] * (RI_Util::array3_to_Vector3(cell1) * GlobalC::ucell.latvec)));
+
+                    Tout Vs_tmp = phase * LRI_CV_Tools::convert(Vs_minus_gauss[iat0][list_A1[i1]]);
+
+#pragma omp critical(Ewald_Vq_cal_Vq_minus_gauss)
+                    {
+                        const TAK index = std::make_pair(iat1, std::array<int, 1>{static_cast<int>(ik)});
+                        if (datas[iat0][index].empty())
+                            datas[iat0][index] = Vs_tmp;
+                        else
+                            datas[iat0][index] = datas[iat0][index] + Vs_tmp;
+                    }
+                }
+            }
+        }
+    }
+
+    // auto end = std::chrono::system_clock::now();
+    // auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end - start);
+    // std::cout << "cal_Vq_minus_gauss Time: "
+    //           << double(duration.count()) * std::chrono::microseconds::period::num
+    //                  / std::chrono::microseconds::period::den
+    //           << " s" << std::endl;
+
+    ModuleBase::timer::tick("Ewald_Vq", "set_Vq_dVq_minus_gauss");
+    return datas;
+}
+
+template <typename Tdata>
 auto Ewald_Vq<Tdata>::set_Vq(const std::vector<TA>& list_A0_k,
                              const std::vector<TAK>& list_A1_k,
                              const std::vector<TA>& list_A0_pair_R,
@@ -465,72 +564,6 @@ auto Ewald_Vq<Tdata>::set_Vq(const std::vector<TA>& list_A0_k,
 
     ModuleBase::timer::tick("Ewald_Vq", "set_Vq");
     return Vq;
-}
-
-template <typename Tdata>
-auto Ewald_Vq<Tdata>::cal_Vq_minus_gauss(const std::vector<TA>& list_A0,
-                                         const std::vector<TAC>& list_A1,
-                                         std::map<TA, std::map<TAC, RI::Tensor<Tdata>>>& Vs_minus_gauss)
-    -> std::map<TA, std::map<TAK, RI::Tensor<std::complex<double>>>>
-{
-    ModuleBase::TITLE("Ewald_Vq", "cal_Vq_minus_gauss");
-    ModuleBase::timer::tick("Ewald_Vq", "cal_Vq_minus_gauss");
-
-    std::map<TA, std::map<TAK, RI::Tensor<std::complex<double>>>> datas;
-
-    // auto start = std::chrono::system_clock::now();
-
-    for (size_t ik = 0; ik != this->nks0; ++ik)
-    {
-#pragma omp parallel
-        for (size_t i0 = 0; i0 < list_A0.size(); ++i0)
-        {
-#pragma omp for schedule(dynamic) nowait
-            for (size_t i1 = 0; i1 < list_A1.size(); ++i1)
-            {
-                const TA iat0 = list_A0[i0];
-                const int it0 = GlobalC::ucell.iat2it[iat0];
-                const TA iat1 = list_A1[i1].first;
-                const int it1 = GlobalC::ucell.iat2it[iat1];
-                const TC& cell1 = list_A1[i1].second;
-
-                const ModuleBase::Vector3<double> tau0 = GlobalC::ucell.atoms[it0].tau[iat0];
-                const ModuleBase::Vector3<double> tau1 = GlobalC::ucell.atoms[it1].tau[iat1];
-                const double Rcut = std::min(this->get_Rcut_max(it0, it1), this->get_Rcut_max(it1, it0));
-                const Abfs::Vector3_Order<double> R_delta
-                    = -tau0 + tau1 + (RI_Util::array3_to_Vector3(cell1) * GlobalC::ucell.latvec);
-
-                if (R_delta.norm() * GlobalC::ucell.lat0 < Rcut)
-                {
-                    std::complex<double> phase = std::exp(
-                        ModuleBase::TWO_PI * ModuleBase::IMAG_UNIT
-                        * (this->p_kv->kvec_c[ik] * (RI_Util::array3_to_Vector3(cell1) * GlobalC::ucell.latvec)));
-
-                    RI::Tensor<std::complex<double>> Vs_tmp
-                        = RI::Global_Func::convert<std::complex<double>>(Vs_minus_gauss[iat0][list_A1[i1]]) * phase;
-
-#pragma omp critical(Ewald_Vq_cal_Vq_minus_gauss)
-                    {
-                        const TAK index = std::make_pair(iat1, std::array<int, 1>{static_cast<int>(ik)});
-                        if (datas[iat0][index].empty())
-                            datas[iat0][index] = Vs_tmp;
-                        else
-                            datas[iat0][index] = datas[iat0][index] + Vs_tmp;
-                    }
-                }
-            }
-        }
-    }
-
-    // auto end = std::chrono::system_clock::now();
-    // auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end - start);
-    // std::cout << "cal_Vq_minus_gauss Time: "
-    //           << double(duration.count()) * std::chrono::microseconds::period::num
-    //                  / std::chrono::microseconds::period::den
-    //           << " s" << std::endl;
-
-    ModuleBase::timer::tick("Ewald_Vq", "cal_Vq_minus_gauss");
-    return datas;
 }
 
 template <typename Tdata>

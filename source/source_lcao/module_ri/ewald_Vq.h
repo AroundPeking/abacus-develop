@@ -128,12 +128,12 @@ class Ewald_Vq
                                 const int& lq_max, // Maximum L for which to calculate interaction.
                                 const size_t& ik,
                                 const ModuleBase::Vector3<double>& tau)>;
-    std::map<TA, std::map<TAK, RI::Tensor<std::complex<double>>>> cal_Vq_gauss(
+    inline std::map<TA, std::map<TAK, RI::Tensor<std::complex<double>>>> cal_Vq_gauss(
         const std::vector<TA>& list_A0_k,
         const std::vector<TAK>& list_A1_k,
         const double& chi,
         const int& shift_for_mpi); // return Vq [-Nk/2, Nk/2)
-    std::map<TA, std::map<TAK, std::array<RI::Tensor<std::complex<double>>, 3>>> cal_dVq_gauss(
+    inline std::map<TA, std::map<TAK, std::array<RI::Tensor<std::complex<double>>, 3>>> cal_dVq_gauss(
         const std::vector<TA>& list_A0_k,
         const std::vector<TAK>& list_A1_k,
         const int& shift_for_mpi); // return dVq [-Nk/2, Nk/2)
@@ -142,6 +142,20 @@ class Ewald_Vq
                                                           const std::vector<TAK>& list_A1_k,
                                                           const int& shift_for_mpi,
                                                           T_func_DPget_Vq<Tresult> func_DPget_Vq_dVq);
+
+    inline std::map<TA, std::map<TAK, RI::Tensor<std::complex<double>>>> cal_Vq_minus_gauss(
+        const std::vector<TA>& list_A0,
+        const std::vector<TAC>& list_A1,
+        std::map<TA, std::map<TAC, RI::Tensor<Tdata>>>& Vs_minus_gauss); // return Vq [0, Nk)
+    inline std::map<TA, std::map<TAK, std::array<RI::Tensor<std::complex<double>>, 3>>> cal_dVq_minus_gauss(
+        const std::vector<TA>& list_A0,
+        const std::vector<TAC>& list_A1,
+        std::map<TA, std::map<TAC, std::array<RI::Tensor<Tdata>>, 3>>& dVs_minus_gauss); // return Vq [0, Nk)
+    template <typename Tdata, typename Tin, typename Tout>
+    std::map<TA, std::map<TAK, Tout>> Ewald_Vq<Tdata>::set_Vq_dVq_minus_gauss(
+        const std::vector<TA>& list_A0,
+        const std::vector<TAC>& list_A1,
+        std::map<TA, std::map<TAC, Tin>>& Vs_dVs_minus_gauss);
 
     std::map<TA, std::map<TAC, RI::Tensor<Tdata>>> set_Vs(
         const std::vector<TA>& list_A0_pair_R,
@@ -157,11 +171,6 @@ class Ewald_Vq
         const std::vector<TAK>& list_A1_pair_k,
         const double& chi,
         std::map<TA, std::map<TAC, RI::Tensor<Tdata>>>& Vs_minus_gauss_in); // return Vq [0, Nk)
-
-    std::map<TA, std::map<TAK, RI::Tensor<std::complex<double>>>> cal_Vq_minus_gauss(
-        const std::vector<TA>& list_A0,
-        const std::vector<TAC>& list_A1,
-        std::map<TA, std::map<TAC, RI::Tensor<Tdata>>>& Vs_minus_gauss); // return Vq [0, Nk)
 
     std::vector<std::vector<std::vector<Numerical_Orbital_Lm>>> init_gauss(
         std::vector<std::vector<std::vector<Numerical_Orbital_Lm>>>& orb_in);
