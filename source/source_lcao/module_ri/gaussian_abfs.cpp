@@ -198,7 +198,7 @@ auto Gaussian_Abfs::DPcal_Vq_dVq(const int& lp_max,
                         {
                             const int lm = MGT.get_lm_index(L, m);
                             double triple_Y = MGT.Gaunt_Coefficients(lmp, lmq, lm);
-                            LRI_CV_Tools::add_elem(Vq_dVq, lmp, lmq, triple_Y * cfac * lattice_sum[i_add_ksq][lm]);
+                            LRI_CV_Tools::add_elem(Vq_dVq, lmp, lmq, lattice_sum[i_add_ksq][lm], triple_Y * cfac);
                         }
                     }
                 }
