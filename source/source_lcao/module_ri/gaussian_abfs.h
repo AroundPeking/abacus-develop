@@ -15,11 +15,12 @@
 #include "module_basis/module_ao/ORB_atomic_lm.h"
 #include "module_basis/module_ao/ORB_gen_tables.h"
 #include "module_basis/module_pw/pw_basis_k.h"
+#include "module_cell/klist.h"
 
 class Gaussian_Abfs
 {
   public:
-    void init(const int& Lmax, const K_Vectors* kv_in, const ModuleBase::Matrix3& G, const double& lambda);
+    void init(const int& Lmax, const std::vector<ModuleBase::Vector3<double>>& kvec_c, const ModuleBase::Matrix3& G, const double& lambda);
 
     inline RI::Tensor<std::complex<double>> get_Vq(const int& lp_max,
                                                    const int& lq_max, // Maximum L for which to calculate interaction.
@@ -58,28 +59,27 @@ Calculate the lattice sum over a Gaussian:
 
   private:
     double lambda;
+    std::vector<ModuleBase::Vector3<double>> kvec_c;
     std::vector<ModuleBase::Vector3<double>> qGvecs;
     std::vector<int> n_cells;
     ModuleBase::matrix ylm;
     template <typename Tresult>
     using T_func_DPcal_phase = std::function<Tresult(const ModuleBase::Vector3<double>& vec)>;
     template <typename Tresult>
-    using T_func_DPcal_lattice_sum
-        = std::function<std::vector<Tresult>(const size_t& ik,
-                                const double& power, // Will be 0. for straight GTOs and -2. for Coulomb interaction
-                                const double& exponent,
-                                const bool& exclude_Gamma, // The R==0. can be excluded by this flag.
-                                const int& lmax,           // Maximum angular momentum the sum is needed for.
-                                const ModuleBase::Vector3<double>& tau)>;
+    using T_func_DPcal_lattice_sum = std::function<std::vector<Tresult>(
+        const double& power, // Will be 0. for straight GTOs and -2. for Coulomb interaction
+        const double& exponent,
+        const bool& exclude_Gamma, // The R==0. can be excluded by this flag.
+        const int& lmax)>;
 
-    template <typename Tin, typename Tout>
+    template <typename Tout, typename Tin>
     Tout DPcal_Vq_dVq(const int& lp_max,
-                         const int& lq_max, // Maximum L for which to calculate interaction.
-                         const size_t& ik,
-                         const double& chi, // Singularity corrected value at q=0.
-                         const ModuleBase::Vector3<double>& tau,
-                         const ORB_gaunt_table& MGT,
-                         const T_func_DPcal_lattice_sum<std::vector<Tin>>& func_DPcal_lattice_sum);
+                      const int& lq_max, // Maximum L for which to calculate interaction.
+                      const size_t& ik,
+                      const double& chi, // Singularity corrected value at q=0.
+                      const ModuleBase::Vector3<double>& tau,
+                      const ORB_gaunt_table& MGT,
+                      const T_func_DPcal_lattice_sum<Tin>& func_DPcal_lattice_sum);
 
     template <typename Tresult>
     std::vector<Tresult> DPcal_lattice_sum(

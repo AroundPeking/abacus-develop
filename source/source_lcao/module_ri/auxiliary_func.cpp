@@ -141,14 +141,16 @@ double Singular_Value::cal_type_0(const std::vector<ModuleBase::Vector3<double>>
 
 double Singular_Value::fq_type_1(const int& qdiv, const ModuleBase::Matrix3& Gvec, const double& lambda)
 {
-    const int qexpo = -abs(qdiv);
+    const size_t ik = 0;
+    const double qexpo = -abs(qdiv);
     const bool exclude_Gamma = true;
     const int lmax = 0;
     const ModuleBase::Vector3<double> tau(0, 0, 0);
-    const ModuleBase::Vector3<double> qvec(0, 0, 0);
+    const std::vector<ModuleBase::Vector3<double>> qvec(1, ModuleBase::Vector3<double>{0, 0, 0});
 
-    auto data = Gaussian_Abfs::get_lattice_sum(qvec, Gvec, qexpo, lambda, exclude_Gamma, lmax, tau, false);
-    std::vector<std::complex<double>> lattice_sum = data.first;
+    Gaussian_Abfs gaussian_abfs;
+    gaussian_abfs.init(lmax, qvec, Gvec, lambda);
+    auto lattice_sum = gaussian_abfs.get_lattice_sum(ik, qexpo, lambda, exclude_Gamma, lmax, tau);   
     assert(lattice_sum[0].imag() < 1e-10);
     double fq = lattice_sum[0].real() * std::sqrt(ModuleBase::FOUR_PI);
 
