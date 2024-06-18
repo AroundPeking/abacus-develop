@@ -41,7 +41,7 @@ Calculate the lattice sum over a Gaussian:
   S(k) := \sum_G |k+G|^{power+L} \exp(-lambda*|k+G|^2) Y_{LM}(k+G) * \exp(i(k+G)\tau)
   d_S(k) := S(k) * i * (k+G)
 */
-    inline std::vector<std::complex<double>> get_lattice_sum(
+    std::vector<std::complex<double>> get_lattice_sum(
         const size_t& ik,
         const double& power, // Will be 0. for straight GTOs and -2. for Coulomb interaction
         const double& exponent,
@@ -49,13 +49,16 @@ Calculate the lattice sum over a Gaussian:
         const int& lmax,           // Maximum angular momentum the sum is needed for.
         const ModuleBase::Vector3<double>& tau);
 
-    inline std::vector<std::array<std::complex<double>, 3>> get_d_lattice_sum(
+    std::vector<std::array<std::complex<double>, 3>> get_d_lattice_sum(
         const size_t& ik,
         const double& power, // Will be 0. for straight GTOs and -2. for Coulomb interaction
         const double& exponent,
         const bool& exclude_Gamma, // The R==0. can be excluded by this flag.
         const int& lmax,           // Maximum angular momentum the sum is needed for.
         const ModuleBase::Vector3<double>& tau);
+
+    // construct gaussian basis based on original NAO
+    Numerical_Orbital_Lm Gauss(const Numerical_Orbital_Lm& orb, const double& lambda);
 
   private:
     double lambda;
@@ -89,9 +92,6 @@ Calculate the lattice sum over a Gaussian:
         const bool& exclude_Gamma, // The R==0. can be excluded by this flag.
         const int& lmax,           // Maximum angular momentum the sum is needed for.
         const T_func_DPcal_phase<Tresult>& func_DPcal_phase);
-
-    // construct gaussian basis based on original NAO
-    Numerical_Orbital_Lm Gauss(const Numerical_Orbital_Lm& orb, const double& lambda);
 
     // calculates the double factorial n!! of n
     static double double_factorial(const int& n);
