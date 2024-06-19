@@ -20,16 +20,19 @@
 class Gaussian_Abfs
 {
   public:
-    void init(const int& Lmax, const std::vector<ModuleBase::Vector3<double>>& kvec_c, const ModuleBase::Matrix3& G, const double& lambda);
+    void init(const int& Lmax,
+              const std::vector<ModuleBase::Vector3<double>>& kvec_c,
+              const ModuleBase::Matrix3& G,
+              const double& lambda);
 
-    inline RI::Tensor<std::complex<double>> get_Vq(const int& lp_max,
-                                                   const int& lq_max, // Maximum L for which to calculate interaction.
-                                                   const size_t& ik,
-                                                   const double& chi, // Singularity corrected value at q=0.
-                                                   const ModuleBase::Vector3<double>& tau,
-                                                   const ORB_gaunt_table& MGT);
+    RI::Tensor<std::complex<double>> get_Vq(const int& lp_max,
+                                            const int& lq_max, // Maximum L for which to calculate interaction.
+                                            const size_t& ik,
+                                            const double& chi, // Singularity corrected value at q=0.
+                                            const ModuleBase::Vector3<double>& tau,
+                                            const ORB_gaunt_table& MGT);
 
-    inline std::array<RI::Tensor<std::complex<double>>, 3> get_dVq(
+    std::array<RI::Tensor<std::complex<double>>, 3> get_dVq(
         const int& lp_max,
         const int& lq_max, // Maximum L for which to calculate interaction.
         const size_t& ik,
