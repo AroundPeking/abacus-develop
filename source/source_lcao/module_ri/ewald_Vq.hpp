@@ -37,6 +37,8 @@ void Ewald_Vq<Tdata>::init(const MPI_Comm& mpi_comm_in,
     this->mpi_comm = mpi_comm_in;
     this->p_kv = kv_in;
     this->nks0 = this->p_kv->nkstot_full / this->nspin0;
+    this->kvec_c.resize(this->nks0);
+    this->wk.resize(this->nks0);
     for (size_t ik = 0; ik != this->nks0; ++ik)
     {
         this->kvec_c[ik] = this->p_kv->kvec_c[ik];
