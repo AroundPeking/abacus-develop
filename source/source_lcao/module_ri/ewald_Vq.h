@@ -31,6 +31,21 @@ class Ewald_Vq
     using TK = std::array<int, 1>;
     using TAK = std::pair<TA, TK>;
 
+    template <typename Tout>
+    struct TinType;
+
+    template <typename T>
+    struct TinType<RI::Tensor<T>>
+    {
+        using type = T;
+    };
+
+    template <typename T>
+    struct TinType<std::array<RI::Tensor<T>, Ndim>>
+    {
+        using type = T;
+    };
+
   public:
     Ewald_Vq(const Exx_Info::Exx_Info_RI& info_in, const Exx_Info::Exx_Info_Ewald& info_ewald_in)
         : info(info_in), info_ewald(info_ewald_in)

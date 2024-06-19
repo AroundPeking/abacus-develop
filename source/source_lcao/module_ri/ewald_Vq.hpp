@@ -226,6 +226,7 @@ auto Ewald_Vq<Tdata>::set_Vs_dVs_minus_gauss(const std::vector<TA>& list_A0,
     ModuleBase::TITLE("Ewald_Vq", "set_Vs_dVs_minus_gauss");
     ModuleBase::timer::tick("Ewald_Vq", "set_Vs_dVs_minus_gauss");
 
+    using Tin_convert = typename TinType<Tresult>::type;
     std::map<TA, std::map<TAC, Tresult>> pVs_dVs_gauss;
 #pragma omp parallel
     for (size_t i0 = 0; i0 < list_A0.size(); ++i0)
@@ -271,13 +272,15 @@ auto Ewald_Vq<Tdata>::set_Vs_dVs_minus_gauss(const std::vector<TA>& list_A0,
                                     {
                                         const size_t index0 = this->index_abfs[it0][l0][n0][m0];
                                         const size_t index1 = this->index_abfs[it1][l1][n1][m1];
+                                        
+                                        Tin_convert pp = RI::Global_Func::convert<Tin_convert>(pA * pB);
                                         LRI_CV_Tools::add_elem(data,
                                                                index0,
                                                                index1,
                                                                Vs_dVs_gauss_in[list_A0[i0]][list_A1[i1]],
                                                                index0,
                                                                index1,
-                                                               RI::Global_Func::convert<Tdata>(pA * pB));
+                                                               pp);
                                     }
                                 }
                             }
@@ -311,8 +314,7 @@ auto Ewald_Vq<Tdata>::cal_Vq_gauss(const std::vector<TA>& list_A0_k,
     ModuleBase::TITLE("Ewald_Vq", "cal_Vq_gauss");
     ModuleBase::timer::tick("Ewald_Vq", "cal_Vq_gauss");
 
-    const T_func_DPget_Vq_dVq<RI::Tensor<std::complex<double>>> func_DPget_Vq = std::bind(&this->gaussian_abfs.get_Vq,
-                                                                                          this,
+    const T_func_DPget_Vq_dVq<RI::Tensor<std::complex<double>>> func_DPget_Vq = std::bind(&Gaussian_Abfs::get_Vq,
                                                                                           std::placeholders::_1,
                                                                                           std::placeholders::_2,
                                                                                           std::placeholders::_3,
@@ -335,8 +337,7 @@ auto Ewald_Vq<Tdata>::cal_dVq_gauss(const std::vector<TA>& list_A0_k,
     ModuleBase::timer::tick("Ewald_Vq", "cal_dVq_gauss");
 
     const T_func_DPget_Vq_dVq<std::array<RI::Tensor<std::complex<double>>, Ndim>> func_DPget_dVq
-        = std::bind(&this->gaussian_abfs.get_dVq,
-                    this,
+        = std::bind(&Gaussian_Abfs::get_dVq,
                     std::placeholders::_1,
                     std::placeholders::_2,
                     std::placeholders::_3,
@@ -400,7 +401,7 @@ auto Ewald_Vq<Tdata>::cal_Vq_minus_gauss(const std::vector<TA>& list_A0,
     ModuleBase::timer::tick("Ewald_Vq", "cal_Vq_minus_gauss");
 
     auto Vq_minus_gauss
-        = this->set_Vq_dVq_minus_gauss<Tdata, std::map<TA, std::map<TAK, RI::Tensor<std::complex<double>>>>>(
+        = this->set_Vq_dVq_minus_gauss<RI::Tensor<std::complex<double>>>(
             list_A0,
             list_A1,
             Vs_minus_gauss);
@@ -420,8 +421,7 @@ auto Ewald_Vq<Tdata>::cal_dVq_minus_gauss(
     ModuleBase::timer::tick("Ewald_Vq", "cal_dVq_minus_gauss");
 
     auto dVq_minus_gauss
-        = this->set_Vq_dVq_minus_gauss<Tdata,
-                                       std::map<TA, std::map<TAK, std::array<RI::Tensor<std::complex<double>>, Ndim>>>>(
+        = this->set_Vq_dVq_minus_gauss<std::array<RI::Tensor<std::complex<double>>, Ndim>>(
             list_A0,
             list_A1,
             dVs_minus_gauss);
@@ -441,6 +441,7 @@ auto Ewald_Vq<Tdata>::set_Vq_dVq_minus_gauss(const std::vector<TA>& list_A0,
     ModuleBase::timer::tick("Ewald_Vq", "set_Vq_dVq_minus_gauss");
 
     using namespace RI::Array_Operator;
+    using Tin_convert = typename TinType<Tout>::type;
     std::map<TA, std::map<TAK, Tout>> datas;
 
     // auto start = std::chrono::system_clock::now();
@@ -471,7 +472,7 @@ auto Ewald_Vq<Tdata>::set_Vq_dVq_minus_gauss(const std::vector<TA>& list_A0,
                         = std::exp(ModuleBase::TWO_PI * ModuleBase::IMAG_UNIT
                                    * (this->kvec_c[ik] * (RI_Util::array3_to_Vector3(cell1) * GlobalC::ucell.latvec)));
 
-                    Tout Vs_dVs_tmp = phase * LRI_CV_Tools::convert<Tout>(Vs_dVs_minus_gauss[iat0][list_A1[i1]]);
+                    Tout Vs_dVs_tmp = LRI_CV_Tools::mul2(phase, LRI_CV_Tools::convert<Tin_convert>(std::move(Vs_dVs_minus_gauss[iat0][list_A1[i1]])));
 
 #pragma omp critical(Ewald_Vq_set_Vq_dVq_minus_gauss)
                     {
@@ -566,6 +567,7 @@ auto Ewald_Vq<Tdata>::set_Vq_dVq(const std::vector<TA>& list_A0_pair_k,
     ModuleBase::TITLE("Ewald_Vq", "set_Vq_dVq");
     ModuleBase::timer::tick("Ewald_Vq", "set_Vq_dVq");
 
+    using Tin_convert = typename TinType<Tout>::type;
     std::map<TA, std::map<TAK, Tout>> pVq_dVq_gauss;
     const int shift_for_mpi = std::floor(this->nks0 / 2.0);
 
@@ -621,13 +623,15 @@ auto Ewald_Vq<Tdata>::set_Vq_dVq(const std::vector<TA>& list_A0_pair_k,
                                 {
                                     const size_t index1 = this->index_abfs[it1][l1][n1][m1];
                                     const size_t lm1 = l1 * l1 + m1;
+
+                                    Tin_convert pp = RI::Global_Func::convert<Tin_convert>(pA * pB);
                                     LRI_CV_Tools::add_elem(data,
                                                            index0,
                                                            index1,
                                                            Vq_dVq_gauss[list_A0_pair_k[i0]][list_A1_pair_k[i1]],
                                                            lm0,
                                                            lm1,
-                                                           RI::Global_Func::convert<std::complex<double>>(pA * pB));
+                                                           pp);
                                 }
                             }
                         }
@@ -693,6 +697,8 @@ auto Ewald_Vq<Tdata>::set_Vs_dVs(const std::vector<TA>& list_A0_pair_R,
     ModuleBase::timer::tick("Ewald_Vq", "set_Vs_dVs");
 
     using namespace RI::Array_Operator;
+    using Tin_convert = typename TinType<Tout>::type;
+
     const double SPIN_multiple = std::map<int, double>{
         {1, 0.5},
         {2, 1  },
@@ -733,7 +739,7 @@ auto Ewald_Vq<Tdata>::set_Vs_dVs(const std::vector<TA>& list_A0_pair_R,
                           * this->wk[ik] * SPIN_multiple;
 
                     const TAK index = std::make_pair(iat1, std::array<int, 1>{static_cast<int>(ik)});
-                    Tout Vq_tmp = LRI_CV_Tools::convert<Tout>(frac * Vq[iat0][index]);
+                    Tout Vq_tmp = LRI_CV_Tools::convert<Tin_convert>(LRI_CV_Tools::mul2(frac, Vq[iat0][index]));
 
 #pragma omp critical(Ewald_Vq_set_Vs_dVs)
                     {
