@@ -57,8 +57,7 @@ void RPA_LRI<T, Tdata>::cal_rpa_cv(const UnitCell& ucell)
 
     std::pair<std::map<TA, std::map<TAC, RI::Tensor<Tdata>>>,
               std::map<TA, std::map<TAC, std::array<RI::Tensor<Tdata>, 3>>>>
-        Cs_dCs = exx_lri_rpa.exx_objs[Conv_Coulomb_Pot_K::Coulomb_Method::Center2].cv.cal_Cs_dCs(ucell,
-                                           list_As_Cs.first,
+        Cs_dCs = exx_lri_rpa.cv.cal_Cs_dCs(list_As_Cs.first,
                                            list_As_Cs.second[0],
                                            {
                                                {"cal_dC",        false},
