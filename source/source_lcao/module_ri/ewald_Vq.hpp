@@ -14,6 +14,7 @@
 #include <cmath>
 
 #include "RI_Util.h"
+#include "RI_2D_Comm.h"
 #include "conv_coulomb_pot_k-template.h"
 #include "conv_coulomb_pot_k.h"
 #include "exx_abfs-abfs_index.h"
@@ -567,19 +568,15 @@ auto Ewald_Vq<Tdata>::set_Vq_dVq(const std::vector<TA>& list_A0_pair_k,
 
     // MPI: {ia0, {ia1, R}} to {ia0, ia1}
     std::map<TA, std::map<TAC, Tin>> Vs_dVs_minus_gauss
-        = RI::Communicate_Tensors_Map_Judge::comm_map2_first(this->mpi_comm,
-                                                             Vs_dVs_minus_gauss_in,
-                                                             this->atoms,
-                                                             this->atoms);
+        = RI_2D_Comm::comm_map2_first(this->mpi_comm, Vs_dVs_minus_gauss_in, this->atoms, this->atoms);
     std::map<TA, std::map<TAK, Tout>> Vq_dVq_minus_gauss = func_cal_Vq_dVq_minus_gauss(Vs_dVs_minus_gauss); //{ia0, ia1}
 
     // MPI: {ia0, {ia1, k}} to {ia0, ia1}
     std::map<TA, std::map<TAK, Tout>> Vq_dVq_gauss_out = func_cal_Vq_dVq_gauss(shift_for_mpi); //{ia0, {ia1, k}}
-    std::map<TA, std::map<TAK, Tout>> Vq_dVq_gauss
-        = RI::Communicate_Tensors_Map_Judge::comm_map2_first(this->mpi_comm,
-                                                             Vq_dVq_gauss_out,
-                                                             this->atoms,
-                                                             this->atoms); //{ia0, ia1}
+    std::map<TA, std::map<TAK, Tout>> Vq_dVq_gauss = RI_2D_Comm::comm_map2_first(this->mpi_comm,
+                                                                                 Vq_dVq_gauss_out,
+                                                                                 this->atoms,
+                                                                                 this->atoms); //{ia0, ia1}
 
 #pragma omp parallel
     for (size_t i0 = 0; i0 < list_A0_pair_k.size(); ++i0)
