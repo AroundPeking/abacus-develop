@@ -150,7 +150,7 @@ double Singular_Value::fq_type_1(const int& qdiv, const ModuleBase::Matrix3& Gve
 
     Gaussian_Abfs gaussian_abfs;
     gaussian_abfs.init(lmax, qvec, Gvec, lambda);
-    auto lattice_sum = gaussian_abfs.get_lattice_sum(ik, qexpo, lambda, exclude_Gamma, lmax, tau);   
+    auto lattice_sum = gaussian_abfs.get_lattice_sum(ik, qexpo, lambda, exclude_Gamma, lmax, tau);
     assert(lattice_sum[0].imag() < 1e-10);
     double fq = lattice_sum[0].real() * std::sqrt(ModuleBase::FOUR_PI);
 

@@ -66,6 +66,10 @@ void Gaussian_Abfs::init(const int& Lmax,
                 = -(qvec + Gvec[0] * static_cast<double>(G0) + Gvec[1] * static_cast<double>(G1)
                     + Gvec[2] * static_cast<double>(G2));
             this->qGvecs.emplace_back(qGvec);
+            if (G0 == 0 && G1 == 0 && G2 == 0)
+                this->check_gamma.emplace_back(true);
+            else
+                this->check_gamma.emplace_back(false);
         }
     }
     const int total_lm = (Lmax + 1) * (Lmax + 1);
@@ -356,6 +360,8 @@ auto Gaussian_Abfs::DPcal_lattice_sum(
 #pragma omp parallel for reduction(vec_plus : result)
     for (int idx = 0; idx < total_cells; ++idx)
     {
+        if (exclude_Gamma && this->check_gamma[ik * total_cells + idx])
+            continue;
         ModuleBase::Vector3<double> vec = this->qGvecs[ik * total_cells + idx];
         const double vec_sq = vec.norm2() * GlobalC::ucell.tpiba2;
         const double vec_abs = std::sqrt(vec_sq);
@@ -370,7 +376,7 @@ auto Gaussian_Abfs::DPcal_lattice_sum(
             for (int m = 0; m != 2 * L + 1; ++m)
             {
                 const int lm = L * L + m;
-                const double val_lm = val_l * ylm(lm, idx);
+                const double val_lm = val_l * this->ylm(lm, idx);
                 result[lm] = result[lm] + RI::Global_Func::convert<std::complex<double>>(val_lm) * phase;
             }
         }
