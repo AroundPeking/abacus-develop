@@ -9,6 +9,7 @@
 #include <array>
 #include <vector>
 
+#include "gaussian_abfs.h"
 #include "module_basis/module_pw/pw_basis_k.h"
 #include "module_cell/klist.h"
 
@@ -38,7 +39,7 @@ class Singular_Value
                              const int& niter,
                              const double& eps);
 
-  private: 
+  private:
     static double solve_chi(const std::vector<ModuleBase::Vector3<double>>& kvec_c,
                             const T_cal_fq_type& func_cal_fq,
                             const std::array<int, 3>& nq_arr,
@@ -67,9 +68,7 @@ class Singular_Value
                             std::vector<ModuleBase::Vector3<double>>& avec,
                             std::vector<ModuleBase::Vector3<double>>& bvec);
     // gamma: chosen as the radius of sphere which has the same volume as the Brillouin zone.
-    static double fq_type_1(const int& qdiv,
-                            const ModuleBase::Matrix3& Gvec,
-                            const double& lambda);
+    static double fq_type_1(Gaussian_Abfs& gaussian_abfs, const int& qdiv, const double& lambda, const int& lmax);
 };
 
 #endif

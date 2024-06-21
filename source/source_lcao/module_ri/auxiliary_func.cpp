@@ -12,7 +12,6 @@
 #include <cmath>
 #include <numeric>
 
-#include "gaussian_abfs.h"
 #include "module_base/global_variable.h"
 #include "module_base/math_ylmreal.h"
 #include "module_base/timer.h"
@@ -139,17 +138,16 @@ double Singular_Value::cal_type_0(const std::vector<ModuleBase::Vector3<double>>
     return val;
 }
 
-double Singular_Value::fq_type_1(const int& qdiv, const ModuleBase::Matrix3& Gvec, const double& lambda)
+double Singular_Value::fq_type_1(Gaussian_Abfs& gaussian_abfs,
+                                 const int& qdiv,
+                                 const double& lambda,
+                                 const int& lmax)
 {
     const size_t ik = 0;
     const double qexpo = -abs(qdiv);
     const bool exclude_Gamma = true;
-    const int lmax = 0;
     const ModuleBase::Vector3<double> tau(0, 0, 0);
-    const std::vector<ModuleBase::Vector3<double>> qvec(1, ModuleBase::Vector3<double>{0, 0, 0});
 
-    Gaussian_Abfs gaussian_abfs;
-    gaussian_abfs.init(lmax, qvec, Gvec, lambda);
     auto lattice_sum = gaussian_abfs.get_lattice_sum(ik, qexpo, lambda, exclude_Gamma, lmax, tau);
     assert(lattice_sum[0].imag() < 1e-10);
     double fq = lattice_sum[0].real() * std::sqrt(ModuleBase::FOUR_PI);
@@ -180,9 +178,14 @@ double Singular_Value::cal_type_1(const std::vector<int>& nmp,
     bvec.e33 = GlobalC::ucell.G.e33 / nmp[2];
 
     const int nks = nmp[0] * nmp[1] * nmp[2];
+    const std::vector<ModuleBase::Vector3<double>> qvec(1, ModuleBase::Vector3<double>{0, 0, 0});
+    const int lmax = 0;
 
-    auto cal_chi = [&qdiv, &bvec, &nks](const double& lambda) {
-        const T_cal_fq_type_no func_cal_fq_type_1 = std::bind(&fq_type_1, qdiv, bvec, lambda);
+    auto cal_chi = [&qdiv, &bvec, &nks, &qvec, &lmax](const double& lambda) {
+        Gaussian_Abfs gaussian_abfs;
+        const double exponent = 1 / lambda;
+        gaussian_abfs.init(lmax, qvec, bvec, exponent);
+        const T_cal_fq_type_no func_cal_fq_type_1 = std::bind(&fq_type_1, gaussian_abfs, qdiv, lambda, lmax);
         double prefactor = ModuleBase::TWO_PI * std::pow(lambda, -1.0 / qdiv) * GlobalC::ucell.omega
                            / std::pow(ModuleBase::TWO_PI, 3);
         double fq_int;

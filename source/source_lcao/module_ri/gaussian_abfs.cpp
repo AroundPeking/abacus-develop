@@ -362,6 +362,7 @@ auto Gaussian_Abfs::DPcal_lattice_sum(
     {
         if (exclude_Gamma && this->check_gamma[ik * total_cells + idx])
             continue;
+        
         ModuleBase::Vector3<double> vec = this->qGvecs[ik * total_cells + idx];
         const double vec_sq = vec.norm2() * GlobalC::ucell.tpiba2;
         const double vec_abs = std::sqrt(vec_sq);
@@ -376,7 +377,7 @@ auto Gaussian_Abfs::DPcal_lattice_sum(
             for (int m = 0; m != 2 * L + 1; ++m)
             {
                 const int lm = L * L + m;
-                const double val_lm = val_l * this->ylm(lm, idx);
+                const double val_lm = val_l * this->ylm(lm, ik * total_cells + idx);
                 result[lm] = result[lm] + RI::Global_Func::convert<std::complex<double>>(val_lm) * phase;
             }
         }
