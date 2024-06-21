@@ -362,7 +362,7 @@ auto Gaussian_Abfs::DPcal_lattice_sum(
     {
         if (exclude_Gamma && this->check_gamma[ik * total_cells + idx])
             continue;
-        
+
         ModuleBase::Vector3<double> vec = this->qGvecs[ik * total_cells + idx];
         const double vec_sq = vec.norm2() * GlobalC::ucell.tpiba2;
         const double vec_abs = std::sqrt(vec_sq);
@@ -370,7 +370,6 @@ auto Gaussian_Abfs::DPcal_lattice_sum(
         const double val_s = std::exp(-exponent * vec_sq) * std::pow(vec_abs, power);
 
         Tresult phase = func_DPcal_phase(vec);
-
         for (int L = 0; L != lmax + 1; ++L)
         {
             const double val_l = val_s * std::pow(vec_abs, L);

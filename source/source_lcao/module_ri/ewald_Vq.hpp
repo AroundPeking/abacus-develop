@@ -13,8 +13,8 @@
 // #include <chrono>
 #include <cmath>
 
-#include "RI_Util.h"
 #include "RI_2D_Comm.h"
+#include "RI_Util.h"
 #include "conv_coulomb_pot_k-template.h"
 #include "conv_coulomb_pot_k.h"
 #include "exx_abfs-abfs_index.h"
@@ -117,7 +117,10 @@ void Ewald_Vq<Tdata>::init_ions(
     this->list_A0_pair_k = list_As_Vq_atoms.first;
     this->list_A1_pair_k = list_As_Vq_atoms.second[0];
 
-    this->gaussian_abfs.init(GlobalC::exx_info.info_ri.abfs_Lmax, this->kvec_c, GlobalC::ucell.G, this->ewald_lambda);
+    this->gaussian_abfs.init(2 * GlobalC::exx_info.info_ri.abfs_Lmax + 1,
+                             this->kvec_c,
+                             GlobalC::ucell.G,
+                             this->ewald_lambda);
 
     ModuleBase::timer::tick("Ewald_Vq", "init_parallel");
 }
