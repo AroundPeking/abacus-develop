@@ -66,10 +66,10 @@ Calculate the lattice sum over a Gaussian:
   private:
     double lambda;
     std::vector<ModuleBase::Vector3<double>> kvec_c;
-    std::vector<ModuleBase::Vector3<double>> qGvecs;
+    std::vector<std::vector<ModuleBase::Vector3<double>>> qGvecs;
     std::vector<int> n_cells;
-    std::vector<bool> check_gamma;
-    ModuleBase::matrix ylm;
+    std::vector<std::vector<bool>> check_gamma;
+    std::vector<ModuleBase::matrix> ylm;
     template <typename Tresult>
     using T_func_DPcal_phase = std::function<Tresult(const ModuleBase::Vector3<double>& vec)>;
     template <typename Tresult>

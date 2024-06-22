@@ -47,6 +47,12 @@ void Gaussian_Abfs::init(const int& Lmax,
     Gvec[2].y = G.e32;
     Gvec[2].z = G.e33;
 
+    this->n_cells.resize(nks0);
+    this->qGvecs.resize(nks0);
+    this->check_gamma.resize(nks0);
+    this->ylm.resize(nks0);
+    const int total_lm = (Lmax + 1) * (Lmax + 1);
+
     for (size_t ik = 0; ik != nks0; ++ik)
     {
         ModuleBase::Vector3<double> qvec = this->kvec_c[ik];
@@ -55,7 +61,9 @@ void Gaussian_Abfs::init(const int& Lmax,
         int total_cells = std::accumulate(n_supercells.begin(), n_supercells.end(), 1, [](int a, int b) {
             return a * (2 * b + 1);
         });
-        this->n_cells.emplace_back(total_cells);
+        this->n_cells[ik] = total_cells;
+        this->qGvecs[ik].resize(total_cells);
+        this->check_gamma[ik].resize(total_cells);
 
         for (int idx = 0; idx < total_cells; ++idx)
         {
@@ -65,18 +73,15 @@ void Gaussian_Abfs::init(const int& Lmax,
             ModuleBase::Vector3<double> qGvec
                 = -(qvec + Gvec[0] * static_cast<double>(G0) + Gvec[1] * static_cast<double>(G1)
                     + Gvec[2] * static_cast<double>(G2));
-            this->qGvecs.emplace_back(qGvec);
+            this->qGvecs[ik][idx] = qGvec;
             if (G0 == 0 && G1 == 0 && G2 == 0)
-                this->check_gamma.emplace_back(true);
+                this->check_gamma[ik][idx] = true;
             else
-                this->check_gamma.emplace_back(false);
+                this->check_gamma[ik][idx] = false;
         }
+        this->ylm[ik].create(total_lm, total_cells);
+        ModuleBase::YlmReal::Ylm_Real(total_lm, total_cells, this->qGvecs[ik].data(), this->ylm[ik]);
     }
-    const int total_lm = (Lmax + 1) * (Lmax + 1);
-    const int npw = qGvecs.size();
-
-    this->ylm.create(total_lm, npw);
-    ModuleBase::YlmReal::Ylm_Real(total_lm, npw, qGvecs.data(), this->ylm);
 
     ModuleBase::timer::tick("Gaussian_Abfs", "init");
 }
@@ -360,10 +365,10 @@ auto Gaussian_Abfs::DPcal_lattice_sum(
 #pragma omp parallel for reduction(vec_plus : result)
     for (int idx = 0; idx < total_cells; ++idx)
     {
-        if (exclude_Gamma && this->check_gamma[ik * total_cells + idx])
+        if (exclude_Gamma && this->check_gamma[ik][idx])
             continue;
 
-        ModuleBase::Vector3<double> vec = this->qGvecs[ik * total_cells + idx];
+        ModuleBase::Vector3<double> vec = this->qGvecs[ik][idx];
         const double vec_sq = vec.norm2() * GlobalC::ucell.tpiba2;
         const double vec_abs = std::sqrt(vec_sq);
 
@@ -376,7 +381,7 @@ auto Gaussian_Abfs::DPcal_lattice_sum(
             for (int m = 0; m != 2 * L + 1; ++m)
             {
                 const int lm = L * L + m;
-                const double val_lm = val_l * this->ylm(lm, ik * total_cells + idx);
+                const double val_lm = val_l * this->ylm[ik](lm, idx);
                 result[lm] = result[lm] + RI::Global_Func::convert<std::complex<double>>(val_lm) * phase;
             }
         }
