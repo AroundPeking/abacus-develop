@@ -13,8 +13,8 @@
 // #include <chrono>
 #include <cmath>
 
-#include "RI_2D_Comm.h"
 #include "RI_Util.h"
+#include "RI_2D_Comm.h"
 #include "conv_coulomb_pot_k-template.h"
 #include "conv_coulomb_pot_k.h"
 #include "exx_abfs-abfs_index.h"
@@ -117,10 +117,7 @@ void Ewald_Vq<Tdata>::init_ions(
     this->list_A0_pair_k = list_As_Vq_atoms.first;
     this->list_A1_pair_k = list_As_Vq_atoms.second[0];
 
-    this->gaussian_abfs.init(2 * GlobalC::exx_info.info_ri.abfs_Lmax + 1,
-                             this->kvec_c,
-                             GlobalC::ucell.G,
-                             this->ewald_lambda);
+    this->gaussian_abfs.init(2 * GlobalC::exx_info.info_ri.abfs_Lmax + 1, this->kvec_c, GlobalC::ucell.G, this->ewald_lambda);
 
     ModuleBase::timer::tick("Ewald_Vq", "init_parallel");
 }
@@ -231,7 +228,7 @@ auto Ewald_Vq<Tdata>::set_Vs_dVs_minus_gauss(const std::vector<TA>& list_A0,
     ModuleBase::TITLE("Ewald_Vq", "set_Vs_dVs_minus_gauss");
     ModuleBase::timer::tick("Ewald_Vq", "set_Vs_dVs_minus_gauss");
 
-    using Tin_convert = typename TinType<Tresult>::type;
+    using Tin_convert = typename LRI_CV_Tools::TinType<Tresult>::type;
     std::map<TA, std::map<TAC, Tresult>> pVs_dVs_gauss;
 #pragma omp parallel
     for (size_t i0 = 0; i0 < list_A0.size(); ++i0)
@@ -439,7 +436,7 @@ auto Ewald_Vq<Tdata>::set_Vq_dVq_minus_gauss(const std::vector<TA>& list_A0,
     ModuleBase::timer::tick("Ewald_Vq", "set_Vq_dVq_minus_gauss");
 
     using namespace RI::Array_Operator;
-    using Tin_convert = typename TinType<Tout>::type;
+    using Tin_convert = typename LRI_CV_Tools::TinType<Tout>::type;
     std::map<TA, std::map<TAK, Tout>> datas;
 
     // auto start = std::chrono::system_clock::now();
@@ -567,7 +564,7 @@ auto Ewald_Vq<Tdata>::set_Vq_dVq(const std::vector<TA>& list_A0_pair_k,
     ModuleBase::TITLE("Ewald_Vq", "set_Vq_dVq");
     ModuleBase::timer::tick("Ewald_Vq", "set_Vq_dVq");
 
-    using Tin_convert = typename TinType<Tout>::type;
+    using Tin_convert = typename LRI_CV_Tools::TinType<Tout>::type;
     std::map<TA, std::map<TAK, Tout>> pVq_dVq_gauss;
     const int shift_for_mpi = std::floor(this->nks0 / 2.0);
 
@@ -688,7 +685,7 @@ auto Ewald_Vq<Tdata>::set_Vs_dVs(const std::vector<TA>& list_A0_pair_R,
     ModuleBase::timer::tick("Ewald_Vq", "set_Vs_dVs");
 
     using namespace RI::Array_Operator;
-    using Tin_convert = typename TinType<Tout>::type;
+    using Tin_convert = typename LRI_CV_Tools::TinType<Tout>::type;
 
     const double SPIN_multiple = std::map<int, double>{
         {1, 0.5},
