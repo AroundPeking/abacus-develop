@@ -95,8 +95,8 @@ void Ewald_Vq<Tdata>::init_ions(
     const std::array<Tcell, Ndim>& period_Vs,
     const std::pair<std::vector<TA>, std::vector<std::vector<std::pair<TA, std::array<Tcell, Ndim>>>>>& list_As_Vs)
 {
-    ModuleBase::TITLE("Ewald_Vq", "init_parallel");
-    ModuleBase::timer::tick("Ewald_Vq", "init_parallel");
+    ModuleBase::TITLE("Ewald_Vq", "init_ions");
+    ModuleBase::timer::tick("Ewald_Vq", "init_ions");
 
     this->list_A0 = list_As_Vs.first;
     this->list_A1 = list_As_Vs.second[0];
@@ -119,7 +119,7 @@ void Ewald_Vq<Tdata>::init_ions(
 
     this->gaussian_abfs.init(2 * GlobalC::exx_info.info_ri.abfs_Lmax + 1, this->kvec_c, GlobalC::ucell.G, this->ewald_lambda);
 
-    ModuleBase::timer::tick("Ewald_Vq", "init_parallel");
+    ModuleBase::timer::tick("Ewald_Vq", "init_ions");
 }
 
 template <typename Tdata>
