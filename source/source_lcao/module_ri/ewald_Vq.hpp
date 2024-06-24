@@ -13,8 +13,8 @@
 // #include <chrono>
 #include <cmath>
 
-#include "RI_Util.h"
 #include "RI_2D_Comm.h"
+#include "RI_Util.h"
 #include "conv_coulomb_pot_k-template.h"
 #include "conv_coulomb_pot_k.h"
 #include "exx_abfs-abfs_index.h"
@@ -117,7 +117,10 @@ void Ewald_Vq<Tdata>::init_ions(
     this->list_A0_pair_k = list_As_Vq_atoms.first;
     this->list_A1_pair_k = list_As_Vq_atoms.second[0];
 
-    this->gaussian_abfs.init(2 * GlobalC::exx_info.info_ri.abfs_Lmax + 1, this->kvec_c, GlobalC::ucell.G, this->ewald_lambda);
+    this->gaussian_abfs.init(2 * GlobalC::exx_info.info_ri.abfs_Lmax + 1,
+                             this->kvec_c,
+                             GlobalC::ucell.G,
+                             this->ewald_lambda);
 
     ModuleBase::timer::tick("Ewald_Vq", "init_ions");
 }
@@ -463,7 +466,7 @@ auto Ewald_Vq<Tdata>::set_Vq_dVq_minus_gauss(const std::vector<TA>& list_A0,
 
                 if (R_delta.norm() * GlobalC::ucell.lat0 < Rcut)
                 {
-                    std::complex<double> phase
+                    Tin_convert phase
                         = std::exp(ModuleBase::TWO_PI * ModuleBase::IMAG_UNIT
                                    * (this->kvec_c[ik] * (RI_Util::array3_to_Vector3(cell1) * GlobalC::ucell.latvec)));
 
@@ -473,7 +476,7 @@ auto Ewald_Vq<Tdata>::set_Vq_dVq_minus_gauss(const std::vector<TA>& list_A0,
 
 #pragma omp critical(Ewald_Vq_set_Vq_dVq_minus_gauss)
                     {
-                        const TAK index = std::make_pair(iat1, std::array<int, 1>{static_cast<int>(ik)});
+                        const TAK index = std::make_pair(iat1, TK{static_cast<int>(ik)});
                         if (datas[iat0][index].empty())
                             datas[iat0][index] = Vs_dVs_tmp;
                         else
@@ -564,8 +567,9 @@ auto Ewald_Vq<Tdata>::set_Vq_dVq(const std::vector<TA>& list_A0_pair_k,
     ModuleBase::TITLE("Ewald_Vq", "set_Vq_dVq");
     ModuleBase::timer::tick("Ewald_Vq", "set_Vq_dVq");
 
+    using namespace RI::Array_Operator;
     using Tin_convert = typename LRI_CV_Tools::TinType<Tout>::type;
-    std::map<TA, std::map<TAK, Tout>> pVq_dVq_gauss;
+    std::map<TA, std::map<TAK, Tout>> Vq_dVq;
     const int shift_for_mpi = std::floor(this->nks0 / 2.0);
 
     // MPI: {ia0, {ia1, R}} to {ia0, ia1}
@@ -617,7 +621,7 @@ auto Ewald_Vq<Tdata>::set_Vq_dVq(const std::vector<TA>& list_A0_pair_k,
                                     const size_t index1 = this->index_abfs[it1][l1][n1][m1];
                                     const size_t lm1 = l1 * l1 + m1;
 
-                                    Tin_convert pp = RI::Global_Func::convert<Tin_convert>(-pA * pB);
+                                    Tin_convert pp = RI::Global_Func::convert<Tin_convert>(pA * pB);
                                     LRI_CV_Tools::add_elem(data,
                                                            index0,
                                                            index1,
@@ -633,11 +637,9 @@ auto Ewald_Vq<Tdata>::set_Vq_dVq(const std::vector<TA>& list_A0_pair_k,
             }
 
 #pragma omp critical(Ewald_Vq_set_Vq_dVq)
-            pVq_dVq_gauss[list_A0_pair_k[i0]][re_index] = data;
+            Vq_dVq[list_A0_pair_k[i0]][re_index] = Vq_dVq_minus_gauss[list_A0_pair_k[i0]][re_index] + data;
         }
     }
-
-    std::map<TA, std::map<TAK, Tout>> Vq_dVq = LRI_CV_Tools::minus(Vq_dVq_minus_gauss, pVq_dVq_gauss);
 
     ModuleBase::timer::tick("Ewald_Vq", "set_Vq_dVq");
     return Vq_dVq;
@@ -695,12 +697,6 @@ auto Ewald_Vq<Tdata>::set_Vs_dVs(const std::vector<TA>& list_A0_pair_R,
 
     std::map<TA, std::map<TAC, Tout>> datas;
 
-    const TC period = RI_Util::get_Born_vonKarmen_period(*this->p_kv);
-    std::vector<std::array<Tcell, Ndim>> cell_vec = RI_Util::get_Born_von_Karmen_cells(period);
-    auto check_cell = [&cell_vec](const TC& cell) -> bool {
-        return std::find(cell_vec.begin(), cell_vec.end(), cell) != cell_vec.end();
-    };
-
     for (size_t ik = 0; ik != this->nks0; ++ik)
     {
         // auto start = std::chrono::system_clock::now();
@@ -719,7 +715,7 @@ auto Ewald_Vq<Tdata>::set_Vs_dVs(const std::vector<TA>& list_A0_pair_R,
                 const int it1 = GlobalC::ucell.iat2it[iat1];
                 const int ia1 = GlobalC::ucell.iat2ia[iat1];
 
-                if (check_cell(cell1))
+                if (this->check_cell(cell1))
                 {
                     const std::complex<double> frac
                         = std::exp(-ModuleBase::TWO_PI * ModuleBase::IMAG_UNIT
@@ -781,6 +777,15 @@ double Ewald_Vq<Tdata>::get_Rcut_max(const int it0, const int it1)
     double g_lcaos_rmax = this->g_lcaos_rcut[it0] * this->info.ccp_rmesh_times + this->g_lcaos_rcut[it1];
 
     return std::max(lcaos_rmax, g_lcaos_rmax);
+}
+
+template <typename Tdata>
+bool Ewald_Vq<Tdata>::check_cell(const TC& cell)
+{
+    const TC period = RI_Util::get_Born_vonKarmen_period(*this->p_kv);
+    std::vector<std::array<Tcell, Ndim>> cell_vec = RI_Util::get_Born_von_Karmen_cells(period);
+
+    return std::find(cell_vec.begin(), cell_vec.end(), cell) != cell_vec.end();
 }
 
 #endif

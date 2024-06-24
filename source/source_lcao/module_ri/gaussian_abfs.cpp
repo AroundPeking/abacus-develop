@@ -53,6 +53,7 @@ void Gaussian_Abfs::init(const int& Lmax,
     this->ylm.resize(nks0);
     const int total_lm = (Lmax + 1) * (Lmax + 1);
 
+#pragma omp parallel for schedule(dynamic)
     for (size_t ik = 0; ik != nks0; ++ik)
     {
         ModuleBase::Vector3<double> qvec = this->kvec_c[ik];
@@ -61,10 +62,9 @@ void Gaussian_Abfs::init(const int& Lmax,
         int total_cells = std::accumulate(n_supercells.begin(), n_supercells.end(), 1, [](int a, int b) {
             return a * (2 * b + 1);
         });
-        this->n_cells[ik] = total_cells;
-        this->qGvecs[ik].resize(total_cells);
-        this->check_gamma[ik].resize(total_cells);
 
+        std::vector<ModuleBase::Vector3<double>> qGvec_ik(total_cells);
+        std::vector<bool> check_gamma_ik(total_cells);
         for (int idx = 0; idx < total_cells; ++idx)
         {
             int G0 = (idx / ((2 * n_supercells[1] + 1) * (2 * n_supercells[2] + 1))) - n_supercells[0];
@@ -73,14 +73,22 @@ void Gaussian_Abfs::init(const int& Lmax,
             ModuleBase::Vector3<double> qGvec
                 = -(qvec + Gvec[0] * static_cast<double>(G0) + Gvec[1] * static_cast<double>(G1)
                     + Gvec[2] * static_cast<double>(G2));
-            this->qGvecs[ik][idx] = qGvec;
+            qGvec_ik[idx] = qGvec;
             if (G0 == 0 && G1 == 0 && G2 == 0)
-                this->check_gamma[ik][idx] = true;
+                check_gamma_ik[idx] = true;
             else
-                this->check_gamma[ik][idx] = false;
+                check_gamma_ik[idx] = false;
         }
-        this->ylm[ik].create(total_lm, total_cells);
-        ModuleBase::YlmReal::Ylm_Real(total_lm, total_cells, this->qGvecs[ik].data(), this->ylm[ik]);
+        ModuleBase::matrix ylm_ik(total_lm, total_cells);
+        ModuleBase::YlmReal::Ylm_Real(total_lm, total_cells, qGvec_ik.data(), ylm_ik);
+
+#pragma omp critical(Gaussian_Abfs_init)
+        {
+            this->n_cells[ik] = total_cells;
+            this->qGvecs[ik] = qGvec_ik;
+            this->check_gamma[ik] = check_gamma_ik;
+            this->ylm[ik] = ylm_ik;
+        }
     }
 
     ModuleBase::timer::tick("Gaussian_Abfs", "init");
