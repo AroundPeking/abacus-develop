@@ -117,8 +117,13 @@ void Ewald_Vq<Tdata>::init_ions(
     this->list_A0_pair_k = list_As_Vq_atoms.first;
     this->list_A1_pair_k = list_As_Vq_atoms.second[0];
 
+    std::vector<ModuleBase::Vector3<double>> neg_kvec(this->nks0);
+    std::transform(this->kvec_c.begin(),
+                   this->kvec_c.end(),
+                   neg_kvec.begin(),
+                   [](ModuleBase::Vector3<double>& vec) -> ModuleBase::Vector3<double> { return -vec; });
     this->gaussian_abfs.init(2 * GlobalC::exx_info.info_ri.abfs_Lmax + 1,
-                             this->kvec_c,
+                             neg_kvec,
                              GlobalC::ucell.G,
                              this->ewald_lambda);
 
