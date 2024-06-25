@@ -184,7 +184,7 @@ class Ewald_Vq
     std::vector<std::vector<std::vector<Numerical_Orbital_Lm>>> init_gauss(
         std::vector<std::vector<std::vector<Numerical_Orbital_Lm>>>& orb_in);
 
-    inline double get_Rcut_max(const int it0, const int it1);
+    inline double get_Rcut_min(const int it0, const int it1);
     inline bool check_cell(const TC& cell);
 };
 #include "ewald_Vq.hpp"

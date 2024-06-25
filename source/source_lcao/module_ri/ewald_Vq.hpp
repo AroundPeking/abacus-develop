@@ -465,7 +465,7 @@ auto Ewald_Vq<Tdata>::set_Vq_dVq_minus_gauss(const std::vector<TA>& list_A0,
 
                 const ModuleBase::Vector3<double> tau0 = GlobalC::ucell.atoms[it0].tau[iat0];
                 const ModuleBase::Vector3<double> tau1 = GlobalC::ucell.atoms[it1].tau[iat1];
-                const double Rcut = std::min(this->get_Rcut_max(it0, it1), this->get_Rcut_max(it1, it0));
+                const double Rcut = std::min(this->get_Rcut_min(it0, it1), this->get_Rcut_min(it1, it0));
                 const Abfs::Vector3_Order<double> R_delta
                     = -tau0 + tau1 + (RI_Util::array3_to_Vector3(cell1) * GlobalC::ucell.latvec);
 
@@ -776,12 +776,12 @@ std::vector<std::vector<std::vector<Numerical_Orbital_Lm>>> Ewald_Vq<Tdata>::ini
 }
 
 template <typename Tdata>
-double Ewald_Vq<Tdata>::get_Rcut_max(const int it0, const int it1)
+double Ewald_Vq<Tdata>::get_Rcut_min(const int it0, const int it1)
 {
     double lcaos_rmax = this->lcaos_rcut[it0] * this->info.ccp_rmesh_times + this->lcaos_rcut[it1];
     double g_lcaos_rmax = this->g_lcaos_rcut[it0] * this->info.ccp_rmesh_times + this->g_lcaos_rcut[it1];
 
-    return std::max(lcaos_rmax, g_lcaos_rmax);
+    return std::min(lcaos_rmax, g_lcaos_rmax);
 }
 
 template <typename Tdata>
