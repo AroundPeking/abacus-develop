@@ -66,7 +66,7 @@ class Ewald_Vq
     Gaussian_Abfs gaussian_abfs;
     const K_Vectors* p_kv;
     std::vector<ModuleBase::Vector3<double>> kvec_c;
-    std::vector<double> wk;
+    //std::vector<double> wk;
     MPI_Comm mpi_comm;
     ORB_gaunt_table MGT;
     std::vector<int> nmp;
@@ -80,6 +80,7 @@ class Ewald_Vq
 
     std::vector<double> lcaos_rcut;
     std::vector<double> g_lcaos_rcut;
+    std::vector<double> g_abfs_ccp_rcut;
 
     const int nspin0 = std::map<int, int>{
         {1, 1},
@@ -186,6 +187,7 @@ class Ewald_Vq
 
     inline double get_Rcut_min(const int it0, const int it1);
     inline bool check_cell(const TC& cell);
+    inline double cal_V_Rcut(const int it0, const int it1);
 };
 #include "ewald_Vq.hpp"
 

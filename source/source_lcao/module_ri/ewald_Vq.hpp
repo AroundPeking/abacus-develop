@@ -38,12 +38,6 @@ void Ewald_Vq<Tdata>::init(const MPI_Comm& mpi_comm_in,
     this->p_kv = kv_in;
     this->nks0 = this->p_kv->nkstot_full / this->nspin0;
     this->kvec_c.resize(this->nks0);
-    this->wk.resize(this->nks0);
-    for (size_t ik = 0; ik != this->nks0; ++ik)
-    {
-        this->kvec_c[ik] = this->p_kv->kvec_c[ik];
-        this->wk[ik] = this->p_kv->wk[ik];
-    }
 
     this->g_lcaos = this->init_gauss(lcaos_in);
     this->g_abfs = this->init_gauss(abfs_in);
@@ -72,6 +66,7 @@ void Ewald_Vq<Tdata>::init(const MPI_Comm& mpi_comm_in,
                                                         get_ccp_parameter(),
                                                         this->info.ccp_rmesh_times,
                                                         this->p_kv->nkstot_full);
+    this->g_abfs_ccp_rcut = Exx_Abfs::Construct_Orbs::get_Rcut(this->g_abfs_ccp);
     this->cv.set_orbitals(this->g_lcaos, this->g_abfs, this->g_abfs_ccp, this->info.kmesh_times, false);
     this->multipole = Exx_Abfs::Construct_Orbs::get_multipole(abfs_in);
 
@@ -117,6 +112,9 @@ void Ewald_Vq<Tdata>::init_ions(
     this->list_A0_pair_k = list_As_Vq_atoms.first;
     this->list_A1_pair_k = list_As_Vq_atoms.second[0];
 
+    for (size_t ik = 0; ik != this->nks0; ++ik)
+        this->kvec_c[ik] = this->p_kv->kvec_c_full[ik];
+
     std::vector<ModuleBase::Vector3<double>> neg_kvec(this->nks0);
     std::transform(this->kvec_c.begin(),
                    this->kvec_c.end(),
@@ -140,7 +138,7 @@ double Ewald_Vq<Tdata>::get_singular_chi()
     switch (this->info_ewald.fq_type)
     {
     case Singular_Value::Fq_type::Type_0:
-        chi = Singular_Value::cal_type_0(this->kvec_c, this->info_ewald.ewald_qdiv, 160, 30, 1e-6, 3);
+        chi = Singular_Value::cal_type_0(this->kvec_c, this->info_ewald.ewald_qdiv, 100, 30, 1e-6, 3);
         break;
     case Singular_Value::Fq_type::Type_1:
         chi = Singular_Value::cal_type_1(this->nmp, this->info_ewald.ewald_qdiv, this->ewald_lambda, 5, 1e-4);
@@ -226,6 +224,12 @@ auto Ewald_Vq<Tdata>::cal_dVs_minus_gauss(const std::vector<TA>& list_A0,
 }
 
 template <typename Tdata>
+double Ewald_Vq<Tdata>::cal_V_Rcut(const int it0, const int it1)
+{
+    return this->g_abfs_ccp_rcut[it0] + this->g_lcaos_rcut[it1];
+}
+
+template <typename Tdata>
 template <typename Tresult>
 auto Ewald_Vq<Tdata>::set_Vs_dVs_minus_gauss(const std::vector<TA>& list_A0,
                                              const std::vector<TAC>& list_A1,
@@ -246,16 +250,17 @@ auto Ewald_Vq<Tdata>::set_Vs_dVs_minus_gauss(const std::vector<TA>& list_A0,
         {
             const TA iat0 = list_A0[i0];
             const int it0 = GlobalC::ucell.iat2it[iat0];
+            const int ia0 = GlobalC::ucell.iat2ia[iat0];
             const TA iat1 = list_A1[i1].first;
             const int it1 = GlobalC::ucell.iat2it[iat1];
+            const int ia1 = GlobalC::ucell.iat2ia[iat1];
             const TC& cell1 = list_A1[i1].second;
 
-            const ModuleBase::Vector3<double> tau0 = GlobalC::ucell.atoms[it0].tau[iat0];
-            const ModuleBase::Vector3<double> tau1 = GlobalC::ucell.atoms[it1].tau[iat1];
+            const ModuleBase::Vector3<double> tau0 = GlobalC::ucell.atoms[it0].tau[ia0];
+            const ModuleBase::Vector3<double> tau1 = GlobalC::ucell.atoms[it1].tau[ia1];
 
             const double Rcut
-                = std::min(this->g_lcaos_rcut[it0] * this->info.ccp_rmesh_times + this->g_lcaos_rcut[it1],
-                           this->g_lcaos_rcut[it1] * this->info.ccp_rmesh_times + this->g_lcaos_rcut[it0]);
+                = std::min(this->cal_V_Rcut(it0, it1), this->cal_V_Rcut(it1, it0));
             const Abfs::Vector3_Order<double> R_delta
                 = -tau0 + tau1 + (RI_Util::array3_to_Vector3(cell1) * GlobalC::ucell.latvec);
             if (R_delta.norm() * GlobalC::ucell.lat0 < Rcut)
@@ -459,12 +464,14 @@ auto Ewald_Vq<Tdata>::set_Vq_dVq_minus_gauss(const std::vector<TA>& list_A0,
             {
                 const TA iat0 = list_A0[i0];
                 const int it0 = GlobalC::ucell.iat2it[iat0];
+                const int ia0 = GlobalC::ucell.iat2ia[iat0];
                 const TA iat1 = list_A1[i1].first;
                 const int it1 = GlobalC::ucell.iat2it[iat1];
+                const int ia1 = GlobalC::ucell.iat2ia[iat1];
                 const TC& cell1 = list_A1[i1].second;
 
-                const ModuleBase::Vector3<double> tau0 = GlobalC::ucell.atoms[it0].tau[iat0];
-                const ModuleBase::Vector3<double> tau1 = GlobalC::ucell.atoms[it1].tau[iat1];
+                const ModuleBase::Vector3<double> tau0 = GlobalC::ucell.atoms[it0].tau[ia0];
+                const ModuleBase::Vector3<double> tau1 = GlobalC::ucell.atoms[it1].tau[ia1];
                 const double Rcut = std::min(this->get_Rcut_min(it0, it1), this->get_Rcut_min(it1, it0));
                 const Abfs::Vector3_Order<double> R_delta
                     = -tau0 + tau1 + (RI_Util::array3_to_Vector3(cell1) * GlobalC::ucell.latvec);
@@ -694,11 +701,7 @@ auto Ewald_Vq<Tdata>::set_Vs_dVs(const std::vector<TA>& list_A0_pair_R,
     using namespace RI::Array_Operator;
     using Tin_convert = typename LRI_CV_Tools::TinType<Tout>::type;
 
-    const double SPIN_multiple = std::map<int, double>{
-        {1, 0.5},
-        {2, 1  },
-        {4, 1  }
-    }.at(GlobalV::NSPIN);
+    const double cfrac = 1.0 / this->nks0;
 
     std::map<TA, std::map<TAC, Tout>> datas;
 
@@ -712,20 +715,14 @@ auto Ewald_Vq<Tdata>::set_Vs_dVs(const std::vector<TA>& list_A0_pair_R,
             for (size_t i1 = 0; i1 < list_A1_pair_R.size(); ++i1)
             {
                 const TA iat0 = list_A0_pair_R[i0];
-                const int it0 = GlobalC::ucell.iat2it[iat0];
-                const int ia0 = GlobalC::ucell.iat2ia[iat0];
-
                 const TA iat1 = list_A1_pair_R[i1].first;
                 const TC& cell1 = list_A1_pair_R[i1].second;
-                const int it1 = GlobalC::ucell.iat2it[iat1];
-                const int ia1 = GlobalC::ucell.iat2ia[iat1];
 
                 if (this->check_cell(cell1))
                 {
                     const std::complex<double> frac
                         = std::exp(-ModuleBase::TWO_PI * ModuleBase::IMAG_UNIT
-                                   * (this->kvec_c[ik] * (RI_Util::array3_to_Vector3(cell1) * GlobalC::ucell.latvec)))
-                          * this->wk[ik] * SPIN_multiple;
+                                   * (this->kvec_c[ik] * (RI_Util::array3_to_Vector3(cell1) * GlobalC::ucell.latvec))) * cfrac;
 
                     const TAK index = std::make_pair(iat1, std::array<int, 1>{static_cast<int>(ik)});
                     Tout Vq_tmp = LRI_CV_Tools::convert<Tin_convert>(LRI_CV_Tools::mul2(frac, Vq[iat0][index]));
