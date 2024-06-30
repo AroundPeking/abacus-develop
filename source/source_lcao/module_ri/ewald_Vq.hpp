@@ -178,7 +178,7 @@ auto Ewald_Vq<Tdata>::cal_dVs_gauss(const std::vector<TA>& list_A0, const std::v
     ModuleBase::timer::tick("Ewald_Vq", "cal_dVs_gauss");
 
     std::map<std::string, bool> flags = {
-        {"writable_Vws", true}
+        {"writable_dVws", true}
     };
 
     std::map<TA, std::map<TAC, std::array<RI::Tensor<Tdata>, Ndim>>> dVs_gauss
