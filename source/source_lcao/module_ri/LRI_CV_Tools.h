@@ -262,6 +262,14 @@ struct plus
         return lhs + rhs;
     }
 };
+
+template <typename Tin>
+inline bool check_empty(RI::Tensor<Tin>&& data)
+{
+    return data.empty();
+}
+template <typename Tin, std::size_t N>
+extern bool check_empty(std::array<RI::Tensor<Tin>, N>&& data);
 } // namespace LRI_CV_Tools
 
 #include "LRI_CV_Tools.hpp"

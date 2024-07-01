@@ -259,8 +259,7 @@ auto Ewald_Vq<Tdata>::set_Vs_dVs_minus_gauss(const std::vector<TA>& list_A0,
             const ModuleBase::Vector3<double> tau0 = GlobalC::ucell.atoms[it0].tau[ia0];
             const ModuleBase::Vector3<double> tau1 = GlobalC::ucell.atoms[it1].tau[ia1];
 
-            const double Rcut
-                = std::min(this->cal_V_Rcut(it0, it1), this->cal_V_Rcut(it1, it0));
+            const double Rcut = std::min(this->cal_V_Rcut(it0, it1), this->cal_V_Rcut(it1, it0));
             const Abfs::Vector3_Order<double> R_delta
                 = -tau0 + tau1 + (RI_Util::array3_to_Vector3(cell1) * GlobalC::ucell.latvec);
             if (R_delta.norm() * GlobalC::ucell.lat0 < Rcut)
@@ -309,7 +308,6 @@ auto Ewald_Vq<Tdata>::set_Vs_dVs_minus_gauss(const std::vector<TA>& list_A0,
     }
 
     std::map<TA, std::map<TAC, Tresult>> Vs_dVs_minus_gauss = LRI_CV_Tools::minus(Vs_dVs_in, pVs_dVs_gauss);
-
     ModuleBase::timer::tick("Ewald_Vq", "set_Vs_dVs_minus_gauss");
     return Vs_dVs_minus_gauss;
 }
@@ -489,7 +487,7 @@ auto Ewald_Vq<Tdata>::set_Vq_dVq_minus_gauss(const std::vector<TA>& list_A0,
 #pragma omp critical(Ewald_Vq_set_Vq_dVq_minus_gauss)
                     {
                         const TAK index = std::make_pair(iat1, TK{static_cast<int>(ik)});
-                        if (datas[iat0][index].empty())
+                        if (LRI_CV_Tools::check_empty(std::move(datas[iat0][index])))
                             datas[iat0][index] = Vs_dVs_tmp;
                         else
                             datas[iat0][index] = datas[iat0][index] + Vs_dVs_tmp;
@@ -722,14 +720,15 @@ auto Ewald_Vq<Tdata>::set_Vs_dVs(const std::vector<TA>& list_A0_pair_R,
                 {
                     const std::complex<double> frac
                         = std::exp(-ModuleBase::TWO_PI * ModuleBase::IMAG_UNIT
-                                   * (this->kvec_c[ik] * (RI_Util::array3_to_Vector3(cell1) * GlobalC::ucell.latvec))) * cfrac;
+                                   * (this->kvec_c[ik] * (RI_Util::array3_to_Vector3(cell1) * GlobalC::ucell.latvec)))
+                          * cfrac;
 
                     const TAK index = std::make_pair(iat1, std::array<int, 1>{static_cast<int>(ik)});
                     Tout Vq_tmp = LRI_CV_Tools::convert<Tin_convert>(LRI_CV_Tools::mul2(frac, Vq[iat0][index]));
 
 #pragma omp critical(Ewald_Vq_set_Vs_dVs)
                     {
-                        if (datas[iat0][list_A1_pair_R[i1]].empty())
+                        if (LRI_CV_Tools::check_empty(std::move(datas[iat0][list_A1_pair_R[i1]])))
                             datas[iat0][list_A1_pair_R[i1]] = Vq_tmp;
                         else
                             datas[iat0][list_A1_pair_R[i1]] = datas[iat0][list_A1_pair_R[i1]] + Vq_tmp;
