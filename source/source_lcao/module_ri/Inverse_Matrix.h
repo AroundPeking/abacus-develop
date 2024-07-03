@@ -12,9 +12,8 @@ template<typename Tdata>
 class Inverse_Matrix
 {
 public:
-	//enum class Method{potrf, getrf};	//, syev};
-	//void cal_inverse(const Method &method);
-	void cal_inverse();
+	enum class Method{potrf};	//, syev};
+	void cal_inverse(const Method &method);
 
 	void input(const RI::Tensor<Tdata> &m);
 	void input(const std::vector<std::vector<RI::Tensor<Tdata>>> &ms);
@@ -22,9 +21,7 @@ public:
 	std::vector<std::vector<RI::Tensor<Tdata>>> output(const std::vector<size_t> &n0, const std::vector<size_t> &n1) const;
 
 private:
-	int using_potrf();
-	void using_getrf();
-	void using_getev(const double &threshold_condition_number);
+	void using_potrf();
 	void copy_down_triangle();
 	RI::Tensor<Tdata> A;
 };
