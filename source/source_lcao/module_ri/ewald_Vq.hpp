@@ -36,7 +36,7 @@ void Ewald_Vq<Tdata>::init(const MPI_Comm& mpi_comm_in,
 
     this->mpi_comm = mpi_comm_in;
     this->p_kv = kv_in;
-    this->nks0 = this->p_kv->nkstot_full / this->nspin0;
+    this->nks0 = his->p_kv->get_nkstot_full() / this->nspin0;
     this->kvec_c.resize(this->nks0);
 
     this->g_lcaos = this->init_gauss(lcaos_in);
@@ -64,8 +64,7 @@ void Ewald_Vq<Tdata>::init(const MPI_Comm& mpi_comm_in,
     this->g_abfs_ccp = Conv_Coulomb_Pot_K::cal_orbs_ccp(this->g_abfs,
                                                         this->info.ccp_type,
                                                         get_ccp_parameter(),
-                                                        this->info.ccp_rmesh_times,
-                                                        this->p_kv->nkstot_full);
+                                                        this->info.ccp_rmesh_times);
     this->g_abfs_ccp_rcut = Exx_Abfs::Construct_Orbs::get_Rcut(this->g_abfs_ccp);
     this->cv.set_orbitals(this->g_lcaos, this->g_abfs, this->g_abfs_ccp, this->info.kmesh_times, false);
     this->multipole = Exx_Abfs::Construct_Orbs::get_multipole(abfs_in);
