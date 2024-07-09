@@ -139,7 +139,7 @@ double Ewald_Vq<Tdata>::get_singular_chi()
         chi = Singular_Value::cal_type_0(this->kvec_c, this->info_ewald.ewald_qdiv, 100, 30, 1e-6, 3);
         break;
     case Singular_Value::Fq_type::Type_1:
-        chi = Singular_Value::cal_type_1(this->nmp, this->info_ewald.ewald_qdiv, this->ewald_lambda, 5, 1e-4);
+        chi = Singular_Value::cal_type_1(this->nmp, this->info_ewald.ewald_qdiv, 1, 5, 1e-4);
         break;
     default:
         throw std::domain_error(std::string(__FILE__) + " line " + std::to_string(__LINE__));
