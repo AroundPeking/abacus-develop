@@ -6,6 +6,7 @@
 #ifndef GAUSSIAN_ABFS_H
 #define GAUSSIAN_ABFS_H
 
+#include "conv_coulomb_pot_k.h"
 #include "module_basis/module_ao/ORB_atomic_lm.h"
 #include "module_basis/module_ao/ORB_gaunt_table.h"
 #include "module_basis/module_pw/pw_basis_k.h"
@@ -21,7 +22,9 @@ class Gaussian_Abfs {
     void init(const int& Lmax,
               const std::vector<ModuleBase::Vector3<double>>& kvec_c,
               const ModuleBase::Matrix3& G,
-              const double& lambda);
+              const double& lambda,
+              const Conv_Coulomb_Pot_K::Ccp_Type& ccp_type,
+              const std::map<std::string, double>& parameter);
 
     RI::Tensor<std::complex<double>> get_Vq(
         const int& lp_max,
@@ -67,6 +70,8 @@ Calculate the lattice sum over a Gaussian:
 
   private:
     double lambda;
+    Conv_Coulomb_Pot_K::Ccp_Type ccp_type;
+    std::map<std::string, double> parameter;
     std::vector<ModuleBase::Vector3<double>> kvec_c;
     std::vector<std::vector<ModuleBase::Vector3<double>>> qGvecs;
     std::vector<int> n_cells;
@@ -107,6 +112,7 @@ Calculate the lattice sum over a Gaussian:
     static double double_factorial(const int& n);
     static std::vector<int> get_n_supercells(const ModuleBase::Matrix3& G,
                                              const double& Gmax);
+    double get_ccp_kernel(const double& vec_sq);
 };
 
 #endif
