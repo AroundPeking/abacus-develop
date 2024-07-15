@@ -512,53 +512,57 @@ auto Ewald_Vq<Tdata>::set_Vq_dVq_minus_gauss(
 
     // auto start = std::chrono::system_clock::now();
 
-    for (size_t ik = 0; ik != this->nks0; ++ik) {
 #pragma omp parallel
-        for (size_t i0 = 0; i0 < list_A0.size(); ++i0) {
+    {
+        std::map<TA, std::map<TAK, Tout>> local_datas;
+
 #pragma omp for schedule(dynamic) nowait
-            for (size_t i1 = 0; i1 < list_A1.size(); ++i1) {
-                const TA iat0 = list_A0[i0];
-                const int it0 = GlobalC::ucell.iat2it[iat0];
-                const int ia0 = GlobalC::ucell.iat2ia[iat0];
-                const TA iat1 = list_A1[i1].first;
-                const int it1 = GlobalC::ucell.iat2it[iat1];
-                const int ia1 = GlobalC::ucell.iat2ia[iat1];
-                const TC& cell1 = list_A1[i1].second;
+        for (size_t ik = 0; ik != this->nks0; ++ik) {
+            for (size_t i0 = 0; i0 < list_A0.size(); ++i0) {
+                for (size_t i1 = 0; i1 < list_A1.size(); ++i1) {
+                    const TA iat0 = list_A0[i0];
+                    const int it0 = GlobalC::ucell.iat2it[iat0];
+                    const int ia0 = GlobalC::ucell.iat2ia[iat0];
+                    const TA iat1 = list_A1[i1].first;
+                    const int it1 = GlobalC::ucell.iat2it[iat1];
+                    const int ia1 = GlobalC::ucell.iat2ia[iat1];
+                    const TC& cell1 = list_A1[i1].second;
 
-                const ModuleBase::Vector3<double> tau0
-                    = GlobalC::ucell.atoms[it0].tau[ia0];
-                const ModuleBase::Vector3<double> tau1
-                    = GlobalC::ucell.atoms[it1].tau[ia1];
-                const double Rcut = std::min(this->get_Rcut_min(it0, it1),
-                                             this->get_Rcut_min(it1, it0));
-                const Abfs::Vector3_Order<double> R_delta
-                    = -tau0 + tau1
-                      + (RI_Util::array3_to_Vector3(cell1)
-                         * GlobalC::ucell.latvec);
+                    const ModuleBase::Vector3<double> tau0 = GlobalC::ucell.atoms[it0].tau[ia0];
+                    const ModuleBase::Vector3<double> tau1 = GlobalC::ucell.atoms[it1].tau[ia1];
+                    const double Rcut = std::min(this->get_Rcut_min(it0, it1), this->get_Rcut_min(it1, it0));
+                    const ModuleBase::Vector3<double> R_delta = -tau0 + tau1 + (RI_Util::array3_to_Vector3(cell1) * GlobalC::ucell.latvec);
 
-                if (R_delta.norm() * GlobalC::ucell.lat0 < Rcut) {
-                    Tin_convert phase
-                        = std::exp(ModuleBase::TWO_PI * ModuleBase::IMAG_UNIT
-                                   * (this->kvec_c[ik]
-                                      * (RI_Util::array3_to_Vector3(cell1)
-                                         * GlobalC::ucell.latvec)));
+                    if (R_delta.norm() * GlobalC::ucell.lat0 < Rcut) {
+                        Tin_convert phase = std::exp(ModuleBase::TWO_PI * ModuleBase::IMAG_UNIT * (this->kvec_c[ik] * (RI_Util::array3_to_Vector3(cell1) * GlobalC::ucell.latvec)));
 
-                    Tout Vs_dVs_tmp = LRI_CV_Tools::mul2(
-                        phase,
-                        LRI_CV_Tools::convert<Tin_convert>(
-                            std::move(Vs_dVs_minus_gauss[iat0][list_A1[i1]])));
+                        Tout Vs_dVs_tmp = LRI_CV_Tools::mul2(
+                            phase,
+                            LRI_CV_Tools::convert<Tin_convert>(
+                                std::move(Vs_dVs_minus_gauss[iat0][list_A1[i1]])));
+
+                        const TAK index = std::make_pair(iat1, TK{static_cast<int>(ik)});
+                        if (LRI_CV_Tools::check_empty(std::move(local_datas[iat0][index])))
+                            local_datas[iat0][index] = std::move(Vs_dVs_tmp);
+                        else
+                            local_datas[iat0][index] = local_datas[iat0][index] + std::move(Vs_dVs_tmp);
+                    }
+                }
+            }
+        }
 
 #pragma omp critical(Ewald_Vq_set_Vq_dVq_minus_gauss)
-                    {
-                        const TAK index
-                            = std::make_pair(iat1, TK{static_cast<int>(ik)});
-                        if (LRI_CV_Tools::check_empty(
-                                std::move(datas[iat0][index])))
-                            datas[iat0][index] = std::move(Vs_dVs_tmp);
-                        else
-                            datas[iat0][index]
-                                = datas[iat0][index] + std::move(Vs_dVs_tmp);
-                    }
+        {
+            for (auto it0 = local_datas.begin(); it0 != local_datas.end(); ++it0) {
+                const TA& key0 = it0->first;
+                std::map<TAK, Tout>& map1 = it0->second;
+                for (auto it1 = map1.begin(); it1 != map1.end(); ++it1) {
+                    const TAK& key1 = it1->first;
+                    Tout& value = it1->second;
+                    if (LRI_CV_Tools::check_empty(std::move(datas[key0][key1])))
+                        datas[key0][key1] = std::move(value);
+                    else
+                        datas[key0][key1] = datas[key0][key1] + std::move(value);
                 }
             }
         }
@@ -566,7 +570,7 @@ auto Ewald_Vq<Tdata>::set_Vq_dVq_minus_gauss(
 
     // auto end = std::chrono::system_clock::now();
     // auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end
-    // - start); std::cout << "cal_Vq_minus_gauss Time: "
+    // - start); std::cout << "set_Vq_dVq_minus_gauss Time: "
     //           << double(duration.count()) *
     //           std::chrono::microseconds::period::num
     //                  / std::chrono::microseconds::period::den
