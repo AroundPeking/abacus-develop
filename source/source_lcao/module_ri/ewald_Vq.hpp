@@ -555,10 +555,10 @@ auto Ewald_Vq<Tdata>::set_Vq_dVq_minus_gauss(
                             = std::make_pair(iat1, TK{static_cast<int>(ik)});
                         if (LRI_CV_Tools::check_empty(
                                 std::move(local_datas[iat0][index])))
-                            local_datas[iat0][index] = std::move(Vs_dVs_tmp);
+                            local_datas[iat0][index] = Vs_dVs_tmp;
                         else
                             local_datas[iat0][index] = local_datas[iat0][index]
-                                                       + std::move(Vs_dVs_tmp);
+                                                       + Vs_dVs_tmp;
                     }
                 }
             }
@@ -574,10 +574,10 @@ auto Ewald_Vq<Tdata>::set_Vq_dVq_minus_gauss(
                     const TAK& key1 = it1->first;
                     Tout& value = it1->second;
                     if (LRI_CV_Tools::check_empty(std::move(datas[key0][key1])))
-                        datas[key0][key1] = std::move(value);
+                        datas[key0][key1] = value;
                     else
                         datas[key0][key1]
-                            = datas[key0][key1] + std::move(value);
+                            = datas[key0][key1] + value;
                 }
             }
         }
@@ -828,7 +828,7 @@ auto Ewald_Vq<Tdata>::set_Vs_dVs(const std::vector<TA>& list_A0_pair_R,
     std::vector<std::array<Tcell, Ndim>> cell_vec
         = RI_Util::get_Born_von_Karmen_cells(period);
 
-    // auto start = std::chrono::system_clock::now();
+    //auto start = std::chrono::system_clock::now();
 #pragma omp parallel
     {
         std::map<TA, std::map<TAC, Tout>> local_datas;
@@ -841,7 +841,7 @@ auto Ewald_Vq<Tdata>::set_Vs_dVs(const std::vector<TA>& list_A0_pair_R,
                     const TA iat1 = list_A1_pair_R[i1].first;
                     const TC& cell1 = list_A1_pair_R[i1].second;
 
-                    if (this->check_cell(cell1, cell_vec)) {
+                    if (std::find(cell_vec.begin(), cell_vec.end(), cell1) != cell_vec.end()) {
                         const std::complex<double> frac
                             = std::exp(-ModuleBase::TWO_PI
                                        * ModuleBase::IMAG_UNIT
@@ -859,11 +859,11 @@ auto Ewald_Vq<Tdata>::set_Vs_dVs(const std::vector<TA>& list_A0_pair_R,
                         if (LRI_CV_Tools::check_empty(std::move(
                                 local_datas[iat0][list_A1_pair_R[i1]])))
                             local_datas[iat0][list_A1_pair_R[i1]]
-                                = std::move(Vq_tmp);
+                                = Vq_tmp;
                         else
                             local_datas[iat0][list_A1_pair_R[i1]]
                                 = local_datas[iat0][list_A1_pair_R[i1]]
-                                  + std::move(Vq_tmp);
+                                  + Vq_tmp;
                     }
                 }
             }
@@ -876,10 +876,10 @@ auto Ewald_Vq<Tdata>::set_Vs_dVs(const std::vector<TA>& list_A0_pair_R,
                     TAC key1 = inner_pair.first;
                     Tout& value = inner_pair.second;
                     if (LRI_CV_Tools::check_empty(std::move(datas[key0][key1])))
-                        datas[key0][key1] = std::move(value);
+                        datas[key0][key1] = value;
                     else
                         datas[key0][key1]
-                            = datas[key0][key1] + std::move(value);
+                            = datas[key0][key1] + value;
                 }
             }
         }
@@ -925,13 +925,6 @@ double Ewald_Vq<Tdata>::get_Rcut_min(const int it0, const int it1) {
                           + this->g_lcaos_rcut[it1];
 
     return std::min(lcaos_rmax, g_lcaos_rmax);
-}
-
-template <typename Tdata>
-bool Ewald_Vq<Tdata>::check_cell(
-    const TC& cell,
-    const std::vector<std::array<Tcell, Ndim>>& cell_vec) {
-    return std::find(cell_vec.begin(), cell_vec.end(), cell) != cell_vec.end();
 }
 
 #endif
