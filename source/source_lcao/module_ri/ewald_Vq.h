@@ -212,7 +212,9 @@ class Ewald_Vq {
         std::vector<std::vector<std::vector<Numerical_Orbital_Lm>>>& orb_in);
 
     inline double get_Rcut_min(const int it0, const int it1);
-    inline bool check_cell(const TC& cell);
+    inline bool
+        check_cell(const TC& cell,
+                   const std::vector<std::array<Tcell, Ndim>>& cell_vec);
     inline double cal_V_Rcut(const int it0, const int it1);
     std::map<std::string, double> get_ccp_parameter();
 };
