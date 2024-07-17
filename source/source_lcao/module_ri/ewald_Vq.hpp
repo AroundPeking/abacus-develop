@@ -557,8 +557,8 @@ auto Ewald_Vq<Tdata>::set_Vq_dVq_minus_gauss(
                                 std::move(local_datas[iat0][index])))
                             local_datas[iat0][index] = Vs_dVs_tmp;
                         else
-                            local_datas[iat0][index] = local_datas[iat0][index]
-                                                       + Vs_dVs_tmp;
+                            local_datas[iat0][index]
+                                = local_datas[iat0][index] + Vs_dVs_tmp;
                     }
                 }
             }
@@ -576,8 +576,7 @@ auto Ewald_Vq<Tdata>::set_Vq_dVq_minus_gauss(
                     if (LRI_CV_Tools::check_empty(std::move(datas[key0][key1])))
                         datas[key0][key1] = value;
                     else
-                        datas[key0][key1]
-                            = datas[key0][key1] + value;
+                        datas[key0][key1] = datas[key0][key1] + value;
                 }
             }
         }
@@ -824,11 +823,8 @@ auto Ewald_Vq<Tdata>::set_Vs_dVs(const std::vector<TA>& list_A0_pair_R,
     const double cfrac = 1.0 / this->nks0;
 
     std::map<TA, std::map<TAC, Tout>> datas;
-    const TC period = RI_Util::get_Born_vonKarmen_period(*this->p_kv);
-    std::vector<std::array<Tcell, Ndim>> cell_vec
-        = RI_Util::get_Born_von_Karmen_cells(period);
 
-    //auto start = std::chrono::system_clock::now();
+    // auto start = std::chrono::system_clock::now();
 #pragma omp parallel
     {
         std::map<TA, std::map<TAC, Tout>> local_datas;
@@ -841,7 +837,7 @@ auto Ewald_Vq<Tdata>::set_Vs_dVs(const std::vector<TA>& list_A0_pair_R,
                     const TA iat1 = list_A1_pair_R[i1].first;
                     const TC& cell1 = list_A1_pair_R[i1].second;
 
-                    if (std::find(cell_vec.begin(), cell_vec.end(), cell1) != cell_vec.end()) {
+                    if (this->check_cell(cell1)) {
                         const std::complex<double> frac
                             = std::exp(-ModuleBase::TWO_PI
                                        * ModuleBase::IMAG_UNIT
@@ -858,8 +854,7 @@ auto Ewald_Vq<Tdata>::set_Vs_dVs(const std::vector<TA>& list_A0_pair_R,
 
                         if (LRI_CV_Tools::check_empty(std::move(
                                 local_datas[iat0][list_A1_pair_R[i1]])))
-                            local_datas[iat0][list_A1_pair_R[i1]]
-                                = Vq_tmp;
+                            local_datas[iat0][list_A1_pair_R[i1]] = Vq_tmp;
                         else
                             local_datas[iat0][list_A1_pair_R[i1]]
                                 = local_datas[iat0][list_A1_pair_R[i1]]
@@ -878,18 +873,17 @@ auto Ewald_Vq<Tdata>::set_Vs_dVs(const std::vector<TA>& list_A0_pair_R,
                     if (LRI_CV_Tools::check_empty(std::move(datas[key0][key1])))
                         datas[key0][key1] = value;
                     else
-                        datas[key0][key1]
-                            = datas[key0][key1] + value;
+                        datas[key0][key1] = datas[key0][key1] + value;
                 }
             }
         }
     }
     // auto end = std::chrono::system_clock::now();
-    // auto duration =
-    // std::chrono::duration_cast<std::chrono::microseconds>(end - start);
+    // auto duration
+    //     = std::chrono::duration_cast<std::chrono::microseconds>(end - start);
     // std::cout << "set_Vs_dVs Time: "
-    //           << double(duration.count()) *
-    //           std::chrono::microseconds::period::num
+    //           << double(duration.count())
+    //                  * std::chrono::microseconds::period::num
     //                  / std::chrono::microseconds::period::den
     //           << " s" << std::endl;
 
@@ -926,5 +920,18 @@ double Ewald_Vq<Tdata>::get_Rcut_min(const int it0, const int it1) {
 
     return std::min(lcaos_rmax, g_lcaos_rmax);
 }
+
+template <typename Tdata>
+bool Ewald_Vq<Tdata>::check_cell(const TC cell) {
+    TC lower = {0, 0, 0};
+    TC upper = {this->nmp[0], this->nmp[1], this->nmp[2]};
+    std::array<bool, 3> res;
+    res.fill(false);
+    for (size_t i = 0; i != Ndim; ++i)
+        if (cell[i] >= lower[i] && cell[i] < upper[i])
+            res[i] = true;
+
+    return std::all_of(res.begin(), res.end(), [](bool v) { return v; });
+};
 
 #endif

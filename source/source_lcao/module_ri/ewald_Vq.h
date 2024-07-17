@@ -214,6 +214,7 @@ class Ewald_Vq {
     inline double get_Rcut_min(const int it0, const int it1);
     inline double cal_V_Rcut(const int it0, const int it1);
     std::map<std::string, double> get_ccp_parameter();
+    bool check_cell(const TC cell);
 };
 #include "ewald_Vq.hpp"
 
