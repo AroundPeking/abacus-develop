@@ -540,7 +540,7 @@ auto Ewald_Vq<Tdata>::set_Vq_dVq_minus_gauss(
                              * GlobalC::ucell.latvec);
 
                     if (R_delta.norm() * GlobalC::ucell.lat0 < Rcut) {
-                        Tin_convert phase = std::exp(
+                        const std::complex<double> phase = std::exp(
                             ModuleBase::TWO_PI * ModuleBase::IMAG_UNIT
                             * (this->kvec_c[ik]
                                * (RI_Util::array3_to_Vector3(cell1)
@@ -553,8 +553,7 @@ auto Ewald_Vq<Tdata>::set_Vq_dVq_minus_gauss(
 
                         const TAK index
                             = std::make_pair(iat1, TK{static_cast<int>(ik)});
-                        if (LRI_CV_Tools::check_empty(
-                                std::move(local_datas[iat0][index])))
+                        if (!LRI_CV_Tools::exist(local_datas[iat0][index]))
                             local_datas[iat0][index] = Vs_dVs_tmp;
                         else
                             local_datas[iat0][index]
@@ -573,10 +572,12 @@ auto Ewald_Vq<Tdata>::set_Vq_dVq_minus_gauss(
                 for (auto it1 = map1.begin(); it1 != map1.end(); ++it1) {
                     const TAK& key1 = it1->first;
                     Tout& value = it1->second;
-                    if (LRI_CV_Tools::check_empty(std::move(datas[key0][key1])))
+
+                    if (!LRI_CV_Tools::exist(datas[key0][key1]))
                         datas[key0][key1] = value;
                     else
                         datas[key0][key1] = datas[key0][key1] + value;
+                    LRI_CV_Tools::check_and_set_zero(datas[key0][key1]);
                 }
             }
         }
@@ -852,8 +853,8 @@ auto Ewald_Vq<Tdata>::set_Vs_dVs(const std::vector<TA>& list_A0_pair_R,
                         Tout Vq_tmp = LRI_CV_Tools::convert<Tin_convert>(
                             LRI_CV_Tools::mul2(frac, Vq[iat0][index]));
 
-                        if (LRI_CV_Tools::check_empty(std::move(
-                                local_datas[iat0][list_A1_pair_R[i1]])))
+                        if (!LRI_CV_Tools::exist(
+                                local_datas[iat0][list_A1_pair_R[i1]]))
                             local_datas[iat0][list_A1_pair_R[i1]] = Vq_tmp;
                         else
                             local_datas[iat0][list_A1_pair_R[i1]]
@@ -870,10 +871,11 @@ auto Ewald_Vq<Tdata>::set_Vs_dVs(const std::vector<TA>& list_A0_pair_R,
                 for (auto& inner_pair: outer_pair.second) {
                     TAC key1 = inner_pair.first;
                     Tout& value = inner_pair.second;
-                    if (LRI_CV_Tools::check_empty(std::move(datas[key0][key1])))
+                    if (!LRI_CV_Tools::exist(datas[key0][key1]))
                         datas[key0][key1] = value;
                     else
                         datas[key0][key1] = datas[key0][key1] + value;
+                    LRI_CV_Tools::check_and_set_zero(datas[key0][key1]);
                 }
             }
         }
