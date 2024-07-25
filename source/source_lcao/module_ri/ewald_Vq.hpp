@@ -70,6 +70,8 @@ void Ewald_Vq<Tdata>::init(
     this->atoms.insert(this->atoms_vec.begin(), this->atoms_vec.end());
 
     this->nmp = {this->p_kv->nmp[0], this->p_kv->nmp[1], this->p_kv->nmp[2]};
+    const TC period = RI_Util::get_Born_vonKarmen_period(*this->p_kv);
+    this->bvk_cells = RI_Util::get_Born_von_Karmen_cells(period);
 
     ModuleBase::timer::tick("Ewald_Vq", "init");
 }
@@ -577,7 +579,6 @@ auto Ewald_Vq<Tdata>::set_Vq_dVq_minus_gauss(
                         datas[key0][key1] = value;
                     else
                         datas[key0][key1] = datas[key0][key1] + value;
-                    LRI_CV_Tools::check_and_set_zero(datas[key0][key1]);
                 }
             }
         }
@@ -822,7 +823,6 @@ auto Ewald_Vq<Tdata>::set_Vs_dVs(const std::vector<TA>& list_A0_pair_R,
     using Tin_convert = typename LRI_CV_Tools::TinType<Tout>::type;
 
     const double cfrac = 1.0 / this->nks0;
-
     std::map<TA, std::map<TAC, Tout>> datas;
 
     // auto start = std::chrono::system_clock::now();
@@ -875,7 +875,6 @@ auto Ewald_Vq<Tdata>::set_Vs_dVs(const std::vector<TA>& list_A0_pair_R,
                         datas[key0][key1] = value;
                     else
                         datas[key0][key1] = datas[key0][key1] + value;
-                    LRI_CV_Tools::check_and_set_zero(datas[key0][key1]);
                 }
             }
         }
@@ -924,16 +923,9 @@ double Ewald_Vq<Tdata>::get_Rcut_min(const int it0, const int it1) {
 }
 
 template <typename Tdata>
-bool Ewald_Vq<Tdata>::check_cell(const TC cell) {
-    TC lower = {0, 0, 0};
-    TC upper = {this->nmp[0], this->nmp[1], this->nmp[2]};
-    std::array<bool, 3> res;
-    res.fill(false);
-    for (size_t i = 0; i != Ndim; ++i)
-        if (cell[i] >= lower[i] && cell[i] < upper[i])
-            res[i] = true;
-
-    return std::all_of(res.begin(), res.end(), [](bool v) { return v; });
-};
+bool Ewald_Vq<Tdata>::check_cell(const TC& cell) {
+    return std::find(this->bvk_cells.begin(), this->bvk_cells.end(), cell)
+           != this->bvk_cells.end();
+}
 
 #endif
