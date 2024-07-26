@@ -78,7 +78,7 @@ class Ewald_Vq {
     // std::vector<double> wk;
     MPI_Comm mpi_comm;
     ORB_gaunt_table MGT;
-    std::vector<int> nmp;
+    std::array<Tcell, Ndim> nmp;
     const double ewald_lambda = 1.0;
 
     std::vector<std::vector<std::vector<double>>> multipole;
@@ -96,7 +96,6 @@ class Ewald_Vq {
     int nks0;
     std::vector<TA> atoms_vec;
     std::set<TA> atoms;
-    std::vector<std::array<Tcell, Ndim>> bvk_cells;
 
     /*
   MPI distribute
@@ -114,6 +113,8 @@ class Ewald_Vq {
     std::vector<TAK> list_A1_k;
     std::vector<TA> list_A0_pair_R;
     std::vector<TAC> list_A1_pair_R;
+    std::vector<TA> list_A0_pair_R_period;
+    std::vector<TAC> list_A1_pair_R_period;
     std::vector<TA> list_A0_pair_k;
     std::vector<TAK> list_A1_pair_k;
 
@@ -215,7 +216,6 @@ class Ewald_Vq {
     inline double get_Rcut_min(const int it0, const int it1);
     inline double cal_V_Rcut(const int it0, const int it1);
     std::map<std::string, double> get_ccp_parameter();
-    inline bool check_cell(const TC& cell);
 };
 #include "ewald_Vq.hpp"
 

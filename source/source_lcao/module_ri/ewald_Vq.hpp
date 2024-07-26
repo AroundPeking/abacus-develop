@@ -69,10 +69,6 @@ void Ewald_Vq<Tdata>::init(
     std::iota(this->atoms_vec.begin(), this->atoms_vec.end(), 0);
     this->atoms.insert(this->atoms_vec.begin(), this->atoms_vec.end());
 
-    this->nmp = {this->p_kv->nmp[0], this->p_kv->nmp[1], this->p_kv->nmp[2]};
-    const TC period = RI_Util::get_Born_vonKarmen_period(*this->p_kv);
-    this->bvk_cells = RI_Util::get_Born_von_Karmen_cells(period);
-
     ModuleBase::timer::tick("Ewald_Vq", "init");
 }
 
@@ -127,6 +123,17 @@ void Ewald_Vq<Tdata>::init_ions(
                                                    false);
     this->list_A0_pair_R = list_As_Vs_atoms.first;
     this->list_A1_pair_R = list_As_Vs_atoms.second[0];
+
+    const std::pair<std::vector<TA>,
+                    std::vector<std::vector<std::pair<TA, TC>>>>
+        list_As_Vs_atoms_period
+        = RI::Distribute_Equally::distribute_atoms(this->mpi_comm,
+                                                   this->atoms_vec,
+                                                   this->nmp,
+                                                   2,
+                                                   false);
+    this->list_A0_pair_R_period = list_As_Vs_atoms_period.first;
+    this->list_A1_pair_R_period = list_As_Vs_atoms_period.second[0];
 
     const std::pair<std::vector<TA>,
                     std::vector<std::vector<std::pair<TA, TK>>>>
@@ -782,8 +789,8 @@ auto Ewald_Vq<Tdata>::cal_Vs(
 
     std::map<TA, std::map<TAK, RI::Tensor<std::complex<double>>>> Vq
         = this->cal_Vq(chi, Vs_in);
-    auto Vs = this->set_Vs_dVs<RI::Tensor<Tdata>>(this->list_A0_pair_R,
-                                                  this->list_A1_pair_R,
+    auto Vs = this->set_Vs_dVs<RI::Tensor<Tdata>>(this->list_A0_pair_R_period,
+                                                  this->list_A1_pair_R_period,
                                                   Vq); //{ia0, ia1}
 
     ModuleBase::timer::tick("Ewald_Vq", "cal_Vs");
@@ -802,8 +809,8 @@ auto Ewald_Vq<Tdata>::cal_dVs(
              std::map<TAK, std::array<RI::Tensor<std::complex<double>>, Ndim>>>
         dVq = this->cal_dVq(dVs_in);
     auto dVs = this->set_Vs_dVs<std::array<RI::Tensor<Tdata>, Ndim>>(
-        this->list_A0_pair_R,
-        this->list_A1_pair_R,
+        this->list_A0_pair_R_period,
+        this->list_A1_pair_R_period,
         dVq); //{ia0, ia1}
 
     ModuleBase::timer::tick("Ewald_Vq", "cal_dVs");
@@ -838,29 +845,25 @@ auto Ewald_Vq<Tdata>::set_Vs_dVs(const std::vector<TA>& list_A0_pair_R,
                     const TA iat1 = list_A1_pair_R[i1].first;
                     const TC& cell1 = list_A1_pair_R[i1].second;
 
-                    if (this->check_cell(cell1)) {
-                        const std::complex<double> frac
-                            = std::exp(-ModuleBase::TWO_PI
-                                       * ModuleBase::IMAG_UNIT
-                                       * (this->kvec_c[ik]
-                                          * (RI_Util::array3_to_Vector3(cell1)
-                                             * GlobalC::ucell.latvec)))
-                              * cfrac;
+                    const std::complex<double> frac
+                        = std::exp(-ModuleBase::TWO_PI * ModuleBase::IMAG_UNIT
+                                   * (this->kvec_c[ik]
+                                      * (RI_Util::array3_to_Vector3(cell1)
+                                         * GlobalC::ucell.latvec)))
+                          * cfrac;
 
-                        const TAK index = std::make_pair(
-                            iat1,
-                            std::array<int, 1>{static_cast<int>(ik)});
-                        Tout Vq_tmp = LRI_CV_Tools::convert<Tin_convert>(
-                            LRI_CV_Tools::mul2(frac, Vq[iat0][index]));
+                    const TAK index = std::make_pair(
+                        iat1,
+                        std::array<int, 1>{static_cast<int>(ik)});
+                    Tout Vq_tmp = LRI_CV_Tools::convert<Tin_convert>(
+                        LRI_CV_Tools::mul2(frac, Vq[iat0][index]));
 
-                        if (!LRI_CV_Tools::exist(
-                                local_datas[iat0][list_A1_pair_R[i1]]))
-                            local_datas[iat0][list_A1_pair_R[i1]] = Vq_tmp;
-                        else
-                            local_datas[iat0][list_A1_pair_R[i1]]
-                                = local_datas[iat0][list_A1_pair_R[i1]]
-                                  + Vq_tmp;
-                    }
+                    if (!LRI_CV_Tools::exist(
+                            local_datas[iat0][list_A1_pair_R[i1]]))
+                        local_datas[iat0][list_A1_pair_R[i1]] = Vq_tmp;
+                    else
+                        local_datas[iat0][list_A1_pair_R[i1]]
+                            = local_datas[iat0][list_A1_pair_R[i1]] + Vq_tmp;
                 }
             }
         }
@@ -920,12 +923,6 @@ double Ewald_Vq<Tdata>::get_Rcut_min(const int it0, const int it1) {
                           + this->g_lcaos_rcut[it1];
 
     return std::min(lcaos_rmax, g_lcaos_rmax);
-}
-
-template <typename Tdata>
-bool Ewald_Vq<Tdata>::check_cell(const TC& cell) {
-    return std::find(this->bvk_cells.begin(), this->bvk_cells.end(), cell)
-           != this->bvk_cells.end();
 }
 
 #endif
