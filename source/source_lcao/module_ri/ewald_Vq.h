@@ -40,12 +40,7 @@ class Ewald_Vq {
         std::vector<std::vector<std::vector<Numerical_Orbital_Lm>>>& abfs_in,
         const K_Vectors* kv_in);
 
-    void init_ions(
-        const std::array<Tcell, Ndim>& period_Vs,
-        const std::pair<
-            std::vector<TA>,
-            std::vector<std::vector<std::pair<TA, std::array<Tcell, Ndim>>>>>&
-            list_As_Vs);
+    void init_ions(const std::array<Tcell, Ndim>& period);
 
     double get_singular_chi();
 
@@ -111,8 +106,6 @@ class Ewald_Vq {
     std::vector<TAC> list_A1;
     std::vector<TA> list_A0_k;
     std::vector<TAK> list_A1_k;
-    std::vector<TA> list_A0_pair_R;
-    std::vector<TAC> list_A1_pair_R;
     std::vector<TA> list_A0_pair_R_period;
     std::vector<TAC> list_A1_pair_R_period;
     std::vector<TA> list_A0_pair_k;
@@ -168,22 +161,16 @@ class Ewald_Vq {
                          const T_func_DPget_Vq_dVq<Tresult>& func_DPget_Vq_dVq);
 
     inline std::map<TA, std::map<TAK, RI::Tensor<std::complex<double>>>>
-        cal_Vq_minus_gauss(const std::vector<TA>& list_A0,
-                           const std::vector<TAC>& list_A1,
-                           std::map<TA, std::map<TAC, RI::Tensor<Tdata>>>&
+        cal_Vq_minus_gauss(std::map<TA, std::map<TAC, RI::Tensor<Tdata>>>&
                                Vs_minus_gauss); // return Vq [0, Nk)
     inline std::map<
         TA,
         std::map<TAK, std::array<RI::Tensor<std::complex<double>>, Ndim>>>
         cal_dVq_minus_gauss(
-            const std::vector<TA>& list_A0,
-            const std::vector<TAC>& list_A1,
             std::map<TA, std::map<TAC, std::array<RI::Tensor<Tdata>, Ndim>>>&
                 dVs_minus_gauss); // return Vq [0, Nk)
     template <typename Tout, typename Tin>
     std::map<TA, std::map<TAK, Tout>> set_Vq_dVq_minus_gauss(
-        const std::vector<TA>& list_A0,
-        const std::vector<TAC>& list_A1,
         std::map<TA, std::map<TAC, Tin>>& Vs_dVs_minus_gauss);
 
     template <typename Tout, typename Tin>
