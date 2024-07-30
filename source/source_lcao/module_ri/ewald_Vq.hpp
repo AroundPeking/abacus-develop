@@ -68,6 +68,7 @@ void Ewald_Vq<Tdata>::init(
     this->atoms_vec.resize(GlobalC::ucell.nat);
     std::iota(this->atoms_vec.begin(), this->atoms_vec.end(), 0);
     this->atoms.insert(this->atoms_vec.begin(), this->atoms_vec.end());
+    this->nmp = {this->p_kv->nmp[0], this->p_kv->nmp[1], this->p_kv->nmp[2]};
 
     ModuleBase::timer::tick("Ewald_Vq", "init");
 }

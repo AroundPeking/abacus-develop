@@ -33,7 +33,7 @@ class Singular_Value
                              const int& niter,
                              const double& eps,
                              const int& a_rate);
-    static double cal_type_1(const std::vector<int>& nmp,
+    static double cal_type_1(const std::array<int, 3>& nmp,
                              const int& qdiv,
                              const double& start_lambda,
                              const int& niter,

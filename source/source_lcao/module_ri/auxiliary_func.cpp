@@ -165,7 +165,7 @@ double Singular_Value::fq_type_1(Gaussian_Abfs& gaussian_abfs,
     return fq;
 }
 
-double Singular_Value::cal_type_1(const std::vector<int>& nmp,
+double Singular_Value::cal_type_1(const std::array<int, 3>& nmp,
                                   const int& qdiv,
                                   const double& start_lambda,
                                   const int& niter,
