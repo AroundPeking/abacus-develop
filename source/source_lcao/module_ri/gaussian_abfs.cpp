@@ -289,10 +289,11 @@ auto Gaussian_Abfs::DPcal_Vq_dVq(
 }
 
 Numerical_Orbital_Lm Gaussian_Abfs::Gauss(const Numerical_Orbital_Lm& orb,
-                                          const double& lambda,
-                                          const double& rcut) {
+                                          const double& lambda) {
     Numerical_Orbital_Lm gaussian;
     const int angular_momentum_l = orb.getL();
+    const double eta = 35;
+    const double rcut = std::sqrt(eta / lambda);
     const double dr = orb.get_rab().back();
     int Nr = std::ceil(rcut / dr);
     if (Nr % 2 == 0)

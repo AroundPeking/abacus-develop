@@ -279,7 +279,7 @@ double Ewald_Vq<Tdata>::get_Rcut_max(const int it0, const int it1) {
     double g_lcaos_rmax = this->g_lcaos_rcut[it0] * this->info.ccp_rmesh_times
                           + this->g_lcaos_rcut[it1];
 
-    return std::max(lcaos_rmax, g_lcaos_rmax);
+    return std::min(lcaos_rmax, g_lcaos_rmax);
 }
 
 template <typename Tdata>
@@ -906,7 +906,6 @@ template <typename Tdata>
 std::vector<std::vector<std::vector<Numerical_Orbital_Lm>>>
     Ewald_Vq<Tdata>::init_gauss(
         std::vector<std::vector<std::vector<Numerical_Orbital_Lm>>>& orb_in) {
-    const double eta = 35;
     std::vector<std::vector<std::vector<Numerical_Orbital_Lm>>> gauss;
     gauss.resize(orb_in.size());
     for (size_t T = 0; T != orb_in.size(); ++T) {
@@ -914,11 +913,8 @@ std::vector<std::vector<std::vector<Numerical_Orbital_Lm>>>
         for (size_t L = 0; L != orb_in[T].size(); ++L) {
             gauss[T][L].resize(orb_in[T][L].size());
             for (size_t N = 0; N != orb_in[T][L].size(); ++N) {
-                gauss[T][L][N] = this->gaussian_abfs.Gauss(
-                    orb_in[T][L][N],
-                    this->ewald_lambda,
-                    std::max(orb_in[T][L][N].getRcut(),
-                             std::sqrt(eta / this->ewald_lambda)));
+                gauss[T][L][N] = this->gaussian_abfs.Gauss(orb_in[T][L][N],
+                                                           this->ewald_lambda);
             }
         }
     }

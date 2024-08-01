@@ -66,8 +66,7 @@ Calculate the lattice sum over a Gaussian:
 
     // construct gaussian basis based on original NAO
     Numerical_Orbital_Lm Gauss(const Numerical_Orbital_Lm& orb,
-                               const double& lambda,
-                               const double& rcut);
+                               const double& lambda);
 
   private:
     double lambda;
