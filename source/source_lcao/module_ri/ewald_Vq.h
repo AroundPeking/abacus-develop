@@ -36,16 +36,12 @@ class Ewald_Vq {
 
     void init(
         const MPI_Comm& mpi_comm_in,
+        const K_Vectors* kv_in,
         std::vector<std::vector<std::vector<Numerical_Orbital_Lm>>>& lcaos_in,
         std::vector<std::vector<std::vector<Numerical_Orbital_Lm>>>& abfs_in,
-        const K_Vectors* kv_in);
+        const std::map<std::string, double>& parameter);
 
-    void init_ions(
-        const std::array<Tcell, Ndim>& period_Vs,
-        const std::pair<
-            std::vector<TA>,
-            std::vector<std::vector<std::pair<TA, std::array<Tcell, Ndim>>>>>&
-            list_As_Vs);
+    void init_ions(const std::array<Tcell, Ndim>& period_Vs_NAO);
 
     double get_singular_chi();
 
@@ -83,9 +79,6 @@ class Ewald_Vq {
 
     std::vector<std::vector<std::vector<double>>> multipole;
     ModuleBase::Element_Basis_Index::IndexLNM index_abfs;
-    std::vector<std::vector<std::vector<Numerical_Orbital_Lm>>> g_lcaos;
-    std::vector<std::vector<std::vector<Numerical_Orbital_Lm>>> g_abfs;
-    std::vector<std::vector<std::vector<Numerical_Orbital_Lm>>> g_abfs_ccp;
 
     std::vector<double> lcaos_rcut;
     std::vector<double> g_lcaos_rcut;
@@ -96,6 +89,11 @@ class Ewald_Vq {
     int nks0;
     std::vector<TA> atoms_vec;
     std::set<TA> atoms;
+    std::map<std::string, double> parameter;
+
+    std::vector<std::vector<std::vector<Numerical_Orbital_Lm>>> g_lcaos;
+    std::vector<std::vector<std::vector<Numerical_Orbital_Lm>>> g_abfs;
+    std::vector<std::vector<std::vector<Numerical_Orbital_Lm>>> g_abfs_ccp;
 
     /*
   MPI distribute
@@ -213,9 +211,8 @@ class Ewald_Vq {
     std::vector<std::vector<std::vector<Numerical_Orbital_Lm>>> init_gauss(
         std::vector<std::vector<std::vector<Numerical_Orbital_Lm>>>& orb_in);
 
-    inline double get_Rcut_min(const int it0, const int it1);
     inline double cal_V_Rcut(const int it0, const int it1);
-    std::map<std::string, double> get_ccp_parameter();
+    inline double get_Rcut_max(const int it0, const int it1);
 };
 #include "ewald_Vq.hpp"
 

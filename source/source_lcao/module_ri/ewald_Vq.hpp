@@ -27,9 +27,10 @@
 template <typename Tdata>
 void Ewald_Vq<Tdata>::init(
     const MPI_Comm& mpi_comm_in,
+    const K_Vectors* kv_in,
     std::vector<std::vector<std::vector<Numerical_Orbital_Lm>>>& lcaos_in,
     std::vector<std::vector<std::vector<Numerical_Orbital_Lm>>>& abfs_in,
-    const K_Vectors* kv_in) {
+    const std::map<std::string, double>& parameter) {
     ModuleBase::TITLE("Ewald_Vq", "init");
     ModuleBase::timer::tick("Ewald_Vq", "init");
 
@@ -38,29 +39,30 @@ void Ewald_Vq<Tdata>::init(
     this->nks0 = this->p_kv->get_nkstot_full() / this->nspin0;
     this->kvec_c.resize(this->nks0);
 
+    this->parameter = parameter;
     this->g_lcaos = this->init_gauss(lcaos_in);
     this->g_abfs = this->init_gauss(abfs_in);
-    this->lcaos_rcut = Exx_Abfs::Construct_Orbs::get_Rcut(lcaos_in);
-    this->g_lcaos_rcut = Exx_Abfs::Construct_Orbs::get_Rcut(this->g_lcaos);
-
     this->g_abfs_ccp
         = Conv_Coulomb_Pot_K::cal_orbs_ccp(this->g_abfs,
                                            this->info.ccp_type,
-                                           this->get_ccp_parameter(),
+                                           this->parameter,
                                            this->info.ccp_rmesh_times);
+    this->multipole = Exx_Abfs::Construct_Orbs::get_multipole(abfs_in);
+    this->lcaos_rcut = Exx_Abfs::Construct_Orbs::get_Rcut(lcaos_in);
+    this->g_lcaos_rcut = Exx_Abfs::Construct_Orbs::get_Rcut(this->g_lcaos);
     this->g_abfs_ccp_rcut
         = Exx_Abfs::Construct_Orbs::get_Rcut(this->g_abfs_ccp);
-    this->cv.set_orbitals(this->g_lcaos,
-                          this->g_abfs,
-                          this->g_abfs_ccp,
-                          this->info.kmesh_times,
-                          false);
-    this->multipole = Exx_Abfs::Construct_Orbs::get_multipole(abfs_in);
 
     const ModuleBase::Element_Basis_Index::Range range_abfs
         = Exx_Abfs::Abfs_Index::construct_range(abfs_in);
     this->index_abfs
         = ModuleBase::Element_Basis_Index::construct_index(range_abfs);
+
+    this->cv.set_orbitals(this->g_lcaos,
+                          this->g_abfs,
+                          this->g_abfs_ccp,
+                          this->info.kmesh_times,
+                          false);
 
     this->MGT.init_Gaunt_CH(GlobalC::exx_info.info_ri.abfs_Lmax);
     this->MGT.init_Gaunt(GlobalC::exx_info.info_ri.abfs_Lmax);
@@ -74,30 +76,24 @@ void Ewald_Vq<Tdata>::init(
 }
 
 template <typename Tdata>
-std::map<std::string, double> Ewald_Vq<Tdata>::get_ccp_parameter() {
-    switch (this->info.ccp_type) {
-    case Conv_Coulomb_Pot_K::Ccp_Type::Ccp:
-        return {};
-    case Conv_Coulomb_Pot_K::Ccp_Type::Ccp_Cam:
-        return {{"hse_omega", this->info.hse_omega},
-                {"cam_alpha", this->info.cam_alpha},
-                {"cam_beta", this->info.cam_beta}};
-    default:
-        throw std::domain_error(std::string(__FILE__) + " line "
-                                + std::to_string(__LINE__));
-        break;
-    }
-};
-
-template <typename Tdata>
-void Ewald_Vq<Tdata>::init_ions(
-    const std::array<Tcell, Ndim>& period_Vs,
-    const std::pair<
-        std::vector<TA>,
-        std::vector<std::vector<std::pair<TA, std::array<Tcell, Ndim>>>>>&
-        list_As_Vs) {
+void Ewald_Vq<Tdata>::init_ions(const std::array<Tcell, Ndim>& period_Vs_NAO) {
     ModuleBase::TITLE("Ewald_Vq", "init_ions");
     ModuleBase::timer::tick("Ewald_Vq", "init_ions");
+
+    const double Rmax = Exx_Abfs::Construct_Orbs::get_Rmax(this->g_lcaos);
+    const std::array<Tcell, Ndim> period_Vs
+        = LRI_CV_Tools::cal_latvec_range<Tcell>(1 + this->info.ccp_rmesh_times,
+                                                Rmax);
+
+    const std::pair<
+        std::vector<TA>,
+        std::vector<std::vector<std::pair<TA, std::array<Tcell, Ndim>>>>>
+        list_As_Vs
+        = RI::Distribute_Equally::distribute_atoms_periods(this->mpi_comm,
+                                                           this->atoms_vec,
+                                                           period_Vs,
+                                                           2,
+                                                           false);
 
     this->list_A0 = list_As_Vs.first;
     this->list_A1 = list_As_Vs.second[0];
@@ -119,7 +115,7 @@ void Ewald_Vq<Tdata>::init_ions(
         list_As_Vs_atoms
         = RI::Distribute_Equally::distribute_atoms(this->mpi_comm,
                                                    this->atoms_vec,
-                                                   period_Vs,
+                                                   period_Vs_NAO,
                                                    2,
                                                    false);
     this->list_A0_pair_R = list_As_Vs_atoms.first;
@@ -163,7 +159,7 @@ void Ewald_Vq<Tdata>::init_ions(
                              GlobalC::ucell.G,
                              this->ewald_lambda,
                              this->info.ccp_type,
-                             get_ccp_parameter());
+                             this->parameter);
 
     ModuleBase::timer::tick("Ewald_Vq", "init_ions");
 }
@@ -274,6 +270,16 @@ auto Ewald_Vq<Tdata>::cal_dVs_minus_gauss(
 template <typename Tdata>
 double Ewald_Vq<Tdata>::cal_V_Rcut(const int it0, const int it1) {
     return this->g_abfs_ccp_rcut[it0] + this->g_lcaos_rcut[it1];
+}
+
+template <typename Tdata>
+double Ewald_Vq<Tdata>::get_Rcut_max(const int it0, const int it1) {
+    double lcaos_rmax = this->lcaos_rcut[it0] * this->info.ccp_rmesh_times
+                        + this->lcaos_rcut[it1];
+    double g_lcaos_rmax = this->g_lcaos_rcut[it0] * this->info.ccp_rmesh_times
+                          + this->g_lcaos_rcut[it1];
+
+    return std::max(lcaos_rmax, g_lcaos_rmax);
 }
 
 template <typename Tdata>
@@ -542,8 +548,8 @@ auto Ewald_Vq<Tdata>::set_Vq_dVq_minus_gauss(
                         = GlobalC::ucell.atoms[it0].tau[ia0];
                     const ModuleBase::Vector3<double> tau1
                         = GlobalC::ucell.atoms[it1].tau[ia1];
-                    const double Rcut = std::min(this->get_Rcut_min(it0, it1),
-                                                 this->get_Rcut_min(it1, it0));
+                    const double Rcut = std::min(this->get_Rcut_max(it0, it1),
+                                                 this->get_Rcut_max(it1, it0));
                     const ModuleBase::Vector3<double> R_delta
                         = -tau0 + tau1
                           + (RI_Util::array3_to_Vector3(cell1)
@@ -900,6 +906,7 @@ template <typename Tdata>
 std::vector<std::vector<std::vector<Numerical_Orbital_Lm>>>
     Ewald_Vq<Tdata>::init_gauss(
         std::vector<std::vector<std::vector<Numerical_Orbital_Lm>>>& orb_in) {
+    const double eta = 35;
     std::vector<std::vector<std::vector<Numerical_Orbital_Lm>>> gauss;
     gauss.resize(orb_in.size());
     for (size_t T = 0; T != orb_in.size(); ++T) {
@@ -907,23 +914,16 @@ std::vector<std::vector<std::vector<Numerical_Orbital_Lm>>>
         for (size_t L = 0; L != orb_in[T].size(); ++L) {
             gauss[T][L].resize(orb_in[T][L].size());
             for (size_t N = 0; N != orb_in[T][L].size(); ++N) {
-                gauss[T][L][N] = this->gaussian_abfs.Gauss(orb_in[T][L][N],
-                                                           this->ewald_lambda);
+                gauss[T][L][N] = this->gaussian_abfs.Gauss(
+                    orb_in[T][L][N],
+                    this->ewald_lambda,
+                    std::max(orb_in[T][L][N].getRcut(),
+                             std::sqrt(eta / this->ewald_lambda)));
             }
         }
     }
 
     return gauss;
-}
-
-template <typename Tdata>
-double Ewald_Vq<Tdata>::get_Rcut_min(const int it0, const int it1) {
-    double lcaos_rmax = this->lcaos_rcut[it0] * this->info.ccp_rmesh_times
-                        + this->lcaos_rcut[it1];
-    double g_lcaos_rmax = this->g_lcaos_rcut[it0] * this->info.ccp_rmesh_times
-                          + this->g_lcaos_rcut[it1];
-
-    return std::max(lcaos_rmax, g_lcaos_rmax);
 }
 
 #endif

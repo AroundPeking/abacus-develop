@@ -1,56 +1,78 @@
 #ifndef EXX_ABFS_CONSTRUCT_ORBS_H
 #define EXX_ABFS_CONSTRUCT_ORBS_H
 
-#include <limits>
-
 #include "../module_basis/module_ao/ORB_atomic_lm.h"
 #include "exx_abfs.h"
 
+#include <limits>
+
 class LCAO_Orbitals;
 
-class Exx_Abfs::Construct_Orbs
-{
+class Exx_Abfs::Construct_Orbs {
   public:
-    static std::vector<std::vector<std::vector<Numerical_Orbital_Lm>>> change_orbs(const LCAO_Orbitals& orb_in,
-                                                                                   const double kmesh_times);
-    static std::vector<std::vector<std::vector<Numerical_Orbital_Lm>>> change_orbs(
-        const std::vector<std::vector<std::vector<Numerical_Orbital_Lm>>>& orb_in,
-        const double kmesh_times);
+    static std::vector<std::vector<std::vector<Numerical_Orbital_Lm>>>
+        change_orbs(const LCAO_Orbitals& orb_in, const double kmesh_times);
+    static std::vector<std::vector<std::vector<Numerical_Orbital_Lm>>>
+        change_orbs(const std::vector<
+                        std::vector<std::vector<Numerical_Orbital_Lm>>>& orb_in,
+                    const double kmesh_times);
 
-    static std::vector<std::vector<std::vector<Numerical_Orbital_Lm>>> abfs_same_atom(
-        const std::vector<std::vector<std::vector<Numerical_Orbital_Lm>>>& lcaos,
-        const double kmesh_times_mot,
-        const double times_threshold = 0);
+    static std::vector<std::vector<std::vector<Numerical_Orbital_Lm>>>
+        abfs_same_atom(
+            const std::vector<std::vector<std::vector<Numerical_Orbital_Lm>>>&
+                lcaos,
+            const double kmesh_times_mot,
+            const double times_threshold = 0);
 
-    static void print_orbs_size(const std::vector<std::vector<std::vector<Numerical_Orbital_Lm>>>& orbs,
-                                std::ostream& os);
+    static void print_orbs_size(
+        const std::vector<std::vector<std::vector<Numerical_Orbital_Lm>>>& orbs,
+        std::ostream& os);
 
     // get the max number of orbitals among all elements
-    // static int get_nmax_total(const std::vector<std::vector<std::vector<Numerical_Orbital_Lm>>> &orb_in);
-    // get number of orbitals for each element
-    // static std::map<int, int> get_nw(const std::vector<std::vector<std::vector<Numerical_Orbital_Lm>>> &orb_in);
+    // static int get_nmax_total(const
+    // std::vector<std::vector<std::vector<Numerical_Orbital_Lm>>> &orb_in); get
+    // number of orbitals for each element static std::map<int, int>
+    // get_nw(const std::vector<std::vector<std::vector<Numerical_Orbital_Lm>>>
+    // &orb_in);
 
     // get multipole of orbitals for each element and angular moment
     static std::vector<std::vector<std::vector<double>>> get_multipole(
-        const std::vector<std::vector<std::vector<Numerical_Orbital_Lm>>>& orb_in);
+        const std::vector<std::vector<std::vector<Numerical_Orbital_Lm>>>&
+            orb_in);
 
-    static std::vector<double> get_Rcut(const std::vector<std::vector<std::vector<Numerical_Orbital_Lm>>>& orb_in);
-    static inline double get_Rmax(const std::vector<std::vector<std::vector<Numerical_Orbital_Lm>>>& orb_in)
-    {
-        std::vector<double> rcut = get_Rcut(orb_in);
+    static std::vector<double> get_Rcut(
+        const std::vector<std::vector<std::vector<Numerical_Orbital_Lm>>>&
+            orb_in);
+    static std::vector<double> get_Rcut(
+        const std::vector<std::vector<std::vector<Numerical_Orbital_Lm>>>&
+            orb_in,
+        const std::vector<std::vector<std::vector<Numerical_Orbital_Lm>>>&
+            g_orb_in);
+    static inline double get_Rmax(const std::vector<double>& rcut) {
         return *std::max_element(rcut.begin(), rcut.end());
+    }
+    static inline double get_Rmax(
+        const std::vector<std::vector<std::vector<Numerical_Orbital_Lm>>>&
+            orb_in) {
+        std::vector<double> rcut = get_Rcut(orb_in);
+        return get_Rmax(rcut);
     }
 
   private:
-    static std::vector<std::vector<std::vector<std::vector<double>>>> psi_mult_psi(
-        const std::vector<std::vector<std::vector<Numerical_Orbital_Lm>>>& lcaos);
+    static std::vector<std::vector<std::vector<std::vector<double>>>>
+        psi_mult_psi(
+            const std::vector<std::vector<std::vector<Numerical_Orbital_Lm>>>&
+                lcaos);
 
-    static std::vector<std::vector<std::vector<std::vector<double>>>> psir_mult_psir(
-        const std::vector<std::vector<std::vector<Numerical_Orbital_Lm>>>& lcaos);
+    static std::vector<std::vector<std::vector<std::vector<double>>>>
+        psir_mult_psir(
+            const std::vector<std::vector<std::vector<Numerical_Orbital_Lm>>>&
+                lcaos);
 
     static std::vector<std::vector<std::vector<std::vector<double>>>> orth(
         const std::vector<std::vector<std::vector<std::vector<double>>>>& psis,
-        const std::vector<std::vector<std::vector<Numerical_Orbital_Lm>>>& lcaos,
+        const std::vector<std::vector<std::vector<Numerical_Orbital_Lm>>>&
+            lcaos,
         const double norm_threshold = std::numeric_limits<double>::min());
 
     static std::vector<std::vector<std::vector<std::vector<double>>>> pca(
@@ -65,11 +87,13 @@ class Exx_Abfs::Construct_Orbs
 
     static std::vector<std::vector<std::vector<Numerical_Orbital_Lm>>> orbital(
         const std::vector<std::vector<std::vector<std::vector<double>>>>& psis,
-        const std::vector<std::vector<std::vector<Numerical_Orbital_Lm>>>& orbs_info,
+        const std::vector<std::vector<std::vector<Numerical_Orbital_Lm>>>&
+            orbs_info,
         const double kmesh_times);
 
     static std::vector<std::vector<std::vector<std::vector<double>>>> get_psi(
-        const std::vector<std::vector<std::vector<Numerical_Orbital_Lm>>>& orbs);
+        const std::vector<std::vector<std::vector<Numerical_Orbital_Lm>>>&
+            orbs);
 };
 
 #endif // EXX_ABFS_IO_ASA_H
