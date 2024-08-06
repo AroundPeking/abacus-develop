@@ -368,38 +368,42 @@ void Force_Stress_LCAO<T>::getForceStress(UnitCell& ucell,
     }
 
 #ifdef __EXX
-    // Force and Stress contribution from exx
-    ModuleBase::matrix force_exx;
-    ModuleBase::matrix stress_exx;
-    if (GlobalC::exx_info.info_global.cal_exx)
-    {
-        if (isforce)
-        {
-            if (GlobalC::exx_info.info_ri.real_number)
-            {
-                exd.cal_exx_force(ucell.nat);
-                force_exx = GlobalC::exx_info.info_global.hybrid_alpha * exd.get_force();
-            }
-            else
-            {
-                exc.cal_exx_force(ucell.nat);
-                force_exx = GlobalC::exx_info.info_global.hybrid_alpha * exc.get_force();
-            }
-        }
-        if (isstress)
-        {
-            if (GlobalC::exx_info.info_ri.real_number)
-            {
-                exd.cal_exx_stress(ucell.omega, ucell.lat0);
-                stress_exx = GlobalC::exx_info.info_global.hybrid_alpha * exd.get_stress();
-            }
-            else
-            {
-                exc.cal_exx_stress(ucell.omega, ucell.lat0);
-                stress_exx = GlobalC::exx_info.info_global.hybrid_alpha * exc.get_stress();
-            }
-        }
-    }
+	//Force and Stress contribution from exx
+	ModuleBase::matrix force_exx;
+	ModuleBase::matrix stress_exx;
+	if( GlobalC::exx_info.info_global.cal_exx )
+	{
+		const double coeff = (GlobalC::exx_info.info_global.ccp_type == Conv_Coulomb_Pot_K::Ccp_Type::Cam
+                              || GlobalC::exx_info.info_global.ccp_type == Conv_Coulomb_Pot_K::Ccp_Type::Ccp)
+                                 ? 1.0
+                                 : GlobalC::exx_info.info_global.hybrid_alpha;
+		if(isforce)
+		{
+			if(GlobalC::exx_info.info_ri.real_number)
+			{
+				exx_lri_double.cal_exx_force();
+				force_exx = coeff * exx_lri_double.force_exx;
+			}
+			else
+			{
+				exx_lri_complex.cal_exx_force();
+				force_exx = coeff * exx_lri_complex.force_exx;
+			}
+		}
+		if(isstress)
+		{
+			if(GlobalC::exx_info.info_ri.real_number)
+			{
+				exx_lri_double.cal_exx_stress();
+				stress_exx = coeff * exx_lri_double.stress_exx;
+			}
+			else
+			{
+				exx_lri_complex.cal_exx_stress();
+				stress_exx = coeff * exx_lri_complex.stress_exx;
+			}
+		}
+	}
 #endif
     //--------------------------------
     // begin calculate and output force
