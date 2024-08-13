@@ -75,7 +75,7 @@ void Exx_Opt_Orb::generate_matrix(const K_Vectors &kv, const UnitCell& ucell, co
 		Matrix_Orbs22 m_lcaoslcaos_lcaoslcaos;
 		ORB_gaunt_table MGT;
 		int Lmax;
-		m_lcaoslcaos_lcaoslcaos.init( 1, ucell,orb, this->kmesh_times, orb.get_Rmax(), Lmax );
+		m_lcaoslcaos_lcaoslcaos.init( 1, this->kmesh_times, 1, Lmax );
 		MGT.init_Gaunt_CH(Lmax);
         MGT.init_Gaunt(Lmax);
 		m_lcaoslcaos_lcaoslcaos.init_radial( lcaos, lcaos, lcaos, lcaos, MGT );
@@ -95,7 +95,7 @@ void Exx_Opt_Orb::generate_matrix(const K_Vectors &kv, const UnitCell& ucell, co
 		Matrix_Orbs21 m_jyslcaos_lcaos;
 		ORB_gaunt_table MGT;
 		int Lmax;
-		m_jyslcaos_lcaos.init( 1, ucell , orb, this->kmesh_times, orb.get_Rmax(), Lmax );
+		m_jyslcaos_lcaos.init( 1, this->kmesh_times, 1, Lmax );
 		MGT.init_Gaunt_CH(Lmax);
         MGT.init_Gaunt(Lmax);
 		m_jyslcaos_lcaos.init_radial( jle.jle, lcaos, lcaos, MGT);
@@ -115,7 +115,7 @@ void Exx_Opt_Orb::generate_matrix(const K_Vectors &kv, const UnitCell& ucell, co
 		Matrix_Orbs11 m_jys_jys;
 		ORB_gaunt_table MGT;
 		int Lmax;
-		m_jys_jys.init( 2,ucell,orb, this->kmesh_times, orb.get_Rmax(), Lmax );
+		m_jys_jys.init( 2, this->kmesh_times, 1, Lmax );
 		MGT.init_Gaunt_CH(Lmax);
         MGT.init_Gaunt(Lmax);
 		m_jys_jys.init_radial( jle.jle, jle.jle, MGT );
@@ -135,7 +135,7 @@ void Exx_Opt_Orb::generate_matrix(const K_Vectors &kv, const UnitCell& ucell, co
 		Matrix_Orbs11 m_abfs_abfs;
 		ORB_gaunt_table MGT;
 		int Lmax;
-		m_abfs_abfs.init( 2, ucell, orb, this->kmesh_times, orb.get_Rmax(), Lmax );
+		m_abfs_abfs.init( 2, this->kmesh_times, 1, Lmax );
 		MGT.init_Gaunt_CH(Lmax);
         MGT.init_Gaunt(Lmax);
 		m_abfs_abfs.init_radial( abfs, abfs, MGT );
@@ -155,7 +155,7 @@ void Exx_Opt_Orb::generate_matrix(const K_Vectors &kv, const UnitCell& ucell, co
 		Matrix_Orbs21 m_abfslcaos_lcaos;
 		ORB_gaunt_table MGT;
 		int Lmax;
-		m_abfslcaos_lcaos.init( 1, ucell , orb, this->kmesh_times, orb.get_Rmax(), Lmax );
+		m_abfslcaos_lcaos.init( 1, this->kmesh_times, 1, Lmax );
 		MGT.init_Gaunt_CH(Lmax);
         MGT.init_Gaunt(Lmax);
 		m_abfslcaos_lcaos.init_radial( abfs, lcaos, lcaos, MGT );
@@ -175,7 +175,7 @@ void Exx_Opt_Orb::generate_matrix(const K_Vectors &kv, const UnitCell& ucell, co
 		Matrix_Orbs11 m_jys_abfs;
 		ORB_gaunt_table MGT;
 		int Lmax;
-		m_jys_abfs.init( 2, ucell,orb, this->kmesh_times, orb.get_Rmax(), Lmax );
+		m_jys_abfs.init( 2, this->kmesh_times, 1, Lmax );
 		MGT.init_Gaunt_CH(Lmax);
         MGT.init_Gaunt(Lmax);
 		m_jys_abfs.init_radial( jle.jle, abfs, MGT );

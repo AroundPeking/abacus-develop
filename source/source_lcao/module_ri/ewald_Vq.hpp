@@ -30,7 +30,8 @@ void Ewald_Vq<Tdata>::init(
     const K_Vectors* kv_in,
     std::vector<std::vector<std::vector<Numerical_Orbital_Lm>>>& lcaos_in,
     std::vector<std::vector<std::vector<Numerical_Orbital_Lm>>>& abfs_in,
-    const std::map<std::string, double>& parameter) {
+    const std::map<std::string, double>& parameter,
+    const ORB_gaunt_table& MGT_in) {
     ModuleBase::TITLE("Ewald_Vq", "init");
     ModuleBase::timer::tick("Ewald_Vq", "init");
 
@@ -58,14 +59,13 @@ void Ewald_Vq<Tdata>::init(
     this->index_abfs
         = ModuleBase::Element_Basis_Index::construct_index(range_abfs);
 
+    this->MGT = MGT_in;
     this->cv.set_orbitals(this->g_lcaos,
                           this->g_abfs,
                           this->g_abfs_ccp,
                           this->info.kmesh_times,
+                          this->MGT,
                           false);
-
-    this->MGT.init_Gaunt_CH(GlobalC::exx_info.info_ri.abfs_Lmax);
-    this->MGT.init_Gaunt(GlobalC::exx_info.info_ri.abfs_Lmax);
 
     this->atoms_vec.resize(GlobalC::ucell.nat);
     std::iota(this->atoms_vec.begin(), this->atoms_vec.end(), 0);
@@ -157,9 +157,7 @@ void Ewald_Vq<Tdata>::init_ions(const std::array<Tcell, Ndim>& period_Vs_NAO) {
     this->gaussian_abfs.init(2 * GlobalC::exx_info.info_ri.abfs_Lmax + 1,
                              neg_kvec,
                              GlobalC::ucell.G,
-                             this->ewald_lambda,
-                             this->info.ccp_type,
-                             this->parameter);
+                             this->ewald_lambda);
 
     ModuleBase::timer::tick("Ewald_Vq", "init_ions");
 }

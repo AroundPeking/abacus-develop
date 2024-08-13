@@ -9,12 +9,11 @@
 #include "source_base/tool_title.h"
 #include "source_pw/module_pwdft/global.h"
 
-void Matrix_Orbs22::init(const int mode, 
-                        const UnitCell& ucell,
-                        const LCAO_Orbitals& orb, 
-                        const double kmesh_times, 
-                        const double rmax,
-                        int& Lmax)
+void Matrix_Orbs22::init(
+	const int mode,
+	const double kmesh_times,
+	const double rmax,
+              int& Lmax)
 {
     ModuleBase::TITLE("Matrix_Orbs22", "init");
     ModuleBase::timer::tick("Matrix_Orbs22", "init");
@@ -47,12 +46,19 @@ void Matrix_Orbs22::init(const int mode,
                                              Rmesh,
                                              psb_);
 
-    //=========================================
     // (3) make Gaunt coefficients table
     //=========================================
     // this->MGT.init_Gaunt_CH(2 * Lmax + 1); // why +1
     // this->MGT.init_Gaunt(2 * Lmax + 1);
     Lmax = 2 * Lmax + 1;
+=======
+    Lmax = 2 * Lmax + 1;
+
+    // //=========================================
+    // // (3) make Gaunt coefficients table
+    // //=========================================
+    // this->MGT.init_Gaunt_CH(2 * Lmax + 1); // why +1
+    // this->MGT.init_Gaunt(2 * Lmax + 1);
 
     ModuleBase::timer::tick("Matrix_Orbs22", "init");
     std::cout << "Matrix_Orbs22::init()::done" << std::endl;

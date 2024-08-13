@@ -23,9 +23,7 @@
 void Gaussian_Abfs::init(const int& Lmax,
                          const std::vector<ModuleBase::Vector3<double>>& kvec_c,
                          const ModuleBase::Matrix3& G,
-                         const double& lambda,
-                         const Conv_Coulomb_Pot_K::Ccp_Type& ccp_type,
-                         const std::map<std::string, double>& parameter) {
+                         const double& lambda) {
     ModuleBase::TITLE("Gaussian_Abfs", "init");
     ModuleBase::timer::tick("Gaussian_Abfs", "init");
 
@@ -33,8 +31,6 @@ void Gaussian_Abfs::init(const int& Lmax,
     const int nks0 = kvec_c.size();
 
     this->lambda = lambda;
-    this->ccp_type = ccp_type;
-    this->parameter = parameter;
     const double eta = 35;
     std::vector<ModuleBase::Vector3<double>> Gvec;
     Gvec.resize(3);
@@ -105,24 +101,6 @@ void Gaussian_Abfs::init(const int& Lmax,
 
     ModuleBase::timer::tick("Gaussian_Abfs", "init");
 }
-
-double Gaussian_Abfs::get_ccp_kernel(const double& vec_sq) {
-    switch (ccp_type) {
-    case Conv_Coulomb_Pot_K::Ccp_Type::Ccp:
-        return 1.0;
-    case Conv_Coulomb_Pot_K::Ccp_Type::Ccp_Cam:
-        return this->parameter.at("cam_alpha")
-               + this->parameter.at("cam_beta")
-                     * (1
-                        - std::exp(-vec_sq
-                                   / (4 * this->parameter.at("hse_omega")
-                                      * this->parameter.at("hse_omega"))));
-    default:
-        throw std::domain_error(std::string(__FILE__) + " line "
-                                + std::to_string(__LINE__));
-        break;
-    }
-};
 
 auto Gaussian_Abfs::get_Vq(
     const int& lp_max,
@@ -442,9 +420,8 @@ auto Gaussian_Abfs::DPcal_lattice_sum(
         const double vec_sq = vec.norm2() * GlobalC::ucell.tpiba2;
         const double vec_abs = std::sqrt(vec_sq);
 
-        const double val_s = std::exp(-exponent * vec_sq)
-                             * std::pow(vec_abs, power)
-                             * this->get_ccp_kernel(vec_sq);
+        const double val_s
+            = std::exp(-exponent * vec_sq) * std::pow(vec_abs, power);
 
         Tresult phase = func_DPcal_phase(vec);
         for (int L = 0; L != lmax + 1; ++L) {

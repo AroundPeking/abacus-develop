@@ -195,12 +195,7 @@ double Singular_Value::cal_type_1(const std::array<int, 3>& nmp,
     auto cal_chi = [&qdiv, &bvec, &nks, &qvec, &lmax](const double& lambda) {
         Gaussian_Abfs gaussian_abfs;
         const double exponent = 1 / lambda;
-        gaussian_abfs.init(lmax,
-                           qvec,
-                           bvec,
-                           exponent,
-                           Conv_Coulomb_Pot_K::Ccp_Type::Ccp,
-                           {});
+        gaussian_abfs.init(lmax, qvec, bvec, exponent);
         const T_cal_fq_type_no func_cal_fq_type_1
             = std::bind(&fq_type_1, gaussian_abfs, qdiv, lambda, lmax);
         double prefactor = ModuleBase::TWO_PI * std::pow(lambda, -1.0 / qdiv)

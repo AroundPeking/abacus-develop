@@ -39,7 +39,8 @@ class Ewald_Vq {
         const K_Vectors* kv_in,
         std::vector<std::vector<std::vector<Numerical_Orbital_Lm>>>& lcaos_in,
         std::vector<std::vector<std::vector<Numerical_Orbital_Lm>>>& abfs_in,
-        const std::map<std::string, double>& parameter);
+        const std::map<std::string, double>& parameter,
+        const ORB_gaunt_table& MGT_in);
 
     void init_ions(const std::array<Tcell, Ndim>& period_Vs_NAO);
 

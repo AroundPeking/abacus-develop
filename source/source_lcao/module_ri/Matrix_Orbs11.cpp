@@ -9,19 +9,18 @@
 #include "source_base/tool_title.h"
 #include "source_pw/module_pwdft/global.h"
 
-void Matrix_Orbs11::init(const int mode, 
-                         const UnitCell& ucell,
-                         const LCAO_Orbitals& orb, 
-                         const double kmesh_times, 
-                         const double rmax, 
-                         int& Lmax)
+void Matrix_Orbs11::init(
+	const int mode,
+	const double kmesh_times,
+	const double rmax,
+    int& Lmax)
 {
     ModuleBase::TITLE("Matrix_Orbs11", "init");
     ModuleBase::timer::tick("Matrix_Orbs11", "init");
 
     int Lmax_used;
-    this->lat0 = &ucell.lat0;
-    const int ntype = orb.get_ntype();
+
+    const int ntype = GlobalC::ORB.get_ntype();
     int lmax_orb = -1, lmax_beta = -1;
     for (int it = 0; it < ntype; it++)
     {
@@ -47,9 +46,12 @@ void Matrix_Orbs11::init(const int mode,
                                              Rmesh,
                                              psb_);
 
-    //=========================================
     // (3) make Gaunt coefficients table
     //=========================================
+=======
+    // //=========================================
+    // // (3) make Gaunt coefficients table
+    // //=========================================
     // this->MGT.init_Gaunt_CH(Lmax);
     // this->MGT.init_Gaunt(Lmax);
 
@@ -71,12 +73,6 @@ void Matrix_Orbs11::init_radial(const std::vector<std::vector<std::vector<Numeri
                             center2_orb11_s[TA][TB][LA][NA][LB].insert(std::make_pair(
                                 NB,
                                 Center2_Orb::Orb11(orb_A[TA][LA][NA], orb_B[TB][LB][NB], psb_, MGT)));
-                        }
-                    }
-                }
-            }
-        }
-    }
     ModuleBase::timer::tick("Matrix_Orbs11", "init_radial");
 }
 
@@ -96,12 +92,6 @@ void Matrix_Orbs11::init_radial(const LCAO_Orbitals& orb_A, const LCAO_Orbitals&
                                                                   orb_B.Phi[TB].PhiLN(LB, NB),
                                                                   psb_,
                                                                   MGT)));
-                        }
-                    }
-                }
-            }
-        }
-    }
     ModuleBase::timer::tick("Matrix_Orbs11", "init_radial");
 }
 

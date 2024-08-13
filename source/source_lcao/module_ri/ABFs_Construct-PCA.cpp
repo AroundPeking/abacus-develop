@@ -99,7 +99,7 @@ namespace PCA
 		Matrix_Orbs21 m_abfslcaos_lcaos;
 		ORB_gaunt_table MGT;
 		int Lmax;
-		m_abfslcaos_lcaos.init( 1, ucell , orb, kmesh_times, orb.get_Rmax(), Lmax );
+		m_abfslcaos_lcaos.init( 1, kmesh_times, 1, Lmax );
 		MGT.init_Gaunt_CH(Lmax);
         MGT.init_Gaunt(Lmax);
 		m_abfslcaos_lcaos.init_radial( abfs, lcaos, lcaos, MGT );
