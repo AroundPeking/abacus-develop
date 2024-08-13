@@ -65,6 +65,7 @@ void Ewald_Vq<Tdata>::init(
                           this->g_abfs_ccp,
                           this->info.kmesh_times,
                           this->MGT,
+                          true,
                           false);
 
     this->atoms_vec.resize(GlobalC::ucell.nat);
