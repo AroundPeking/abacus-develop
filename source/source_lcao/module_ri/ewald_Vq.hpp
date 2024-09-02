@@ -64,9 +64,13 @@ void Ewald_Vq<Tdata>::init(
                           this->g_abfs,
                           this->g_abfs_ccp,
                           this->info.kmesh_times,
-                          this->MGT,
-                          true,
+                          MGT_in,
+                          false,
                           false);
+    this->gaunt.create(MGT_in.Gaunt_Coefficients.getBound1(),
+                       MGT_in.Gaunt_Coefficients.getBound2(),
+                       MGT_in.Gaunt_Coefficients.getBound3());
+    this->gaunt = MGT_in.Gaunt_Coefficients;
 
     this->atoms_vec.resize(GlobalC::ucell.nat);
     std::iota(this->atoms_vec.begin(), this->atoms_vec.end(), 0);
@@ -388,14 +392,14 @@ auto Ewald_Vq<Tdata>::cal_Vq_gauss(const std::vector<TA>& list_A0_k,
                     std::placeholders::_3,
                     chi,
                     std::placeholders::_4,
-                    this->MGT);
-    auto res = this->set_Vq_dVq_gauss(list_A0_k,
-                                      list_A1_k,
-                                      shift_for_mpi,
-                                      func_DPget_Vq);
+                    this->gaunt);
+    auto Vq_gauss = this->set_Vq_dVq_gauss(list_A0_k,
+                                           list_A1_k,
+                                           shift_for_mpi,
+                                           func_DPget_Vq);
 
     ModuleBase::timer::tick("Ewald_Vq", "cal_Vq_gauss");
-    return res;
+    return Vq_gauss;
 }
 
 template <typename Tdata>
@@ -416,14 +420,37 @@ auto Ewald_Vq<Tdata>::cal_dVq_gauss(const std::vector<TA>& list_A0_k,
                                    std::placeholders::_2,
                                    std::placeholders::_3,
                                    std::placeholders::_4,
-                                   this->MGT);
+                                   this->gaunt);
+
+    using namespace RI::Array_Operator;
+    std::map<TA,
+             std::map<TAK, std::array<RI::Tensor<std::complex<double>>, Ndim>>>
+        dVq_gauss;
     auto res = this->set_Vq_dVq_gauss(list_A0_k,
                                       list_A1_k,
                                       shift_for_mpi,
                                       func_DPget_dVq);
 
+    for (size_t i0 = 0; i0 < list_A0_k.size(); ++i0) {
+        const TA iat0 = list_A0_k[i0];
+        const int it0 = GlobalC::ucell.iat2it[iat0];
+        for (size_t i1 = 0; i1 < list_A1_k.size(); ++i1) {
+            const TA iat1 = list_A1_k[i1].first;
+            const int it1 = GlobalC::ucell.iat2it[iat1];
+            if (iat0 != iat1) {
+                const int ik = list_A1_k[i1].second[0];
+                const TAK index0 = std::make_pair(iat1, TK{ik});
+                dVq_gauss[iat0][index0] = -res[list_A0_k[i0]][list_A1_k[i1]];
+                const TAK index1 = std::make_pair(iat0, TK{ik});
+                dVq_gauss[iat1][index1] = res[list_A0_k[i0]][list_A1_k[i1]];
+            } else
+                dVq_gauss[list_A0_k[i0]][list_A1_k[i1]]
+                    = res[list_A0_k[i0]][list_A1_k[i1]];
+        }
+    }
+
     ModuleBase::timer::tick("Ewald_Vq", "cal_dVq_gauss");
-    return res;
+    return dVq_gauss;
 }
 
 template <typename Tdata>

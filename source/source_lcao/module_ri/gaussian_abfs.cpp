@@ -365,7 +365,7 @@ auto Gaussian_Abfs::get_d_lattice_sum(
         std::array<std::complex<double>, 3> ip_vec
             = {phase * vec.x, phase * vec.y, phase * vec.z};
         std::array<std::complex<double>, 3> d_phase
-            = GlobalC::ucell.lat0 * ModuleBase::IMAG_UNIT * ip_vec;
+            = GlobalC::ucell.tpiba * ModuleBase::IMAG_UNIT * ip_vec;
 
         return d_phase;
     };
