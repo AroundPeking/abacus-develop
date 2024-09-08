@@ -229,7 +229,6 @@ void sparse_format::cal_STN_R_for_T(const UnitCell& ucell,
                                     else if (type == "p")
                                     {
                                         HS_arrays.pR_sparse[dR][iw1_all][iw2_all] = -tmp;
-                                        std::cout << -tmp << std::endl;
                                     }
                                 }
                             }
