@@ -5,10 +5,10 @@
 #include "module_elecstate/module_dm/density_matrix.h"
 #include "module_elecstate/potentials/potential_new.h"
 #include "module_hamilt_general/hamilt.h"
+#include "module_hamilt_lcao/hamilt_lcaodft/hs_matrix_k.hpp"
 #include "module_hamilt_lcao/module_gint/gint_gamma.h"
 #include "module_hamilt_lcao/module_gint/gint_k.h"
 #include "module_hamilt_lcao/module_hcontainer/hcontainer.h"
-#include "module_hamilt_lcao/hamilt_lcaodft/hs_matrix_k.hpp"
 #ifdef __EXX
 #include "module_ri/Exx_LRI.h"
 #endif
@@ -25,20 +25,21 @@ class HamiltLCAO : public Hamilt<TK>
      * @brief Constructor of Hamiltonian for LCAO base
      * HR and SR will be allocated with Operators
      */
-      using TAC = std::pair<int, std::array<int, 3>>;
-      HamiltLCAO(Gint_Gamma* GG_in,
-          Gint_k* GK_in,
-          const Parallel_Orbitals* paraV,
-          elecstate::Potential* pot_in,
-          const K_Vectors& kv_in,
-          const TwoCenterBundle& two_center_bundle,
-          elecstate::DensityMatrix<TK, double>* DM_in
+    using TAC = std::pair<int, std::array<int, 3>>;
+    HamiltLCAO(Gint_Gamma* GG_in,
+               Gint_k* GK_in,
+               const Parallel_Orbitals* paraV,
+               elecstate::Potential* pot_in,
+               const K_Vectors& kv_in,
+               const TwoCenterBundle& two_center_bundle,
+               elecstate::DensityMatrix<TK, double>* DM_in
 #ifdef __EXX
-          , int* exx_two_level_step = nullptr
-          , std::vector<std::map<int, std::map<TAC, RI::Tensor<double>>>>* Hexxd = nullptr
-          , std::vector<std::map<int, std::map<TAC, RI::Tensor<std::complex<double>>>>>* Hexxc = nullptr
+               ,
+               int* exx_two_level_step = nullptr,
+               std::vector<std::map<int, std::map<TAC, RI::Tensor<double>>>>* Hexxd = nullptr,
+               std::vector<std::map<int, std::map<TAC, RI::Tensor<std::complex<double>>>>>* Hexxc = nullptr
 #endif
-      );
+    );
     /**
      * @brief Constructor of vacuum Operators, only HR and SR will be initialed as empty HContainer
      */
@@ -58,14 +59,29 @@ class HamiltLCAO : public Hamilt<TK>
     /// get pointer of Operator<TK> ops
     Operator<TK>*& getOperator();
     /// get hk-pointer
-    TK* getHk() const{return this->hsk->get_hk();}
+    TK* getHk() const
+    {
+        return this->hsk->get_hk();
+    }
     /// get sk-pointer
-    TK* getSk() const{return this->hsk->get_sk();}
-    int get_size_hsk() const{return this->hsk->get_size();}
+    TK* getSk() const
+    {
+        return this->hsk->get_sk();
+    }
+    int get_size_hsk() const
+    {
+        return this->hsk->get_size();
+    }
     /// get HR pointer of *this->hR, which is a HContainer<TR> and contains H(R)
-    HContainer<TR>*& getHR(){return this->hR;}
+    HContainer<TR>*& getHR()
+    {
+        return this->hR;
+    }
     /// get SR pointer of *this->sR, which is a HContainer<TR> and contains S(R)
-    HContainer<TR>*& getSR(){return this->sR;}
+    HContainer<TR>*& getSR()
+    {
+        return this->sR;
+    }
     /// refresh the status of HR
     void refresh() override;
 

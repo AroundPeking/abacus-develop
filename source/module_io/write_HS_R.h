@@ -10,27 +10,28 @@
 
 namespace ModuleIO
 {
-    using TAC = std::pair<int, std::array<int, 3>>;
+using TAC = std::pair<int, std::array<int, 3>>;
 void output_HSR(const int& istep,
-    const ModuleBase::matrix& v_eff,
-    const Parallel_Orbitals& pv,
-    LCAO_HS_Arrays& HS_Arrays,
-    Grid_Driver& grid, // mohan add 2024-04-06
-    const K_Vectors& kv,
-    hamilt::Hamilt<std::complex<double>>* p_ham,
+                const ModuleBase::matrix& v_eff,
+                const Parallel_Orbitals& pv,
+                LCAO_HS_Arrays& HS_Arrays,
+                Grid_Driver& grid, // mohan add 2024-04-06
+                const K_Vectors& kv,
+                hamilt::Hamilt<std::complex<double>>* p_ham,
 #ifdef __EXX
-    const std::vector<std::map<int, std::map<TAC, RI::Tensor<double>>>>* Hexxd = nullptr,
-    const std::vector<std::map<int, std::map<TAC, RI::Tensor<std::complex<double>>>>>* Hexxc = nullptr,
+                const std::vector<std::map<int, std::map<TAC, RI::Tensor<double>>>>* Hexxd = nullptr,
+                const std::vector<std::map<int, std::map<TAC, RI::Tensor<std::complex<double>>>>>* Hexxc = nullptr,
 #endif
-    const std::string& SR_filename = "data-SR-sparse_SPIN0.csr",
-    const std::string& HR_filename_up = "data-HR-sparse_SPIN0.csr",
-    const std::string HR_filename_down = "data-HR-sparse_SPIN1.csr",
-    const bool& binary = false,
-    const double& sparse_threshold = 1e-10); // LiuXh add 2019-07-15, modify in 2021-12-3
+                const std::string& SR_filename = "data-SR-sparse_SPIN0.csr",
+                const std::string& pR_filename = "data-pR-sparse_SPIN0.csr",
+                const std::string& HR_filename_up = "data-HR-sparse_SPIN0.csr",
+                const std::string HR_filename_down = "data-HR-sparse_SPIN1.csr",
+                const bool& binary = false,
+                const double& sparse_threshold = 1e-10); // LiuXh add 2019-07-15, modify in 2021-12-3
 
 void output_dHR(const int& istep,
                 const ModuleBase::matrix& v_eff,
-                Gint_k& gint_k,    // mohan add 2024-04-01
+                Gint_k& gint_k, // mohan add 2024-04-01
                 const Parallel_Orbitals& pv,
                 LCAO_HS_Arrays& HS_Arrays,
                 Grid_Driver& grid, // mohan add 2024-04-06
@@ -46,6 +47,16 @@ void output_TR(const int istep,
                Grid_Driver& grid,
                const TwoCenterBundle& two_center_bundle,
                const std::string& TR_filename = "data-TR-sparse_SPIN0.csr",
+               const bool& binary = false,
+               const double& sparse_threshold = 1e-10);
+
+void output_pR(const int istep,
+               const UnitCell& ucell,
+               const Parallel_Orbitals& pv,
+               LCAO_HS_Arrays& HS_Arrays,
+               Grid_Driver& grid,
+               const TwoCenterBundle& two_center_bundle,
+               const std::string& TR_filename = "data-pR-sparse_SPIN0.csr",
                const bool& binary = false,
                const double& sparse_threshold = 1e-10);
 

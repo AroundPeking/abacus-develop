@@ -3,6 +3,7 @@
 #include "module_base/timer.h"
 #include "module_base/tool_title.h"
 #include "module_cell/module_neighbor/sltk_grid_driver.h"
+#include "module_hamilt_lcao/hamilt_lcaodft/LCAO_domain.h"
 #include "module_hamilt_lcao/hamilt_lcaodft/operator_lcao/operator_lcao.h"
 #include "module_hamilt_lcao/module_hcontainer/hcontainer_funcs.h"
 
@@ -19,6 +20,7 @@ hamilt::OverlapNew<hamilt::OperatorLCAO<TK, TR>>::OverlapNew(HS_Matrix_K<TK>* hs
     this->cal_type = calculation_type::lcao_overlap;
     this->ucell = ucell_in;
     this->SR = SR_in;
+
 #ifdef __DEBUG
     assert(this->ucell != nullptr);
     assert(this->SR != nullptr);

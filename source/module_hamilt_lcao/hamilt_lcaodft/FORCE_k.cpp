@@ -140,8 +140,7 @@ void Force_LCAO<std::complex<double>>::allocate(const Parallel_Orbitals& pv,
     {
         cal_deri = false;
 
-        ModuleBase::WARNING_QUIT("cal_syns",
-                                 "This function has been broken and will be fixed later.");
+        ModuleBase::WARNING_QUIT("cal_syns", "This function has been broken and will be fixed later.");
 
         LCAO_domain::build_ST_new(fsr,
                                   'S',
@@ -157,7 +156,7 @@ void Force_LCAO<std::complex<double>>::allocate(const Parallel_Orbitals& pv,
 
         for (int ik = 0; ik < nks; ik++)
         {
-            
+
             bool bit = false; // LiuXh, 2017-03-21
         }
     }
@@ -329,27 +328,26 @@ void Force_LCAO<std::complex<double>>::ftable(const bool isforce,
         const std::vector<std::vector<std::complex<double>>>& dm_k = dm->get_DMK_vector();
 
         // when deepks_scf is on, the init pdm should be same as the out pdm, so we should not recalculate the pdm
-        //GlobalC::ld.cal_projected_DM_k(dm, ucell, GlobalC::ORB, GlobalC::GridD);
+        // GlobalC::ld.cal_projected_DM_k(dm, ucell, GlobalC::ORB, GlobalC::GridD);
 
         GlobalC::ld.cal_descriptor(ucell.nat);
 
         GlobalC::ld.cal_gedm(ucell.nat);
 
-	    DeePKS_domain::cal_f_delta_k(
-				dm_k, 
-				ucell, 
-				GlobalC::ORB, 
-				GlobalC::GridD, 
-                pv,
-                GlobalC::ld.lmaxd,
-				kv->get_nks(), 
-				kv->kvec_d, 
-                GlobalC::ld.nlm_save_k,
-                GlobalC::ld.gedm,
-                GlobalC::ld.inl_index,
-                GlobalC::ld.F_delta,
-				isstress, 
-				svnl_dalpha);
+        DeePKS_domain::cal_f_delta_k(dm_k,
+                                     ucell,
+                                     GlobalC::ORB,
+                                     GlobalC::GridD,
+                                     pv,
+                                     GlobalC::ld.lmaxd,
+                                     kv->get_nks(),
+                                     kv->kvec_d,
+                                     GlobalC::ld.nlm_save_k,
+                                     GlobalC::ld.gedm,
+                                     GlobalC::ld.inl_index,
+                                     GlobalC::ld.F_delta,
+                                     isstress,
+                                     svnl_dalpha);
 
 #ifdef __MPI
         Parallel_Reduce::reduce_all(GlobalC::ld.F_delta.c, GlobalC::ld.F_delta.nr * GlobalC::ld.F_delta.nc);

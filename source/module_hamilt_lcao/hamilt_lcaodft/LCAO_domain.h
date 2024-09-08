@@ -16,14 +16,13 @@ namespace LCAO_domain
 {
 
 void init_basis_lcao(Parallel_Orbitals& pv,
-        const double &onsite_radius,
-        const double &lcao_ecut,
-        const double &lcao_dk,
-        const double &lcao_dr,
-        const double &lcao_rmax,
-		UnitCell& ucell,
-        TwoCenterBundle& two_center_bundle);
-
+                     const double& onsite_radius,
+                     const double& lcao_ecut,
+                     const double& lcao_dk,
+                     const double& lcao_dr,
+                     const double& lcao_rmax,
+                     UnitCell& ucell,
+                     TwoCenterBundle& two_center_bundle);
 
 void build_Nonlocal_mu_new(const Parallel_Orbitals& pv,
                            ForceStressArrays& fsr, // mohan 2024-06-16
@@ -120,7 +119,8 @@ void single_overlap(const LCAO_Orbitals& orb,
 /**
  * @brief set each element of T matrices
  */
-void single_derivative(ForceStressArrays& fsr,
+void single_derivative(double* HSloc,
+                       ForceStressArrays& fsr,
                        const LCAO_Orbitals& orb,
                        const TwoCenterBundle& two_center_bundle,
                        const Parallel_Orbitals& pv,
@@ -173,11 +173,7 @@ void zeros_HSR(const char& mtype, LCAO_HS_Arrays& HS_arrays);
 void divide_HS_in_frag(const bool isGamma, Parallel_Orbitals& pv, const int& nks);
 
 template <typename T>
-void set_mat2d(const int& global_ir,
-                const int& global_ic,
-                const T& v,
-                const Parallel_Orbitals& pv,
-                T* mat);
+void set_mat2d(const int& global_ir, const int& global_ic, const T& v, const Parallel_Orbitals& pv, T* mat);
 
 } // namespace LCAO_domain
 

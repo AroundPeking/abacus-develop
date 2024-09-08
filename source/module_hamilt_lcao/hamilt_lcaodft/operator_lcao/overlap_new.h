@@ -72,7 +72,6 @@ class OverlapNew<OperatorLCAO<TK, TR>> : public OperatorLCAO<TK, TR>
      * loop the atom-pairs in SR and calculate the overlap matrix
      */
     void calculate_SR();
-
     /**
      * @brief calculate the SR local matrix of <I,J,R> atom pair
      */
@@ -81,7 +80,6 @@ class OverlapNew<OperatorLCAO<TK, TR>> : public OperatorLCAO<TK, TR>
                     const Parallel_Orbitals* paraV,
                     const ModuleBase::Vector3<double>& dtau,
                     TR* data_pointer);
-
     // if k vector is not changed, then do nothing and return
     // default of kvec_d_old is (-10,-10,-10), which is not a valid k vector
     ModuleBase::Vector3<double> kvec_d_old = ModuleBase::Vector3<double>(-10, -10, -10);

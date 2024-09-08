@@ -5,7 +5,8 @@
 namespace LCAO_domain
 {
 
-void single_derivative(ForceStressArrays& fsr,
+void single_derivative(double* HSloc,
+                       ForceStressArrays& fsr,
                        const LCAO_Orbitals& orb,
                        const TwoCenterBundle& two_center_bundle,
                        const Parallel_Orbitals& pv,
@@ -94,8 +95,8 @@ void single_derivative(ForceStressArrays& fsr,
                                     fsr.DHloc_fixed_23,
                                     fsr.DHloc_fixed_33);
         } // end stress
-    }     // end gamma_only
-    else  // condition 7, multiple k-points algorithm
+    } // end gamma_only
+    else // condition 7, multiple k-points algorithm
     {
         // condition 8, S or T
         if (dtype == 'S')
@@ -106,6 +107,7 @@ void single_derivative(ForceStressArrays& fsr,
                 fsr.DSloc_Rx[nnr] = olm[0];
                 fsr.DSloc_Ry[nnr] = olm[1];
                 fsr.DSloc_Rz[nnr] = olm[2];
+                HSloc[nnr] = olm[0];
             }
             else if (nspin == 4)
             {
@@ -196,7 +198,7 @@ void single_derivative(ForceStressArrays& fsr,
             {
                 ModuleBase::WARNING_QUIT("LCAO_domain::build_ST_new", "nspin must be 1, 2 or 4");
             } // end condition 9, nspin
-        }     // end condition 8, S or T
+        } // end condition 8, S or T
         ++total_nnr;
         ++nnr;
     } // end condition 7, gamma or multiple k
@@ -452,7 +454,8 @@ void build_ST_new(ForceStressArrays& fsr,
                             }
                             else // condition 6, calculate the derivative
                             {
-                                single_derivative(fsr,
+                                single_derivative(HSloc,
+                                                  fsr,
                                                   orb,
                                                   two_center_bundle,
                                                   pv,
@@ -486,7 +489,7 @@ void build_ST_new(ForceStressArrays& fsr,
                         } // end loop 5, kk
                         ++iw1_all;
                     } // end loop 4, jj
-                }     // condition 3, distance
+                } // condition 3, distance
                 else if (distance >= rcut && (!gamma_only_local))
                 {
                     int start1 = ucell.itiaiw2iwt(T1, I1, 0);
@@ -515,23 +518,25 @@ void build_ST_new(ForceStressArrays& fsr,
                         for (int jj = 0; jj < atom1->nw * npol; ++jj)
                         {
                             const int mu = pv.global2local_row(start1 + jj);
-                            if (mu < 0) {
+                            if (mu < 0)
+                            {
                                 continue;
-}
+                            }
                             for (int kk = 0; kk < atom2->nw * npol; ++kk)
                             {
                                 const int nu = pv.global2local_col(start2 + kk);
-                                if (nu < 0) {
+                                if (nu < 0)
+                                {
                                     continue;
-}
+                                }
                                 ++total_nnr;
                                 ++nnr;
                             } // kk
-                        }     // jj
-                    }         // is_adj
-                }             // distance, end condition 3
-            }                 // end loop 2, ad
-        }                     // end loop 1, iat1
+                        } // jj
+                    } // is_adj
+                } // distance, end condition 3
+            } // end loop 2, ad
+        } // end loop 1, iat1
 
 #ifdef _OPENMP
     }
