@@ -337,6 +337,9 @@ auto Ewald_Vq<Tdata>::set_Vs_dVs_minus_gauss(
                                  n1 != this->g_abfs[it1][l1].size();
                                  ++n1) {
                                 const double pB = this->multipole[it1][l1][n1];
+                                Tin_convert pp
+                                    = RI::Global_Func::convert<Tin_convert>(
+                                        pA * pB);
                                 for (size_t m0 = 0; m0 != 2 * l0 + 1; ++m0) {
                                     for (size_t m1 = 0; m1 != 2 * l1 + 1;
                                          ++m1) {
@@ -345,9 +348,6 @@ auto Ewald_Vq<Tdata>::set_Vs_dVs_minus_gauss(
                                         const size_t index1
                                             = this->index_abfs[it1][l1][n1][m1];
 
-                                        Tin_convert pp
-                                            = RI::Global_Func::convert<
-                                                Tin_convert>(pA * pB);
                                         LRI_CV_Tools::add_elem(
                                             data,
                                             index0,
@@ -774,6 +774,9 @@ auto Ewald_Vq<Tdata>::set_Vq_dVq(
                         for (size_t n1 = 0; n1 != this->g_abfs[it1][l1].size();
                              ++n1) {
                             const double pB = this->multipole[it1][l1][n1];
+                            Tin_convert pp
+                                = RI::Global_Func::convert<Tin_convert>(pA
+                                                                        * pB);
                             for (size_t m0 = 0; m0 != 2 * l0 + 1; ++m0) {
                                 const size_t index0
                                     = this->index_abfs[it0][l0][n0][m0];
@@ -783,9 +786,6 @@ auto Ewald_Vq<Tdata>::set_Vq_dVq(
                                         = this->index_abfs[it1][l1][n1][m1];
                                     const size_t lm1 = l1 * l1 + m1;
 
-                                    Tin_convert pp
-                                        = RI::Global_Func::convert<Tin_convert>(
-                                            pA * pB);
                                     LRI_CV_Tools::add_elem(
                                         data,
                                         index0,
