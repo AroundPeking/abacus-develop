@@ -69,6 +69,8 @@ void sparse_format::cal_TR(const UnitCell& ucell,
                               pv,
                               two_center_bundle,
                               &(GlobalC::GridD),
+                              HS_Arrays.Hloc_fixedR.data(),
+                              HS_Arrays.Hloc_fixedR.data(),
                               HS_Arrays.Hloc_fixedR.data());
 
     sparse_format::set_R_range(HS_Arrays.all_R_coor, grid);
@@ -88,9 +90,11 @@ void sparse_format::cal_pR(const UnitCell& ucell,
     ModuleBase::TITLE("sparse_format", "cal_pR");
 
     // need to rebuild p(R)
-    HS_Arrays.Hloc_fixedR.resize(pv.nnr);
+    HS_Arrays.Hloc_fixedR_x.resize(pv.nnr);
+    HS_Arrays.Hloc_fixedR_y.resize(pv.nnr);
+    HS_Arrays.Hloc_fixedR_z.resize(pv.nnr);
 
-    LCAO_domain::zeros_HSR('T', HS_Arrays);
+    LCAO_domain::zeros_pR('T', HS_Arrays);
 
     // tmp array, will be deleted later,
     // mohan 2024-06-15
@@ -114,7 +118,9 @@ void sparse_format::cal_pR(const UnitCell& ucell,
                               pv,
                               two_center_bundle,
                               &(GlobalC::GridD),
-                              HS_Arrays.Hloc_fixedR.data());
+                              HS_Arrays.Hloc_fixedR_x.data(),
+                              HS_Arrays.Hloc_fixedR_y.data(),
+                              HS_Arrays.Hloc_fixedR_z.data());
 
     sparse_format::set_R_range(HS_Arrays.all_R_coor, grid);
 
@@ -139,6 +145,9 @@ void sparse_format::cal_STN_R_for_T(const UnitCell& ucell,
     ModuleBase::Vector3<double> dtau1, dtau2, tau0;
 
     double tmp = 0.0;
+    double tmpx = 0.0;
+    double tmpy = 0.0;
+    double tmpz = 0.0;
     std::complex<double> tmpc = std::complex<double>(0.0, 0.0);
 
     for (int T1 = 0; T1 < ucell.ntype; ++T1)
@@ -221,20 +230,31 @@ void sparse_format::cal_STN_R_for_T(const UnitCell& ucell,
 
                             if (nspin == 1 || nspin == 2)
                             {
-                                tmp = HS_arrays.Hloc_fixedR[index];
-                                if (std::abs(tmp) > sparse_thr)
+
+                                if (type == "T")
                                 {
-                                    if (type == "T")
-                                        HS_arrays.TR_sparse[dR][iw1_all][iw2_all] = tmp;
-                                    else if (type == "p")
+                                    tmp = HS_arrays.Hloc_fixedR[index];
+                                    if (std::abs(tmp) > sparse_thr)
                                     {
-                                        HS_arrays.pR_sparse[dR][iw1_all][iw2_all] = -tmp;
+                                        HS_arrays.TR_sparse[dR][iw1_all][iw2_all] = tmp;
                                     }
                                 }
+                                else if (type == "p")
+                                {
+                                    tmpx = HS_arrays.Hloc_fixedR_x[index];
+                                    tmpy = HS_arrays.Hloc_fixedR_y[index];
+                                    tmpz = HS_arrays.Hloc_fixedR_z[index];
+                                    if (std::abs(tmpx) > sparse_thr)
+                                        HS_arrays.pxR_sparse[dR][iw1_all][iw2_all] = -tmpx;
+                                    if (std::abs(tmpy) > sparse_thr)
+                                        HS_arrays.pyR_sparse[dR][iw1_all][iw2_all] = -tmpy;
+                                    if (std::abs(tmpz) > sparse_thr)
+                                        HS_arrays.pzR_sparse[dR][iw1_all][iw2_all] = -tmpz;
+                                }
                             }
-
-                            ++index;
                         }
+
+                        ++index;
                     }
                 }
             }
@@ -252,7 +272,9 @@ void sparse_format::destroy_T_R_sparse(LCAO_HS_Arrays& HS_Arrays)
     {
         std::map<Abfs::Vector3_Order<int>, std::map<size_t, std::map<size_t, double>>> empty_TR_sparse;
         HS_Arrays.TR_sparse.swap(empty_TR_sparse);
-        HS_Arrays.pR_sparse.swap(empty_TR_sparse);
+        HS_Arrays.pxR_sparse.swap(empty_TR_sparse);
+        HS_Arrays.pyR_sparse.swap(empty_TR_sparse);
+        HS_Arrays.pzR_sparse.swap(empty_TR_sparse);
     }
     return;
 }

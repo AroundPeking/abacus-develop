@@ -119,7 +119,9 @@ void single_overlap(const LCAO_Orbitals& orb,
 /**
  * @brief set each element of T matrices
  */
-void single_derivative(double* HSloc,
+void single_derivative(double* HSloc_x,
+                       double* HSloc_y,
+                       double* HSloc_z,
                        ForceStressArrays& fsr,
                        const LCAO_Orbitals& orb,
                        const TwoCenterBundle& two_center_bundle,
@@ -161,7 +163,9 @@ void build_ST_new(ForceStressArrays& fsr,
                   const Parallel_Orbitals& pv,
                   const TwoCenterBundle& two_center_bundle,
                   Grid_Driver* GridD,
-                  double* SHlocR,
+                  double* SHlocR_x,
+                  double* SHlocR_y,
+                  double* SHlocR_z,
                   bool cal_syns = false,
                   double dmax = 0.0);
 
@@ -169,6 +173,7 @@ void build_ST_new(ForceStressArrays& fsr,
  * @brief set zeros for HSR matrices
  */
 void zeros_HSR(const char& mtype, LCAO_HS_Arrays& HS_arrays);
+void zeros_pR(const char& mtype, LCAO_HS_Arrays& HS_arrays);
 
 void divide_HS_in_frag(const bool isGamma, Parallel_Orbitals& pv, const int& nks);
 

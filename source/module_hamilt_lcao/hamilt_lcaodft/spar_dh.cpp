@@ -39,6 +39,8 @@ void sparse_format::cal_dH(const Parallel_Orbitals& pv,
                                   pv,
                                   two_center_bundle,
                                   &GlobalC::GridD,
+                                  nullptr,
+                                  nullptr,
                                   nullptr); // delete unused parameter lm.Hloc_fixedR
 
         GlobalV::CAL_STRESS = true;
@@ -53,6 +55,8 @@ void sparse_format::cal_dH(const Parallel_Orbitals& pv,
                                   pv,
                                   two_center_bundle,
                                   &GlobalC::GridD,
+                                  nullptr,
+                                  nullptr,
                                   nullptr); // delete unused parameter lm.Hloc_fixedR
     }
 
@@ -71,8 +75,7 @@ void sparse_format::cal_dH(const Parallel_Orbitals& pv,
     delete[] fsr_dh.DHloc_fixedR_y;
     delete[] fsr_dh.DHloc_fixedR_z;
 
-    gint_k
-        .cal_dvlocal_R_sparseMatrix(current_spin, sparse_thr, HS_Arrays, &pv, GlobalC::ucell, GlobalC::GridD);
+    gint_k.cal_dvlocal_R_sparseMatrix(current_spin, sparse_thr, HS_Arrays, &pv, GlobalC::ucell, GlobalC::GridD);
 
     return;
 }

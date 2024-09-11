@@ -56,6 +56,7 @@ void output_pR(const int istep,
                LCAO_HS_Arrays& HS_Arrays,
                Grid_Driver& grid,
                const TwoCenterBundle& two_center_bundle,
+               const std::set<Abfs::Vector3_Order<int>>& output_R_coor,
                const std::string& TR_filename = "data-pR-sparse_SPIN0.csr",
                const bool& binary = false,
                const double& sparse_threshold = 1e-10);

@@ -5,7 +5,9 @@
 namespace LCAO_domain
 {
 
-void single_derivative(double* HSloc,
+void single_derivative(double* HSloc_x,
+                       double* HSloc_y,
+                       double* HSloc_z,
                        ForceStressArrays& fsr,
                        const LCAO_Orbitals& orb,
                        const TwoCenterBundle& two_center_bundle,
@@ -107,7 +109,9 @@ void single_derivative(double* HSloc,
                 fsr.DSloc_Rx[nnr] = olm[0];
                 fsr.DSloc_Ry[nnr] = olm[1];
                 fsr.DSloc_Rz[nnr] = olm[2];
-                HSloc[nnr] = olm[0];
+                HSloc_x[nnr] = olm[0];
+                HSloc_y[nnr] = olm[1];
+                HSloc_z[nnr] = olm[2];
             }
             else if (nspin == 4)
             {
@@ -318,7 +322,9 @@ void build_ST_new(ForceStressArrays& fsr,
                   const Parallel_Orbitals& pv,
                   const TwoCenterBundle& two_center_bundle,
                   Grid_Driver* GridD,
-                  double* HSloc,
+                  double* HSloc_x,
+                  double* HSloc_y,
+                  double* HSloc_z,
                   bool cal_syns,
                   double dmax)
 {
@@ -450,11 +456,13 @@ void build_ST_new(ForceStressArrays& fsr,
                                                nnr,
                                                total_nnr,
                                                olm,
-                                               HSloc);
+                                               HSloc_x);
                             }
                             else // condition 6, calculate the derivative
                             {
-                                single_derivative(HSloc,
+                                single_derivative(HSloc_x,
+                                                  HSloc_y,
+                                                  HSloc_z,
                                                   fsr,
                                                   orb,
                                                   two_center_bundle,

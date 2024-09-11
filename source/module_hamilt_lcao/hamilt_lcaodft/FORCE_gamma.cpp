@@ -76,6 +76,8 @@ void Force_LCAO<double>::allocate(const Parallel_Orbitals& pv,
                               pv,
                               two_center_bundle,
                               &GlobalC::GridD,
+                              nullptr,
+                              nullptr,
                               nullptr);
 
     // calculate dT in LCAP
@@ -99,6 +101,8 @@ void Force_LCAO<double>::allocate(const Parallel_Orbitals& pv,
                               pv,
                               two_center_bundle,
                               &GlobalC::GridD,
+                              nullptr,
+                              nullptr,
                               nullptr);
 
     LCAO_domain::build_Nonlocal_mu_new(pv,
@@ -235,25 +239,24 @@ void Force_LCAO<double>::ftable(const bool isforce,
         const std::vector<std::vector<double>>& dm_gamma = dm->get_DMK_vector();
 
         // when deepks_scf is on, the init pdm should be same as the out pdm, so we should not recalculate the pdm
-        //GlobalC::ld.cal_projected_DM(dm, ucell, GlobalC::ORB, GlobalC::GridD);
+        // GlobalC::ld.cal_projected_DM(dm, ucell, GlobalC::ORB, GlobalC::GridD);
 
         GlobalC::ld.cal_descriptor(ucell.nat);
 
         GlobalC::ld.cal_gedm(ucell.nat);
 
-		DeePKS_domain::cal_f_delta_gamma(
-				dm_gamma, 
-				ucell, 
-				GlobalC::ORB, 
-				GlobalC::GridD, 
-                *this->ParaV,
-                GlobalC::ld.lmaxd,
-                GlobalC::ld.nlm_save,
-                GlobalC::ld.gedm,
-                GlobalC::ld.inl_index,
-                GlobalC::ld.F_delta,
-				isstress, 
-				svnl_dalpha);
+        DeePKS_domain::cal_f_delta_gamma(dm_gamma,
+                                         ucell,
+                                         GlobalC::ORB,
+                                         GlobalC::GridD,
+                                         *this->ParaV,
+                                         GlobalC::ld.lmaxd,
+                                         GlobalC::ld.nlm_save,
+                                         GlobalC::ld.gedm,
+                                         GlobalC::ld.inl_index,
+                                         GlobalC::ld.F_delta,
+                                         isstress,
+                                         svnl_dalpha);
 
 #ifdef __MPI
         Parallel_Reduce::reduce_all(GlobalC::ld.F_delta.c, GlobalC::ld.F_delta.nr * GlobalC::ld.F_delta.nc);

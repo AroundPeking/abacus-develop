@@ -830,6 +830,199 @@ void ModuleIO::save_sparse(const std::map<Abfs::Vector3_Order<int>, std::map<siz
     ModuleBase::timer::tick("ModuleIO", "save_sparse");
 }
 
+template <typename Tdata>
+void ModuleIO::save_pR_sparse(
+    const std::map<Abfs::Vector3_Order<int>, std::map<size_t, std::map<size_t, Tdata>>>& smatx,
+    const std::map<Abfs::Vector3_Order<int>, std::map<size_t, std::map<size_t, Tdata>>>& smaty,
+    const std::map<Abfs::Vector3_Order<int>, std::map<size_t, std::map<size_t, Tdata>>>& smatz,
+    const std::set<Abfs::Vector3_Order<int>>& output_R_coor,
+    const std::set<Abfs::Vector3_Order<int>>& all_R_coor,
+    const double& sparse_thr,
+    const bool& binary,
+    const std::string& filename,
+    const Parallel_Orbitals& pv,
+    const std::string& label,
+    const int& istep,
+    const bool& reduce)
+{
+    ModuleBase::TITLE("ModuleIO", "save_pR_sparse");
+    ModuleBase::timer::tick("ModuleIO", "save_pR_sparse");
+
+    int total_R_num = output_R_coor.size();
+    std::vector<int> nonzero_numx(total_R_num, 0);
+    std::vector<int> nonzero_numy(total_R_num, 0);
+    std::vector<int> nonzero_numz(total_R_num, 0);
+    int count = 0;
+    for (auto& R_coor: output_R_coor)
+    {
+        auto iter = smatx.find(R_coor);
+        if (iter != smatx.end())
+        {
+            for (auto& row_loop: iter->second)
+            {
+                nonzero_numx[count] += row_loop.second.size();
+            }
+        }
+        ++count;
+    }
+    count = 0;
+    for (auto& R_coor: output_R_coor)
+    {
+        auto iter = smaty.find(R_coor);
+        if (iter != smaty.end())
+        {
+            for (auto& row_loop: iter->second)
+            {
+                nonzero_numy[count] += row_loop.second.size();
+            }
+        }
+        ++count;
+    }
+    count = 0;
+    for (auto& R_coor: output_R_coor)
+    {
+        auto iter = smatz.find(R_coor);
+        if (iter != smatz.end())
+        {
+            for (auto& row_loop: iter->second)
+            {
+                nonzero_numz[count] += row_loop.second.size();
+            }
+        }
+        ++count;
+    }
+    if (reduce)
+    {
+        Parallel_Reduce::reduce_all(nonzero_numx.data(), total_R_num);
+        Parallel_Reduce::reduce_all(nonzero_numy.data(), total_R_num);
+        Parallel_Reduce::reduce_all(nonzero_numz.data(), total_R_num);
+    }
+
+    int output_R_number = output_R_coor.size();
+    /* for (int index = 0; index < total_R_num; ++index)
+    {
+        if (nonzero_numx[index] != 0 || nonzero_numy[index] != 0 || nonzero_numz[index] != 0)
+            ++output_R_number;
+    } */
+
+    std::stringstream sss;
+    sss << filename;
+    std::ofstream ofs;
+    if (!reduce || GlobalV::DRANK == 0)
+    {
+        if (binary)
+        {
+            if (GlobalV::CALCULATION == "md" && GlobalV::out_app_flag && istep)
+            {
+                ofs.open(sss.str().c_str(), std::ios::binary | std::ios::app);
+            }
+            else
+            {
+                ofs.open(sss.str().c_str(), std::ios::binary);
+            }
+            ofs.write(reinterpret_cast<char*>(0), sizeof(int));
+            ofs.write(reinterpret_cast<char*>(&GlobalV::NLOCAL), sizeof(int));
+            ofs.write(reinterpret_cast<char*>(&output_R_number), sizeof(int));
+        }
+        else
+        {
+            if (GlobalV::CALCULATION == "md" && GlobalV::out_app_flag && istep)
+            {
+                ofs.open(sss.str().c_str(), std::ios::app);
+            }
+            else
+            {
+                ofs.open(sss.str().c_str());
+            }
+            ofs << "STEP: " << std::max(istep, 0) << std::endl;
+            ofs << "Matrix Dimension of " + label + "(R): " << GlobalV::NLOCAL << std::endl;
+            ofs << "Matrix number of " + label + "(R): " << output_R_number << std::endl;
+        }
+    }
+
+    count = 0;
+    for (auto& R_coor: output_R_coor)
+    {
+        int dRx = R_coor.x;
+        int dRy = R_coor.y;
+        int dRz = R_coor.z;
+
+        /* if (nonzero_numx[count] == 0 && nonzero_numy[count] == 0 && nonzero_numz[count] == 0)
+        {
+            count++;
+            continue;
+        } */
+
+        if (!reduce || GlobalV::DRANK == 0)
+        {
+            if (binary)
+            {
+                ofs.write(reinterpret_cast<char*>(&dRx), sizeof(int));
+                ofs.write(reinterpret_cast<char*>(&dRy), sizeof(int));
+                ofs.write(reinterpret_cast<char*>(&dRz), sizeof(int));
+                ofs.write(reinterpret_cast<char*>(&nonzero_numx[count]), sizeof(int));
+            }
+            else
+            {
+                ofs << dRx << " " << dRy << " " << dRz << std::endl;
+                ofs << nonzero_numx[count] << std::endl;
+            }
+        }
+        if (nonzero_numx[count])
+        {
+            output_single_R(ofs, smatx.at(R_coor), sparse_thr, binary, pv, reduce);
+        }
+        else
+        {
+        }
+
+        if (!reduce || GlobalV::DRANK == 0)
+        {
+            if (binary)
+            {
+                ofs.write(reinterpret_cast<char*>(&nonzero_numy[count]), sizeof(int));
+            }
+            else
+            {
+                ofs << nonzero_numy[count] << std::endl;
+            }
+        }
+        if (nonzero_numy[count])
+        {
+            output_single_R(ofs, smaty.at(R_coor), sparse_thr, binary, pv, reduce);
+        }
+        else
+        {
+        }
+
+        if (!reduce || GlobalV::DRANK == 0)
+        {
+            if (binary)
+            {
+                ofs.write(reinterpret_cast<char*>(&nonzero_numz[count]), sizeof(int));
+            }
+            else
+            {
+                ofs << nonzero_numz[count] << std::endl;
+            }
+        }
+        if (nonzero_numz[count])
+        {
+            output_single_R(ofs, smatz.at(R_coor), sparse_thr, binary, pv, reduce);
+        }
+        else
+        {
+        }
+        ++count;
+    }
+    if (!reduce || GlobalV::DRANK == 0)
+    {
+        ofs.close();
+    }
+
+    ModuleBase::timer::tick("ModuleIO", "save_pR_sparse");
+}
+
 template void ModuleIO::save_sparse<double>(
     const std::map<Abfs::Vector3_Order<int>, std::map<size_t, std::map<size_t, double>>>&,
     const std::set<Abfs::Vector3_Order<int>>&,
@@ -843,6 +1036,34 @@ template void ModuleIO::save_sparse<double>(
 
 template void ModuleIO::save_sparse<std::complex<double>>(
     const std::map<Abfs::Vector3_Order<int>, std::map<size_t, std::map<size_t, std::complex<double>>>>&,
+    const std::set<Abfs::Vector3_Order<int>>&,
+    const double&,
+    const bool&,
+    const std::string&,
+    const Parallel_Orbitals&,
+    const std::string&,
+    const int&,
+    const bool&);
+
+template void ModuleIO::save_pR_sparse<double>(
+    const std::map<Abfs::Vector3_Order<int>, std::map<size_t, std::map<size_t, double>>>&,
+    const std::map<Abfs::Vector3_Order<int>, std::map<size_t, std::map<size_t, double>>>&,
+    const std::map<Abfs::Vector3_Order<int>, std::map<size_t, std::map<size_t, double>>>&,
+    const std::set<Abfs::Vector3_Order<int>>&,
+    const std::set<Abfs::Vector3_Order<int>>&,
+    const double&,
+    const bool&,
+    const std::string&,
+    const Parallel_Orbitals&,
+    const std::string&,
+    const int&,
+    const bool&);
+
+template void ModuleIO::save_pR_sparse<std::complex<double>>(
+    const std::map<Abfs::Vector3_Order<int>, std::map<size_t, std::map<size_t, std::complex<double>>>>&,
+    const std::map<Abfs::Vector3_Order<int>, std::map<size_t, std::map<size_t, std::complex<double>>>>&,
+    const std::map<Abfs::Vector3_Order<int>, std::map<size_t, std::map<size_t, std::complex<double>>>>&,
+    const std::set<Abfs::Vector3_Order<int>>&,
     const std::set<Abfs::Vector3_Order<int>>&,
     const double&,
     const bool&,

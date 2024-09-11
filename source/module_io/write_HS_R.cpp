@@ -235,6 +235,7 @@ void ModuleIO::output_pR(const int istep,
                          LCAO_HS_Arrays& HS_Arrays,
                          Grid_Driver& grid,
                          const TwoCenterBundle& two_center_bundle,
+                         const std::set<Abfs::Vector3_Order<int>>& output_R_coor,
                          const std::string& pR_filename,
                          const bool& binary,
                          const double& sparse_thr)
@@ -253,15 +254,27 @@ void ModuleIO::output_pR(const int istep,
     }
 
     sparse_format::cal_pR(ucell, pv, HS_Arrays, grid, two_center_bundle, sparse_thr);
-
-    ModuleIO::save_sparse(HS_Arrays.pR_sparse,
-                          HS_Arrays.all_R_coor,
-                          sparse_thr,
-                          binary,
-                          sst.str().c_str(),
-                          pv,
-                          "p",
-                          istep);
+    ModuleIO::save_pR_sparse(HS_Arrays.pxR_sparse,
+                             HS_Arrays.pyR_sparse,
+                             HS_Arrays.pzR_sparse,
+                             output_R_coor,
+                             HS_Arrays.all_R_coor,
+                             sparse_thr,
+                             binary,
+                             sst.str().c_str(),
+                             pv,
+                             "p",
+                             istep);
+    /* ModuleIO::save_pR_sparse(HS_Arrays.pxR_sparse,
+                             HS_Arrays.pyR_sparse,
+                             HS_Arrays.pzR_sparse,
+                             HS_Arrays.all_R_coor,
+                             sparse_thr,
+                             binary,
+                             sst.str().c_str(),
+                             pv,
+                             "p",
+                             istep); */
 
     sparse_format::destroy_T_R_sparse(HS_Arrays);
 

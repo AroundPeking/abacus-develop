@@ -22,13 +22,19 @@ class LCAO_HS_Arrays
     // SlocR -> Sloc2,
     //------------------------------
     std::vector<double> Hloc_fixedR;
+    std::vector<double> Hloc_fixedR_x;
+    std::vector<double> Hloc_fixedR_y;
+    std::vector<double> Hloc_fixedR_z;
 
     // For HR_sparse[2], when nspin=1, only 0 is valid, when nspin=2, 0 means
     // spin up, 1 means spin down
     std::map<Abfs::Vector3_Order<int>, std::map<size_t, std::map<size_t, double>>> HR_sparse[2];
     std::map<Abfs::Vector3_Order<int>, std::map<size_t, std::map<size_t, double>>> SR_sparse;
     std::map<Abfs::Vector3_Order<int>, std::map<size_t, std::map<size_t, double>>> TR_sparse;
-    std::map<Abfs::Vector3_Order<int>, std::map<size_t, std::map<size_t, double>>> pR_sparse;
+    // pR 3 directions
+    std::map<Abfs::Vector3_Order<int>, std::map<size_t, std::map<size_t, double>>> pxR_sparse;
+    std::map<Abfs::Vector3_Order<int>, std::map<size_t, std::map<size_t, double>>> pyR_sparse;
+    std::map<Abfs::Vector3_Order<int>, std::map<size_t, std::map<size_t, double>>> pzR_sparse;
 
     std::map<Abfs::Vector3_Order<int>, std::map<size_t, std::map<size_t, double>>> dHRx_sparse[2];
     std::map<Abfs::Vector3_Order<int>, std::map<size_t, std::map<size_t, double>>> dHRy_sparse[2];

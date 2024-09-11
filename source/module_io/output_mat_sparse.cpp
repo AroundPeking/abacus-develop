@@ -41,7 +41,13 @@ void Output_Mat_Sparse<std::complex<double>>::write()
     if (_out_mat_hsR)
     {
         output_HSR(_istep, this->_v_eff, this->_pv, HS_Arrays, this->_grid, _kv, _p_ham);
-        output_pR(_istep, GlobalC::ucell, this->_pv, HS_Arrays, this->_grid, two_center_bundle_);
+        output_pR(_istep,
+                  GlobalC::ucell,
+                  this->_pv,
+                  HS_Arrays,
+                  this->_grid,
+                  two_center_bundle_,
+                  HS_Arrays.output_R_coor);
     }
 
     //! generate a file containing the kinetic energy matrix

@@ -37,6 +37,20 @@ void save_sparse(const std::map<Abfs::Vector3_Order<int>, std::map<size_t, std::
                  const std::string& label,
                  const int& istep = -1,
                  const bool& reduce = true);
+
+template <typename Tdata>
+void save_pR_sparse(const std::map<Abfs::Vector3_Order<int>, std::map<size_t, std::map<size_t, Tdata>>>& smatx,
+                    const std::map<Abfs::Vector3_Order<int>, std::map<size_t, std::map<size_t, Tdata>>>& smaty,
+                    const std::map<Abfs::Vector3_Order<int>, std::map<size_t, std::map<size_t, Tdata>>>& smatz,
+                    const std::set<Abfs::Vector3_Order<int>>& output_R_coor,
+                    const std::set<Abfs::Vector3_Order<int>>& all_R_coor,
+                    const double& sparse_thr,
+                    const bool& binary,
+                    const std::string& filename,
+                    const Parallel_Orbitals& pv,
+                    const std::string& label,
+                    const int& istep = -1,
+                    const bool& reduce = true);
 } // namespace ModuleIO
 
 #endif

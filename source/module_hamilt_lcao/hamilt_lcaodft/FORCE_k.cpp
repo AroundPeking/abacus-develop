@@ -93,6 +93,8 @@ void Force_LCAO<std::complex<double>>::allocate(const Parallel_Orbitals& pv,
                               pv,
                               two_center_bundle,
                               &GlobalC::GridD,
+                              nullptr,
+                              nullptr,
                               nullptr); // delete lm.SlocR
 
     //-----------------------------------------
@@ -123,6 +125,8 @@ void Force_LCAO<std::complex<double>>::allocate(const Parallel_Orbitals& pv,
                               pv,
                               two_center_bundle,
                               &GlobalC::GridD,
+                              nullptr,
+                              nullptr,
                               nullptr); // delete lm.Hloc_fixedR
 
     // calculate dVnl=<phi|dVnl|dphi> in LCAO
@@ -151,6 +155,8 @@ void Force_LCAO<std::complex<double>>::allocate(const Parallel_Orbitals& pv,
                                   two_center_bundle,
                                   &(GlobalC::GridD),
                                   nullptr, // delete lm.SlocR
+                                  nullptr,
+                                  nullptr,
                                   PARAM.inp.cal_syns,
                                   PARAM.inp.dmax);
 
