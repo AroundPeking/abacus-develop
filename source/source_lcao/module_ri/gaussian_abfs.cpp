@@ -333,12 +333,11 @@ auto Gaussian_Abfs::get_lattice_sum(
     const int& lmax, // Maximum angular momentum the sum is needed for.
     const ModuleBase::Vector3<double>& tau)
     -> std::vector<std::complex<double>> {
-    auto cal_phase =
+    const T_func_DPcal_phase<std::complex<double>> func_DPcal_phase =
         [&tau](const ModuleBase::Vector3<double>& vec) -> std::complex<double> {
         return std::exp(ModuleBase::TWO_PI * ModuleBase::IMAG_UNIT
                         * (vec * tau));
     };
-    const T_func_DPcal_phase<std::complex<double>> func_DPcal_phase = cal_phase;
 
     return this->DPcal_lattice_sum<std::complex<double>>(ik,
                                                          power,
@@ -357,7 +356,8 @@ auto Gaussian_Abfs::get_d_lattice_sum(
     const int& lmax, // Maximum angular momentum the sum is needed for.
     const ModuleBase::Vector3<double>& tau)
     -> std::vector<std::array<std::complex<double>, 3>> {
-    auto cal_d_phase = [&tau](const ModuleBase::Vector3<double>& vec)
+    const T_func_DPcal_phase<std::array<std::complex<double>, 3>>
+        func_DPcal_d_phase = [&tau](const ModuleBase::Vector3<double>& vec)
         -> std::array<std::complex<double>, 3> {
         using namespace RI::Array_Operator;
         std::complex<double> phase = std::exp(
@@ -369,8 +369,6 @@ auto Gaussian_Abfs::get_d_lattice_sum(
 
         return d_phase;
     };
-    const T_func_DPcal_phase<std::array<std::complex<double>, 3>>
-        func_DPcal_d_phase = cal_d_phase;
 
     return this->DPcal_lattice_sum<std::array<std::complex<double>, 3>>(
         ik,

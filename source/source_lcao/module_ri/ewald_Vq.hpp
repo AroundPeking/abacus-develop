@@ -272,14 +272,15 @@ auto Ewald_Vq<Tdata>::cal_dVs_minus_gauss(
 
 template <typename Tdata>
 double Ewald_Vq<Tdata>::cal_V_Rcut(const int it0, const int it1) {
-    return this->g_abfs_ccp_rcut[it0] + this->g_lcaos_rcut[it1];
+    // return this->g_abfs_ccp_rcut[it0] + this->g_lcaos_rcut[it1];
+    return this->g_lcaos_rcut[it0] + this->g_lcaos_rcut[it1];
 }
 
 template <typename Tdata>
 double Ewald_Vq<Tdata>::get_Rcut_max(const int it0, const int it1) {
-    double lcaos_rmax = this->lcaos_rcut[it0] * this->info.ccp_rmesh_times
+    double lcaos_rmax = this->lcaos_rcut[it0] //* this->info.ccp_rmesh_times
                         + this->lcaos_rcut[it1];
-    double g_lcaos_rmax = this->g_lcaos_rcut[it0] * this->info.ccp_rmesh_times
+    double g_lcaos_rmax = this->g_lcaos_rcut[it0] //* this->info.ccp_rmesh_times
                           + this->g_lcaos_rcut[it1];
 
     return std::min(lcaos_rmax, g_lcaos_rmax);
@@ -765,7 +766,6 @@ auto Ewald_Vq<Tdata>::set_Vq_dVq(
             const size_t size1 = this->index_abfs[it1].count_size;
             Tout data;
             LRI_CV_Tools::init_elem(data, size0, size1);
-
             for (int l0 = 0; l0 != this->g_abfs_ccp[it0].size(); ++l0) {
                 for (int l1 = 0; l1 != this->g_abfs[it1].size(); ++l1) {
                     for (size_t n0 = 0; n0 != this->g_abfs_ccp[it0][l0].size();

@@ -99,12 +99,16 @@ class Ewald_Vq {
     /*
   MPI distribute
     distribute_atoms_periods:
-      list_A0 / list_A1 : {ia0, {ia1, R}}
-      list_A0_k / list_A1_k : {ia0, {ia1, ik}} ; range -> [-Nk/2, Nk/2)
+      - list_A0 / list_A1 : {ia0, {ia1, R}} ; range -> [-Rmax, Rmax)
+      - list_A0_k / list_A1_k : {ia0, {ia1, ik}} ; range -> [-Nk/2, Nk/2)
+
     distribute_atoms:
-      list_A0_pair_R / list_A1_pair_R : {ia0, ia1} for R
-      list_A0_pair_k / list_A1_pair_k : {ia0, ia1} for k ; range -> [-Nk/2,
+      - list_A0_pair_R / list_A1_pair_R : {ia0, ia1} for R ; range -> [-Rmax,
+  Rmax)
+      - list_A0_pair_k / list_A1_pair_k : {ia0, ia1} for k ; range -> [-Nk/2,
   Nk/2)
+      - list_A0_pair_R_period / list_A1_pair_R_period : {ia0, ia1} for R ; range
+  -> match with kmesh
   */
     std::vector<TA> list_A0;
     std::vector<TAC> list_A1;
