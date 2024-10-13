@@ -44,7 +44,8 @@ class Ewald_Vq {
 
     void init_ions(const std::array<Tcell, Ndim>& period_Vs_NAO);
 
-    double get_singular_chi();
+    double get_singular_chi(const Singular_Value::Fq_type& fq_type,
+                            const double& qdiv);
 
     inline std::map<TA, std::map<TAK, RI::Tensor<std::complex<double>>>>
         cal_Vq(const double& chi,
@@ -54,6 +55,7 @@ class Ewald_Vq {
         TA,
         std::map<TAK, std::array<RI::Tensor<std::complex<double>>, Ndim>>>
         cal_dVq(
+            const double& chi,
             std::map<TA, std::map<TAC, std::array<RI::Tensor<Tdata>, Ndim>>>&
                 dVs_in); // return Vq [0, Nk)
 
@@ -62,6 +64,7 @@ class Ewald_Vq {
                std::map<TA, std::map<TAC, RI::Tensor<Tdata>>>& Vs_in);
     inline std::map<TA, std::map<TAC, std::array<RI::Tensor<Tdata>, Ndim>>>
         cal_dVs(
+            const double& chi,
             std::map<TA, std::map<TAC, std::array<RI::Tensor<Tdata>, Ndim>>>&
                 dVs_in);
 
@@ -162,6 +165,7 @@ class Ewald_Vq {
         std::map<TAK, std::array<RI::Tensor<std::complex<double>>, Ndim>>>
         cal_dVq_gauss(const std::vector<TA>& list_A0_k,
                       const std::vector<TAK>& list_A1_k,
+                      const double& chi,
                       const int& shift_for_mpi); // return dVq [-Nk/2, Nk/2)
     template <typename Tresult>
     std::map<TA, std::map<TAK, Tresult>>

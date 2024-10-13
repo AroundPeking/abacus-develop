@@ -168,26 +168,18 @@ void Ewald_Vq<Tdata>::init_ions(const std::array<Tcell, Ndim>& period_Vs_NAO) {
 }
 
 template <typename Tdata>
-double Ewald_Vq<Tdata>::get_singular_chi() {
+double Ewald_Vq<Tdata>::get_singular_chi(const Singular_Value::Fq_type& fq_type,
+                                         const double& qdiv) {
     ModuleBase::TITLE("Ewald_Vq", "get_singular_chi");
     ModuleBase::timer::tick("Ewald_Vq", "get_singular_chi");
 
     double chi = 0.0;
-    switch (this->info_ewald.fq_type) {
+    switch (fq_type) {
     case Singular_Value::Fq_type::Type_0:
-        chi = Singular_Value::cal_type_0(this->kvec_c,
-                                         this->info_ewald.ewald_qdiv,
-                                         100,
-                                         30,
-                                         1e-6,
-                                         3);
+        chi = Singular_Value::cal_type_0(this->kvec_c, qdiv, 100, 30, 1e-6, 3);
         break;
     case Singular_Value::Fq_type::Type_1:
-        chi = Singular_Value::cal_type_1(this->nmp,
-                                         this->info_ewald.ewald_qdiv,
-                                         1,
-                                         5,
-                                         1e-4);
+        chi = Singular_Value::cal_type_1(this->nmp, qdiv, 1, 5, 1e-4);
         break;
     default:
         throw std::domain_error(std::string(__FILE__) + " line "
@@ -406,6 +398,7 @@ auto Ewald_Vq<Tdata>::cal_Vq_gauss(const std::vector<TA>& list_A0_k,
 template <typename Tdata>
 auto Ewald_Vq<Tdata>::cal_dVq_gauss(const std::vector<TA>& list_A0_k,
                                     const std::vector<TAK>& list_A1_k,
+                                    const double& chi,
                                     const int& shift_for_mpi)
     -> std::map<
         TA,
@@ -420,6 +413,7 @@ auto Ewald_Vq<Tdata>::cal_dVq_gauss(const std::vector<TA>& list_A0_k,
                                    std::placeholders::_1,
                                    std::placeholders::_2,
                                    std::placeholders::_3,
+                                   chi,
                                    std::placeholders::_4,
                                    this->gaunt);
 
@@ -677,6 +671,7 @@ auto Ewald_Vq<Tdata>::cal_Vq(
 
 template <typename Tdata>
 auto Ewald_Vq<Tdata>::cal_dVq(
+    const double& chi,
     std::map<TA, std::map<TAC, std::array<RI::Tensor<Tdata>, Ndim>>>& dVs_in)
     -> std::map<
         TA,
@@ -703,6 +698,7 @@ auto Ewald_Vq<Tdata>::cal_dVq(
                                        this,
                                        this->list_A0_k,
                                        this->list_A1_k,
+                                       chi,
                                        std::placeholders::_1);
 
     auto dVq = this->set_Vq_dVq(this->list_A0_pair_k,
@@ -832,6 +828,7 @@ auto Ewald_Vq<Tdata>::cal_Vs(
 
 template <typename Tdata>
 auto Ewald_Vq<Tdata>::cal_dVs(
+    const double& chi,
     std::map<TA, std::map<TAC, std::array<RI::Tensor<Tdata>, Ndim>>>&
         dVs_in) //{ia0, {ia1, R}}
     -> std::map<TA, std::map<TAC, std::array<RI::Tensor<Tdata>, Ndim>>> {
@@ -840,7 +837,7 @@ auto Ewald_Vq<Tdata>::cal_dVs(
 
     std::map<TA,
              std::map<TAK, std::array<RI::Tensor<std::complex<double>>, Ndim>>>
-        dVq = this->cal_dVq(dVs_in);
+        dVq = this->cal_dVq(chi, dVs_in);
     auto dVs = this->set_Vs_dVs<std::array<RI::Tensor<Tdata>, Ndim>>(
         this->list_A0_pair_R_period,
         this->list_A1_pair_R_period,

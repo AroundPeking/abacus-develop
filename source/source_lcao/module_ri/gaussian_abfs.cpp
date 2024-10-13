@@ -138,6 +138,7 @@ auto Gaussian_Abfs::get_dVq(
     const int& lp_max,
     const int& lq_max, // Maximum L for which to calculate interaction.
     const size_t& ik,
+    const double& chi, // Singularity corrected value at q=0.
     const ModuleBase::Vector3<double>& tau,
     const ORB_gaunt_table& MGT)
     -> std::array<RI::Tensor<std::complex<double>>, 3> {
@@ -153,13 +154,12 @@ auto Gaussian_Abfs::get_dVq(
                                              std::placeholders::_3,
                                              std::placeholders::_4,
                                              tau);
-    const double exponent = 1.0 / lambda;
     auto res
         = this->DPcal_Vq_dVq<std::array<RI::Tensor<std::complex<double>>, 3>>(
             lp_max,
             lq_max,
             ik,
-            exponent,
+            chi,
             tau,
             MGT,
             func_DPcal_d_lattice_sum);
@@ -243,13 +243,12 @@ auto Gaussian_Abfs::DPcal_Vq_dVq(
             {
                 const int i_add_ksq = (lp + lq - L) / 2;
                 for (int mp = 0; mp != 2 * lp + 1; ++mp) {
-                    const int lmp = MGT.get_lm_index(lp, mp);
+                    const int lmp = lp * lp + mp;
                     for (int mq = 0; mq != 2 * lq + 1; ++mq) {
-                        const int lmq = MGT.get_lm_index(lq, mq);
+                        const int lmq = lq * lq + mq;
                         for (int m = 0; m != 2 * L + 1; ++m) {
-                            const int lm = MGT.get_lm_index(L, m);
-                            double triple_Y
-                                = MGT.Gaunt_Coefficients(lmp, lmq, lm);
+                            const int lm = L * L + m;
+                            double triple_Y = gaunt(lmp, lmq, lm);
                             std::complex<double> fac = triple_Y * cfac;
                             LRI_CV_Tools::add_elem(Vq_dVq,
                                                    lmp,

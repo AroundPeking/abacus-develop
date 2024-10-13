@@ -36,6 +36,7 @@ class Gaussian_Abfs {
         const int& lp_max,
         const int& lq_max, // Maximum L for which to calculate interaction.
         const size_t& ik,
+        const double& chi, // Singularity corrected value at q=0.
         const ModuleBase::Vector3<double>& tau,
         const ORB_gaunt_table& MGT);
 
