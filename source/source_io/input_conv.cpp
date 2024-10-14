@@ -451,11 +451,17 @@ void Input_Conv::Convert()
         )
     {
         // EXX case, convert all EXX related variables
-        XC_Functional::set_hybrid_alpha(GlobalC::exx_info.info_global.hybrid_alpha);
-        if(!PARAM.inp.exx_erfc_omega.empty())
-            { GlobalC::exx_info.info_global.hse_omega = std::stod(PARAM.inp.exx_erfc_omega[0]); }
-        if(!PARAM.inp.exx_fock_lambda.empty())
-            { GlobalC::exx_info.info_lip.lambda = std::stod(PARAM.inp.exx_fock_lambda[0]); }
+        // GlobalC::exx_info.info_global.cal_exx = true;
+        GlobalC::exx_info.info_global.hybrid_alpha = std::stod(PARAM.inp.exx_hybrid_alpha);
+        if (GlobalC::exx_info.info_global.use_ewald)
+            XC_Functional::set_hybrid_alpha(0.0, 
+                                            std::stod(PARAM.inp.exx_cam_alpha), 
+                                            std::stod(PARAM.inp.exx_cam_beta));
+        else
+            XC_Functional::set_hybrid_alpha(std::stod(PARAM.inp.exx_hybrid_alpha),
+                                            0.0, 
+                                            0.0);
+        GlobalC::exx_info.info_global.hse_omega = std::stod(PARAM.inp.exx_hse_omega);
         GlobalC::exx_info.info_global.separate_loop = PARAM.inp.exx_separate_loop;
         GlobalC::exx_info.info_global.hybrid_step = PARAM.inp.exx_hybrid_step;
         GlobalC::exx_info.info_global.mixing_beta_for_loop1 = PARAM.inp.exx_mixing_beta;
