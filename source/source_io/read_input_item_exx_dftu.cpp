@@ -14,9 +14,27 @@ void ReadInput::item_exx()
         {
             para.input.exx_fock_alpha = item.str_values;
         };
-        item.reset_value = [](const Input_Item& item, Parameter& para) 
-        {
-            if (para.input.exx_fock_alpha.size()==1 && para.input.exx_fock_alpha[0]=="default")
+        item.check_value = [](const Input_Item& item, const Parameter& para) {
+            const double exx_hybrid_alpha_value = std::stod(para.input.exx_hybrid_alpha);
+            if (exx_hybrid_alpha_value < 0 || exx_hybrid_alpha_value > 1)
+            {
+                ModuleBase::WARNING_QUIT("ReadInput", "must 0 <= exx_hybrid_alpha <= 1");
+            }
+        };
+        this->add_item(item);
+    }
+    {
+        Input_Item item("exx_use_ewald");
+        item.annotation = "if 1, use Ewald method to construct V matrix";
+        read_sync_bool(input.exx_use_ewald);
+        this->add_item(item);
+    }
+    {
+        Input_Item item("exx_cam_alpha");
+        item.annotation = "fraction of the full-range parts of Fock exchange in range-separated hybrid funtionals";
+        read_sync_string(input.exx_cam_alpha);
+        item.reset_value = [](const Input_Item& item, Parameter& para) {
+            if (para.input.exx_cam_alpha == "default")
             {
                 std::string& dft_functional = para.input.dft_functional;
                 std::string dft_functional_lower = dft_functional;
