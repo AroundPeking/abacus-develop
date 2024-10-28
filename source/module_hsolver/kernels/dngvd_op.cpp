@@ -318,6 +318,8 @@ struct dngvx_op<T, base_device::DEVICE_CPU>
         delete[] rwork;
         delete[] iwork;
         delete[] ifail;
+
+        assert(0 == info);
     }
 };
 
