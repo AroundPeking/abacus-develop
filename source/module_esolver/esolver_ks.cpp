@@ -640,9 +640,10 @@ void ESolver_KS<T, Device>::runner(const int istep, UnitCell& ucell)
         this->print_iter(iter, drho, dkin, duration, diag_ethr);
 
         // add a energy threshold for SCF convergence
-        if (this->conv_elec == 0) // only check when density is not converged
+        if (this->scf_ene_thr > 0.0 && this->conv_elec == 1) // only check when density is not converged
         {
-            this->conv_elec = ( iter != 1 && std::abs(this->pelec->f_en.etot_delta * ModuleBase::Ry_to_eV) < this->scf_ene_thr );
+            this->conv_elec
+                = (std::abs(this->pelec->f_en.etot_delta * ModuleBase::Ry_to_eV) < this->scf_ene_thr);
         }
 
         // 12) Json, need to be moved to somewhere else
