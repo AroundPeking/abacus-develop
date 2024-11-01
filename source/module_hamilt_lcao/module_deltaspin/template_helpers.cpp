@@ -41,7 +41,7 @@ std::vector<std::vector<std::vector<double>>> SpinConstrain<double>::convert(
 }
 
 template <>
-void SpinConstrain<double>::run_lambda_loop(int outer_step)
+void SpinConstrain<double>::run_lambda_loop(int outer_step, bool rerun)
 {
 }
 

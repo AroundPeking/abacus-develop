@@ -64,7 +64,7 @@ public:
 
   std::vector<std::vector<std::vector<double>>> convert(const ModuleBase::matrix& orbMulP);
 
-  void run_lambda_loop(int outer_step);
+  void run_lambda_loop(int outer_step, bool rerun = true);
 
   /// @brief update the charge density for LCAO base with new lambda
   /// update the charge density and psi for PW base with new lambda

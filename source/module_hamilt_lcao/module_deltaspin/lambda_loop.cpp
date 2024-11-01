@@ -5,6 +5,7 @@
 #include <chrono>
 
 #include "basic_funcs.h"
+#include "module_parameter/parameter.h"
 
 // lambda = initial_lambda + delta_lambda/(spin2 - spin1) * (target_spin - spin1)
 /*inline void next_lambda(std::vector<ModuleBase::Vector3<double>>& initial_lambda,
@@ -98,7 +99,7 @@ void SpinConstrain<std::complex<double>>::run_lambda_loop(int outer_step)
 
 
 template <>
-void SpinConstrain<std::complex<double>>::run_lambda_loop(int outer_step)
+void SpinConstrain<std::complex<double>>::run_lambda_loop(int outer_step, bool rerun)
 {
     // init controlling parameters
     int nat = this->get_nat();
@@ -187,7 +188,7 @@ void SpinConstrain<std::complex<double>>::run_lambda_loop(int outer_step)
         if(i_step == 0)
         {
             // set current_sc_thr_ to max(rms_error * 0.001, this->sc_thr_)
-            this->current_sc_thr_ = std::max(rms_error * 0.001, this->sc_thr_);
+            this->current_sc_thr_ = std::max(rms_error * 0.01, this->sc_thr_);
         }
 #ifdef __MPI
 			duration = (double)(MPI_Wtime() - iterstart);
@@ -201,6 +202,29 @@ void SpinConstrain<std::complex<double>>::run_lambda_loop(int outer_step)
         {
             //add_scalar_multiply_2d(initial_lambda, dnu_last_step, 1.0, this->lambda_);
             this->update_psi_charge(dnu_last_step.data());
+            if(PARAM.inp.basis_type == "pw")
+            {
+                //double check Atomic spin moment
+                this->cal_Mi_pw();
+                subtract_2d(this->Mi_, this->target_mag_, delta_spin);
+                where_fill_scalar_2d(this->constrain_, 0, zero, delta_spin);
+                search = delta_spin;
+                for (int ia = 0; ia < nat; ia++)
+                {
+                    for (int ic = 0; ic < 3; ic++)
+                    {
+                        temp_1[ia][ic] = std::pow(delta_spin[ia][ic],2);
+                    }
+                }
+                mean_error = sum_2d(temp_1) / nat;
+                rms_error = std::sqrt(mean_error);
+                std::cout<<"Current RMS: "<<rms_error<<std::endl;
+                if(rms_error > this->current_sc_thr_ * 10 && rerun == true)
+                {
+                    std::cout<<"Error: RMS error is too large, rerun the loop"<<std::endl;
+                    this->run_lambda_loop(outer_step, false);
+                }
+            }
             break;
         }
 #ifdef __MPI

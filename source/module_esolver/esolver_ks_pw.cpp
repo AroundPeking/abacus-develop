@@ -769,12 +769,6 @@ void ESolver_KS_PW<T, Device>::iter_finish(const int iter) {
         GlobalC::ppcell.cal_effective_D(veff, this->pw_rhod, GlobalC::ucell);
     }
 
-    if (PARAM.inp.sc_mag_switch)
-    {
-        SpinConstrain<std::complex<double>>& sc = SpinConstrain<std::complex<double>>::getScInstance();
-        sc.cal_Mi_pw();
-    }
-
     // 1 means Harris-Foulkes functional
     // 2 means Kohn-Sham functional
     const int energy_type = 2;
