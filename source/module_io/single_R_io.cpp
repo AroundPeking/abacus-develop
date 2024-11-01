@@ -5,7 +5,7 @@
 
 inline void write_data(std::ofstream& ofs, const double& data)
 {
-    ofs << " " << std::fixed << std::scientific << std::setprecision(8) << data;
+    ofs << " " << std::fixed << std::scientific << std::setprecision(16) << data;
 }
 inline void write_data(std::ofstream& ofs, const std::complex<double>& data)
 {

@@ -5,12 +5,12 @@
 
 #ifndef RPA_LRI_HPP
 #define RPA_LRI_HPP
+#include "RPA_LRI.h"
+#include "module_parameter/parameter.h"
+
 #include <cstring>
 #include <fstream>
 #include <iostream>
-
-#include "RPA_LRI.h"
-#include "module_parameter/parameter.h"
 
 template <typename T, typename Tdata>
 void RPA_LRI<T, Tdata>::init(const MPI_Comm& mpi_comm_in, const K_Vectors& kv_in)
@@ -41,11 +41,8 @@ void RPA_LRI<T, Tdata>::cal_rpa_cv()
     const std::pair<std::vector<TA>, std::vector<std::vector<std::pair<TA, std::array<Tcell, Ndim>>>>> list_As_Vs
         = RI::Distribute_Equally::distribute_atoms(this->mpi_comm, atoms, period_Vs, 2, false);
 
-    std::map<TA, std::map<TAC, RI::Tensor<Tdata>>> Vs = exx_lri_rpa.cv.cal_Vs(list_As_Vs.first,
-                                                                              list_As_Vs.second[0],
-                                                                              {
-                                                                                  {"writable_Vws", true}
-    });
+    std::map<TA, std::map<TAC, RI::Tensor<Tdata>>> Vs
+        = exx_lri_rpa.cv.cal_Vs(list_As_Vs.first, list_As_Vs.second[0], {{"writable_Vws", true}});
     this->Vs_period = RI::RI_Tools::cal_period(Vs, period);
 
     const std::array<Tcell, Ndim> period_Cs = LRI_CV_Tools::cal_latvec_range<Tcell>(2);
@@ -56,13 +53,11 @@ void RPA_LRI<T, Tdata>::cal_rpa_cv()
               std::array<std::map<TA, std::map<TAC, RI::Tensor<Tdata>>>, 3>>
         Cs_dCs = exx_lri_rpa.cv.cal_Cs_dCs(list_As_Cs.first,
                                            list_As_Cs.second[0],
-                                           {
-                                               {"cal_dC",        false},
-                                               {"writable_Cws",  true },
-                                               {"writable_dCws", true },
-                                               {"writable_Vws",  false},
-                                               {"writable_dVws", false}
-    });
+                                           {{"cal_dC", false},
+                                            {"writable_Cws", true},
+                                            {"writable_dCws", true},
+                                            {"writable_Vws", false},
+                                            {"writable_dVws", false}});
     std::map<TA, std::map<TAC, RI::Tensor<Tdata>>>& Cs = std::get<0>(Cs_dCs);
     this->Cs_period = RI::RI_Tools::cal_period(Cs, period);
 }
@@ -77,9 +72,14 @@ void RPA_LRI<T, Tdata>::cal_postSCF_exx(const elecstate::DensityMatrix<T, Tdata>
     mix_DMk_2D.set_mixing(nullptr);
     mix_DMk_2D.mix(dm.get_DMK_vector(), true);
     const std::vector<std::map<TA, std::map<TAC, RI::Tensor<Tdata>>>> Ds
-        = GlobalV::GAMMA_ONLY_LOCAL
-        ? RI_2D_Comm::split_m2D_ktoR<Tdata>(kv, mix_DMk_2D.get_DMk_gamma_out(), *dm.get_paraV_pointer(), GlobalV::NSPIN)
-        : RI_2D_Comm::split_m2D_ktoR<Tdata>(kv, mix_DMk_2D.get_DMk_k_out(), *dm.get_paraV_pointer(), GlobalV::NSPIN);
+        = GlobalV::GAMMA_ONLY_LOCAL ? RI_2D_Comm::split_m2D_ktoR<Tdata>(kv,
+                                                                        mix_DMk_2D.get_DMk_gamma_out(),
+                                                                        *dm.get_paraV_pointer(),
+                                                                        GlobalV::NSPIN)
+                                    : RI_2D_Comm::split_m2D_ktoR<Tdata>(kv,
+                                                                        mix_DMk_2D.get_DMk_k_out(),
+                                                                        *dm.get_paraV_pointer(),
+                                                                        GlobalV::NSPIN);
 
     // set parameters for bare Coulomb potential
     GlobalC::exx_info.info_global.ccp_type = Conv_Coulomb_Pot_K::Ccp_Type::Hf;
@@ -164,7 +164,7 @@ void RPA_LRI<T, Tdata>::out_eigen_vector(const Parallel_Orbitals& parav, const p
                     is_wfc_ib_iw[is](ib_global, iw) = wfc_iks[iw];
                 }
             } // ib
-        }     // is
+        } // is
         ofs << ik + 1 << std::endl;
         for (int iw = 0; iw < GlobalV::NLOCAL; iw++)
         {
@@ -172,8 +172,8 @@ void RPA_LRI<T, Tdata>::out_eigen_vector(const Parallel_Orbitals& parav, const p
             {
                 for (int is = 0; is < npsin_tmp; is++)
                 {
-                    ofs << std::setw(21) << std::fixed << std::setprecision(15) << is_wfc_ib_iw[is](ib, iw).real()
-                        << std::setw(21) << std::fixed << std::setprecision(15) << is_wfc_ib_iw[is](ib, iw).imag()
+                    ofs << std::setw(30) << std::fixed << std::setprecision(20) << is_wfc_ib_iw[is](ib, iw).real()
+                        << std::setw(30) << std::fixed << std::setprecision(20) << is_wfc_ib_iw[is](ib, iw).imag()
                         << std::endl;
                 }
             }
@@ -247,7 +247,7 @@ void RPA_LRI<T, Tdata>::out_bands(const elecstate::ElecState* pelec)
             for (int ib = 0; ib != GlobalV::NBANDS; ib++)
             {
                 ofs << std::setw(5) << ib + 1 << "   " << std::setw(8) << pelec->wg(ik + is * nks_tot, ib) * nks_tot
-                    << std::setw(18) << std::fixed << std::setprecision(8) << pelec->ekb(ik + is * nks_tot, ib) / 2.0
+                    << std::setw(25) << std::fixed << std::setprecision(20) << pelec->ekb(ik + is * nks_tot, ib) / 2.0
                     << std::setw(18) << std::fixed << std::setprecision(8)
                     << pelec->ekb(ik + is * nks_tot, ib) * ModuleBase::Ry_to_eV << std::endl;
             }
@@ -285,7 +285,7 @@ void RPA_LRI<T, Tdata>::out_Cs()
                 {
                     for (int mu = 0; mu != tmp_Cs.shape[0]; mu++)
                     {
-                        ofs << std::setw(15) << std::fixed << std::setprecision(9) << tmp_Cs(mu, i, j) << std::endl;
+                        ofs << std::setw(30) << std::fixed << std::setprecision(20) << tmp_Cs(mu, i, j) << std::endl;
                     }
                 }
             }
