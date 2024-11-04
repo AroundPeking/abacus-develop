@@ -519,8 +519,7 @@ struct Input_para
      */
     bool sc_mag_switch = false;     ///< the switch to open the DeltaSpin function, 0: no
                                     ///< spin-constrained DFT; 1: constrain atomic magnetization
-    bool decay_grad_switch = false; ///< the switch to use the local approximation of gradient
-                                    ///< decay, 0: no local approximation; 1: apply the method
+    double sc_drop_thr = 1e-3;        ///< threshold for lambda-loop threshold cutoff in spin-constrained DFT
     double sc_thr = 1e-06;          ///< threshold for spin-constrained DFT in uB
     int nsc = 100;                  ///< maximum number of inner lambda loop
     int nsc_min = 2;                ///< minimum number of inner lambda loop

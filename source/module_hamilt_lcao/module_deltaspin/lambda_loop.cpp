@@ -187,8 +187,8 @@ void SpinConstrain<std::complex<double>>::run_lambda_loop(int outer_step, bool r
         rms_error = std::sqrt(mean_error);
         if(i_step == 0)
         {
-            // set current_sc_thr_ to max(rms_error * 0.001, this->sc_thr_)
-            this->current_sc_thr_ = std::max(rms_error * 0.01, this->sc_thr_);
+            // set current_sc_thr_ to max(rms_error * sc_drop_thr, this->sc_thr_)
+            this->current_sc_thr_ = std::max(rms_error * this->sc_drop_thr_, this->sc_thr_);
         }
 #ifdef __MPI
 			duration = (double)(MPI_Wtime() - iterstart);
@@ -201,7 +201,7 @@ void SpinConstrain<std::complex<double>>::run_lambda_loop(int outer_step, bool r
         if (this->check_rms_stop(outer_step, i_step, rms_error, duration, inner_loop_duration))
         {
             //add_scalar_multiply_2d(initial_lambda, dnu_last_step, 1.0, this->lambda_);
-            this->update_psi_charge(dnu_last_step.data());
+            this->update_psi_charge(dnu_last_step.data(), rerun);
             if(PARAM.inp.basis_type == "pw")
             {
                 //double check Atomic spin moment

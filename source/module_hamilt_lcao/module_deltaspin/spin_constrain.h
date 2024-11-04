@@ -29,7 +29,7 @@ public:
                int nsc_min_in,
                double alpha_trial_in,
                double sccut_in,
-               bool decay_grad_switch_in,
+               double sc_drop_thr_in,
                const UnitCell& ucell,
                std::string sc_file,
                int NPOL,
@@ -68,7 +68,7 @@ public:
 
   /// @brief update the charge density for LCAO base with new lambda
   /// update the charge density and psi for PW base with new lambda
-  void update_psi_charge(const ModuleBase::Vector3<double>* delta_lambda);
+  void update_psi_charge(const ModuleBase::Vector3<double>* delta_lambda, bool pw_solve = true);
 
   void calculate_delta_hcc(std::complex<double>* h_tmp, const std::complex<double>* becp_k, const ModuleBase::Vector3<double>* delta_lambda, const int nbands, const int nkb, const int* nh_iat);
 
@@ -197,14 +197,14 @@ public:
     /// set decay_grad from variable
     void set_decay_grad(const double* decay_grad_in, int ntype_in);
     /// set decay grad switch
-    void set_decay_grad_switch(bool decay_grad_switch_in);
+    void set_sc_drop_thr(double sc_drop_thr_in);
     /// set input parameters
     void set_input_parameters(double sc_thr_in,
                               int nsc_in,
                               int nsc_min_in,
                               double alpha_trial_in,
                               double sccut_in,
-                              bool decay_grad_switch_in);
+                              double sc_drop_thr_in);
     /// get sc_thr
     double get_sc_thr();
     /// get nsc
@@ -215,8 +215,8 @@ public:
     double get_alpha_trial();
     /// get sccut
     double get_sccut();
-    /// get decay_grad_switch
-    bool get_decay_grad_switch();
+    /// get sc_drop_thr
+    double get_sc_drop_thr();
     /// @brief set orbital parallel info
     void set_ParaV(Parallel_Orbitals* ParaV_in);
     /// @brief set parameters for solver
@@ -252,7 +252,7 @@ public:
      */
     int nsc_;
     int nsc_min_;
-    bool decay_grad_switch_ = false;
+    double sc_drop_thr_ = 1e-3;
     double sc_thr_; // in unit of uB
     double current_sc_thr_;
     std::vector<ModuleBase::Vector3<int>> constrain_;

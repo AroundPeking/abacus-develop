@@ -1539,9 +1539,9 @@ void ReadInput::item_others()
         this->add_item(item);
     }
     {
-        Input_Item item("decay_grad_switch");
-        item.annotation = "switch to control gradient break condition";
-        read_sync_bool(input.decay_grad_switch);
+        Input_Item item("sc_drop_thr");
+        item.annotation = "Convergence criterion ratio of lambda iteration in Spin-constrained DFT";
+        read_sync_double(input.sc_drop_thr);
         this->add_item(item);
     }
     {

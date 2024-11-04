@@ -395,7 +395,7 @@ TEST_F(InputParaTest, ParaRead)
     EXPECT_FALSE(param.inp.mdp.dump_vel);
     EXPECT_FALSE(param.inp.mdp.dump_virial);
     EXPECT_EQ(param.inp.sc_mag_switch, 0);
-    EXPECT_TRUE(param.inp.decay_grad_switch);
+    EXPECT_DOUBLE_EQ(param.inp.sc_drop_thr, 1e-3);
     EXPECT_DOUBLE_EQ(param.inp.sc_thr, 1e-4);
     EXPECT_EQ(param.inp.nsc, 50);
     EXPECT_EQ(param.inp.nsc_min, 4);

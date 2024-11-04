@@ -269,7 +269,7 @@ TYPED_TEST(SpinConstrainTest, SetScDecayGrad)
     this->sc.set_orbitalCounts(orbitalCounts);
     this->sc.Set_ScData_From_Json("./support/sc_f2.json");
     EXPECT_DOUBLE_EQ(this->sc.get_decay_grad(1), 0.9);
-    this->sc.set_decay_grad_switch(true);
+    this->sc.set_sc_drop_thr(true);
     this->sc.set_decay_grad();
     EXPECT_DOUBLE_EQ(this->sc.get_decay_grad().data()[1], 0.9 * 13.605698);
     int ntype = this->sc.get_ntype();
@@ -355,14 +355,14 @@ TYPED_TEST(SpinConstrainTest, SetInputParameters)
     int nsc_min = 2;
     double alpha_trial = 0.01;
     double sccut = 3.0;
-    bool decay_grad_switch = 1;
-    this->sc.set_input_parameters(sc_thr, nsc, nsc_min, alpha_trial, sccut, decay_grad_switch);
+    double sc_drop_thr = 1e-3;
+    this->sc.set_input_parameters(sc_thr, nsc, nsc_min, alpha_trial, sccut, sc_drop_thr);
     EXPECT_DOUBLE_EQ(this->sc.get_sc_thr(), sc_thr);
     EXPECT_EQ(this->sc.get_nsc(), nsc);
     EXPECT_EQ(this->sc.get_nsc_min(), nsc_min);
     EXPECT_DOUBLE_EQ(this->sc.get_alpha_trial(), alpha_trial / 13.605698);
     EXPECT_DOUBLE_EQ(this->sc.get_sccut(), sccut / 13.605698);
-    EXPECT_EQ(this->sc.get_decay_grad_switch(), decay_grad_switch);
+    EXPECT_EQ(this->sc.get_sc_drop_thr(), sc_drop_thr);
 }
 
 TYPED_TEST(SpinConstrainTest, SetSolverParameters)

@@ -537,7 +537,7 @@ void ESolver_KS_PW<T, Device>::before_scf(const int istep) {
                    PARAM.inp.nsc_min,
                    PARAM.inp.alpha_trial,
                    PARAM.inp.sccut,
-                   PARAM.inp.decay_grad_switch,
+                   PARAM.inp.sc_drop_thr,
                    GlobalC::ucell,
                    PARAM.inp.sc_file,
                    GlobalV::NPOL,

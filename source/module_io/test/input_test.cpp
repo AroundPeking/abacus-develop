@@ -379,7 +379,7 @@ TEST_F(InputTest, Default)
     EXPECT_TRUE(INPUT.mdp.dump_vel);
     EXPECT_TRUE(INPUT.mdp.dump_virial);
     EXPECT_EQ(INPUT.sc_mag_switch,0);
-    EXPECT_FALSE(INPUT.decay_grad_switch);
+    EXPECT_DOUBLE_EQ(INPUT.sc_drop_thr, 1e-3);
     EXPECT_DOUBLE_EQ(INPUT.sc_thr, 1e-6);
     EXPECT_EQ(INPUT.nsc, 100);
     EXPECT_EQ(INPUT.nsc_min, 2);
@@ -749,7 +749,7 @@ TEST_F(InputTest, Read)
     EXPECT_FALSE(INPUT.mdp.dump_vel);
     EXPECT_FALSE(INPUT.mdp.dump_virial);
     EXPECT_EQ(INPUT.sc_mag_switch, 0);
-    EXPECT_TRUE(INPUT.decay_grad_switch);
+    EXPECT_DOUBLE_EQ(INPUT.sc_drop_thr, 1e-3);
     EXPECT_DOUBLE_EQ(INPUT.sc_thr, 1e-4);
     EXPECT_EQ(INPUT.nsc, 50);
 	EXPECT_EQ(INPUT.nsc_min, 4);

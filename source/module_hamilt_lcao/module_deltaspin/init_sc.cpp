@@ -7,7 +7,7 @@ void SpinConstrain<FPTYPE>::init_sc(double sc_thr_in,
                                             int nsc_min_in,
                                             double alpha_trial_in,
                                             double sccut_in,
-                                            bool decay_grad_switch_in,
+                                            double sc_drop_thr_in,
                                             const UnitCell& ucell,
                                             std::string sc_file,
                                             int NPOL,
@@ -20,7 +20,7 @@ void SpinConstrain<FPTYPE>::init_sc(double sc_thr_in,
                                             void* psi_in,
                                             elecstate::ElecState* pelec_in)
 {
-    this->set_input_parameters(sc_thr_in, nsc_in, nsc_min_in, alpha_trial_in, sccut_in, decay_grad_switch_in);
+    this->set_input_parameters(sc_thr_in, nsc_in, nsc_min_in, alpha_trial_in, sccut_in, sc_drop_thr_in);
     this->set_atomCounts(ucell.get_atom_Counts());
     this->set_orbitalCounts(ucell.get_orbital_Counts());
     this->set_lnchiCounts(ucell.get_lnchi_Counts());

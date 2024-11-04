@@ -68,7 +68,7 @@ TYPED_TEST(SpinConstrainTest, InitSc)
     int nsc_min = 2;
     double alpha_trial = 0.01;
     double sccut = 3.0;
-    bool decay_grad_switch = 1;
+    bool sc_drop_thr = 1;
     K_Vectors kv;
     Parallel_Orbitals paraV;
     paraV.nloc = 2;
@@ -79,7 +79,7 @@ TYPED_TEST(SpinConstrainTest, InitSc)
                      nsc_min,
                      alpha_trial,
                      sccut,
-                     decay_grad_switch,
+                     sc_drop_thr,
                      *(this->ucell),
                      sc_file,
                      2,

@@ -450,14 +450,6 @@ void SpinConstrain<FPTYPE>::set_decay_grad()
     {
         this->decay_grad_[itype] = 0.0;
     }
-    // if (this->decay_grad_switch_)
-    //{
-    //     for (auto& itype_data: this->ScDecayGrad)
-    //     {
-    //         int itype = itype_data.first;
-    //         this->decay_grad_[itype] = itype_data.second * ModuleBase::Ry_to_eV;
-    //     }
-    // }
 }
 
 /// get decay_grad
@@ -491,14 +483,14 @@ void SpinConstrain<FPTYPE>::set_input_parameters(double sc_thr_in,
                                                  int nsc_min_in,
                                                  double alpha_trial_in,
                                                  double sccut_in,
-                                                 bool decay_grad_switch_in)
+                                                 double sc_drop_thr_in)
 {
     this->sc_thr_ = sc_thr_in;
     this->nsc_ = nsc_in;
     this->nsc_min_ = nsc_min_in;
     this->alpha_trial_ = alpha_trial_in / ModuleBase::Ry_to_eV;
     this->restrict_current_ = sccut_in / ModuleBase::Ry_to_eV;
-    this->decay_grad_switch_ = decay_grad_switch_in;
+    this->sc_drop_thr_ = sc_drop_thr_in;
 }
 
 /// get sc_thr
@@ -536,18 +528,18 @@ double SpinConstrain<FPTYPE>::get_sccut()
     return this->restrict_current_;
 }
 
-/// set decay_grad_switch
+/// set sc_drop_thr
 template <typename FPTYPE>
-void SpinConstrain<FPTYPE>::set_decay_grad_switch(bool decay_grad_switch_in)
+void SpinConstrain<FPTYPE>::set_sc_drop_thr(double sc_drop_thr_in)
 {
-    this->decay_grad_switch_ = decay_grad_switch_in;
+    this->sc_drop_thr_ = sc_drop_thr_in;
 }
 
-/// get decay_grad_switch
+/// get sc_drop_thr
 template <typename FPTYPE>
-bool SpinConstrain<FPTYPE>::get_decay_grad_switch()
+double SpinConstrain<FPTYPE>::get_sc_drop_thr()
 {
-    return this->decay_grad_switch_;
+    return this->sc_drop_thr_;
 }
 
 template <typename FPTYPE>

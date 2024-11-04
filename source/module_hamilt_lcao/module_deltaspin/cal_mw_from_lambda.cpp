@@ -273,7 +273,7 @@ void SpinConstrain<std::complex<double>>::cal_mw_from_lambda(int i_step, const M
 }
 
 template <>
-void SpinConstrain<std::complex<double>>::update_psi_charge(const ModuleBase::Vector3<double>* delta_lambda)
+void SpinConstrain<std::complex<double>>::update_psi_charge(const ModuleBase::Vector3<double>* delta_lambda, bool pw_solve)
 {
     ModuleBase::TITLE("SpinConstrain", "update_psi_charge");
     ModuleBase::timer::tick("SpinConstrain", "update_psi_charge");
@@ -333,8 +333,15 @@ void SpinConstrain<std::complex<double>>::update_psi_charge(const ModuleBase::Ve
             this->sub_s_save = nullptr;
             this->becp_save = nullptr;
 
-            hsolver::HSolver<std::complex<double>, base_device::DEVICE_CPU>* hsolver_t = static_cast<hsolver::HSolver<std::complex<double>, base_device::DEVICE_CPU>*>(this->phsol);
-            hsolver_t->solve(hamilt_t, psi_t[0], this->pelec, this->KS_SOLVER, false);
+            if(pw_solve)
+            {
+                hsolver::HSolver<std::complex<double>, base_device::DEVICE_CPU>* hsolver_t = static_cast<hsolver::HSolver<std::complex<double>, base_device::DEVICE_CPU>*>(this->phsol);
+                hsolver_t->solve(hamilt_t, psi_t[0], this->pelec, this->KS_SOLVER, false);
+            }
+            else
+            {// update charge density only
+                this->pelec->psiToRho(*psi_t);
+            }
         }
 #if ((defined __CUDA) || (defined __ROCM))
         else

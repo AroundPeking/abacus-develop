@@ -549,6 +549,10 @@ void ESolver_KS<T, Device>::runner(const int istep, UnitCell& ucell)
                     drho = p_chgmix->get_drho(pelec->charge, GlobalV::nelec);
                     hsolver_error = this->phsol->cal_hsolerror();
                 }
+                else if(PARAM.inp.sc_mag_switch == 1 && PARAM.inp.sc_scf_thr == 10.0)
+                {
+                    this->hamilt2density(istep, iter, diag_ethr);
+                }
             }
             // mixing will restart at this->p_chgmix->mixing_restart steps
             if (drho <= GlobalV::MIXING_RESTART && GlobalV::MIXING_RESTART > 0.0
