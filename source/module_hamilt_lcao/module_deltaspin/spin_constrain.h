@@ -105,6 +105,9 @@ public:
   /// collect_mw from matrix multiplication result
   void collect_MW(ModuleBase::matrix& MecMulP, const ModuleBase::ComplexMatrix& mud, int nw, int isk);
 
+  /// @brief use rerun to get higher precision in lambda_loop for PW base
+  bool higher_mag_prec = false;
+
 public:
     /**
      * important outter class pointers used in spin-constrained DFT

@@ -803,6 +803,15 @@ void ESolver_KS_PW<T, Device>::iter_finish(const int iter) {
             // functions into file WAVEFUNC.dat");
         }
     }
+    if(PARAM.inp.sc_mag_switch)
+    {
+        SpinConstrain<std::complex<double>>& sc = SpinConstrain<std::complex<double>>::getScInstance();
+        if(!sc.higher_mag_prec)
+        {
+            sc.higher_mag_prec = 
+                this->p_chgmix->if_scf_oscillate(iter, this->drho, PARAM.inp.sc_os_ndim, PARAM.inp.scf_thr_os);
+        }
+    }
 }
 
 template <typename T, typename Device>
