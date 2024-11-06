@@ -139,6 +139,8 @@ class ESolver_KS : public ESolver_FP
 
 		std::string basisname; //PW or LCAO
 
+		bool oscillate_esolver = false; // whether esolver is oscillated
+
 		void print_wfcfft(const Input_para& inp, std::ofstream &ofs);
 };	
 } // end of namespace

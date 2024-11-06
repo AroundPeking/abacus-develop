@@ -249,6 +249,8 @@ struct Input_para
     double dos_scale = 0.01;
     double dos_sigma = 0.07; ///< pengfei 2014-10-13
     int dos_nche = 100;      ///< orders of Chebyshev expansions for dos
+    double scf_thr_os = -0.01;  ///< drho threshold for oscillation
+    int scf_os_ndim = 0;       ///< number of old iterations used for oscillation detection
 
     // ==============   #Parameters (9.Molecular dynamics) ================
     MD_para mdp;
