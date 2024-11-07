@@ -105,7 +105,7 @@ void SpinConstrain<std::complex<double>>::cal_mw_from_lambda(int i_step, const M
     else
 #endif
     {
-        /*if (i_step == -1)
+        if (i_step == -1 && this->higher_mag_prec)
         {
             // std::cout<<__FILE__<<__LINE__<<"istep == 0"<<std::endl;
             if (PARAM.inp.device == "cpu")
@@ -125,7 +125,7 @@ void SpinConstrain<std::complex<double>>::cal_mw_from_lambda(int i_step, const M
             this->pelec->calculate_weights();
             this->cal_Mi_pw();
         }
-        else*/
+        else
         {
             this->zero_Mi();
             int size_becp = 0;
