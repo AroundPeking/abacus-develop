@@ -809,7 +809,7 @@ void ESolver_KS_PW<T, Device>::iter_finish(const int iter) {
         if(!sc.higher_mag_prec)
         {
             sc.higher_mag_prec = 
-                this->p_chgmix->if_scf_oscillate(iter, this->drho, PARAM.inp.sc_os_ndim, PARAM.inp.scf_thr_os);
+                this->p_chgmix->if_scf_oscillate(iter, this->drho, PARAM.inp.sc_os_ndim, PARAM.inp.scf_os_thr);
         }
     }
 }
