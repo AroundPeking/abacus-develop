@@ -810,6 +810,10 @@ void ESolver_KS_PW<T, Device>::iter_finish(const int iter) {
         {
             sc.higher_mag_prec = 
                 this->p_chgmix->if_scf_oscillate(iter, this->drho, PARAM.inp.sc_os_ndim, PARAM.inp.scf_os_thr);
+            if(sc.higher_mag_prec)
+            { // if oscillate, increase the precision of magnetization and do mixing_restart in next iteration
+                this->p_chgmix->mixing_restart_step = iter + 1;
+            }
         }
     }
 }

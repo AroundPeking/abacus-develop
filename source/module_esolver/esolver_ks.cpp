@@ -695,6 +695,7 @@ void ESolver_KS<T, Device>::runner(const int istep, UnitCell& ucell)
         // notice for restart
         if (GlobalV::MIXING_RESTART > 0 && iter == this->p_chgmix->mixing_restart_step - 1 && iter != GlobalV::SCF_NMAX)
         {
+            this->p_chgmix->mixing_restart_last = iter;
             std::cout << " SCF restart after this step!" << std::endl;
         }
     } // end scf iterations
