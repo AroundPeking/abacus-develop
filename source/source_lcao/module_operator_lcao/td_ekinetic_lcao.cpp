@@ -39,6 +39,10 @@ TDEkinetic<OperatorLCAO<TK, TR>>::~TDEkinetic()
     {
         delete this->hR_tmp;
     }
+    if (this->td_velocity != nullptr)
+    {
+        delete this->td_velocity;
+    }
     TD_Velocity::td_vel_op = nullptr;
 }
 
@@ -111,7 +115,7 @@ void TDEkinetic<OperatorLCAO<TK, TR>>::calculate_HR()
                     std::complex<double>* tmp_c[3] = {nullptr, nullptr, nullptr};
                     for (int i = 0; i < 3; i++)
                     {
-                        tmp_c[i] = td_velocity.get_current_term_pointer(i)->find_matrix(iat1, iat2, R_index2)->get_pointer();
+                        tmp_c[i] = td_velocity->get_current_term_pointer(i)->find_matrix(iat1, iat2, R_index2)->get_pointer();
                     }
                     this->cal_HR_IJR(iat1, iat2, paraV, dtau, tmp->get_pointer(), tmp_c);
                 }
@@ -237,15 +241,12 @@ void TDEkinetic<OperatorLCAO<TK, TR>>::cal_HR_IJR(const int& iat1,
 template <typename TK, typename TR>
 void TDEkinetic<OperatorLCAO<TK, TR>>::init_td()
 {
-    TD_Velocity::td_vel_op = &td_velocity;
+    td_velocity = new TD_Velocity(this->ucell);
+    TD_Velocity::td_vel_op = td_velocity;
     // calculate At in cartesian coorinates.
-    td_velocity.cal_cart_At(elecstate::H_TDDFT_pw::At);
-    this->cart_At = td_velocity.cart_At;
-
-    // mohan update 2025-04-20
-    ModuleBase::GlobalFunc::OUT(GlobalV::ofs_running, "Cartesian vector potential Ax(t)", cart_At[0]);
-    ModuleBase::GlobalFunc::OUT(GlobalV::ofs_running, "Cartesian vector potential Ay(t)", cart_At[1]);
-    ModuleBase::GlobalFunc::OUT(GlobalV::ofs_running, "Cartesian vector potential Az(t)", cart_At[2]);
+    td_velocity->cal_cart_At(elecstate::H_TDDFT_pw::At);
+    this->cart_At = td_velocity->cart_At;
+    std::cout << "cart_At: " << cart_At[0] << " " << cart_At[1] << " " << cart_At[2] << std::endl;
 }
 
 template <typename TK, typename TR>
@@ -362,7 +363,7 @@ void TDEkinetic<OperatorLCAO<TK, TR>>::contributeHR()
         // initialize current term if needed
         if (TD_Velocity::out_current)
         {
-            td_velocity.initialize_current_term(this->hR_tmp, paraV);
+            td_velocity->initialize_current_term(this->hR_tmp, paraV);
         }
         // calculate the values in hR_tmp
         this->calculate_HR();
@@ -405,7 +406,7 @@ void TDEkinetic<OperatorLCAO<std::complex<double>, double>>::contributeHk(int ik
                                                  spin_now,
                                                  1e-10,
                                                  *hR_tmp,
-                                                 td_velocity.HR_sparse_td_vel[spin_now]);
+                                                 td_velocity->HR_sparse_td_vel[spin_now]);
             }
             output_hR_done = true;
         }

@@ -1,15 +1,16 @@
 #ifndef TD_VELOCITY_H
 #define TD_VELOCITY_H
-#include "source_base/abfs-vector3_order.h"
-#include "source_base/timer.h"
-#include "source_lcao/module_hcontainer/hcontainer.h"
+#include "module_base/abfs-vector3_order.h"
+#include "module_base/timer.h"
+#include "module_hamilt_lcao/module_hcontainer/hcontainer.h"
+#include "module_hamilt_lcao/hamilt_lcaodft/hamilt_lcao.h"
 
 #include <map>
 // Class to store TDDFT velocity gauge infos.
 class TD_Velocity
 {
   public:
-    TD_Velocity();
+    TD_Velocity(const UnitCell* ucell_in);
     ~TD_Velocity();
 
     void init();
@@ -38,6 +39,20 @@ class TD_Velocity
     /// @brief Store the vector potential for tddft calculation
     ModuleBase::Vector3<double> cart_At;
 
+    //ETD
+    /// @brief pointer to the hybrid Hk matrix
+    std::complex<double>* hk_hybrid = nullptr;
+
+    void matrixHk_hybrid(hamilt::MatrixBlock<std::complex<double>>& hk_in, const Parallel_Orbitals* paraV) {
+      if(hk_hybrid!=nullptr)
+      {
+#ifdef __MPI
+        hk_in = hamilt::MatrixBlock<std::complex<double>>{hk_hybrid,(size_t)paraV->nrow,(size_t)paraV->ncol,paraV->desc};
+#endif
+      }
+    }
+    //ETD
+
     /// @brief calculate the At in cartesian coordinate
     void cal_cart_At(const ModuleBase::Vector3<double>& At);
 
@@ -48,11 +63,35 @@ class TD_Velocity
     {
         return this->current_term[i];
     }
+        // folding HR to hk, for mixing gague
+    void folding_HR_td(const hamilt::HContainer<double>& hR,
+                std::complex<double>* hk,
+                const ModuleBase::Vector3<double>& kvec_d_in,
+                const int ncol,
+                const int hk_type);
+
+    void folding_HR_td_c(const hamilt::HContainer<std::complex<double>>& hR,
+                std::complex<double>* hk,
+                const ModuleBase::Vector3<double>& kvec_d_in,
+                const int ncol,
+                const int hk_type);
+
+    const UnitCell* get_ucell()
+    {
+        return this->ucell;
+    }
+    int get_istep()
+    {
+      return istep;
+    }
 
     // For TDDFT velocity gauge, to fix the output of HR
     std::map<Abfs::Vector3_Order<int>, std::map<size_t, std::map<size_t, std::complex<double>>>> HR_sparse_td_vel[2];
 
   private:
+    /// @brief pointer to the unit cell
+    const UnitCell* ucell = nullptr;
+
     /// @brief read At from output file
     void read_cart_At();
 

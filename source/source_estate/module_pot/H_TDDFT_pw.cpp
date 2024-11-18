@@ -42,8 +42,18 @@ int H_TDDFT_pw::istep_int;
 double H_TDDFT_pw::lcut1;
 double H_TDDFT_pw::lcut2;
 
-// velocity gauge
+//velocity gauge
 ModuleBase::Vector3<double> H_TDDFT_pw::At;
+ModuleBase::Vector3<double> H_TDDFT_pw::At_laststep;
+//mixing gague
+ModuleBase::Vector3<double> H_TDDFT_pw::Et;
+//ETDP
+//energy correction
+//double H_TDDFT_pw::e_td = 0.0;
+//ETDP
+//ETD
+std::vector<double> H_TDDFT_pw::v_tdfield;
+//ETD
 
 // time domain parameters
 
@@ -99,12 +109,17 @@ void H_TDDFT_pw::cal_fixed_v(double* vl_pseudo)
 {
     ModuleBase::TITLE("H_TDDFT_pw", "cal_fixed_v");
 
-    // skip if velocity_gauge
-    if (stype == 1)
+    // skip if velocity_gague
+    if (stype != 0)
     {
         return;
     }
+    //ETD
+    H_TDDFT_pw::v_tdfield.resize(this->rho_basis_->nrxx);
+    H_TDDFT_pw::v_tdfield.assign(v_tdfield.size(), 0.0);
+    //ETD
 
+    std::cout<<"length gague"<<std::endl;
     // time evolve
     H_TDDFT_pw::istep++;
     H_TDDFT_pw::istep_int = istep;
@@ -161,6 +176,9 @@ void H_TDDFT_pw::cal_fixed_v(double* vl_pseudo)
         for (size_t ir = 0; ir < this->rho_basis_->nrxx; ++ir)
         {
             vl_pseudo[ir] += vext_space[ir] * vext_time;
+            //ETD
+            v_tdfield[ir] += vext_space[ir] * vext_time;
+            //ETD
         }
         count++;
     }
@@ -301,8 +319,10 @@ void H_TDDFT_pw::update_At()
     int ncut = 1;
     bool last = false;
     double out = 0.0;
-
-    for (auto direc: PARAM.inp.td_vext_dire)
+    At = At + At_laststep;
+    At_laststep.set(0.0, 0.0, 0.0);
+    Et.set(0.0, 0.0, 0.0);
+    for (auto direc: module_tddft::Evolve_elec::td_vext_dire_case)
     {
         last = false;
         // cut the integral space and initialize relevant parameters
@@ -329,7 +349,11 @@ void H_TDDFT_pw::update_At()
         switch (stype)
         {
         case 1:
-            At[direc - 1] -= out;
+            At_laststep[direc - 1] -= out;
+            break;
+        case 2:
+            At_laststep[direc-1] -= out;
+            Et[direc-1] += vext_time[0];
             break;
         default:
             std::cout << "space_domain_type of electric field is wrong" << std::endl;
@@ -373,7 +397,7 @@ double H_TDDFT_pw::cal_v_time(int t_type, const bool last)
         break;
 
     case 3:
-        vext_time = cal_v_time_heaviside();
+        vext_time = cal_v_time_heaviside(last);
         break;
 
         // case 4:
@@ -460,7 +484,7 @@ double H_TDDFT_pw::cal_v_time_trigonometric(const bool last)
     return vext_time;
 }
 
-double H_TDDFT_pw::cal_v_time_heaviside()
+double H_TDDFT_pw::cal_v_time_heaviside(const bool last)
 {
     double t0 = *(heavi_t0.begin() + heavi_count);
     double amp = *(heavi_amp.begin() + heavi_count);
@@ -473,7 +497,7 @@ double H_TDDFT_pw::cal_v_time_heaviside()
     {
         vext_time = 0.0;
     }
-    heavi_count++;
+    if(last)heavi_count++;
 
     return vext_time;
 }

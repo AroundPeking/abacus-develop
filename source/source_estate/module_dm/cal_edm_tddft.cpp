@@ -14,7 +14,15 @@ void cal_edm_tddft(Parallel_Orbitals& pv,
     const int nlocal = PARAM.globalv.nlocal;
     assert(nlocal >= 0);
 
-    auto _pelec = dynamic_cast<elecstate::ElecStateLCAO<std::complex<double>>*>(pelec);
+    dynamic_cast<elecstate::ElecStateLCAO<std::complex<double>>*>(this->pelec)
+        ->get_DM()
+        ->EDMK.resize(kv.get_nks());
+    for (int ik = 0; ik < kv.get_nks(); ++ik) {
+
+        p_hamilt->updateHk(ik);
+
+        std::complex<double>* tmp_dmk
+            = dynamic_cast<elecstate::ElecStateLCAO<std::complex<double>>*>(this->pelec)->get_DM()->get_DMK_pointer(ik);
 
     _pelec->get_DM()->EDMK.resize(kv.get_nks());
 
@@ -116,6 +124,10 @@ void cal_edm_tddft(Parallel_Orbitals& pv,
                 Htmp,
                 &one_int,
                 &one_int,
+                this->pv.desc,
+                Sinv,
+                &one_int,
+                &one_int,
                 pv.desc,
                 Sinv,
                 &one_int,
@@ -136,7 +148,7 @@ void cal_edm_tddft(Parallel_Orbitals& pv,
                 tmp1,
                 &one_int,
                 &one_int,
-                pv.desc,
+                this->pv.desc,
                 tmp_dmk,
                 &one_int,
                 &one_int,
@@ -174,6 +186,10 @@ void cal_edm_tddft(Parallel_Orbitals& pv,
                 &nlocal,
                 &one_float,
                 tmp_dmk,
+                &one_int,
+                &one_int,
+                this->pv.desc,
+                tmp3,
                 &one_int,
                 &one_int,
                 pv.desc,

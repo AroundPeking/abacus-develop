@@ -23,22 +23,23 @@
 #include "source_hsolver/diago_elpa.h"
 #endif
 
-#include "source_estate/module_pot/H_TDDFT_pw.h"
-#include "source_hamilt/module_xc/xc_functional.h"
-#include "source_lcao/module_deltaspin/spin_constrain.h"
-#include "source_lcao/module_hcontainer/hcontainer_funcs.h"
-#include "source_hsolver/hsolver_lcao.h"
-#include "module_operator_lcao/dftu_lcao.h"
-#include "module_operator_lcao/dspin_lcao.h"
-#include "module_operator_lcao/ekinetic_new.h"
-#include "module_operator_lcao/meta_lcao.h"
-#include "module_operator_lcao/nonlocal_new.h"
-#include "module_operator_lcao/op_dftu_lcao.h"
-#include "module_operator_lcao/op_exx_lcao.h"
-#include "module_operator_lcao/overlap_new.h"
-#include "module_operator_lcao/td_ekinetic_lcao.h"
-#include "module_operator_lcao/td_nonlocal_lcao.h"
-#include "module_operator_lcao/veff_lcao.h"
+#include "module_elecstate/potentials/H_TDDFT_pw.h"
+#include "module_hamilt_lcao/module_tddft/td_velocity.h"
+#include "module_hamilt_general/module_xc/xc_functional.h"
+#include "module_hamilt_lcao/module_hcontainer/hcontainer_funcs.h"
+#include "module_hsolver/hsolver_lcao.h"
+#include "operator_lcao/dftu_lcao.h"
+#include "operator_lcao/ekinetic_new.h"
+#include "operator_lcao/meta_lcao.h"
+#include "operator_lcao/nonlocal_new.h"
+#include "operator_lcao/op_dftu_lcao.h"
+#include "operator_lcao/op_exx_lcao.h"
+#include "operator_lcao/overlap_new.h"
+#include "operator_lcao/sc_lambda_lcao.h"
+#include "operator_lcao/td_ekinetic_lcao.h"
+#include "operator_lcao/td_nonlocal_lcao.h"
+#include "operator_lcao/td_pot_mixing.h"
+#include "operator_lcao/veff_lcao.h"
 
 namespace hamilt
 {
@@ -316,7 +317,7 @@ HamiltLCAO<TK, TR>::HamiltLCAO(Gint_Gamma* GG_in,
                                                                            two_center_bundle.overlap_orb_beta.get());
             // TDDFT velocity gauge will calculate full non-local potential including the original one and the
             // correction on its own. So the original non-local potential term should be skipped
-            if (PARAM.inp.esolver_type != "tddft" || elecstate::H_TDDFT_pw::stype != 1)
+            if (!TD_Velocity::tddft_velocity)
             {
                 this->getOperator()->add(nonlocal);
             }
@@ -346,10 +347,9 @@ HamiltLCAO<TK, TR>::HamiltLCAO(Gint_Gamma* GG_in,
         // TDDFT_velocity_gauge
         if (TD_Velocity::tddft_velocity)
         {
-            if (!TD_Velocity::init_vecpot_file)
-            {
-                elecstate::H_TDDFT_pw::update_At();
-            }
+            std::cout<<"velocity"<<std::endl;
+            if(!TD_Velocity::init_vecpot_file) { elecstate::H_TDDFT_pw::update_At();
+}
             Operator<TK>* td_ekinetic = new TDEkinetic<OperatorLCAO<TK, TR>>(this->hsk,
                                                                              this->hR,
                                                                              this->kv,
@@ -362,6 +362,21 @@ HamiltLCAO<TK, TR>::HamiltLCAO(Gint_Gamma* GG_in,
             Operator<TK>* td_nonlocal
                 = new TDNonlocal<OperatorLCAO<TK, TR>>(this->hsk, this->kv->kvec_d, this->hR, &ucell, orb, &grid_d);
             this->getOperator()->add(td_nonlocal);
+        }
+        if ((elecstate::H_TDDFT_pw::stype == 2))
+        {
+            std::cout<<"hybrid gague" <<std::endl;
+            elecstate::H_TDDFT_pw::update_At();
+            Operator<TK>* td_pot_mixing = new TD_mixing_pot<OperatorLCAO<TK, TR>>(this->hsk,
+                                                                           this->kv->kvec_d,
+                                                                           this->hR,
+                                                                           this->sR,
+                                                                           orb,
+                                                                           &GlobalC::ucell,
+                                                                           orb.cutoffs(),
+                                                                           &GlobalC::GridD,
+                                                                           two_center_bundle.kinetic_orb.get());
+            this->getOperator()->add(td_pot_mixing);
         }
         if (PARAM.inp.dft_plus_u)
         {
@@ -524,7 +539,38 @@ void HamiltLCAO<TK, TR>::updateSk(
 
     ModuleBase::timer::tick("HamiltLCAO", "updateSk");
 }
-
+template <>
+void HamiltLCAO<std::complex<double>, double>::updateSk(const int ik, const int hk_type)
+{
+    ModuleBase::TITLE("HamiltLCAO", "updateSk");
+    ModuleBase::timer::tick("HamiltLCAO", "updateSk");
+    ModuleBase::GlobalFunc::ZEROS(this->getSk(), this->get_size_hsk());
+    if (hk_type == 1) // collumn-major matrix for SK
+    {
+        const int nrow = this->hsk->get_pv()->get_row_size();
+        if(elecstate::H_TDDFT_pw::stype == 2)
+        {
+            TD_Velocity::td_vel_op->folding_HR_td(*this->sR, this->getSk(), this->kv->kvec_d[ik], nrow, 1);
+        }
+        else
+        {
+            hamilt::folding_HR(*this->sR, this->getSk(), this->kv->kvec_d[ik], nrow, 1);
+        }
+    }
+    else if (hk_type == 0) // row-major matrix for SK
+    {
+        const int ncol = this->hsk->get_pv()->get_col_size();
+        if(elecstate::H_TDDFT_pw::stype == 2)
+        {
+            TD_Velocity::td_vel_op->folding_HR_td(*this->sR, this->getSk(), this->kv->kvec_d[ik], ncol, 0);
+        }
+        else
+        {
+            hamilt::folding_HR(*this->sR, this->getSk(), this->kv->kvec_d[ik], ncol, 0);
+        }
+    }
+    ModuleBase::timer::tick("HamiltLCAO", "updateSk");
+}
 // case for nspin<4, gamma-only k-point
 template class HamiltLCAO<double, double>;
 // case for nspin<4, multi-k-points

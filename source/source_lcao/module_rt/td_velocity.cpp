@@ -16,8 +16,9 @@ int TD_Velocity::istep = -1;
 int TD_Velocity::max_istep = -1;
 std::vector<ModuleBase::Vector3<double>> TD_Velocity::At_from_file;
 
-TD_Velocity::TD_Velocity()
+TD_Velocity::TD_Velocity(const UnitCell* ucell_in)
 {
+    this->ucell = ucell_in;
     if (init_vecpot_file && istep == -1)
     {
         this->read_cart_At();
@@ -26,8 +27,9 @@ TD_Velocity::TD_Velocity()
 }
 TD_Velocity::~TD_Velocity()
 {
+    if(elecstate::H_TDDFT_pw::stype == 1)
     this->destroy_HS_R_td_sparse();
-    delete td_vel_op;
+    //delete td_vel_op;
     for (int dir = 0; dir < 3; dir++)
     {
         if (this->current_term[dir] != nullptr)

@@ -1,0 +1,20 @@
+#!/bin/bash
+
+CMAKE_INSTALL_PREFIX=/public/home/hlx/zaotian/ABACUS/git-new
+CMAKE_CXX_COMPILER=mpiicpc
+MPI_CXX_COMPILER=mpiicpc
+ELPA_DIR=/public/software/elpa/2021.11.002
+ELPA_LIBRARY=$ELPA_DIR/lib/libelpa_openmp.so
+CEREAL_INCLUDE_DIR=/public/software/cereal/1.3.2/include
+
+cmake -B build \
+-DCMAKE_CXX_COMPILER=$CMAKE_CXX_COMPILER \
+-DMPI_CXX_COMPILER=$MPI_CXX_COMPILER \
+-DCMAKE_INSTALL_PREFIX=$CMAKE_INSTALL_PREFIX \
+-DELPA_DIR=$ELPA_DIR \
+-DELPA_LIBRARY=$ELPA_LIBRARY \
+-DCEREAL_INCLUDE_DIR=$CEREAL_INCLUDE_DIR \
+-DDEBUG_INFO=OFF \
+
+cmake --build build/ -j 20
+cmake --install build/
