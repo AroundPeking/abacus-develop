@@ -661,6 +661,10 @@ void WF_atomic::random_t(std::complex<FPTYPE>* psi,
                     ModuleBase::libm::sincos(arg, &sinp, &cosp);
                     ppsi[ig+startig] = std::complex<FPTYPE>(rr * cosp, rr * sinp) / FPTYPE(gk2 + 1.0);
                 }
+                for(int ig=ng ;ig<npwx;++ig)
+                {
+                    ppsi[ig+startig] = std::complex<FPTYPE>(0.0, 0.0);
+                }
                 startig += npwx;
             }
         }
@@ -757,6 +761,10 @@ void WF_atomic::atomicrandom(ModuleBase::ComplexMatrix& psi,
                     double sinp, cosp;
                     ModuleBase::libm::sincos(arg, &sinp, &cosp);
                     psi(iw,startig+ig) *= (1.0 + 0.05 * std::complex<double>(rr * cosp, rr * sinp));
+                }
+                for(int ig=ng ;ig<npwx;++ig)
+                {
+                    psi(iw,startig+ig) = std::complex<double>(0.0, 0.0);
                 }
                 startig += npwx;
             }
