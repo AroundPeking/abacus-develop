@@ -190,7 +190,7 @@ void ReadInput::item_exx()
                           "start with a GGA-Loop, and then Hybrid-Loop";
         read_sync_bool(input.exx_separate_loop);
         item.check_value = [](const Input_Item& item, const Parameter& para) {
-            if (para.input.esolver_type == "tddft" && para.input.exx_separate_loop > 0)
+            if (para.input.esolver_type == "tddft" && para.input.exx_hse_omega != "default" && para.input.exx_separate_loop > 0)
             {
                 ModuleBase::WARNING_QUIT("ReadInput", "For RT-TDDFT with hybrid functionals, only exx_separate_loop=0 is supported");
             }
