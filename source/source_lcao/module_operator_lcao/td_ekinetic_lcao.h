@@ -83,7 +83,7 @@ class TDEkinetic<OperatorLCAO<TK,TR>> : public OperatorLCAO<TK, TR>
 
     virtual void set_HR_fixed(void*) override;
 
-    TD_Velocity* td_velocity;
+    TD_Velocity td_velocity;
 
   private:
 

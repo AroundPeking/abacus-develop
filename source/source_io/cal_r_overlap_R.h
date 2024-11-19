@@ -33,21 +33,8 @@ class cal_r_overlap_R
     bool binary = false;
 
     void init(const Parallel_Orbitals& pv, const LCAO_Orbitals& orb);
-        ModuleBase::Vector3<double> get_psi_r_psi(
-      const ModuleBase::Vector3<double>& R1,
-      const int& T1,
-      const int& L1,
-      const int& m1,
-      const int& N1,
-      const ModuleBase::Vector3<double>& R2,
-      const int& T2,
-      const int& L2,
-      const int& m2,
-      const int& N2
-    );
     void out_rR(const int& istep);
     void out_rR_other(const int& istep, const std::set<Abfs::Vector3_Order<int>>& output_R_coor);
-    
 
   private:
     void initialize_orb_table(const UnitCell& ucell, const LCAO_Orbitals& orb);
@@ -64,7 +51,6 @@ class cal_r_overlap_R
 
     Numerical_Orbital_Lm orb_r;
     std::vector<std::vector<std::vector<Numerical_Orbital_Lm>>> orbs;
-    std::vector<std::vector<Numerical_Orbital_Lm>> orbs_nonlocal;
 
     std::map<
         size_t,
@@ -75,16 +61,6 @@ class cal_r_overlap_R
         size_t,
         std::map<size_t, std::map<size_t, std::map<size_t, std::map<size_t, std::map<size_t, Center2_Orb::Orb21>>>>>>
         center2_orb21_r;
-
-    std::map<
-        size_t,
-        std::map<size_t, std::map<size_t, std::map<size_t, std::map<size_t, Center2_Orb::Orb11>>>>>
-        center2_orb11_nonlocal;
-
-    std::map<
-        size_t,
-        std::map<size_t, std::map<size_t, std::map<size_t, std::map<size_t, Center2_Orb::Orb21>>>>>
-        center2_orb21_r_nonlocal;
 
     const Parallel_Orbitals* ParaV;
 };

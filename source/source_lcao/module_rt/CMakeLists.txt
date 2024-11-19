@@ -10,11 +10,9 @@ if(ENABLE_LCAO)
         propagator_taylor.cpp
         propagator_etrs.cpp
         upsi.cpp
-        solve_psi.cpp
         td_velocity.cpp
         td_current.cpp
         snap_psibeta_half_tddft.cpp
-        td_folding_mixing.cpp
     )
 
     add_library(

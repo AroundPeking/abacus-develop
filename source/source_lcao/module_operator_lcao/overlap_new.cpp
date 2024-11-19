@@ -8,9 +8,6 @@
 #include "source_lcao/module_hcontainer/hcontainer_funcs.h"
 #include <vector>
 
-#include "module_elecstate/potentials/H_TDDFT_pw.h"
-#include "module_hamilt_lcao/module_tddft/td_velocity.h"
-
 template <typename TK, typename TR>
 hamilt::OverlapNew<hamilt::OperatorLCAO<TK, TR>>::OverlapNew(HS_Matrix_K<TK>* hsk_in,
                                                              const std::vector<ModuleBase::Vector3<double>>& kvec_d_in,
@@ -220,43 +217,7 @@ void hamilt::OverlapNew<hamilt::OperatorLCAO<TK, TR>>::contributeHk(int ik)
 
     ModuleBase::timer::tick("OverlapNew", "contributeHk");
 }
-// contributeHk()
-template <>
-void hamilt::OverlapNew<hamilt::OperatorLCAO<std::complex<double>, double>>::contributeHk(int ik)
-{
-    ModuleBase::TITLE("OverlapNew", "contributeHk");
-    ModuleBase::timer::tick("OverlapNew", "contributeHk");
-    // set SK to zero and then calculate SK for each k vector
-    this->hsk->set_zero_sk();
-    if (ModuleBase::GlobalFunc::IS_COLUMN_MAJOR_KS_SOLVER(PARAM.inp.ks_solver))
-    {
-        const int nrow = this->SR->get_atom_pair(0).get_paraV()->get_row_size();
-        if(elecstate::H_TDDFT_pw::stype == 2)
-        {
-            TD_Velocity::td_vel_op->folding_HR_td(*this->SR, this->hsk->get_sk(), this->kvec_d[ik], nrow, 1);
-        }
-        else
-        {
-            hamilt::folding_HR(*this->SR, this->hsk->get_sk(), this->kvec_d[ik], nrow, 1);
-        }
-    }
-    else
-    {
-        const int ncol = this->SR->get_atom_pair(0).get_paraV()->get_col_size();
-        if(elecstate::H_TDDFT_pw::stype == 2)
-        {
-            TD_Velocity::td_vel_op->folding_HR_td(*this->SR, this->hsk->get_sk(), this->kvec_d[ik], ncol, 0);
-        }
-        else
-        {
-            hamilt::folding_HR(*this->SR, this->hsk->get_sk(), this->kvec_d[ik], ncol, 0);
-        }
-    }
-    // update kvec_d_old
-    this->kvec_d_old = this->kvec_d[ik];
 
-    ModuleBase::timer::tick("OverlapNew", "contributeHk");
-}
 template <typename TK, typename TR>
 TK* hamilt::OverlapNew<hamilt::OperatorLCAO<TK, TR>>::getSk()
 {

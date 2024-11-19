@@ -48,9 +48,6 @@ struct fenergy
 
     double ekinetic = 0.0;  /// kinetic energy, used in OFDFT
     double eion_elec = 0.0; /// ion-electron interaction energy, used in OFDFT
-    //ETDP
-    //double e_tdfield = 0.0;
-    //ETDP
 
     double calculate_etot();
     double calculate_harris();

@@ -238,49 +238,7 @@ void cal_r_overlap_R::init(const UnitCell& ucell,const Parallel_Orbitals& pv, co
     ModuleBase::timer::tick("cal_r_overlap_R", "init");
     return;
 }
-ModuleBase::Vector3<double> cal_r_overlap_R::get_psi_r_psi(const ModuleBase::Vector3<double>& R1,
-                                                           const int& T1,
-                                                           const int& L1,
-                                                           const int& m1,
-                                                           const int& N1,
-                                                           const ModuleBase::Vector3<double>& R2,
-                                                           const int& T2,
-                                                           const int& L2,
-                                                           const int& m2,
-                                                           const int& N2)
-{
-    ModuleBase::Vector3<double> origin_point(0.0, 0.0, 0.0);
-    double factor = sqrt(ModuleBase::FOUR_PI / 3.0);
-    const ModuleBase::Vector3<double>& distance = R2 - R1;
 
-    double overlap_o = center2_orb11[T1][T2][L1][N1][L2].at(N2).cal_overlap(origin_point, distance, m1, m2);
-
-    double overlap_x = -1 * factor
-                       * center2_orb21_r[T1][T2][L1][N1][L2].at(N2).cal_overlap(origin_point,
-                                                                                distance,
-                                                                                m1,
-                                                                                1,
-                                                                                m2); // m =  1
-
-    double overlap_y = -1 * factor
-                       * center2_orb21_r[T1][T2][L1][N1][L2].at(N2).cal_overlap(origin_point,
-                                                                                distance,
-                                                                                m1,
-                                                                                2,
-                                                                                m2); // m = -1
-
-    double overlap_z = factor
-                       * center2_orb21_r[T1][T2][L1][N1][L2].at(N2).cal_overlap(origin_point,
-                                                                                distance,
-                                                                                m1,
-                                                                                0,
-                                                                                m2); // m =  0
-
-    ModuleBase::Vector3<double> temp_prp
-        = ModuleBase::Vector3<double>(overlap_x, overlap_y, overlap_z) + R1 * overlap_o;
-
-    return temp_prp;
-}
 void cal_r_overlap_R::out_rR(const int& istep)
 {
     ModuleBase::TITLE("cal_r_overlap_R", "out_rR");

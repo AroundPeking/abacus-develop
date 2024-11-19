@@ -142,9 +142,6 @@ class ElecState
     double get_hartree_energy();
     double get_etot_efield();
     double get_etot_gatefield();
-    //ETDP
-    //double get_etot_tdfield();
-    //ETDP
 
     double get_solvent_model_Ael();
     double get_solvent_model_Acav();

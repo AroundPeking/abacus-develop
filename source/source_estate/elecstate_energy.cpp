@@ -3,7 +3,6 @@
 #include "module_base/global_variable.h"
 #include "module_base/parallel_reduce.h"
 #include "module_parameter/parameter.h"
-#include "module_elecstate/potentials/H_TDDFT_pw.h"
 #ifdef USE_PAW
 #include "module_hamilt_general/module_xc/xc_functional.h"
 #include "module_hamilt_pw/hamilt_pwdft/global.h"
@@ -101,14 +100,6 @@ double ElecState::cal_delta_eband(const UnitCell& ucell) const
     // on the fly calculate it here by v_effective - v_fixed
     const double* v_eff = this->pot->get_effective_v(0);
     const double* v_fixed = this->pot->get_fixed_v();
-    // ETD
-    if(H_TDDFT_pw::v_tdfield.size()==0)
-    {
-        H_TDDFT_pw::v_tdfield.resize(this->charge->nrxx);
-        H_TDDFT_pw::v_tdfield.assign(H_TDDFT_pw::v_tdfield.size(), 0.0);
-    }
-    const double* v_TD = H_TDDFT_pw::v_tdfield.data();
-    // ETD
     const double* v_ofk = nullptr;
     const bool v_ofk_flag = (XC_Functional::get_ked_flag());
 
@@ -159,7 +150,7 @@ double ElecState::cal_delta_eband(const UnitCell& ucell) const
 
         for (int ir = 0; ir < this->charge->rhopw->nrxx; ir++)
         {
-            deband_aux -= this->charge->rho[0][ir] * (v_eff[ir] - v_fixed[ir] + v_TD[ir]);
+            deband_aux -= this->charge->rho[0][ir] * (v_eff[ir] - v_fixed[ir]);
             if (get_xc_func_type() == 3 || get_xc_func_type() == 5)
             {
                 deband_aux -= this->charge->kin_r[0][ir] * v_ofk[ir];
@@ -172,7 +163,7 @@ double ElecState::cal_delta_eband(const UnitCell& ucell) const
             v_ofk = this->pot->get_effective_vofk(1);
             for (int ir = 0; ir < this->charge->rhopw->nrxx; ir++)
             {
-                deband_aux -= this->charge->rho[1][ir] * (v_eff[ir] - v_fixed[ir] + v_TD[ir]);
+                deband_aux -= this->charge->rho[1][ir] * (v_eff[ir] - v_fixed[ir]);
                 if (get_xc_func_type() == 3 || get_xc_func_type() == 5)
                 {
                     deband_aux -= this->charge->kin_r[1][ir] * v_ofk[ir];
@@ -303,11 +294,6 @@ void ElecState::cal_energies(const int type)
 
     //! energy from gate-field
     this->f_en.gatefield = get_etot_gatefield();
-
-    //ETDP
-    //! energy from TD-field
-    //this->f_en.e_tdfield = get_etot_tdfield();
-    //ETDP
 
     //! energy from implicit solvation model 
     if (PARAM.inp.imp_sol)

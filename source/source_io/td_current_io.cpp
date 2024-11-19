@@ -61,28 +61,10 @@ void ModuleIO::cal_tmp_DM(elecstate::DensityMatrix<std::complex<double>, double>
             // only ik
             if (PARAM.inp.nspin != 4)
             {
-                double arg_td = 0.0;
-                if(elecstate::H_TDDFT_pw::stype == 2)
-                {
-                    //new
-                    //cal tddft phase for mixing gague
-                    const int iat1 = tmp_ap_real.get_atom_i();
-                    const int iat2 = tmp_ap_real.get_atom_j();
-                    ModuleBase::Vector3<double> dtau = TD_Velocity::td_vel_op->get_ucell()->cal_dtau(iat1, iat2, r_index);
-                    double& tmp_lat0 = TD_Velocity::td_vel_op->get_ucell()->lat0;
-                    arg_td = TD_Velocity::td_vel_op->cart_At * dtau * tmp_lat0;
-
-                    /*std::cout << "arg_td " << arg_td << std::endl;
-                    std::cout << "cart_At " << TD_Velocity::td_vel_op->cart_At[0] << " "<< TD_Velocity::td_vel_op->cart_At[1] << " " << TD_Velocity::td_vel_op->cart_At[2] << std::endl;
-                    std::cout << "dtau " << dtau[0] << " "<< dtau[1] << " " << dtau[2] << std::endl;
-                    std::cout << "ucell->lat0 " << tmp_lat0 << std::endl;
-                    std::cout << "iat1 " << iat1 << " " << "iat2 " << iat2 << std::endl;*/
-                    //new
-                }
                 // cal k_phase
                 // if TK==std::complex<double>, kphase is e^{ikR}
                 const ModuleBase::Vector3<double> dR(r_index.x, r_index.y, r_index.z);
-                const double arg = (DM_real.get_kv_pointer()->kvec_d[ik] * dR) * ModuleBase::TWO_PI + arg_td;
+                const double arg = (DM_real.get_kvec_d()[ik] * dR) * ModuleBase::TWO_PI;
                 double sinp, cosp;
                 ModuleBase::libm::sincos(arg, &sinp, &cosp);
                 std::complex<double> kphase = std::complex<double>(cosp, sinp);
@@ -249,7 +231,8 @@ void ModuleIO::write_current(const UnitCell& ucell,
                         double Rx = ra.info[iat][cb][0];
                         double Ry = ra.info[iat][cb][1];
                         double Rz = ra.info[iat][cb][2];
-                        //std::cout<< "iat1: " << iat1 << " iat2: " << iat2 << " Rx: " << Rx << " Ry: " << Ry << " Rz:" << Rz << std::endl;
+                        // std::cout<< "iat1: " << iat1 << " iat2: " << iat2 << " Rx: " << Rx << " Ry: " << Ry << " Rz:
+                        // " << Rz << std::endl;
                         //  get BaseMatrix
                         hamilt::BaseMatrix<double>* tmp_matrix_real
                             = DM_real.get_DMR_pointer(is)->find_matrix(iat1, iat2, Rx, Ry, Rz);
@@ -290,10 +273,7 @@ void ModuleIO::write_current(const UnitCell& ucell,
                                     rvy = tmp_m_rvy->get_value(mu, nu);
                                     rvz = tmp_m_rvz->get_value(mu, nu);
                                 }
-                                // std::cout<<"mu: "<< mu <<" nu: "<< nu << std::endl;
-                                // std::cout<<"dm2d1_real: "<< dm2d1_real << " dm2d1_imag: "<< dm2d1_imag << std::endl;
-                                // std::cout<<"rvz: "<< rvz.real() << " " << rvz.imag() << std::endl;
-                                local_current_ik[0] -= dm2d1_real * rvx.real() - dm2d1_imag * rvx.imag();    
+                                local_current_ik[0] -= dm2d1_real * rvx.real() - dm2d1_imag * rvx.imag();
                                 local_current_ik[1] -= dm2d1_real * rvy.real() - dm2d1_imag * rvy.imag();
                                 local_current_ik[2] -= dm2d1_real * rvz.real() - dm2d1_imag * rvz.imag();
 

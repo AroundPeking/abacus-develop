@@ -5,9 +5,6 @@
 #include "source_lcao/module_hcontainer/hcontainer_funcs.h"
 #include "source_hsolver/hsolver_lcao.h"
 
-#include "module_elecstate/potentials/H_TDDFT_pw.h"
-#include "module_hamilt_lcao/module_tddft/td_velocity.h"
-
 #include "module_parameter/parameter.h"
 
 #ifdef __ELPA
@@ -214,6 +211,7 @@ void OperatorLCAO<TK, TR>::init(const int ik_in) {
             }
         }
         this->contributeHk(ik_in);
+
         break;
     }
     default: {
@@ -255,38 +253,6 @@ void OperatorLCAO<TK, TR>::contributeHk(int ik) {
     {
         const int ncol = this->hsk->get_pv()->get_col_size();
         hamilt::folding_HR(*this->hR, this->hsk->get_hk(), this->kvec_d[ik], ncol, 0);
-    }
-    ModuleBase::timer::tick("OperatorLCAO", "contributeHk");
-}
-
-// contributeHk()
-template <>
-void OperatorLCAO<std::complex<double>, double>::contributeHk(int ik) {
-    ModuleBase::TITLE("OperatorLCAO", "contributeHk");
-    ModuleBase::timer::tick("OperatorLCAO", "contributeHk");
-    if(ModuleBase::GlobalFunc::IS_COLUMN_MAJOR_KS_SOLVER(PARAM.inp.ks_solver))
-    {
-        const int nrow = this->hsk->get_pv()->get_row_size();
-        if(elecstate::H_TDDFT_pw::stype == 2)
-        {
-            TD_Velocity::td_vel_op->folding_HR_td(*this->hR, this->hsk->get_hk(), this->kvec_d[ik], nrow, 1);
-        }
-        else
-        {
-            hamilt::folding_HR(*this->hR, this->hsk->get_hk(), this->kvec_d[ik], nrow, 1);
-        }
-    }
-    else
-    {
-        const int ncol = this->hsk->get_pv()->get_col_size();
-        if(elecstate::H_TDDFT_pw::stype == 2)
-        {
-            TD_Velocity::td_vel_op->folding_HR_td(*this->hR, this->hsk->get_hk(), this->kvec_d[ik], ncol, 0);
-        }
-        else
-        {
-            hamilt::folding_HR(*this->hR, this->hsk->get_hk(), this->kvec_d[ik], ncol, 0);
-        }
     }
     ModuleBase::timer::tick("OperatorLCAO", "contributeHk");
 }
