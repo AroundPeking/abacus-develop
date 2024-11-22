@@ -72,16 +72,49 @@ void RPA_LRI<T, Tdata>::cal_rpa_cv(const UnitCell& ucell)
 }
 
 template <typename T, typename Tdata>
-void RPA_LRI<T, Tdata>::cal_postSCF_exx(const elecstate::DensityMatrix<T, Tdata>& dm,
-    const MPI_Comm& mpi_comm_in,
-    const K_Vectors& kv)
+void RPA_LRI<T, Tdata>::cal_postSCF_exx(const int istep, 
+                                        const elecstate::DensityMatrix<T, Tdata>& dm,
+                                        const MPI_Comm& mpi_comm_in,
+                                        const K_Vectors& kv,
+                                        const LCAO_Orbitals& orb)
 {
-    exx_lri_rpa.mix_DMk_2D.set_nks(kv.nks, GlobalV::GAMMA_ONLY_LOCAL);
-    exx_lri_rpa.mix_DMk_2D.set_mixing(nullptr);
-    exx_lri_rpa.mix_DMk_2D.mix(dm.get_DMK_vector(), true);
-    exx_lri_rpa.init(mpi_comm_in, kv);
-    exx_lri_rpa.cal_exx_ions();
-    exx_lri_rpa.cal_exx_elec(*dm.get_paraV_pointer());
+    Mix_DMk_2D mix_DMk_2D;
+    bool exx_spacegroup_symmetry = (PARAM.inp.nspin < 4 && ModuleSymmetry::Symmetry::symm_flag == 1);
+    if (exx_spacegroup_symmetry)
+        {mix_DMk_2D.set_nks(kv.get_nkstot_full() * (PARAM.inp.nspin == 2 ? 2 : 1), PARAM.globalv.gamma_only_local);}
+    else
+        {mix_DMk_2D.set_nks(kv.get_nks(), PARAM.globalv.gamma_only_local);}
+        
+    mix_DMk_2D.set_mixing(nullptr);
+    ModuleSymmetry::Symmetry_rotation symrot;
+    if (exx_spacegroup_symmetry)
+    {
+        const std::array<Tcell, Ndim> period = RI_Util::get_Born_vonKarmen_period(kv);
+        symrot.find_irreducible_sector(GlobalC::ucell.symm, GlobalC::ucell.atoms, GlobalC::ucell.st,
+            RI_Util::get_Born_von_Karmen_cells(period), period, GlobalC::ucell.lat);
+        symrot.cal_Ms(kv, GlobalC::ucell, *dm.get_paraV_pointer());
+        mix_DMk_2D.mix(symrot.restore_dm(kv, dm.get_DMK_vector(), *dm.get_paraV_pointer()), true);
+    }
+    else { mix_DMk_2D.mix(dm.get_DMK_vector(), true); }
+    
+    const std::vector<std::map<TA, std::map<TAC, RI::Tensor<Tdata>>>>
+		Ds = PARAM.globalv.gamma_only_local
+        ? RI_2D_Comm::split_m2D_ktoR<Tdata>(kv, mix_DMk_2D.get_DMk_gamma_out(), *dm.get_paraV_pointer(), PARAM.inp.nspin)
+        : RI_2D_Comm::split_m2D_ktoR<Tdata>(kv, mix_DMk_2D.get_DMk_k_out(), *dm.get_paraV_pointer(), PARAM.inp.nspin, exx_spacegroup_symmetry);
+    
+    // set parameters for bare Coulomb potential
+    GlobalC::exx_info.info_global.ccp_type = Conv_Coulomb_Pot_K::Ccp_Type::Hf;
+    GlobalC::exx_info.info_global.hybrid_alpha = 1;
+    GlobalC::exx_info.info_ri.ccp_rmesh_times = PARAM.inp.rpa_ccp_rmesh_times;
+
+    exx_lri_rpa.init(mpi_comm_in, kv, orb);
+    exx_lri_rpa.cal_exx_ions(0, PARAM.inp.out_ri_cv);
+
+    if (exx_spacegroup_symmetry && PARAM.inp.exx_symmetry_realspace) {
+        exx_lri_rpa.cal_exx_elec(Ds, *dm.get_paraV_pointer(), &symrot);
+    } else {
+        exx_lri_rpa.cal_exx_elec(Ds, *dm.get_paraV_pointer());
+}
     // cout<<"postSCF_Eexx: "<<exx_lri_rpa.Eexx<<endl;
 }
 
