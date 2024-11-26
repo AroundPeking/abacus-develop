@@ -1292,25 +1292,59 @@ TEST_F(InputTest, Item_test2)
         it->second.reset_value(it->second, param);
         EXPECT_EQ(param.input.exx_erfc_alpha[0], "0.25");
 
-        param.input.exx_erfc_alpha[0] = "default";
+        param.input.exx_hybrid_alpha = "default";
+        param.input.dft_functional = "none";
+        it->second.reset_value(it->second, param);
+        EXPECT_EQ(param.input.exx_hybrid_alpha, "0");
+
+        param.input.exx_hybrid_alpha = "-1";
+        testing::internal::CaptureStdout();
+        EXPECT_EXIT(it->second.check_value(it->second, param), ::testing::ExitedWithCode(0), "");
+        output = testing::internal::GetCapturedStdout();
+        EXPECT_THAT(output, testing::HasSubstr("NOTICE"));
+    }
+    { // exx_hybrid_beta
+        auto it = find_label("exx_hybrid_beta", readinput.input_lists);
+        param.input.exx_hybrid_beta = "default";
+        param.input.dft_functional = "lc_pbe";
+        it->second.reset_value(it->second, param);
+        EXPECT_EQ(param.input.exx_hybrid_beta, "-1");
+
+        param.input.exx_hybrid_beta = "default";
         param.input.dft_functional = "lc_wpbe";
         it->second.reset_value(it->second, param);
-        EXPECT_EQ(param.input.exx_erfc_alpha[0], "-1");
+        EXPECT_EQ(param.input.exx_hybrid_beta, "-1");
 
-        param.input.exx_erfc_alpha[0] = "default";
+        param.input.exx_hybrid_beta = "default";
         param.input.dft_functional = "lrc_wpbe";
         it->second.reset_value(it->second, param);
-        EXPECT_EQ(param.input.exx_erfc_alpha[0], "-1");
+        EXPECT_EQ(param.input.exx_hybrid_beta, "-1");
 
-        param.input.exx_erfc_alpha[0] = "default";
+        param.input.exx_hybrid_beta = "default";
         param.input.dft_functional = "lrc_wpbeh";
         it->second.reset_value(it->second, param);
-        EXPECT_EQ(param.input.exx_erfc_alpha[0], "-0.8");
+        EXPECT_EQ(param.input.exx_hybrid_beta, "-0.8");
 
-        param.input.exx_erfc_alpha[0] = "default";
+        param.input.exx_hybrid_beta = "default";
         param.input.dft_functional = "cam_pbeh";
         it->second.reset_value(it->second, param);
-        EXPECT_EQ(param.input.exx_erfc_alpha[0], "0.8");
+        EXPECT_EQ(param.input.exx_hybrid_beta, "0.8");
+
+        param.input.exx_hybrid_beta = "default";
+        param.input.dft_functional = "hse";
+        it->second.reset_value(it->second, param);
+        EXPECT_EQ(param.input.exx_hybrid_beta, "0.25");
+
+        param.input.exx_hybrid_beta= "default";
+        param.input.dft_functional = "none";
+        it->second.reset_value(it->second, param);
+        EXPECT_EQ(param.input.exx_hybrid_beta, "0");
+
+        param.input.exx_hybrid_beta = "-1";
+        testing::internal::CaptureStdout();
+        EXPECT_EXIT(it->second.check_value(it->second, param), ::testing::ExitedWithCode(0), "");
+        output = testing::internal::GetCapturedStdout();
+        EXPECT_THAT(output, testing::HasSubstr("NOTICE"));
     }
     { // exx_erfc_omega
         auto it = find_label("exx_erfc_omega", readinput.input_lists);

@@ -8,11 +8,36 @@ void ReadInput::item_exx()
 {
     // EXX
     {
-        Input_Item item("exx_fock_alpha");
-        item.annotation = "fraction of Fock exchange 1/r in hybrid functionals";
-        item.read_value = [](const Input_Item& item, Parameter& para)
-        {
-            para.input.exx_fock_alpha = item.str_values;
+        Input_Item item("exx_hybrid_alpha");
+        item.annotation = "fraction of Fock exchange in hybrid functionals";
+        read_sync_string(input.exx_hybrid_alpha);
+        item.reset_value = [](const Input_Item& item, Parameter& para) {
+            if (para.input.exx_hybrid_alpha == "default")
+            {
+                std::string& dft_functional = para.input.dft_functional;
+                std::string dft_functional_lower = dft_functional;
+                std::transform(dft_functional.begin(), dft_functional.end(), dft_functional_lower.begin(), tolower);
+                if (dft_functional_lower == "hf" ||
+                    dft_functional_lower == "lc_pbe" || dft_functional_lower == "lc_wpbe" ||
+                    dft_functional_lower == "lrc_wpbe" || dft_functional_lower == "lrc_wpbeh")
+                {
+                    para.input.exx_hybrid_alpha = "1";
+                }
+                else if (dft_functional_lower == "pbe0" || dft_functional_lower == "hse"
+                         || dft_functional_lower == "scan0")
+                {
+                    para.input.exx_hybrid_alpha = "0.25";
+                }
+                else if (dft_functional_lower == "cam_pbeh")
+                {
+                    para.input.exx_hybrid_alpha = "0.2";
+                }
+                else
+                { // no exx in scf, but will change to non-zero in
+                    // postprocess like rpa
+                    para.input.exx_hybrid_alpha = "0";
+                }
+            }
         };
         item.check_value = [](const Input_Item& item, const Parameter& para) {
             const double exx_hybrid_alpha_value = std::stod(para.input.exx_hybrid_alpha);
@@ -36,81 +61,34 @@ void ReadInput::item_exx()
         this->add_item(item);
     }
     {
-        Input_Item item("exx_cam_alpha");
-        item.annotation = "fraction of the full-range parts of Fock exchange in range-separated hybrid funtionals";
-        read_sync_string(input.exx_cam_alpha);
+        Input_Item item("exx_hybrid_beta");
+        item.annotation = "another fraction of Fock exchange in range-separated hybrid funtionals";
+        read_sync_string(input.exx_hybrid_beta);
         item.reset_value = [](const Input_Item& item, Parameter& para) {
-            if (para.input.exx_cam_alpha == "default")
-            {
-                std::string& dft_functional = para.input.dft_functional;
-                std::string dft_functional_lower = dft_functional;
-                std::transform(dft_functional.begin(), dft_functional.end(), dft_functional_lower.begin(), tolower);
-                if (dft_functional_lower == "hf" ||
-                    dft_functional_lower == "lc_pbe" || dft_functional_lower == "lc_wpbe" ||
-                    dft_functional_lower == "lrc_wpbe" || dft_functional_lower == "lrc_wpbeh" ||
-                    dft_functional_lower == "muller" || dft_functional_lower == "power"      // added by jghan 2024-07-06
-                    || dft_functional_lower == "wp22" )
-                {
-                    para.input.exx_fock_alpha = {"1"};
-                }
-                else if (dft_functional_lower == "pbe0" || dft_functional_lower == "scan0")
-                {
-                    para.input.exx_fock_alpha = {"0.25"};
-                }
-                else if (dft_functional_lower == "b3lyp")
-                {
-                    para.input.exx_fock_alpha = {"0.2"};
-                }
-                else if (dft_functional_lower == "cam_pbeh")
-                {
-                    para.input.exx_fock_alpha = {"0.2"};
-                }
-                else
-                {   // no exx in scf, but will change to non-zero in postprocess like rpa
-                    para.input.exx_fock_alpha = {};
-                }
-            }
-        };
-        this->add_item(item);
-    }
-    {
-        Input_Item item("exx_erfc_alpha");
-        item.annotation = "fraction of exchange erfc(wr)/r in hybrid functionals";
-        item.read_value = [](const Input_Item& item, Parameter& para)
-        {
-            para.input.exx_erfc_alpha = item.str_values;
-        };
-        item.reset_value = [](const Input_Item& item, Parameter& para) 
-        {
-            if (para.input.exx_erfc_alpha.size()==1 &&  para.input.exx_erfc_alpha[0]=="default")
+            if (para.input.exx_hybrid_beta == "default")
             {
                 std::string& dft_functional = para.input.dft_functional;
                 std::string dft_functional_lower = dft_functional;
                 std::transform(dft_functional.begin(), dft_functional.end(), dft_functional_lower.begin(), tolower);
                 if (dft_functional_lower == "hse")
                 {
-                    para.input.exx_erfc_alpha = {"0.25"};
+                    para.input.exx_hybrid_beta = "-1";
                 }
                 else if (dft_functional_lower == "lrc_wpbeh")
                 {
-                    para.input.exx_erfc_alpha = {"-0.8"};
+                    para.input.exx_hybrid_beta = "-0.8";
                 }
                 else if (dft_functional_lower == "cam_pbeh")
                 {
-                    para.input.exx_erfc_alpha = {"0.8"};
+                    para.input.exx_hybrid_beta = "0.8";
                 }
                 else if (dft_functional_lower == "cwp22")
                 {
-                    para.input.exx_erfc_alpha = {"1"};
-                }
-                else if (dft_functional_lower == "lc_pbe" || dft_functional_lower == "lc_wpbe" ||
-                    dft_functional_lower == "lrc_wpbe" || dft_functional_lower == "wp22")
-                {
-                    para.input.exx_erfc_alpha = {"-1"};
+                    para.input.exx_hybrid_beta = "0.25";
                 }
                 else
-                { // no exx in scf, but will change to non-zero in postprocess like rpa
-                    para.input.exx_erfc_alpha = {};
+                {
+                    para.input.exx_hybrid_beta = "0";
                 }
             }
         };

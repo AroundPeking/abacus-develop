@@ -16,11 +16,12 @@ int XC_Functional::func_type = 0;
 bool XC_Functional::ked_flag = false;
 bool XC_Functional::use_libxc = true;
 double XC_Functional::hybrid_alpha = 0.25;
-std::map<int, double> XC_Functional::scaling_factor_xc = { {1, 1.0} }; // added by jghan, 2024-10-10
+double XC_Functional::hybrid_beta = 0.0;
 
-void XC_Functional::set_hybrid_alpha(const double alpha_in)
+void XC_Functional::set_hybrid_alpha(const double alpha_in, const double beta_in)
 {
     hybrid_alpha = alpha_in;
+    hybrid_beta = beta_in;
 }
 
 void XC_Functional::set_xc_first_loop(const UnitCell& ucell)

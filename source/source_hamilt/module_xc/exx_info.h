@@ -29,6 +29,7 @@ struct Exx_Info
 
         Conv_Coulomb_Pot_K::Ccp_Type ccp_type;
         double hybrid_alpha = 0.25;
+        double hybrid_beta = 0.0;
         double hse_omega = 0.11;
         double mixing_beta_for_loop1 = 1.0;
 
@@ -62,7 +63,10 @@ struct Exx_Info
 
     struct Exx_Info_RI
     {
-        const std::map<Conv_Coulomb_Pot_K::Coulomb_Type, std::vector<std::map<std::string,std::string>>> &coulomb_param;
+        const Conv_Coulomb_Pot_K::Ccp_Type& ccp_type;
+        const double& hse_omega;
+        const double& hybrid_alpha;
+        const double& hybrid_beta;
 
         bool real_number = false;
 
@@ -82,7 +86,8 @@ struct Exx_Info
         int abfs_Lmax = 0; // tmp
 
         Exx_Info_RI(const Exx_Info::Exx_Info_Global& info_global)
-            : coulomb_param(info_global.coulomb_param)
+            : ccp_type(info_global.ccp_type), hse_omega(info_global.hse_omega), hybrid_alpha(info_global.hybrid_alpha),
+              hybrid_beta(info_global.hybrid_beta)
         {
         }
     };

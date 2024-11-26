@@ -520,8 +520,7 @@ struct Input_para
     // ==========================================================
     std::string exx_hybrid_alpha = "default";   ///< fraction of Fock exchange in hybrid functionals
     std::string exx_hse_omega = "default";                ///< range-separation parameter in HSE/CAM/LR functional
-    std::string exx_cam_alpha = "default";                ///< range-separation parameter in CAM/LR functional
-    std::string exx_cam_beta = "default";                ///< range-separation parameter in CAM/LR functional
+    std::string exx_hybrid_beta = "default";                ///< range-separation parameter in CAM/LR functional
     bool exx_use_ewald = false;              ///< if 1, Ewald method is used for HF or CAM/LR hybrid functions 
     int exx_fq_type = 1;                        /// auxiliary-function fq used in correction to V(q) at q->0
     bool exx_separate_loop = true;              ///< if 1, a two-step method is employed, else it will start

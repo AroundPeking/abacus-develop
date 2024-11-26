@@ -276,8 +276,10 @@ TEST_F(InputParaTest, ParaRead)
     EXPECT_EQ(param.inp.vdw_cutoff_period[0], 3);
     EXPECT_EQ(param.inp.vdw_cutoff_period[1], 3);
     EXPECT_EQ(param.inp.vdw_cutoff_period[2], 3);
-    EXPECT_DOUBLE_EQ(std::stod(param.inp.exx_fock_alpha[0]), 1);
-    EXPECT_DOUBLE_EQ(std::stod(param.inp.exx_erfc_alpha[0]), 0.25);
+    EXPECT_EQ(std::stod(param.inp.exx_hybrid_alpha), 0.25);
+    EXPECT_EQ(std::stod(param.inp.exx_hybrid_beta), 0.0);
+    EXPECT_EQ(param.inp.exx_use_ewald, 0);
+    EXPECT_EQ(param.inp.exx_fq_type, 1);
     EXPECT_EQ(param.inp.exx_real_number, "1");
     EXPECT_EQ(param.inp.exx_singularity_correction, "limits");
     EXPECT_DOUBLE_EQ(std::stod(param.inp.exx_erfc_omega[0]), 0.11);
