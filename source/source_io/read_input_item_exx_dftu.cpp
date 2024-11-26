@@ -30,12 +30,6 @@ void ReadInput::item_exx()
         this->add_item(item);
     }
     {
-        Input_Item item("exx_ewald_qdiv");
-        item.annotation = "the order of q-divergence in auxiliary function";
-        read_sync_double(input.exx_ewald_qdiv);
-        this->add_item(item);
-    }
-    {
         Input_Item item("exx_use_ewald");
         item.annotation = "if 1, use Ewald method to construct V matrix";
         read_sync_bool(input.exx_use_ewald);

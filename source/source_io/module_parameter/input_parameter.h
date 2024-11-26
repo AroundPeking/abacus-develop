@@ -524,7 +524,6 @@ struct Input_para
     std::string exx_cam_beta = "default";                ///< range-separation parameter in CAM/LR functional
     bool exx_use_ewald = false;              ///< if 1, Ewald method is used for HF or CAM/LR hybrid functions 
     int exx_fq_type = 1;                        /// auxiliary-function fq used in correction to V(q) at q->0
-    double exx_ewald_qdiv = 2;                      /// the order of q-divergence in auxiliary function
     bool exx_separate_loop = true;              ///< if 1, a two-step method is employed, else it will start
                                                 ///< with a GGA-Loop, and then Hybrid-Loop
     int exx_hybrid_step = 100;                  ///< the maximal electronic iteration number in

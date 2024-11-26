@@ -49,6 +49,17 @@ struct Exx_Info
     };
     Exx_Info_Lip info_lip;
 
+    struct Exx_Info_Ewald
+    {
+        Singular_Value::Fq_type fq_type;
+        const bool& use_ewald;
+
+        Exx_Info_Ewald(const Exx_Info::Exx_Info_Global& info_global) : use_ewald(info_global.use_ewald)
+        {
+        }
+    };
+    Exx_Info_Ewald info_ewald;
+
     struct Exx_Info_RI
     {
         const std::map<Conv_Coulomb_Pot_K::Coulomb_Type, std::vector<std::map<std::string,std::string>>> &coulomb_param;
