@@ -1042,6 +1042,13 @@ void ESolver_KS_LCAO<TK, TR>::iter_finish(int iter)
     if (PARAM.inp.sc_mag_switch)
     {
         SpinConstrain<TK>& sc = SpinConstrain<TK>::getScInstance();
+	if(!sc.mag_converged())
+	{//enter lambda_loop if oscillate occurred
+	    if(this->p_chgmix->if_scf_oscillate(iter, this->drho, PARAM.inp.sc_os_ndim, PARAM.inp.scf_os_thr))
+	    {
+	        sc.set_mag_converged(true);
+	    }
+	}
         sc.cal_MW(iter);
     }
 
