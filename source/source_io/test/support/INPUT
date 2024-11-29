@@ -276,6 +276,9 @@ exx_hybrid_alpha               default #
 exx_hybrid_beta                   default #
 exx_hse_omega                  default #
 exx_separate_loop              1 #0 or 1
+exx_use_ewald                  0 
+exx_spencer_type                  0 
+exx_fq_type                    1 
 exx_hybrid_step                100 #
 exx_mixing_beta                1.0 #
 exx_fock_lambda              0.3 #

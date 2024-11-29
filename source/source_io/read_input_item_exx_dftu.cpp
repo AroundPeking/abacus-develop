@@ -61,6 +61,12 @@ void ReadInput::item_exx()
         this->add_item(item);
     }
     {
+        Input_Item item("exx_spencer_type");
+        item.annotation = "set Spencer scheme type";
+        read_sync_int(input.exx_spencer_type);
+        this->add_item(item);
+    }
+    {
         Input_Item item("exx_hybrid_beta");
         item.annotation = "another fraction of Fock exchange in range-separated hybrid funtionals";
         read_sync_string(input.exx_hybrid_beta);

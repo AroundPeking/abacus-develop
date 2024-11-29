@@ -69,7 +69,7 @@ struct Exx_Info
         const double& hybrid_beta;
 
         bool real_number = false;
-        const int Rcut_type = 1;
+        int Rcut_type = 1;
 
         double pca_threshold = 0;
         std::vector<std::string> files_abfs;
