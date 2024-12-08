@@ -50,7 +50,7 @@ void SpinConstrain<std::complex<double>>::calculate_delta_hcc(std::complex<doubl
         base_device::DEVICE_GPU* ctx = {};
         base_device::DEVICE_CPU* cpu_ctx = {};
         base_device::memory::resize_memory_op<std::complex<double>, base_device::DEVICE_GPU>()(ctx, ps_pointer, size_ps);
-        base_device::memory::synchronize_memory_op<std::complex<double>, base_device::DEVICE_GPU, base_device::DEVICE_CPU>()(cpu_ctx, ctx, ps_pointer, ps.data(), size_ps);   
+        base_device::memory::synchronize_memory_op<std::complex<double>, base_device::DEVICE_GPU, base_device::DEVICE_CPU>()(ctx, cpu_ctx, ps_pointer, ps.data(), size_ps);   
 #endif
     }
     else if (PARAM.inp.device == "cpu")
@@ -65,7 +65,7 @@ void SpinConstrain<std::complex<double>>::calculate_delta_hcc(std::complex<doubl
     {
 #if ((defined __CUDA) || (defined __ROCM))
         base_device::DEVICE_GPU* ctx = {};
-        hsolver::gemm_op<std::complex<double>, base_device::DEVICE_CPU>()(
+        hsolver::gemm_op<std::complex<double>, base_device::DEVICE_GPU>()(
             ctx,
             transa,
             transb,
@@ -463,7 +463,7 @@ void SpinConstrain<std::complex<double>>::update_psi_charge(const ModuleBase::Ve
             }
             else
             {// update charge density only
-                this->pelec->psiToRho(*psi_t);
+                reinterpret_cast<elecstate::ElecStatePW<std::complex<double>, base_device::DEVICE_GPU>*>(this->pelec)->psiToRho(*psi_t);
             }
             
         }
