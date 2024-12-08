@@ -18,6 +18,21 @@ void SpinConstrain<std::complex<double>>::calculate_delta_hcc(std::complex<doubl
 {
     int sum = 0;
     int size_ps = nkb * 2 * nbands;
+    std::complex<double>* becp_cpu = nullptr;
+    if(PARAM.inp.device == "gpu")
+    {
+#if ((defined __CUDA) || (defined __ROCM))
+        base_device::DEVICE_GPU* ctx = {};
+        base_device::DEVICE_CPU* cpu_ctx = {};
+        base_device::memory::resize_memory_op<std::complex<double>, base_device::DEVICE_CPU>()(ctx, becp_cpu, size_ps);
+        base_device::memory::synchronize_memory_op<std::complex<double>, base_device::DEVICE_CPU, base_device::DEVICE_GPU>()(cpu_ctx, ctx, becp_cpu, becp_k, size_ps);   
+#endif
+    }
+    else if (PARAM.inp.device == "cpu")
+    {
+        becp_cpu = becp_k;
+    }
+
     std::vector<std::complex<double>> ps(size_ps, 0.0);
     for (int iat = 0; iat < this->Mi_.size(); iat++)
     {
@@ -34,8 +49,8 @@ void SpinConstrain<std::complex<double>>::calculate_delta_hcc(std::complex<doubl
             for (int ip = 0; ip < nproj; ip++)
             {
                 const int becpind = ib * nkb + sum + ip;
-                const std::complex<double> becp1 = becp_k[becpind];
-                const std::complex<double> becp2 = becp_k[becpind + nkb];
+                const std::complex<double> becp1 = becp_cpu[becpind];
+                const std::complex<double> becp2 = becp_cpu[becpind + nkb];
                 ps[becpind] += coefficients0 * becp1
                                 + coefficients2 * becp2;
                 ps[becpind + nkb] += coefficients1 * becp1
@@ -83,6 +98,7 @@ void SpinConstrain<std::complex<double>>::calculate_delta_hcc(std::complex<doubl
             nbands
         );
         base_device::memory::delete_memory_op<std::complex<double>, base_device::DEVICE_GPU>()(ctx, ps_pointer);
+        base_device::memory::delete_memory_op<std::complex<double>, base_device::DEVICE_CPU>()(ctx, becp_cpu);
 #endif
 
     }
