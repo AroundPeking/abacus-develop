@@ -5,6 +5,7 @@
 #include "spin_constrain.h"
 #include "module_hamilt_pw/hamilt_pwdft/onsite_projector.h"
 #include "module_base/parallel_reduce.h"
+#include "module_elecstate/elecstate_pw.h"
 
 #ifdef __LCAO
 #include "module_elecstate/elecstate_lcao.h"
