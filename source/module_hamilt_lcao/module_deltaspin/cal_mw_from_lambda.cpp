@@ -47,6 +47,8 @@ void SpinConstrain<std::complex<double>>::calculate_delta_hcc(std::complex<doubl
     if(PARAM.inp.device == "gpu")
     {
 #if ((defined __CUDA) || (defined __ROCM))
+        base_device::DEVICE_GPU* ctx = {};
+        base_device::DEVICE_CPU* cpu_ctx = {};
         base_device::memory::resize_memory_op<std::complex<double>, base_device::DEVICE_GPU>()(ctx, ps_pointer, size_ps);
         base_device::memory::synchronize_memory_op<std::complex<double>, base_device::DEVICE_GPU, base_device::DEVICE_CPU>()(cpu_ctx, ctx, ps_pointer, ps.data(), size_ps);   
 #endif
@@ -59,28 +61,49 @@ void SpinConstrain<std::complex<double>>::calculate_delta_hcc(std::complex<doubl
     char transa = 'C';
     char transb = 'N';
     const int npm = nkb * 2;
-    base_device::DEVICE_CPU* ctx = {};
-    hsolver::gemm_op<std::complex<double>, base_device::DEVICE_CPU>()(
-        ctx,
-        transa,
-        transb,
-        nbands,
-        nbands,
-        npm,
-        &ModuleBase::ONE,
-        becp_k,
-        npm,
-        ps_pointer,
-        npm,
-        &ModuleBase::ONE,
-        h_tmp,
-        nbands
-    );
-    if(PARAM.inp.device == "gpu")
+    if (PARAM.inp.device == "gpu")
     {
 #if ((defined __CUDA) || (defined __ROCM))
+        base_device::DEVICE_GPU* ctx = {};
+        hsolver::gemm_op<std::complex<double>, base_device::DEVICE_CPU>()(
+            ctx,
+            transa,
+            transb,
+            nbands,
+            nbands,
+            npm,
+            &ModuleBase::ONE,
+            becp_k,
+            npm,
+            ps_pointer,
+            npm,
+            &ModuleBase::ONE,
+            h_tmp,
+            nbands
+        );
         base_device::memory::delete_memory_op<std::complex<double>, base_device::DEVICE_GPU>()(ctx, ps_pointer);
 #endif
+
+    }
+    else if (PARAM.inp.device == "cpu")
+    {
+        base_device::DEVICE_CPU* ctx = {};
+        hsolver::gemm_op<std::complex<double>, base_device::DEVICE_CPU>()(
+            ctx,
+            transa,
+            transb,
+            nbands,
+            nbands,
+            npm,
+            &ModuleBase::ONE,
+            becp_k,
+            npm,
+            ps_pointer,
+            npm,
+            &ModuleBase::ONE,
+            h_tmp,
+            nbands
+        );
     }
 }
 
