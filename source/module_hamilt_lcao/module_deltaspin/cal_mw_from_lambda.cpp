@@ -24,13 +24,13 @@ void SpinConstrain<std::complex<double>>::calculate_delta_hcc(std::complex<doubl
 #if ((defined __CUDA) || (defined __ROCM))
         base_device::DEVICE_GPU* ctx = {};
         base_device::DEVICE_CPU* cpu_ctx = {};
-        base_device::memory::resize_memory_op<std::complex<double>, base_device::DEVICE_CPU>()(ctx, becp_cpu, size_ps);
+        base_device::memory::resize_memory_op<std::complex<double>, base_device::DEVICE_CPU>()(cpu_ctx, becp_cpu, size_ps);
         base_device::memory::synchronize_memory_op<std::complex<double>, base_device::DEVICE_CPU, base_device::DEVICE_GPU>()(cpu_ctx, ctx, becp_cpu, becp_k, size_ps);   
 #endif
     }
     else if (PARAM.inp.device == "cpu")
     {
-        becp_cpu = becp_k;
+        becp_cpu = const_cast<std::complex<double>*>(becp_k);
     }
 
     std::vector<std::complex<double>> ps(size_ps, 0.0);
@@ -98,7 +98,7 @@ void SpinConstrain<std::complex<double>>::calculate_delta_hcc(std::complex<doubl
             nbands
         );
         base_device::memory::delete_memory_op<std::complex<double>, base_device::DEVICE_GPU>()(ctx, ps_pointer);
-        base_device::memory::delete_memory_op<std::complex<double>, base_device::DEVICE_CPU>()(ctx, becp_cpu);
+        delete[] becp_cpu;
 #endif
 
     }
