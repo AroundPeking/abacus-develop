@@ -7,6 +7,8 @@
 #include "xc_functional.h"
 #include "module_base/parallel_reduce.h"
 #include "module_base/timer.h"
+#include "module_parameter/parameter.h"
+#include <unistd.h>
 
 // [etxc, vtxc, v] = XC_Functional::v_xc(...)
 std::tuple<double,double,ModuleBase::matrix> XC_Functional::v_xc(
@@ -190,6 +192,8 @@ std::tuple<double,double,ModuleBase::matrix> XC_Functional::v_xc_libxc(		// Peiz
         (GlobalV::NSPIN == 1 || ( GlobalV::NSPIN ==4 && !GlobalV::DOMAG && !GlobalV::DOMAG_Z))
         ? 1 : 2;
 
+    // variable nspin = 2 for normal noncollinear (nspin = 4) calculation
+
     double etxc = 0.0;
     double vtxc = 0.0;
     ModuleBase::matrix v(nspin,nrxx);
@@ -229,7 +233,7 @@ std::tuple<double,double,ModuleBase::matrix> XC_Functional::v_xc_libxc(		// Peiz
             for( int ir=0; ir<nrxx; ++ir )
                 rho[ir*nspin+is] = chr->rho[is][ir] + 1.0/nspin*chr->rho_core[ir];
     }
-    else
+    else // noncollinear
     {
         amag.resize(nrxx);
         #ifdef _OPENMP
@@ -239,9 +243,10 @@ std::tuple<double,double,ModuleBase::matrix> XC_Functional::v_xc_libxc(		// Peiz
         {
             const double arhox = std::abs( chr->rho[0][ir] + chr->rho_core[ir] );
             amag[ir] = std::sqrt( std::pow(chr->rho[1][ir],2) + std::pow(chr->rho[2][ir],2) + std::pow(chr->rho[3][ir],2) );
-            const double amag_clip = (amag[ir]<arhox) ? amag[ir] : arhox;
-            rho[ir*nspin+0] = (arhox + amag_clip) / 2.0;
-            rho[ir*nspin+1] = (arhox - amag_clip) / 2.0;
+            //const double amag_clip = (amag[ir]<arhox) ? amag[ir] : arhox;
+            const double amag_clip = amag[ir];
+            rho[ir*nspin+0] = (arhox + amag_clip) / 2.0; // n_{+}
+            rho[ir*nspin+1] = (arhox - amag_clip) / 2.0; // n_{-}
         }        
     }
 
@@ -251,28 +256,107 @@ std::tuple<double,double,ModuleBase::matrix> XC_Functional::v_xc_libxc(		// Peiz
     {
         // calculating grho
         gdr.resize( nspin );
-        for( int is=0; is!=nspin; ++is )
+        for (int is = 0; is < nspin; is++)
         {
-            std::vector<double> rhor(nrxx);
-            #ifdef _OPENMP
-            #pragma omp parallel for schedule(static, 1024)
-            #endif
-            for(int ir=0; ir<nrxx; ++ir)
-                rhor[ir] = rho[ir*nspin+is];
-            //------------------------------------------
-            // initialize the charge density array in reciprocal space
-            // bring electron charge density from real space to reciprocal space
-            //------------------------------------------
-            std::vector<std::complex<double>> rhog(chr->rhopw->npw);
-            chr->rhopw->real2recip(rhor.data(), rhog.data());
-
-            //-------------------------------------------
-            // compute the gradient of charge density and
-            // store the gradient in gdr[is]
-            //-------------------------------------------
             gdr[is].resize(nrxx);
-            XC_Functional::grad_rho(rhog.data(), gdr[is].data(), chr->rhopw, tpiba);
-        } // end for(is)
+        }
+
+
+        // new block
+        // <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
+        if (GlobalV::NSPIN == 4 && PARAM.inp.gga_grad == 2)
+        {
+            // compute mag_part = mag_i / |mag|
+            std::vector<double> mag_part(3 * nrxx, 0.0);
+            for (int ir = 0; ir < nrxx; ir++)
+            {
+                double mag_norm = std::sqrt(std::pow(chr->rho[1][ir], 2) + std::pow(chr->rho[2][ir], 2) + std::pow(chr->rho[3][ir], 2));
+                if(mag_norm > 1e-12)
+                {
+                    mag_part[ir] = chr->rho[1][ir] / mag_norm;
+                    mag_part[ir + nrxx] = chr->rho[2][ir] / mag_norm;
+                    mag_part[ir + 2 * nrxx] = chr->rho[3][ir] / mag_norm;
+                }
+            }
+
+            // compute \nabla rho' = \nabla rho_core + \nabla rho
+            std::complex<double>* rhogsum1 = new std::complex<double>[chr->rhopw->npw];
+            const double fac0 = GlobalV::NSPIN == 2 ? 0.5 : 1.0;
+            for (int ig = 0; ig < chr->rhopw->npw; ig++)
+            {
+                rhogsum1[ig] = chr->rhog[0][ig] + fac0 * chr->rhog_core[ig];
+            }
+
+            ModuleBase::Vector3<double>* gdr1 = new ModuleBase::Vector3<double>[nrxx];
+            XC_Functional::grad_rho(rhogsum1, gdr1, chr->rhopw, tpiba);
+
+            // for non-collinear case
+            // rho' has been calculated in rhotmp1, rhog' has been calculated in rhogsum1, \nabla rho' has been calculated
+            // in gdr1
+            std::complex<double>* tmp_recip = new std::complex<double>[chr->rhopw->npw];
+            ModuleBase::Vector3<double>* gdr_mag = new ModuleBase::Vector3<double>[nrxx];
+            for (int ir = 0; ir < nrxx; ir++)
+            {
+                gdr_mag[ir] = gdr1[ir];
+                gdr[0][ir] = 0.5 * gdr_mag[ir];
+                gdr[1][ir] = 0.5 * gdr_mag[ir];
+            }
+            // now gdr[0] and gdr[1] are both 0.5 * \nabla rho'
+
+            for (int is = 1; is < 4; is++) // loop over mx, my, mz
+            {
+                chr->rhopw->real2recip(chr->rho[is], tmp_recip);
+                XC_Functional::grad_rho(tmp_recip, gdr_mag, chr->rhopw, tpiba);
+                // now gdr_mag contains \nabla mag_i
+
+                // mag_part is mag_i / |mag|
+                const double* mag_part_is = mag_part.data() + (is-1) * nrxx;
+                for (int ir = 0; ir < nrxx; ir++)
+                {
+                    const ModuleBase::Vector3<double> grad_is = 0.5 * gdr_mag[ir] * mag_part_is[ir];
+                    // grad_is = 0.5 * (\nabla mag_i) * (mag_i / |mag|)
+                    gdr[0][ir] += grad_is;
+                    gdr[1][ir] -= grad_is;
+                }
+            }
+
+            delete[] tmp_recip;
+            delete[] gdr_mag;
+            delete[] gdr1;
+            delete[] rhogsum1;
+        }
+        else
+        {
+            //<<<<<<<<<<<<<<<<< this block is the original algorithm
+            for( int is=0; is!=nspin; ++is )
+            {
+                std::vector<double> rhor(nrxx);
+                #ifdef _OPENMP
+                #pragma omp parallel for schedule(static, 1024)
+                #endif
+                for(int ir=0; ir<nrxx; ++ir)
+                    rhor[ir] = rho[ir*nspin+is];
+                //------------------------------------------
+                // initialize the charge density array in reciprocal space
+                // bring electron charge density from real space to reciprocal space
+                //------------------------------------------
+                std::vector<std::complex<double>> rhog(chr->rhopw->npw);
+                chr->rhopw->real2recip(rhor.data(), rhog.data());
+
+                //-------------------------------------------
+                // compute the gradient of charge density and
+                // store the gradient in gdr[is]
+                //-------------------------------------------
+                gdr[is].resize(nrxx);
+                XC_Functional::grad_rho(rhog.data(), gdr[is].data(), chr->rhopw, tpiba);
+            } // end for(is)
+
+            //>>>>>>>>>>>>>>>>> end of the original algorithm
+        }
+        //>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+
+
+        // gdr stores the gradients of n_{+} and n_{-}
 
         // converting grho
         sigma.resize( nrxx * ((1==nspin)?1:3) );
@@ -296,6 +380,13 @@ std::tuple<double,double,ModuleBase::matrix> XC_Functional::v_xc_libxc(		// Peiz
                 sigma[ir*3+2] = gdr[1][ir]*gdr[1][ir];
             }
         }
+
+        // contracted gradients sigma:
+        // sigma0 = \grad n_{+} \cdot \grad n_{+}
+        // sigma1 = \grad n_{+} \cdot \grad n_{-}
+        // sigma2 = \grad n_{-} \cdot \grad n_{-}
+
+
     } // end if(is_gga)
 
     for( xc_func_type &func : funcs )
@@ -323,10 +414,12 @@ std::tuple<double,double,ModuleBase::matrix> XC_Functional::v_xc_libxc(		// Peiz
                     sgn[ir*2+1] = 0.0;
             }
         }
+        // sgn[even] -> mask for n_{+}
+        // sgn[odd]  -> mask for n_{-}
 
         std::vector<double> exc   ( nrxx                    );
         std::vector<double> vrho  ( nrxx * nspin            );
-        std::vector<double> vsigma( nrxx * ((1==nspin)?1:3) );
+        std::vector<double> vsigma( nrxx * ((1==nspin)?1:3) ); // nrxx * 3 for noncollinear
         switch( func.info->family )
         {
             case XC_FAMILY_LDA:
@@ -390,12 +483,20 @@ std::tuple<double,double,ModuleBase::matrix> XC_Functional::v_xc_libxc(		// Peiz
                     h[1][ir] = 2.0 * (gdr[1][ir] * vsigma[ir*3+2] * sgn[ir*2+1] * 2.0 
                                     + gdr[0][ir] * vsigma[ir*3+1] * sgn[ir*2]   * sgn[ir*2+1]);
                 }
+
+                // de/d(\nabla n_{+}) = 2 * \nabla n_{+} * vsigma0 + \nabla n_{-} * vsigma1
+                // de/d(\nabla n_{-}) = 2 * \nabla n_{-} * vsigma2 + \nabla n_{+} * vsigma1
+                //
+                // NOTE: the mask for vsigma0/vsigma2 is simply the mask for n_{+}/n_{-},
+                // but the mask for vsigma1 is taken to be the product of masks for n_{+} and n_{-}
             }
 
             // define two dimensional array dh [ nspin, nrxx ]
             std::vector<std::vector<double>> dh(nspin, std::vector<double>(nrxx));
             for( int is=0; is!=nspin; ++is )
                 XC_Functional::grad_dot( h[is].data(), dh[is].data(), chr->rhopw, tpiba);
+
+            // dh is \div h
 
             double rvtxc = 0.0;
             #ifdef _OPENMP
@@ -438,6 +539,9 @@ std::tuple<double,double,ModuleBase::matrix> XC_Functional::v_xc_libxc(		// Peiz
         ModuleBase::matrix v_nspin4(GlobalV::NSPIN,nrxx);
         for( int ir=0; ir<nrxx; ++ir )
             v_nspin4(0,ir) = 0.5 * (v(0,ir)+v(1,ir));
+
+        // v_nspin4(0) is 0.5 * (v_{+} + v_{-})
+
         if(GlobalV::DOMAG || GlobalV::DOMAG_Z)
         {
             for( int ir=0; ir<nrxx; ++ir )
@@ -449,6 +553,7 @@ std::tuple<double,double,ModuleBase::matrix> XC_Functional::v_xc_libxc(		// Peiz
                         v_nspin4(ipol,ir) = vs * chr->rho[ipol][ir] / amag[ir];
                 }
             }
+        // v_nspin4(i) is 0.5 * (v_{+} - v_{-}) * mag_i / |mag|
         }
 
         ModuleBase::timer::tick("XC_Functional","v_xc_libxc");
