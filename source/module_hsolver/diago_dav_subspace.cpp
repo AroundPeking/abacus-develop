@@ -480,7 +480,7 @@ void Diago_DavSubspace<T, Device>::cal_elem(const int& dim,
 }
 
 template <typename T, typename Device>
-void Diago_DavSubspace<T, Device>::diag_zhegvx(const int& nbase,
+bool Diago_DavSubspace<T, Device>::diag_zhegvx(const int& nbase,
                                                const int& nband,
                                                T* hcc,
                                                T* scc,
@@ -489,6 +489,8 @@ void Diago_DavSubspace<T, Device>::diag_zhegvx(const int& nbase,
                                                T* vcc)
 {
     ModuleBase::timer::tick("Diago_DavSubspace", "diag_zhegvx");
+
+    int fail_info = 1;
 
     if (this->diag_comm.rank == 0)
     {
@@ -513,7 +515,7 @@ void Diago_DavSubspace<T, Device>::diag_zhegvx(const int& nbase,
                 base_device::memory::synchronize_memory_op<T, Device, Device>()(this->ctx, this->ctx, hcc_gpu + i * nbase, hcc + i * nbase_x, nbase);
                 base_device::memory::synchronize_memory_op<T, Device, Device>()(this->ctx, this->ctx, scc_gpu + i * nbase, scc + i * nbase_x, nbase);
             }
-            dngvd_op<T, Device>()(this->ctx, nbase, nbase, hcc_gpu, scc_gpu, eigenvalue_gpu, vcc_gpu);
+            dngvd_op<T, Device>()(this->ctx, nbase, nbase, hcc_gpu, scc_gpu, eigenvalue_gpu, vcc_gpu, &fail_info);
             for(int i=0;i<nbase;i++)
             {
                 base_device::memory::synchronize_memory_op<T, Device, Device>()(this->ctx, this->ctx, vcc + i * nbase_x, vcc_gpu + i * nbase, nbase);
@@ -547,7 +549,8 @@ void Diago_DavSubspace<T, Device>::diag_zhegvx(const int& nbase,
                                   this->scc,
                                   nband,
                                   (*eigenvalue_iter).data(),
-                                  this->vcc);
+                                  this->vcc,
+                                  &fail_info);
             // reset:
             for (size_t i = 0; i < nbase; i++)
             {
@@ -568,6 +571,11 @@ void Diago_DavSubspace<T, Device>::diag_zhegvx(const int& nbase,
         }
     }
 
+    MPI_Bcast(&fail_info, 1, MPI_INT, 0, this->diag_comm.comm);
+    if(fail_info != 0)
+    {
+        return false;
+    }
 #ifdef __MPI
     if (this->diag_comm.nproc > 1)
     {
@@ -581,7 +589,7 @@ void Diago_DavSubspace<T, Device>::diag_zhegvx(const int& nbase,
 #endif
 
     ModuleBase::timer::tick("Diago_DavSubspace", "diag_zhegvx");
-    return;
+    return true;
 }
 
 template <typename T, typename Device>
@@ -696,7 +704,12 @@ int Diago_DavSubspace<T, Device>::diag(const HPsiFunc& hpsi_func,
     do
     {
 
-        sum_iter += this->diag_once(hpsi_func, psi_in, psi_in_dmax, eigenvalue_in_hsolver, ethr_band);
+        int iter_return = this->diag_once(hpsi_func, psi_in, psi_in_dmax, eigenvalue_in_hsolver, ethr_band);
+        if(iter_return == -1)
+        {
+            return -1;
+        }
+        sum_iter += iter_return;
 
         ++ntry;
 

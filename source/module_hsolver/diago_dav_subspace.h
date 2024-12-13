@@ -118,7 +118,7 @@ class Diago_DavSubspace : public DiagH<T, Device>
     //                   Real* e,
     //                   T* vcc);
 
-    void diag_zhegvx(const int& nbase,
+    bool diag_zhegvx(const int& nbase,
                      const int& nband,
                      T* hcc,
                      T* scc,

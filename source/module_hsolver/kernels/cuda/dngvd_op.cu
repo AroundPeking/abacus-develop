@@ -28,7 +28,7 @@ void destroyGpuSolverHandle()
 }
 
 static inline
-void xhegvd_wrapper(
+int xhegvd_wrapper(
     const cublasFillMode_t& uplo,
     const int& n,
     double* A, const int& lda,
@@ -52,14 +52,14 @@ void xhegvd_wrapper(
         A, lda, B, ldb, W, work, lwork, devInfo));
 
     cudaErrcheck(cudaMemcpy(&info_gpu, devInfo, sizeof(int), cudaMemcpyDeviceToHost));
-    assert(0 == info_gpu);
     // free the buffer
     cudaErrcheck(cudaFree(work));
     cudaErrcheck(cudaFree(devInfo));
+    return info_gpu;
 }
 
 static inline
-void xhegvd_wrapper (
+int xhegvd_wrapper (
         const cublasFillMode_t& uplo,
         const int& n,
         std::complex<float> * A, const int& lda,
@@ -84,14 +84,14 @@ void xhegvd_wrapper (
                                       reinterpret_cast<float2 *>(A), lda, reinterpret_cast<float2 *>(B), ldb, W, work, lwork, devInfo));
 
     cudaErrcheck(cudaMemcpy(&info_gpu, devInfo, sizeof(int), cudaMemcpyDeviceToHost));
-    assert(0 == info_gpu);
     // free the buffer
     cudaErrcheck(cudaFree(work));
     cudaErrcheck(cudaFree(devInfo));
+    return info_gpu;
 }
 
 static inline
-void xhegvd_wrapper (
+int xhegvd_wrapper (
         const cublasFillMode_t& uplo,
         const int& n,
         std::complex<double> * A, const int& lda,
@@ -116,10 +116,11 @@ void xhegvd_wrapper (
                                       reinterpret_cast<double2 *>(A), lda, reinterpret_cast<double2 *>(B), ldb, W, work, lwork, devInfo));
 
     cudaErrcheck(cudaMemcpy(&info_gpu, devInfo, sizeof(int), cudaMemcpyDeviceToHost));
-    assert(0 == info_gpu);
+
     // free the buffer
     cudaErrcheck(cudaFree(work));
     cudaErrcheck(cudaFree(devInfo));
+    return info_gpu;
 }
 
 static inline
@@ -214,13 +215,18 @@ struct dngvd_op<T, base_device::DEVICE_GPU>
                     const T* A, // hcc
                     const T* B, // scc
                     Real* W,    // eigenvalue
-                    T* V)
+                    T* V,
+                    int* fail_info)
     {
         assert(nstart == ldh);
         // A to V
         cudaErrcheck(cudaMemcpy(V, A, sizeof(T) * ldh * nstart, cudaMemcpyDeviceToDevice));
-        xhegvd_wrapper(CUBLAS_FILL_MODE_UPPER, nstart, V, ldh,
+        int info = xhegvd_wrapper(CUBLAS_FILL_MODE_UPPER, nstart, V, ldh,
             (T*)B, ldh, W);
+        if (fail_info != nullptr)
+        {
+            *fail_info = info;
+        }
     }
 };
 

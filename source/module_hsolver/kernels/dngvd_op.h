@@ -43,7 +43,7 @@ struct dngvd_op
     /// Output Parameter
     ///     @param W : calculated eigenvalues
     ///     @param V : calculated eigenvectors (col major)
-    void operator()(const Device* d, const int nstart, const int ldh, const T* A, const T* B, Real* W, T* V);
+    void operator()(const Device* d, const int nstart, const int ldh, const T* A, const T* B, Real* W, T* V, int* fail_info = nullptr);
 };
 
 template <typename T, typename Device>
@@ -78,7 +78,7 @@ struct dngvx_op
     /// Output Parameter
     ///     @param W : calculated eigenvalues
     ///     @param V : calculated eigenvectors (col major)
-    void operator()(const Device* d, const int nstart, const int ldh, T* A, T* B, const int m, Real* W, T* V);
+    void operator()(const Device* d, const int nstart, const int ldh, T* A, T* B, const int m, Real* W, T* V, int* fail_info = nullptr);
 };
 
 template <typename T, typename Device>

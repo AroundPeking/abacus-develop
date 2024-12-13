@@ -21,7 +21,8 @@ void dngvd_op<double, base_device::DEVICE_GPU>::operator()(const base_device::DE
                                                            const double* _hcc,
                                                            const double* _scc,
                                                            double* _eigenvalue,
-                                                           double* _vcc)
+                                                           double* _vcc,
+                                                           int* fail_info)
 {
     std::vector<double> hcc(nstart * nstart, 0.0);
     std::vector<double> scc(nstart * nstart, 0.0);
@@ -36,7 +37,8 @@ void dngvd_op<double, base_device::DEVICE_GPU>::operator()(const base_device::DE
                                                 hcc.data(),
                                                 scc.data(),
                                                 eigenvalue.data(),
-                                                vcc.data());
+                                                vcc.data(),
+                                                fail_info);
     hipErrcheck(hipMemcpy(_vcc, vcc.data(), sizeof(double) * vcc.size(), hipMemcpyHostToDevice));
     hipErrcheck(hipMemcpy(_eigenvalue, eigenvalue.data(), sizeof(double) * eigenvalue.size(), hipMemcpyHostToDevice));
 }
@@ -49,7 +51,8 @@ void dngvd_op<std::complex<float>, base_device::DEVICE_GPU>::operator()(const ba
                                                                         const std::complex<float>* _hcc,
                                                                         const std::complex<float>* _scc,
                                                                         float* _eigenvalue,
-                                                                        std::complex<float>* _vcc)
+                                                                        std::complex<float>* _vcc,
+                                                                        int* fail_info)
 {
     std::vector<std::complex<float>> hcc(nstart * nstart, {0, 0});
     std::vector<std::complex<float>> scc(nstart * nstart, {0, 0});
@@ -64,7 +67,8 @@ void dngvd_op<std::complex<float>, base_device::DEVICE_GPU>::operator()(const ba
                                                              hcc.data(),
                                                              scc.data(),
                                                              eigenvalue.data(),
-                                                             vcc.data());
+                                                             vcc.data(),
+                                                             fail_info);
     hipErrcheck(hipMemcpy(_vcc, vcc.data(), sizeof(std::complex<float>) * vcc.size(), hipMemcpyHostToDevice));
     hipErrcheck(hipMemcpy(_eigenvalue, eigenvalue.data(), sizeof(float) * eigenvalue.size(), hipMemcpyHostToDevice));
 }
@@ -76,7 +80,8 @@ void dngvd_op<std::complex<double>, base_device::DEVICE_GPU>::operator()(const b
                                                                          const std::complex<double>* _hcc,
                                                                          const std::complex<double>* _scc,
                                                                          double* _eigenvalue,
-                                                                         std::complex<double>* _vcc)
+                                                                         std::complex<double>* _vcc,
+                                                                         int* fail_info)
 {
     std::vector<std::complex<double>> hcc(nstart * nstart, {0, 0});
     std::vector<std::complex<double>> scc(nstart * nstart, {0, 0});
@@ -91,7 +96,8 @@ void dngvd_op<std::complex<double>, base_device::DEVICE_GPU>::operator()(const b
                                                               hcc.data(),
                                                               scc.data(),
                                                               eigenvalue.data(),
-                                                              vcc.data());
+                                                              vcc.data(), 
+                                                              fail_info);
     hipErrcheck(hipMemcpy(_vcc, vcc.data(), sizeof(std::complex<double>) * vcc.size(), hipMemcpyHostToDevice));
     hipErrcheck(hipMemcpy(_eigenvalue, eigenvalue.data(), sizeof(double) * eigenvalue.size(), hipMemcpyHostToDevice));
 }

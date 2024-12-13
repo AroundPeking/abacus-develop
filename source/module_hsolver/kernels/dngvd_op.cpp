@@ -17,7 +17,8 @@ struct dngvd_op<T, base_device::DEVICE_CPU>
                     const T* hcc,
                     const T* scc,
                     Real* eigenvalue,
-                    T* vcc)
+                    T* vcc, 
+                    int* fail_info)
     {
         for (int i = 0; i < nstart * ldh; i++)
         {
@@ -56,25 +57,10 @@ struct dngvd_op<T, base_device::DEVICE_CPU>
                                 liwork,
                                 info);
 
-        if (info != 0)
+        if(fail_info != nullptr)
         {
-            std::cout << "Error: xhegvd failed, linear dependent basis functions\n"
-                      << ", wrong initialization of wavefunction, or wavefunction information loss\n"
-                      << ", output overlap matrix scc.txt to check\n"
-                      << std::endl;
-            // print scc to file scc.txt
-            std::ofstream ofs("scc.txt");
-            for (int i = 0; i < nstart; i++)
-            {
-                for (int j = 0; j < nstart; j++)
-                {
-                    ofs << scc[i * ldh + j] << " ";
-                }
-                ofs << std::endl;
-            }
-            ofs.close();
+            *fail_info = info;
         }
-        assert(0 == info);
 
         delete[] work;
         delete[] rwork;
@@ -245,7 +231,8 @@ struct dngvx_op<T, base_device::DEVICE_CPU>
                     T* scc,
                     const int m,
                     Real* eigenvalue,
-                    T* vcc)
+                    T* vcc, 
+                    int* fail_info)
     {
 
         int info = 0;
@@ -319,7 +306,10 @@ struct dngvx_op<T, base_device::DEVICE_CPU>
         delete[] iwork;
         delete[] ifail;
 
-        assert(0 == info);
+        if(fail_info != nullptr)
+        {
+            *fail_info = info;
+        }
     }
 };
 
