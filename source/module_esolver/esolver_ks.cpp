@@ -19,10 +19,10 @@
 #include "module_hamilt_pw/hamilt_pwdft/global.h"
 //---------------------------------------
 #ifdef USE_PAW
-#include "module_base/parallel_common.h"
 #include "module_cell/module_paw/paw_cell.h"
 #endif
 #include "module_io/json_output/output_info.h"
+#include "module_base/parallel_common.h"
 
 namespace ModuleESolver
 {
@@ -535,6 +535,7 @@ void ESolver_KS<T, Device>::runner(const int istep, UnitCell& ucell)
             // EState should be used after it is constructed.
 
             drho = p_chgmix->get_drho(pelec->charge, GlobalV::nelec);
+            Parallel_Common::bcast_double(drho);
             double hsolver_error = 0.0;
             if (firstscf)
             {

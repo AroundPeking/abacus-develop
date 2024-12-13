@@ -876,7 +876,7 @@ bool UnitCell::read_atom_positions(std::ifstream &ifpos, std::ofstream &ofs_runn
                 }
             }
         }
-        if (autoset_mag)
+        if (0)
         {
             if(GlobalV::NSPIN==4)
             {

@@ -6,6 +6,7 @@
 #endif
 
 #include "module_base/tool_quit.h"
+#include "module_base/parallel_common.h"
 
 #include <iomanip>
 #include <iostream>
@@ -35,6 +36,7 @@ double fenergy::calculate_etot()
         etot += (ecore + epawdc);
     }
 #endif
+    Parallel_Common::bcast_double(etot);
     return etot;
 }
 
@@ -59,6 +61,7 @@ double fenergy::calculate_harris()
         etot_harris += (ecore + epawdc);
     }
 #endif
+    Parallel_Common::bcast_double(etot_harris);
     return etot_harris;
 }
 
