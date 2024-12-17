@@ -18,6 +18,8 @@
 #include <module_hamilt_general/module_xc/kernels/xc_functional_op.h>
 #include "module_parameter/parameter.h"
 
+int XC_Functional::gga_grad = 1;
+
 // from gradcorr.f90
 void XC_Functional::gradcorr(double& etxc,
                              double& vtxc,
@@ -215,7 +217,7 @@ void XC_Functional::gradcorr(double& etxc,
         if (!is_stress)
             h2 = new ModuleBase::Vector3<double>[rhopw->nrxx];
 
-        if (PARAM.inp.gga_grad == 2)
+        if (XC_Functional::gga_grad == 2)
         {
         // for non-collinear case
         // calculate the gradient of
@@ -571,7 +573,7 @@ void XC_Functional::gradcorr(double& etxc,
     // std::cout << "\n vtxcgc=" << vtxcgc;
     // std::cout << "\n etxcgc=" << etxcgc << std::endl;
 
-    if(!is_stress && GlobalV::NSPIN==4 && PARAM.inp.gga_grad==2)
+    if(!is_stress && GlobalV::NSPIN==4 && XC_Functional::gga_grad==2)
     {
         // calculate the grad(h1+h2) and grad((h1-h2)*mag_i/mag_part) respectively
         // and add them to v(0, ir) and v(1-3, ir) respectively.
@@ -732,7 +734,7 @@ void XC_Functional::gradcorr(double& etxc,
         vtxc += vtxcgc;
         etxc += etxcgc;
 
-        if(GlobalV::NSPIN == 4 && PARAM.inp.gga_grad == 1)
+        if(GlobalV::NSPIN == 4 && XC_Functional::gga_grad == 1)
         {
 #ifdef _OPENMP
 #pragma omp parallel for collapse(2) schedule(static, 1024)

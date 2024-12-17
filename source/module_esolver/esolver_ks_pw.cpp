@@ -7,6 +7,7 @@
 #include "module_io/write_dos_pw.h"
 #include "module_io/write_istate_info.h"
 #include "module_io/write_wfc_pw.h"
+#include "module_hamilt_general/module_xc/xc_functional.h"
 
 #include <iostream>
 
@@ -805,6 +806,10 @@ void ESolver_KS_PW<T, Device>::iter_finish(const int iter) {
     }
     if(PARAM.inp.sc_mag_switch)
     {
+        if(this->drho > 0 && this->drho < PARAM.inp.scf_thr * 10.0 && PARAM.inp.gga_grad == 2)
+        {
+            XC_Functional::gga_grad = 1;
+        }
         SpinConstrain<std::complex<double>>& sc = SpinConstrain<std::complex<double>>::getScInstance();
         if(!sc.higher_mag_prec)
         {

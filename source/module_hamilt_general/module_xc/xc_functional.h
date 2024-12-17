@@ -27,6 +27,8 @@ class XC_Functional
 	XC_Functional();
 	~XC_Functional();
 
+	static int gga_grad;
+
 //-------------------
 // subroutines, grouped according to the file they are in:
 //-------------------

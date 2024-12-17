@@ -88,7 +88,7 @@ class Diago_DavSubspace : public DiagH<T, Device>
     base_device::DEVICE_CPU* cpu_ctx = {};
     base_device::AbacusDevice_t device = {};
 
-    void cal_grad(const HPsiFunc& hpsi_func,
+    bool cal_grad(const HPsiFunc& hpsi_func,
                   const int& dim,
                   const int& nbase,
                   const int& notconv,

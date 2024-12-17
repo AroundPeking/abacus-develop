@@ -12,6 +12,7 @@
 #include "module_parameter/parameter.h"
 #include "module_relax/relax_old/ions_move_basic.h"
 #include "module_relax/relax_old/lattice_change_basic.h"
+#include "module_hamilt_general/module_xc/xc_functional.h"
 
 #include <algorithm>
 
@@ -559,6 +560,7 @@ void Input_Conv::Convert()
     // iteration
     //----------------------------------------------------------
     GlobalV::SCF_NMAX = PARAM.inp.scf_nmax;
+    XC_Functional::gga_grad = PARAM.inp.gga_grad;
 
     //----------------------------------------------------------
     // wavefunction / charge / potential / (2/4)

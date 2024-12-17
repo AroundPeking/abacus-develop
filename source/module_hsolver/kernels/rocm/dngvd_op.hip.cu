@@ -181,7 +181,8 @@ void dngvx_op<std::complex<float>, base_device::DEVICE_GPU>::operator()(const ba
                                                                         std::complex<float>* scc,
                                                                         const int m,
                                                                         float* eigenvalue,
-                                                                        std::complex<float>* vcc)
+                                                                        std::complex<float>* vcc,
+                                                                        int* fail_info)
 {
 }
 
@@ -193,7 +194,8 @@ void dngvx_op<std::complex<double>, base_device::DEVICE_GPU>::operator()(const b
                                                                          std::complex<double>* scc,
                                                                          const int m,
                                                                          double* eigenvalue,
-                                                                         std::complex<double>* vcc)
+                                                                         std::complex<double>* vcc,
+                                                                         int* fail_info)
 {
 }
 
@@ -206,7 +208,8 @@ void dngvx_op<double, base_device::DEVICE_GPU>::operator()(const base_device::DE
                                                            double* scc,
                                                            const int m,
                                                            double* eigenvalue,
-                                                           double* vcc)
+                                                           double* vcc,
+                                                           int* fail_info)
 {
 }
 #endif // __LCAO

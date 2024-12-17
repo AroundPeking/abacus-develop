@@ -123,7 +123,12 @@ int Diago_DavSubspace<T, Device>::diag_once(const HPsiFunc& hpsi_func,
 
     this->cal_elem(this->dim, nbase, this->notconv, this->psi_in_iter, this->hphi, this->hcc, this->scc);
 
-    this->diag_zhegvx(nbase, this->notconv, this->hcc, this->scc, this->nbase_x, &eigenvalue_iter, this->vcc);
+    bool diag_ok = this->diag_zhegvx(nbase, this->notconv, this->hcc, this->scc, this->nbase_x, &eigenvalue_iter, this->vcc);
+    if(!diag_ok)
+    {
+        ModuleBase::timer::tick("Diago_DavSubspace", "diag_once");
+        return -1;
+    }
 
     for (size_t m = 0; m < this->n_band; m++)
     {
@@ -138,7 +143,7 @@ int Diago_DavSubspace<T, Device>::diag_once(const HPsiFunc& hpsi_func,
     {
         dav_iter++;
 
-        this->cal_grad(hpsi_func,
+        bool grad_ok = this->cal_grad(hpsi_func,
                        this->dim,
                        nbase,
                        this->notconv,
@@ -147,10 +152,20 @@ int Diago_DavSubspace<T, Device>::diag_once(const HPsiFunc& hpsi_func,
                        this->vcc,
                        unconv.data(),
                        &eigenvalue_iter);
+        if(!grad_ok)
+        {
+            ModuleBase::timer::tick("Diago_DavSubspace", "diag_once");
+            return -1;
+        }
 
         this->cal_elem(this->dim, nbase, this->notconv, this->psi_in_iter, this->hphi, this->hcc, this->scc);
 
-        this->diag_zhegvx(nbase, this->n_band, this->hcc, this->scc, this->nbase_x, &eigenvalue_iter, this->vcc);
+        bool diag_ok_loop = this->diag_zhegvx(nbase, this->n_band, this->hcc, this->scc, this->nbase_x, &eigenvalue_iter, this->vcc);
+        if(!diag_ok_loop)
+        {
+            ModuleBase::timer::tick("Diago_DavSubspace", "diag_once");
+            return -1;
+        }
 
         // check convergence and update eigenvalues
         ModuleBase::timer::tick("Diago_DavSubspace", "check_update");
@@ -238,7 +253,7 @@ int Diago_DavSubspace<T, Device>::diag_once(const HPsiFunc& hpsi_func,
 }
 
 template <typename T, typename Device>
-void Diago_DavSubspace<T, Device>::cal_grad(const HPsiFunc& hpsi_func,
+bool Diago_DavSubspace<T, Device>::cal_grad(const HPsiFunc& hpsi_func,
                                             const int& dim,
                                             const int& nbase,
                                             const int& notconv,
@@ -354,7 +369,11 @@ void Diago_DavSubspace<T, Device>::cal_grad(const HPsiFunc& hpsi_func,
                                                psi_iter + (nbase + i) * this->dim,
                                                psi_iter + (nbase + i) * this->dim,
                                                true);
-        assert(psi_norm[i] > 0.0);
+        if(psi_norm[i] <= 0.0) 
+        { 
+            ModuleBase::timer::tick("Diago_DavSubspace", "cal_grad");
+            return false;
+        }
         psi_norm[i] = sqrt(psi_norm[i]);
 
         vector_div_constant_op<T, Device>()(this->ctx,
@@ -367,7 +386,7 @@ void Diago_DavSubspace<T, Device>::cal_grad(const HPsiFunc& hpsi_func,
     hpsi_func(&hphi[nbase * this->dim], psi_iter, this->nbase_x, this->dim, nbase, nbase + notconv - 1);
 
     ModuleBase::timer::tick("Diago_DavSubspace", "cal_grad");
-    return;
+    return true;
 }
 
 template <typename T, typename Device>
