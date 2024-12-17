@@ -18,8 +18,7 @@ namespace GlobalV
 //==========================================================
 
 extern int NBANDS;
-extern int NLOCAL;        // 1.1 // mohan add 2009-05-29
-
+extern int NLOCAL; // 1.1 // mohan add 2009-05-29
 
 extern double PSEUDORCUT;
 
@@ -54,18 +53,18 @@ extern bool double_grid;
 
 extern bool fixed_atoms;
 
-extern int SCF_NMAX;      // 8.4
+extern int SCF_NMAX; // 8.4
 
 extern std::string BASIS_TYPE; // xiaohui add 2013-09-01
 extern std::string KS_SOLVER;  // xiaohui add 2013-09-01
 extern double SEARCH_RADIUS;   // 11.1 // mohan add 2011-03-10
 
 // added by zhengdy-soc
-extern bool NONCOLIN;     // 0 : collinear ; 1 : non-collinear
-extern bool LSPINORB;     // 0 : no soc ; 1 : has soc
-extern bool DOMAG;        // 1 : calculate the magnetism with x, y, z component
-extern bool DOMAG_Z;      // 1 : constrain the magnetism to z axis
-extern int NPOL;          // 1 : no soc; 2 : has soc
+extern bool NONCOLIN; // 0 : collinear ; 1 : non-collinear
+extern bool LSPINORB; // 0 : no soc ; 1 : has soc
+extern bool DOMAG;    // 1 : calculate the magnetism with x, y, z component
+extern bool DOMAG_Z;  // 1 : constrain the magnetism to z axis
+extern int NPOL;      // 1 : no soc; 2 : has soc
 
 extern int PW_DIAG_NMAX;   // 13
 extern int PW_DIAG_NDIM;   // 14
@@ -82,7 +81,6 @@ extern int NQXQ;  // liuyu add 2023-10-03
 extern bool COLOUR;           // mohan add 2011-04-26
 extern bool GAMMA_ONLY_LOCAL; // 22 : mohan add 2010-10-20
 extern bool GAMMA_ONLY_PW;    // mohan add 2012-06-05
-
 
 //========================================================================
 // EXPLAIN : Parallel information
@@ -143,10 +141,10 @@ extern std::string global_kpoint_card;
 // extern std::string global_pseudo_type; // mohan add 2013-05-20 (xiaohui add
 // 2013-06-23)
 extern std::string global_out_dir;
-extern std::string global_readin_dir;  // zhengdy modified
-extern std::string global_stru_dir;    // liuyu add 2022-05-24 for MD STRU
-extern std::string global_matrix_dir;  // liuyu add 2022-09-19 for HS matrix outpu, jiyy
-                                       // modified 2023-01-23 for R matrix output
+extern std::string global_readin_dir; // zhengdy modified
+extern std::string global_stru_dir;   // liuyu add 2022-05-24 for MD STRU
+extern std::string global_matrix_dir; // liuyu add 2022-09-19 for HS matrix outpu, jiyy
+                                      // modified 2023-01-23 for R matrix output
 
 extern std::ofstream ofs_running;
 extern std::ofstream ofs_warning;
@@ -201,11 +199,9 @@ extern bool deepks_bandgap;    // for bandgap label. QO added 2021-12-15
 
 extern int deepks_v_delta; // for v_delta label. xinyuan added 2023-2-15
 
-extern bool deepks_equiv; //whether to use equviariant version of DeePKS
+extern bool deepks_equiv; // whether to use equviariant version of DeePKS
 
 extern bool deepks_setorb;
-
-
 
 // implicit solvation
 extern bool imp_sol; // sunml added 2022-04-04

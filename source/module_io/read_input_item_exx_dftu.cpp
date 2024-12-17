@@ -273,6 +273,18 @@ void ReadInput::item_exx()
         };
         this->add_item(item);
     }
+    {
+        Input_Item item("Cs_inv_thr");
+        item.annotation = "Vq inverse threshold for getting Cs";
+        read_sync_double(input.Cs_inv_thr);
+        this->add_item(item);
+    }
+    {
+        Input_Item item("gs_orth_thr");
+        item.annotation = "Gram-Schmidt threshold for generating abfs";
+        read_sync_double(input.gs_orth_thr);
+        this->add_item(item);
+    }
 }
 void ReadInput::item_dftu()
 {

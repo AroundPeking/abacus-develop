@@ -4,16 +4,16 @@ if(POLICY CMP0135) # https://cmake.org/cmake/help/git-stage/policy/CMP0135.html
   # Otherwise this policy generates a warning on CMake 3.24
 endif()
 
-set(CMAKE_CXX_COMPILER "/home/apps/intel20u4/compilers_and_libraries_2020.4.304/linux/bin/intel64/icpc")
-set(MPI_CXX_COMPILER "/home/apps/intel20u4/compilers_and_libraries_2020.4.304/linux/mpi/intel64/bin/mpiicpc")
-set(CEREAL_DIR   "/home/linpz/software/cereal/cereal-1.3.0" CACHE STRING "")
-set(CEREAL_INCLUDE_DIR   "/home/linpz/software/cereal/cereal-1.3.0/include" CACHE STRING "")
-set(ELPA_LIBRARY "/home/linpz/software/elpa/elpa-openmp_2021.11.002/lib/libelpa_openmp.so" CACHE STRING "")
-set(ELPA_DIR "/home/linpz/software/elpa/elpa-openmp_2021.11.002" CACHE STRING "")
-set(ELPA_INCLUDE_DIR "/home/linpz/software/elpa/elpa-openmp_2021.11.002/include/elpa_openmp-2021.11.002" CACHE STRING "")
-set(LIBRI_DIR "/home/ghj/abacus/240731/LibRI"  CACHE STRING "")
-set(LIBCOMM_DIR "/home/ghj/abacus/240731/LibComm" CACHE STRING "")
-set(Libxc_DIR "/home/ghj/abacus/libxc-6.0.0-build" CACHE STRING "")
+#set(CMAKE_CXX_COMPILER "/home/apps/intel20u4/compilers_and_libraries_2020.4.304/linux/bin/intel64/icpc")
+#set(MPI_CXX_COMPILER "/home/apps/intel20u4/compilers_and_libraries_2020.4.304/linux/mpi/intel64/bin/mpiicpc")
+set(CEREAL_DIR   "/mnt/sg001/home/ks_iopcas_rxg/software/cereal-1.3.0" CACHE STRING "")
+set(CEREAL_INCLUDE_DIR   "/mnt/sg001/home/ks_iopcas_rxg/software/cereal-1.3.0/include" CACHE STRING "")
+#set(ELPA_LIBRARY "/mnt/sg001/home/ks_iopcas_rxg/software/" CACHE STRING "")
+set(ELPA_DIR "/mnt/sg001/home/ks_iopcas_rxg/software/elpa-build" CACHE STRING "")
+#set(ELPA_INCLUDE_DIR "/home/linpz/software/elpa/elpa-openmp_2021.11.002/include/elpa_openmp-2021.11.002" CACHE STRING "")
+set(LIBRI_DIR "/mnt/sg001/home/ks_iopcas_rxg/ghj/app/LibRI"  CACHE STRING "")
+set(LIBCOMM_DIR "/mnt/sg001/home/ks_iopcas_rxg/ghj/app/LibComm" CACHE STRING "")
+set(Libxc_DIR "/mnt/sg001/home/ks_iopcas_rxg/software/libxc-6.2.2-build" CACHE STRING "")
 
 project(
   ABACUS

@@ -19,8 +19,7 @@ namespace GlobalV
 // input.cpp.
 //----------------------------------------------------------
 int NBANDS = 0;
-int NLOCAL = 0;        // total number of local basis.
-
+int NLOCAL = 0; // total number of local basis.
 
 double PSEUDORCUT = 0;
 
@@ -32,7 +31,7 @@ bool GATE_FLAG = false;   // add gate field
 bool out_app_flag = true; // whether output r(R), H(R), S(R), T(R), and dH(R) matrices in an
                           // append manner during MD  liuyu 2023-03-20
 std::string DFT_FUNCTIONAL = "default";
-int NSPIN = 1;       // LDA
+int NSPIN = 1;           // LDA
 bool TWO_EFERMI = false; // two fermi energy, exist only magnetization is fixed.
 double nupdown = 0.0;
 int CURRENT_K = 0;
@@ -77,8 +76,8 @@ bool out_mul = false; // qifeng add 2019/9/10
 // EXPLAIN : Parallel information
 //----------------------------------------------------------
 
-int NPROC = 1; ///< global number of process
-int KPAR = 1;  ///< global number of pools
+int NPROC = 1;     ///< global number of process
+int KPAR = 1;      ///< global number of pools
 int KPAR_LCAO = 1; ///< global number of pools for LCAO diagonalization only
 int NSTOGROUP = 1;
 int MY_RANK = 0; ///< global index of process
@@ -101,7 +100,6 @@ int GSIZE = DSIZE;
 std::string global_in_card = "INPUT";
 std::string stru_file = "STRU";
 std::string global_kpoint_card = "KPT";
-
 
 // std::string global_pseudo_type = "auto";
 std::string global_epm_pseudo_card;
@@ -163,14 +161,13 @@ int NPOL = 1;
 bool FINAL_SCF = false; // LiuXh add 20180619
 
 bool deepks_out_labels = false; // caoyu add 2021-10-16 for DeePKS, wenfei 2022-1-16
-bool deepks_scf = false; // caoyu add 2021-10-16 for DeePKS, wenfei 2022-1-16
-bool deepks_bandgap = false; // for bandgap label. QO added 2021-12-15
-int  deepks_v_delta = 0; // for v_delta label. xinyuan added 2023-2-15
+bool deepks_scf = false;        // caoyu add 2021-10-16 for DeePKS, wenfei 2022-1-16
+bool deepks_bandgap = false;    // for bandgap label. QO added 2021-12-15
+int deepks_v_delta = 0;         // for v_delta label. xinyuan added 2023-2-15
 
 bool deepks_equiv = false;
 
 bool deepks_setorb = false;
-
 
 bool imp_sol = false; // implicit solvation.  sunml added 2022-04-04
 double eb_k = 80.0;
@@ -244,4 +241,7 @@ std::vector<double> qo_screening_coeff = {};
 
 // on-site orbitals
 double onsite_radius = 0.0;
+
+// enable Cs inverse parameters
+double threshold_condition_number = 1E-6;
 } // namespace GlobalV
