@@ -806,11 +806,11 @@ void ESolver_KS_PW<T, Device>::iter_finish(const int iter, const bool conv_elec)
     }
     if(PARAM.inp.sc_mag_switch)
     {
-        if(this->drho > 0 && this->drho < PARAM.inp.scf_thr * 10.0 && PARAM.inp.gga_grad == 2)
-        {
-            XC_Functional::gga_grad = 1;
-            this->p_chgmix->mixing_restart_step = iter + 1;
-        }
+        //if(this->drho > 0 && this->drho < PARAM.inp.scf_thr && PARAM.inp.gga_grad == 2)
+        //{
+        //    XC_Functional::gga_grad = 1;
+        //    this->p_chgmix->mixing_restart_step = iter + 1;
+        //}
         SpinConstrain<std::complex<double>>& sc = SpinConstrain<std::complex<double>>::getScInstance();
         if(!sc.higher_mag_prec)
         {
