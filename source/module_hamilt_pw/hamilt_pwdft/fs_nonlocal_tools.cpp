@@ -278,10 +278,12 @@ template <typename FPTYPE, typename Device>
 void FS_Nonlocal_tools<FPTYPE, Device>::cal_becp(int ik,
                                                  int npm,
                                                  std::complex<FPTYPE>* becp_in,
-                                                 const std::complex<FPTYPE>* ppsi_in)
+                                                 const std::complex<FPTYPE>* ppsi_in,
+                                                 int npwx)
 {
     ModuleBase::TITLE("FS_Nonlocal_tools", "cal_becp");
     ModuleBase::timer::tick("FS_Nonlocal_tools", "cal_becp");
+    if(npwx == 0) npwx = this->max_npw;
 
     const int npol = this->ucell_->get_npol();
     const std::complex<FPTYPE>* ppsi = ppsi_in == nullptr ? &(this->psi_[0](ik, 0, 0)) : ppsi_in;
@@ -435,7 +437,7 @@ void FS_Nonlocal_tools<FPTYPE, Device>::cal_becp(int ik,
               this->ppcell_vkb,
               npw,
               ppsi,
-              this->max_npw,
+              npwx,
               &ModuleBase::ZERO,
               becp_tmp,
               this->nkb);
@@ -979,11 +981,12 @@ void FS_Nonlocal_tools<FPTYPE, Device>::cal_force_dspin(int ik,
                                                         const FPTYPE* h_wg)
 {
     std::vector<FPTYPE> lambda_array(this->ucell_->nat * 3);
+    const int sign = this->kv_->isk[ik] == 0 ? 1 : -1;
     for (int iat = 0; iat < this->ucell_->nat; iat++)
     {
-        lambda_array[iat * 3] = lambda[iat].x;
-        lambda_array[iat * 3 + 1] = lambda[iat].y;
-        lambda_array[iat * 3 + 2] = lambda[iat].z;
+        lambda_array[iat * 3] = lambda[iat].x * sign;
+        lambda_array[iat * 3 + 1] = lambda[iat].y * sign;
+        lambda_array[iat * 3 + 2] = lambda[iat].z * sign;
     }
     FPTYPE* lambda_tmp = nullptr;
 #if defined(__CUDA) || defined(__ROCM)
@@ -1008,6 +1011,7 @@ void FS_Nonlocal_tools<FPTYPE, Device>::cal_force_dspin(int ik,
                                       this->nbands,
                                       ik,
                                       nkb,
+                                      this->ucell_->get_npol(),
                                       atom_nh,
                                       atom_na,
                                       this->ucell_->tpiba,
@@ -1110,6 +1114,7 @@ void FS_Nonlocal_tools<FPTYPE, Device>::cal_stress_dspin(int ik,
                        this->ntype,
                        this->nbands,
                        ik,
+                       this->ucell_->get_npol(),
                        atom_nh,
                        atom_na,
                        d_wg,

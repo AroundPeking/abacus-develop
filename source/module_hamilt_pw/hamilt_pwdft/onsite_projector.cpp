@@ -341,7 +341,8 @@ void projectors::OnsiteProjector<T, Device>::tabulate_atomic(const int ik, const
 template<typename T, typename Device>
 void projectors::OnsiteProjector<T, Device>::overlap_proj_psi( 
                     const int npm,
-                    const std::complex<double>* ppsi
+                    const std::complex<double>* ppsi,
+                    int npwx
                     )
 {
     ModuleBase::timer::tick("OnsiteProj", "overlap");
@@ -387,6 +388,7 @@ void projectors::OnsiteProjector<T, Device>::overlap_proj_psi(
     // std::cout << "at " << __FILE__ << ": " << __LINE__ << " output npm: " << npm << std::endl;
     // std::cout << "at " << __FILE__ << ": " << __LINE__ << " ik_: " << ik_ << std::endl;
     int npol = this->ucell->get_npol();
+    if(npwx == 0) npwx = this->npwx_;
     if(this->becp == nullptr || this->size_becp < npm*this->tot_nproj)
     {
         this->size_becp = npm*this->tot_nproj;
@@ -400,7 +402,7 @@ void projectors::OnsiteProjector<T, Device>::overlap_proj_psi(
             this->h_becp = this->becp;
         }
     }
-    this->fs_tools->cal_becp(ik_, npm/npol, this->becp, ppsi); // in cal_becp, npm should be the one not multiplied by npol
+    this->fs_tools->cal_becp(ik_, npm/npol, this->becp, ppsi, npwx); // in cal_becp, npm should be the one not multiplied by npol
     if(this->device == base_device::GpuDevice)
     {
         syncmem_complex_d2h_op()(this->cpu_ctx, this->ctx, h_becp, this->becp, this->size_becp);
@@ -575,7 +577,7 @@ void projectors::OnsiteProjector<T, Device>::cal_occupations(const psi::Psi<std:
                         const int occ_index = (begin_ih + ih) * 4;
                         const int index = ib*nkb + begin_ih + ih;
                         occs[occ_index] += weight * conj(becp_p[index]) * becp_p[index];
-                        occs[occ_index + 3] += weight * conj(becp_p[index]) * becp_p[index] * sign;
+                        occs[occ_index + 3] += sign * weight * conj(becp_p[index]) * becp_p[index];
                     }
                 }
                 begin_ih += nh;

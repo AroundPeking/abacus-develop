@@ -45,7 +45,8 @@ namespace projectors
         
         void overlap_proj_psi(
                     const int npm,
-                    const std::complex<double>* ppsi
+                    const std::complex<double>* ppsi,
+                    int npwx = 0
                     );
         void read_abacus_orb(std::ifstream& ifs,
                             std::string& elem,

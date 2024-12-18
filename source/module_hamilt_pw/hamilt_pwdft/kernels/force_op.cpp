@@ -337,6 +337,7 @@ struct cal_force_nl_op<FPTYPE, base_device::DEVICE_CPU>
                     const int& nbands,
                     const int& ik,
                     const int& nkb,
+                    const int& npol,
                     const int* atom_nh,
                     const int* atom_na,
                     const FPTYPE& tpiba,
@@ -361,9 +362,11 @@ struct cal_force_nl_op<FPTYPE, base_device::DEVICE_CPU>
                 const std::complex<FPTYPE> coefficients3(-1 * lambda[iat*3+2], 0.0);
                 for (int ib = 0; ib < nbands_occ; ib++)
                 {
-                    const int ib2 = ib*2;
                     FPTYPE local_force[3] = {0, 0, 0};
                     FPTYPE fac = d_wg[ik * wg_nc + ib] * 2.0 * tpiba;
+                    if(npol ==2)
+                    {
+                    const int ib2 = ib*2;
                     for (int ip = 0; ip < nproj; ip++)
                     {
                         const int inkb = sum + ip;
@@ -380,6 +383,22 @@ struct cal_force_nl_op<FPTYPE, base_device::DEVICE_CPU>
                             local_force[ipol] -= fac * (coefficients0 * dbb0 + coefficients1 * dbb1 + coefficients2 * dbb2 + coefficients3 * dbb3).real();
                         }
                     }//ip
+                    }
+                    else if(npol == 1)
+                    {
+                        for (int ip = 0; ip < nproj; ip++)
+                        {
+                            const int inkb = sum + ip;
+
+                            for (int ipol = 0; ipol < 3; ipol++)
+                            {
+                                const int index0 = ipol * nbands * nproj + ib * nproj + ip;
+                                const int index1 = ib * nproj + ip;
+                                const FPTYPE dbb = (conj(dbecp[index0]) * becp[index1]).real();
+                                local_force[ipol] -= fac * lambda[iat*3+2] * dbb;
+                            }
+                        }//ip
+                    }
                     for (int ipol = 0; ipol < 3; ++ipol)
                     {
                         force[iat * forcenl_nc + ipol] += local_force[ipol];
