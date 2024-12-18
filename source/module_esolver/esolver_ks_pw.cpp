@@ -868,7 +868,7 @@ void ESolver_KS_PW<T, Device>::after_scf(const int istep) {
     if(GlobalV::onsite_radius > 0)
     { // float type has not been implemented
         auto* onsite_p = projectors::OnsiteProjector<double, Device>::get_instance();
-        onsite_p->cal_occupations(reinterpret_cast<psi::Psi<std::complex<double>, Device>*>(this->kspw_psi), this->pelec->wg);
+        onsite_p->cal_occupations(reinterpret_cast<psi::Psi<std::complex<double>, Device>*>(this->kspw_psi), this->pelec->wg, this->pelec->klist->isk.data());
     }
 
     ModuleIO::output_convergence_after_scf(this->conv_elec,

@@ -526,7 +526,7 @@ void projectors::OnsiteProjector<T, Device>::read_abacus_orb(std::ifstream& ifs,
 } // end of read_abacus_orb
 
 template<typename T, typename Device>
-void projectors::OnsiteProjector<T, Device>::cal_occupations(const psi::Psi<std::complex<T>, Device>* psi_in, const ModuleBase::matrix& wg_in)
+void projectors::OnsiteProjector<T, Device>::cal_occupations(const psi::Psi<std::complex<T>, Device>* psi_in, const ModuleBase::matrix& wg_in, const int* isk_in)
 {
     ModuleBase::timer::tick("OnsiteProj", "cal_occupation");
     this->tabulate_atomic(0);
@@ -537,7 +537,7 @@ void projectors::OnsiteProjector<T, Device>::cal_occupations(const psi::Psi<std:
     for(int ik = 0; ik < psi_in->get_nk(); ik++)
     {
         psi_in->fix_k(ik);
-        const int sign = psi_in->get_ngk_pointer()[ik] == 0? 1: -1;
+        const int sign = isk_in[ik] == 0? 1: -1;
         if(ik != 0)
         {
             this->tabulate_atomic(ik);
@@ -616,10 +616,18 @@ void projectors::OnsiteProjector<T, Device>::cal_occupations(const psi::Psi<std:
         std::vector<double> charge_mag(4, 0.0);
         for(int ih=0;ih<this->iat_nh[iat];ih++)
         {
-            charge_mag[3] += (occs[occ_index] - occs[occ_index + 3]).real();
-            charge_mag[1] += (occs[occ_index + 1] + occs[occ_index + 2]).real();
-            charge_mag[2] += (occs[occ_index + 1] - occs[occ_index + 2]).imag();
-            charge_mag[0] += (occs[occ_index] + occs[occ_index + 3]).real();
+            if(this->ucell->get_npol() == 2)
+            {
+                charge_mag[3] += (occs[occ_index] - occs[occ_index + 3]).real();
+                charge_mag[1] += (occs[occ_index + 1] + occs[occ_index + 2]).real();
+                charge_mag[2] += (occs[occ_index + 1] - occs[occ_index + 2]).imag();
+                charge_mag[0] += (occs[occ_index] + occs[occ_index + 3]).real();
+            }
+            else if (this->ucell->get_npol() == 1)
+            {
+                charge_mag[0] += occs[occ_index].real();
+                charge_mag[3] += occs[occ_index + 3].real();
+            }
             if(ih == current_l * current_l - 1)
             {
                 sum[0] += charge_mag[0];
