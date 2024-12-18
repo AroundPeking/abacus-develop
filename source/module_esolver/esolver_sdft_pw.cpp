@@ -137,7 +137,7 @@ void ESolver_SDFT_PW::before_scf(const int istep)
     }
 }
 
-void ESolver_SDFT_PW::iter_finish(int iter)
+void ESolver_SDFT_PW::iter_finish(const int iter, const bool conv_elec)
 {
     // this->pelec->print_eigenvalue(GlobalV::ofs_running);
     this->pelec->cal_energies(2);

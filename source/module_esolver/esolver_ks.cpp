@@ -639,7 +639,9 @@ void ESolver_KS<T, Device>::runner(const int istep, UnitCell& ucell)
         }
 #ifdef __MPI
         MPI_Bcast(&drho, 1, MPI_DOUBLE, 0, PARAPW_WORLD);
-        MPI_Bcast(&this->conv_elec, 1, MPI_DOUBLE, 0, PARAPW_WORLD);
+        int conv_elec_int = this->conv_elec ? 1 : 0;
+        MPI_Bcast(&conv_elec_int, 1, MPI_INT, 0, PARAPW_WORLD);
+        this->conv_elec = conv_elec_int == 1 ? true : false;
         MPI_Bcast(pelec->charge->rho[0], this->pw_rhod->nrxx, MPI_DOUBLE, 0, PARAPW_WORLD);
 #endif
 
@@ -649,7 +651,7 @@ void ESolver_KS<T, Device>::runner(const int istep, UnitCell& ucell)
         this->update_pot(istep, iter);
 
         // 10) finish scf iterations
-        this->iter_finish(iter);
+        this->iter_finish(iter, this->conv_elec);
 #ifdef __MPI
         double duration = (double)(MPI_Wtime() - iterstart);
 #else

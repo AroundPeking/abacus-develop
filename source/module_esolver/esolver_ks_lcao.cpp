@@ -812,13 +812,6 @@ void ESolver_KS_LCAO<TK, TR>::hamilt2density(int istep, int iter, double ethr)
     }
 #endif
 
-    // 8) for delta spin
-    if (PARAM.inp.sc_mag_switch)
-    {
-        SpinConstrain<TK>& sc = SpinConstrain<TK>::getScInstance();
-        sc.cal_MW(iter);
-    }
-
     // 9) use new charge density to calculate energy
     this->pelec->cal_energies(1);
 
@@ -954,13 +947,13 @@ void ESolver_KS_LCAO<TK, TR>::update_pot(const int istep, const int iter)
 //! 6) calculate the total energy?
 //------------------------------------------------------------------------------
 template <typename TK, typename TR>
-void ESolver_KS_LCAO<TK, TR>::iter_finish(int iter)
+void ESolver_KS_LCAO<TK, TR>::iter_finish(const int iter, const bool conv_elec)
 {
     ModuleBase::TITLE("ESolver_KS_LCAO", "iter_finish");
 
     // 1) mix density matrix if mixing_restart + mixing_dmr + not first
     // mixing_restart at every iter
-    if (GlobalV::MIXING_RESTART > 0 && this->p_chgmix->mixing_restart_count > 0 && GlobalV::MIXING_DMR)
+    if (GlobalV::MIXING_RESTART > 0 && this->p_chgmix->mixing_restart_count > 0 && GlobalV::MIXING_DMR && !conv_elec)
     {
         elecstate::DensityMatrix<TK, double>* dm = dynamic_cast<elecstate::ElecStateLCAO<TK>*>(this->pelec)->get_DM();
         this->p_chgmix->mix_dmr(dm);
