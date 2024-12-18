@@ -14,10 +14,10 @@
 #endif
 
 template <>
-void SpinConstrain<std::complex<double>>::calculate_delta_hcc(std::complex<double>* h_tmp, const std::complex<double>* becp_k, const ModuleBase::Vector3<double>* delta_lambda, const int nbands, const int nkb, const int* nh_iat)
+void SpinConstrain<std::complex<double>>::calculate_delta_hcc(std::complex<double>* h_tmp, const std::complex<double>* becp_k, const ModuleBase::Vector3<double>* delta_lambda, const int nbands, const int nkb, const int* nh_iat, const int sign)
 {
     int sum = 0;
-    int size_ps = nkb * 2 * nbands;
+    int size_ps = nkb * this->npol_ * nbands;
     std::complex<double>* becp_cpu = nullptr;
     if(PARAM.inp.device == "gpu")
     {
@@ -34,6 +34,7 @@ void SpinConstrain<std::complex<double>>::calculate_delta_hcc(std::complex<doubl
     }
 
     std::vector<std::complex<double>> ps(size_ps, 0.0);
+    if(this->npol_ == 2)
     for (int iat = 0; iat < this->Mi_.size(); iat++)
     {
         const int nproj = nh_iat[iat];
@@ -44,7 +45,7 @@ void SpinConstrain<std::complex<double>>::calculate_delta_hcc(std::complex<doubl
         // each atom has nproj, means this is with structure factor;
         // each projector (each atom) must multiply coefficient
         // with all the other projectors.
-        for (int ib = 0; ib < nbands * 2; ib+=2)
+        for (int ib = 0; ib < nbands * this->npol_; ib += this->npol_)
         {
             for (int ip = 0; ip < nproj; ip++)
             {
@@ -59,6 +60,27 @@ void SpinConstrain<std::complex<double>>::calculate_delta_hcc(std::complex<doubl
         } // end ib
         sum += nproj;
     } // end iat
+    else if(this->npol_ == 1)
+    {
+        for (int iat = 0; iat < this->Mi_.size(); iat++)
+        {
+            const int nproj = nh_iat[iat];
+            double coefficients0 = delta_lambda[iat][2] * sign;
+            // each atom has nproj, means this is with structure factor;
+            // each projector (each atom) must multiply coefficient
+            // with all the other projectors.
+            for (int ib = 0; ib < nbands; ib++)
+            {
+                for (int ip = 0; ip < nproj; ip++)
+                {
+                    const int becpind = ib * nkb + sum + ip;
+                    const std::complex<double> becp1 = becp_cpu[becpind];
+                    ps[becpind] += coefficients0 * becp1;
+                } // end ip
+            } // end ib
+            sum += nproj;
+        } // end iat
+    }
     std::complex<double>* ps_pointer = nullptr;
     if(PARAM.inp.device == "gpu")
     {
@@ -76,7 +98,7 @@ void SpinConstrain<std::complex<double>>::calculate_delta_hcc(std::complex<doubl
     // update h_tmp by becp_k * ps
     char transa = 'C';
     char transb = 'N';
-    const int npm = nkb * 2;
+    const int npm = nkb * this->npol_;
     if (PARAM.inp.device == "gpu")
     {
 #if ((defined __CUDA) || (defined __ROCM))
@@ -219,6 +241,7 @@ void SpinConstrain<std::complex<double>>::cal_mw_from_lambda(int i_step, const M
                 {
 
                     psi_t->fix_k(ik);
+                    const int sign = this->pelec->klist->isk[ik] == 0 ? 1 : -1;
 
                     std::complex<double>* h_k = this->sub_h_save + ik * nbands * nbands;
                     std::complex<double>* s_k = this->sub_s_save + ik * nbands * nbands;
@@ -233,14 +256,14 @@ void SpinConstrain<std::complex<double>>::cal_mw_from_lambda(int i_step, const M
                     memcpy(h_tmp.data(), h_k, sizeof(std::complex<double>) * nbands * nbands);
                     memcpy(s_tmp.data(), s_k, sizeof(std::complex<double>) * nbands * nbands);
                     // update h_tmp by delta_lambda
-                    if (i_step != -1) this->calculate_delta_hcc(h_tmp.data(), becp_k, delta_lambda, nbands, nkb, nh_iat);
+                    if (i_step != -1) this->calculate_delta_hcc(h_tmp.data(), becp_k, delta_lambda, nbands, nkb, nh_iat, sign);
 
                     hsolver::DiagoIterAssist<std::complex<double>>::diag_responce(h_tmp.data(),
                                                                                   s_tmp.data(),
                                                                                   nbands,
                                                                                   becp_k,
                                                                                   &becp_tmp[ik * size_becp],
-                                                                                  nkb * 2,
+                                                                                  nkb * npol,
                                                                                   &this->pelec->ekb(ik, 0));
                 }
             }
@@ -278,6 +301,7 @@ void SpinConstrain<std::complex<double>>::cal_mw_from_lambda(int i_step, const M
                 for (int ik = 0; ik < nk; ++ik)
                 {
                     psi_t->fix_k(ik);
+                    const int sign = this->pelec->klist->isk[ik] == 0 ? 1 : -1;
 
                     std::complex<double>* h_k = this->sub_h_save + ik * nbands * nbands;
                     std::complex<double>* s_k = this->sub_s_save + ik * nbands * nbands;
@@ -292,7 +316,7 @@ void SpinConstrain<std::complex<double>>::cal_mw_from_lambda(int i_step, const M
                     base_device::memory::synchronize_memory_op<std::complex<double>, base_device::DEVICE_GPU, base_device::DEVICE_GPU>()(ctx, ctx, h_tmp, h_k, nbands * nbands);
                     base_device::memory::synchronize_memory_op<std::complex<double>, base_device::DEVICE_GPU, base_device::DEVICE_GPU>()(ctx, ctx, s_tmp, s_k, nbands * nbands);
                     // update h_tmp by delta_lambda
-                    if (i_step != -1) this->calculate_delta_hcc(h_tmp, becp_k, delta_lambda, nbands, nkb, nh_iat);
+                    if (i_step != -1) this->calculate_delta_hcc(h_tmp, becp_k, delta_lambda, nbands, nkb, nh_iat, sign);
 
                     hsolver::DiagoIterAssist<std::complex<double>, base_device::DEVICE_GPU>::diag_responce(h_tmp,
                                                                                   s_tmp,
@@ -312,6 +336,7 @@ void SpinConstrain<std::complex<double>>::cal_mw_from_lambda(int i_step, const M
             // calculate weights from ekb to update wg
             this->pelec->calculate_weights();
             // calculate Mi from existed becp
+            if(this->npol_ == 2)
             for (int ik = 0; ik < nk; ik++)
             {
                 const std::complex<double>* becp = &becp_tmp[ik * size_becp];
@@ -339,6 +364,34 @@ void SpinConstrain<std::complex<double>>::cal_mw_from_lambda(int i_step, const M
                         this->Mi_[iat].y += weight * (occ[1] - occ[2]).imag();
                         this->Mi_[iat].z += weight * (occ[0] - occ[3]).real();
                         begin_ih += nh;
+                    }
+                }
+            }
+            else if (this->npol_ == 1)
+            {
+                for (int ik = 0; ik < nk; ik++)
+                {
+                    const int sign = this->pelec->klist->isk[ik] == 0 ? 1 : -1;
+                    const std::complex<double>* becp = &becp_tmp[ik * size_becp];
+                    // becp(nbands*npol , nkb)
+                    // mag = wg * \sum_{nh}becp * becp
+                    for (int ib = 0; ib < nbands; ib++)
+                    {
+                        const double weight = this->pelec->wg(ik, ib);
+                        int begin_ih = 0;
+                        for (int iat = 0; iat < this->Mi_.size(); iat++)
+                        {
+                            const int nh = nh_iat[iat];
+                            double occ = 0.0;
+                            for (int ih = 0; ih < nh; ih++)
+                            {
+                                const int index = ib * nkb + begin_ih + ih;
+                                occ += (conj(becp[index]) * becp[index]).real();
+                            }
+                            // occ has been reduced and calculate mag
+                            this->Mi_[iat].z += weight * occ * sign;
+                            begin_ih += nh;
+                        }
                     }
                 }
             }
@@ -400,9 +453,10 @@ void SpinConstrain<std::complex<double>>::update_psi_charge(const ModuleBase::Ve
                 std::complex<double>* becp_k = this->becp_save + ik * size_becp;
 
                 psi_t->fix_k(ik);
+                const int sign = this->pelec->klist->isk[ik] == 0 ? 1 : -1;
                 memcpy(h_tmp.data(), h_k, sizeof(std::complex<double>) * nbands * nbands);
                 memcpy(s_tmp.data(), s_k, sizeof(std::complex<double>) * nbands * nbands);
-                this->calculate_delta_hcc(h_tmp.data(), becp_k, delta_lambda, nbands, nkb, nh_iat);
+                this->calculate_delta_hcc(h_tmp.data(), becp_k, delta_lambda, nbands, nkb, nh_iat, sign);
                 hsolver::DiagoIterAssist<std::complex<double>>::diag_subspace_psi(h_tmp.data(),
                                                                                 s_tmp.data(),
                                                                                 nbands,
@@ -456,9 +510,10 @@ void SpinConstrain<std::complex<double>>::update_psi_charge(const ModuleBase::Ve
                 std::complex<double>* becp_k = this->becp_save + ik * size_becp;
 
                 psi_t->fix_k(ik);
+                const int sign = this->pelec->klist->isk[ik] == 0 ? 1 : -1;
                 base_device::memory::synchronize_memory_op<std::complex<double>, base_device::DEVICE_GPU, base_device::DEVICE_GPU>()(ctx, ctx, h_tmp, h_k, nbands * nbands);
                 base_device::memory::synchronize_memory_op<std::complex<double>, base_device::DEVICE_GPU, base_device::DEVICE_GPU>()(ctx, ctx, s_tmp, s_k, nbands * nbands);
-                this->calculate_delta_hcc(h_tmp, becp_k, delta_lambda, nbands, nkb, nh_iat);
+                this->calculate_delta_hcc(h_tmp, becp_k, delta_lambda, nbands, nkb, nh_iat, sign);
                 hsolver::DiagoIterAssist<std::complex<double>, base_device::DEVICE_GPU>::diag_subspace_psi(h_tmp,
                                                                                 s_tmp,
                                                                                 nbands,

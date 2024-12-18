@@ -16,6 +16,8 @@ struct onsite_ps_op<FPTYPE, base_device::DEVICE_CPU>
                     std::complex<FPTYPE>* ps,
                     const std::complex<FPTYPE>* becp)
     {
+        if(npol == 2)
+        {
 #ifdef _OPENMP
 #pragma omp parallel for collapse(2)
 #endif
@@ -33,6 +35,23 @@ struct onsite_ps_op<FPTYPE, base_device::DEVICE_CPU>
                             + lambda_array[iat * 4 + 3] * becp[becpind + tnp];
             } // end ip
         } // end ib
+        }
+        else if(npol == 1)
+        {
+#ifdef _OPENMP
+#pragma omp parallel for collapse(2)
+#endif
+            for (int ib = 0; ib < npm; ib++)
+            {
+                for (int ip = 0; ip < tnp; ip++)
+                {
+                    int iat = ip_iat[ip];
+                    const int psind = ip * npm + ib;
+                    const int becpind = ib * tnp + ip;
+                    ps[psind] += lambda_array[iat] * becp[becpind];
+                } // end ip
+            } // end ib
+        }
     };
 
     // kernel for DFT+U calculation

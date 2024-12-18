@@ -535,6 +535,7 @@ void projectors::OnsiteProjector<T, Device>::cal_occupations(const psi::Psi<std:
     for(int ik = 0; ik < psi_in->get_nk(); ik++)
     {
         psi_in->fix_k(ik);
+        const int sign = psi_in->get_ngk_pointer()[ik] == 0? 1: -1;
         if(ik != 0)
         {
             this->tabulate_atomic(ik);
@@ -557,6 +558,7 @@ void projectors::OnsiteProjector<T, Device>::cal_occupations(const psi::Psi<std:
             for(int iat = 0; iat < this->iat_nh.size(); iat++)
             {
                 const int nh = this->get_nh(iat);
+                if(this->ucell->get_npol() == 2)
                 for(int ih = 0; ih < nh; ih++)
                 {
                     const int occ_index = (begin_ih + ih) * 4;
@@ -565,6 +567,16 @@ void projectors::OnsiteProjector<T, Device>::cal_occupations(const psi::Psi<std:
                     occs[occ_index + 1] += weight * conj(becp_p[index]) * becp_p[index + nkb];
                     occs[occ_index + 2] += weight * conj(becp_p[index + nkb]) * becp_p[index];
                     occs[occ_index + 3] += weight * conj(becp_p[index + nkb]) * becp_p[index + nkb];
+                }
+                else if(this->ucell->get_npol() == 1)
+                {
+                    for(int ih = 0; ih < nh; ih++)
+                    {
+                        const int occ_index = (begin_ih + ih) * 4;
+                        const int index = ib*nkb + begin_ih + ih;
+                        occs[occ_index] += weight * conj(becp_p[index]) * becp_p[index];
+                        occs[occ_index + 3] += weight * conj(becp_p[index]) * becp_p[index] * sign;
+                    }
                 }
                 begin_ih += nh;
             }

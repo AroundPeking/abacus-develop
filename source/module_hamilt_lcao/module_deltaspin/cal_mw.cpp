@@ -130,6 +130,40 @@ void SpinConstrain<std::complex<double>>::cal_Mi_pw()
         const int nbands = psi_t->get_nbands();
         const int nks = psi_t->get_nk();
         const int npol = psi_t->npol;
+        if(npol == 1)// nspin=2
+        for(int ik = 0; ik < nks; ik++)
+        {
+            psi_t->fix_k(ik);
+            const int is = this->pelec->klist->isk[ik];
+            const int sign = (is == 0) ? 1 : -1;
+            psi_pointer = psi_t->get_pointer();
+            onsite_p->tabulate_atomic(ik); // tabulate for each atom at each k-point
+            // std::cout << __FILE__ << ":" << __LINE__ << " nbands = " << nbands << std::endl;
+            onsite_p->overlap_proj_psi(nbands, psi_pointer);
+            const std::complex<double>* becp = onsite_p->get_h_becp();
+            // becp(nbands*npol , nkb)
+            // mag = wg * \sum_{nh}becp * becp
+            int nkb = onsite_p->get_tot_nproj();
+            for(int ib = 0;ib<nbands;ib++)
+            {
+                const double weight = this->pelec->wg(ik, ib);
+                int begin_ih = 0;
+                for(int iat = 0; iat < this->Mi_.size(); iat++)
+                {
+                    double occ = 0.0;
+                    const int nh = onsite_p->get_nh(iat);
+                    for(int ih = 0; ih < nh; ih++)
+                    {
+                        const int index = ib*nkb + begin_ih + ih;
+                        occ += (conj(becp[index]) * becp[index]).real();
+                    }
+                    // occ has been reduced and calculate mag
+                    this->Mi_[iat].z += sign * weight * occ ;
+                    begin_ih += nh;
+                }
+            }
+        }
+        else if(npol == 2)
         for(int ik = 0; ik < nks; ik++)
         {
             psi_t->fix_k(ik);
