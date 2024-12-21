@@ -3,6 +3,7 @@
 #include "md_parameter.h"
 #include "module_base/vector3.h"
 
+#include <limits>
 #include <string>
 #include <vector>
 
@@ -56,8 +57,8 @@ struct Input_para
     std::string stru_file = "STRU";     ///< file contains atomic positions --
                                         ///< xiaohui modify 2015-02-01
     std::string kpoint_file = "KPT";    ///< file contains k-points -- xiaohui modify 2015-02-01
-    std::string pseudo_dir = "";      ///< directory of pseudopotential
-    std::string orbital_dir = "";     ///< directory of orbital file
+    std::string pseudo_dir = "";        ///< directory of pseudopotential
+    std::string orbital_dir = "";       ///< directory of orbital file
     std::string read_file_dir = "auto"; ///< directory of files for reading
     bool restart_load = false;
     std::string wannier_card = "none";              ///< input card for wannier functions.
@@ -109,11 +110,11 @@ struct Input_para
     bool mixing_dftu = false; ///< whether to mix locale in DFT+U
     bool mixing_dmr = false;  ///< whether to mix real space density matrix
 
-    bool gamma_only = false; ///< for plane wave.
-    int scf_nmax = 100;      ///< number of max elec iter
-    double scf_thr = -1.0;   ///< \sum |rhog_out - rhog_in |^2
+    bool gamma_only = false;   ///< for plane wave.
+    int scf_nmax = 100;        ///< number of max elec iter
+    double scf_thr = -1.0;     ///< \sum |rhog_out - rhog_in |^2
     double scf_ene_thr = -1.0; ///< energy threshold for scf convergence, in eV
-    int scf_thr_type = -1;   ///< type of the criterion of scf_thr, 1: reci drho, 2: real drho
+    int scf_thr_type = -1;     ///< type of the criterion of scf_thr, 1: reci drho, 2: real drho
 
     bool lspinorb = false;   ///< consider the spin-orbit interaction
     bool noncolin = false;   ///< using non-collinear-spin
@@ -328,11 +329,11 @@ struct Input_para
     bool out_mat_hs2 = false;             ///< LiuXh add 2019-07-16, output H(R) matrix and
                                           ///< S(R) matrix in local basis.
     bool out_mat_dh = false;
-    bool out_mat_xc = false; ///< output exchange-correlation matrix in
-                             ///< KS-orbital representation.
-    bool out_eband_terms = false;   ///< output the band energy terms separately
-    bool out_hr_npz = false; ///< output exchange-correlation matrix in
-                             ///< KS-orbital representation.
+    bool out_mat_xc = false;      ///< output exchange-correlation matrix in
+                                  ///< KS-orbital representation.
+    bool out_eband_terms = false; ///< output the band energy terms separately
+    bool out_hr_npz = false;      ///< output exchange-correlation matrix in
+                                  ///< KS-orbital representation.
     bool out_dm_npz = false;
 
     int out_interval = 1;
@@ -477,17 +478,21 @@ struct Input_para
     double exx_cauchy_force_threshold = 1e-07;  ///< threshold to screen exx force using Cauchy-Schwartz
                                                 ///< inequality
     double exx_cauchy_stress_threshold = 1e-07; ///< threshold to screen exx stress using Cauchy-Schwartz
-                                                ///< inequality
-    std::string exx_ccp_rmesh_times = "1";      ///< how many times larger the radial mesh required for
-                                                ///< calculating Columb potential is to that of atomic orbitals
-    std::string exx_distribute_type = "htime";  ///< distribute type (assuming default as no specific value
-                                                ///< provided)
-    int exx_opt_orb_lmax = 0;                   ///< the maximum l of the spherical Bessel functions for opt ABFs
-    double exx_opt_orb_ecut = 0.0;              ///< the cut-off of plane wave expansion for opt ABFs
-    double exx_opt_orb_tolerence = 0.0;         ///< the threshold when solving for the zeros of spherical Bessel
-                                                ///< functions for opt ABFs
-    double rpa_ccp_rmesh_times = 10.0;          ///< how many times larger the radial mesh required for
-                                                ///< calculating Columb potential is to that of atomic orbitals
+    ///< inequality
+    double Cs_inv_thr = 1e-06;
+
+    std::string exx_ccp_rmesh_times = "1";     ///< how many times larger the radial mesh required for
+                                               ///< calculating Columb potential is to that of atomic orbitals
+    std::string exx_distribute_type = "htime"; ///< distribute type (assuming default as no specific value
+                                               ///< provided)
+    int exx_opt_orb_lmax = 0;                  ///< the maximum l of the spherical Bessel functions for opt ABFs
+    double exx_opt_orb_ecut = 0.0;             ///< the cut-off of plane wave expansion for opt ABFs
+    double exx_opt_orb_tolerence = 0.0;        ///< the threshold when solving for the zeros of spherical Bessel
+    double gs_orth_thr = std::numeric_limits<double>::min();
+
+    ///< functions for opt ABFs
+    double rpa_ccp_rmesh_times = 10.0; ///< how many times larger the radial mesh required for
+                                       ///< calculating Columb potential is to that of atomic orbitals
     // ==============   #Parameters (16.dft+u) ======================
     //    DFT+U       Xin Qu added on 2020-10-29
     int dft_plus_u = 0;                    ///< 0: standard DFT calculation (default)

@@ -11,7 +11,8 @@ set(CEREAL_INCLUDE_DIR   "/home/linpz/software/cereal/cereal-1.3.0/include" CACH
 set(ELPA_LIBRARY "/home/linpz/software/elpa/elpa-openmp_2021.11.002/lib/libelpa_openmp.so" CACHE STRING "")
 set(ELPA_DIR "/home/linpz/software/elpa/elpa-openmp_2021.11.002" CACHE STRING "")
 set(ELPA_INCLUDE_DIR "/home/linpz/software/elpa/elpa-openmp_2021.11.002/include/elpa_openmp-2021.11.002" CACHE STRING "")
-set(LIBRI_DIR "/home/ghj/abacus/240731/LibRI"  CACHE STRING "")
+# set(LIBRI_DIR "/home/ghj/abacus/240731/LibRI"  CACHE STRING "")
+set(LIBRI_DIR "/home/ghj/abacus/LibRI_time-out"  CACHE STRING "")
 set(LIBCOMM_DIR "/home/ghj/abacus/240731/LibComm" CACHE STRING "")
 set(Libxc_DIR "/home/ghj/abacus/libxc-6.0.0-build" CACHE STRING "")
 

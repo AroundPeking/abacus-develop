@@ -27,8 +27,9 @@ struct Exx_Info
         double lambda = 0.3;
 
         Exx_Info_Lip(const Exx_Info::Exx_Info_Global& info_global)
-            :ccp_type(info_global.ccp_type),
-            hse_omega(info_global.hse_omega) {}
+            : ccp_type(info_global.ccp_type), hse_omega(info_global.hse_omega)
+        {
+        }
     };
     Exx_Info_Lip info_lip;
 
@@ -53,6 +54,7 @@ struct Exx_Info
         double cauchy_stress_threshold = 0;
         double ccp_rmesh_times = 10;
         double kmesh_times = 4;
+        double Cs_inv_thr = 1E-6;
 
         int abfs_Lmax = 0; // tmp
 

@@ -174,6 +174,12 @@ void ReadInput::item_exx()
         this->add_item(item);
     }
     {
+        Input_Item item("cs_inv_thr");
+        item.annotation = "threshold to inverse Vq in abfs for generating Cs";
+        read_sync_double(input.Cs_inv_thr);
+        this->add_item(item);
+    }
+    {
         Input_Item item("exx_ccp_rmesh_times");
         item.annotation = "how many times larger the radial mesh required for "
                           "calculating Columb potential is to that "
@@ -271,6 +277,18 @@ void ReadInput::item_exx()
                 ModuleBase::WARNING_QUIT("ReadInput", "rpa_ccp_rmesh_times must >= 1");
             }
         };
+        this->add_item(item);
+    }
+    {
+        Input_Item item("Cs_inv_thr");
+        item.annotation = "Vq inverse threshold for getting Cs";
+        read_sync_double(input.Cs_inv_thr);
+        this->add_item(item);
+    }
+    {
+        Input_Item item("gs_orth_thr");
+        item.annotation = "Gram-Schmidt threshold for generating abfs";
+        read_sync_double(input.gs_orth_thr);
         this->add_item(item);
     }
 }

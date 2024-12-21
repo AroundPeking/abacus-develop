@@ -1,11 +1,11 @@
-#include <cstdio>
-#include <fstream>
-
-#include "gmock/gmock.h"
-#include "gtest/gtest.h"
 #include "module_base/tool_quit.h"
 #include "module_io/read_input.h"
 #include "module_parameter/parameter.h"
+
+#include "gmock/gmock.h"
+#include "gtest/gtest.h"
+#include <cstdio>
+#include <fstream>
 // #ifdef __MPI
 #include "module_base/parallel_global.h"
 #include "module_basis/module_pw/test/test_tool.h"
@@ -275,6 +275,7 @@ TEST_F(InputParaTest, ParaRead)
     EXPECT_DOUBLE_EQ(param.inp.exx_v_grad_threshold, 0);
     EXPECT_DOUBLE_EQ(param.inp.exx_cauchy_force_threshold, 0);
     EXPECT_DOUBLE_EQ(param.inp.exx_cauchy_stress_threshold, 0);
+    EXPECT_DOUBLE_EQ(param.inp.Cs_inv_thr, 1E-6);
     EXPECT_EQ(param.inp.exx_ccp_rmesh_times, "1.5");
     EXPECT_DOUBLE_EQ(param.inp.rpa_ccp_rmesh_times, 10.0);
     EXPECT_EQ(param.inp.exx_distribute_type, "htime");
