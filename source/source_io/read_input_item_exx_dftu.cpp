@@ -88,7 +88,7 @@ void ReadInput::item_exx()
                 {
                     para.input.exx_hybrid_beta = "0.8";
                 }
-                else if (dft_functional_lower == "cwp22")
+                else if (para.input.exx_use_ewald && dft_functional_lower == "hse")
                 {
                     para.input.exx_hybrid_beta = "0.25";
                 }
@@ -112,11 +112,7 @@ void ReadInput::item_exx()
                 std::transform(dft_functional.begin(), dft_functional.end(), dft_functional_lower.begin(), tolower);
                 if (dft_functional_lower == "hse" || dft_functional_lower == "cwp22" || dft_functional_lower == "wp22")
                 {
-                    para.input.exx_erfc_omega = {"0.11"};
-                }
-                else if (dft_functional_lower == "lc_pbe")
-                {
-                    para.input.exx_erfc_omega = {"0.33"};
+                    para.input.exx_hse_omega = "0.33";
                 }
                 else if (dft_functional_lower == "lc_wpbe")
                 {
