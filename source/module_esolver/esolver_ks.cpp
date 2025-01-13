@@ -599,14 +599,6 @@ void ESolver_KS<T, Device>::runner(const int istep, UnitCell& ucell)
                         = (std::abs(this->pelec->f_en.etot_delta * ModuleBase::Ry_to_eV) < this->scf_ene_thr);
                 }
             }
-            if(this->conv_elec && PARAM.inp.sc_mag_switch && PARAM.inp.gga_grad == 2)
-            {
-                XC_Functional::gga_grad = 1;
-            }
-            else if(PARAM.inp.gga_grad != XC_Functional::gga_grad)
-            {
-                this->conv_elec = true;
-            }
 
             // If drho < hsolver_error in the first iter or drho < scf_thr, we
             // do not change rho.
