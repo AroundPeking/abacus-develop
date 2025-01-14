@@ -76,7 +76,7 @@ void Exx_LRI_Interface<T, Tdata>::exx_beforescf(const int istep, const K_Vectors
                 XC_Functional::set_xc_type("scan");
             }
         }
-        this->exx_ptr->cal_exx_ions(PARAM.inp.out_ri_cv, istep);
+        this->exx_ptr->cal_exx_ions(istep, PARAM.inp.out_ri_cv);
     }
 
 		if (Exx_Abfs::Jle::generate_matrix)

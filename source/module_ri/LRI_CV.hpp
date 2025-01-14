@@ -48,11 +48,11 @@ void LRI_CV<Tdata>::set_orbitals(
     ModuleBase::TITLE("LRI_CV", "set_orbitals");
     ModuleBase::timer::tick("LRI_CV", "set_orbitals");
 
-    this->orb_cutoff_ = orb.cutoffs();
     this->lcaos = lcaos_in;
     this->abfs = abfs_in;
     this->abfs_ccp = abfs_ccp_in;
 
+    this->lcaos_rcut = Exx_Abfs::Construct_Orbs::get_Rcut(this->lcaos);
     this->abfs_ccp_rcut = Exx_Abfs::Construct_Orbs::get_Rcut(this->abfs_ccp);
     const double lcaos_rmax = Exx_Abfs::Construct_Orbs::get_Rmax(this->lcaos);
     const double abfs_ccp_rmax
@@ -97,13 +97,13 @@ void LRI_CV<Tdata>::set_orbitals(
 
 template <typename Tdata>
 double LRI_CV<Tdata>::cal_V_Rcut(const int it0, const int it1) {
-    return this->abfs_ccp_rcut[it0] + this->orb_cutoff_[it1];
+    return this->abfs_ccp_rcut[it0] + this->lcaos_rcut[it1];
 }
 
 template <typename Tdata>
 double LRI_CV<Tdata>::cal_C_Rcut(const int it0, const int it1) {
-    return std::min(this->abfs_ccp_rcut[it0], this->orb_cutoff_[it0])
-           + this->orb_cutoff_[it1];
+    return std::min(this->abfs_ccp_rcut[it0], this->lcaos_rcut[it0])
+           + this->lcaos_rcut[it1];
 }
 
 template <typename Tdata>
