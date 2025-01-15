@@ -119,8 +119,10 @@ void BFGSData::UpdateHessian()
 
     auto term3=this->ScaleMatrix(term1, a);
     auto term4=this->ScaleMatrix(term2, b);
+    this->RecPrtMat("hessian matrix to be updated", H, size, size);
     H = this->MatAdd(H, term3);
     H = this->MatAdd(H, term4);
+    this->RecPrtMat("hessian matrix updated", H, size, size);
 }
 
 std::vector<double> BFGSData::VSubV(std::vector<double>& a, std::vector<double>& b) 
@@ -207,7 +209,7 @@ std::vector<std::vector<double>> BFGSData::MatAdd(std::vector<std::vector<double
     return result;
 }
 
-void BFGSData::RecPrtVec(char* info, std::vector<double>& vec, int nrow, int ncol)
+void BFGSData::RecPrtVec(std::string info, std::vector<double>& vec, int nrow, int ncol)
 {
     std::cout << "printing data for " << info << std::endl;
     int iloc = 0;
@@ -222,7 +224,7 @@ void BFGSData::RecPrtVec(char* info, std::vector<double>& vec, int nrow, int nco
     }
 }
 
-void BFGSData::RecPrtMat(char* info, std::vector<std::vector<double>>& mat, int nrow, int ncol)
+void BFGSData::RecPrtMat(std::string info, std::vector<std::vector<double>>& mat, int nrow, int ncol)
 {
     std::cout << "printing data for " << info << std::endl;
     for(int irow = 0; irow < nrow; ++irow)

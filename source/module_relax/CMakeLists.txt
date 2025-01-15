@@ -9,6 +9,8 @@ add_library(
 
     relax_old/relax_old.cpp
     relax_old/bfgs_basic.cpp
+    relax_old/bfgsdata.cpp
+    relax_old/magmom_bfgs_opt.cpp
     relax_old/ions_move_basic.cpp
     relax_old/ions_move_bfgs.cpp
     relax_old/ions_move_cg.cpp

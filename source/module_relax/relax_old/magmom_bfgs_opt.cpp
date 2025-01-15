@@ -1,13 +1,14 @@
-#include "magmom_bfgs.h"
+#include "magmom_bfgs_opt.h"
 #include "bfgsdata.h"
+#include <string>
 #include "module_hamilt_lcao/module_deltaspin/spin_constrain.h"
 //#include "module_hamilt_lcao/module_deltaspin/spin_constrain.cpp"
 
-Magmom_BFGS::Magmom_BFGS(){}
-Magmom_BFGS::~Magmom_BFGS(){}
+Magmom_BFGS_Opt::Magmom_BFGS_Opt(){}
+Magmom_BFGS_Opt::~Magmom_BFGS_Opt(){}
 
 //! initialize H0、H、pos0、grad0、grad
-void Magmom_BFGS::initialize(const int _n_atom, const int _n_moment_component) 
+void Magmom_BFGS_Opt::initialize(const int _n_atom, const int _n_moment_component) 
 {
     n_atom = _n_atom;
     n_moment_component = _n_moment_component;
@@ -31,34 +32,50 @@ void Magmom_BFGS::initialize(const int _n_atom, const int _n_moment_component)
     BFGSData::allocate(size);
 }
 
-bool Magmom_BFGS::bfgs_wrapper()
+bool Magmom_BFGS_Opt::bfgs_wrapper()
 {
-    spinconstrain::SpinConstrain<double>& sc = spinconstrain::SpinConstrain<double>::getScInstance();
-//
-//    std::vector<ModuleBase::Vector3<double>> vec3_magforce = sc.get_sc_lambda();
-//    std::vector<ModuleBase::Vector3<double>> vec3_magmoment = sc.get_target_mag();
-//
-//    std::vector<std::vector<double>> magforce = matvec3_to_mat(vec3_magforce, n_atom);
-//    std::vector<std::vector<double>> magmoment = matvec3_to_mat(vec3_magmoment, n_atom);
-//    std::vector<ModuleBase::Vector3<int>> vec3_magconstrain = sc.get_constrain();
-//
-//    BFGSData::RecPrtMat("read-in magforce", magforce, n_atom, n_moment_component);
-//    BFGSData::RecPrtMat("read-in magmoment", magmoment, n_atom, n_moment_component);
-//
-//    constrain_magforce(vec3_magforce, vec3_magconstrain);
-//    magmoment = matvec3_to_mat(vec3_magmoment, n_atom);
-//    BFGSData::RecPrtMat("magmoment after setting constraint", magmoment, n_atom, n_moment_component);
-//
-//    std::vector<std::vector<double>> new_magmom = calc_new_magmom(magmoment, magforce);
-//    BFGSData::RecPrtMat("new magmoment", magmoment, n_atom, n_moment_component);
-//
-//    const std::vector<ModuleBase::Vector3<double>> vec3_newmag = mat_to_matvec3(new_magmom, n_atom);
-//    sc.set_target_mag(vec3_newmag);
+    std::cout << "hello from bfgs_wrapper" << std::endl;
+    std::cout << "obtainging the sc instance" << std::endl;
+    spinconstrain::SpinConstrain<std::complex<double>>& sc = spinconstrain::SpinConstrain<std::complex<double>>::getScInstance();
 
+    std::cout << "obtaining lambda" << std::endl;
+    auto& vec3_magforce = sc.get_sc_lambda();
+    std::cout << "obtaining target magnetic moment" << std::endl;
+    auto& vec3_magmoment = sc.get_target_mag();
+
+    std::cout << "converting from matrix_vector3 to matrix, n_atom = " << n_atom << std::endl;
+    std::vector<std::vector<double>> magforce = matvec3_to_mat(vec3_magforce, n_atom);
+    std::cout << "conversion of magforce done" << std::endl;
+    std::vector<std::vector<double>> magmoment = matvec3_to_mat(vec3_magmoment, n_atom);
+
+    std::cout << "obtaining magmoment constraints" << std::endl;
+    std::vector<ModuleBase::Vector3<int>> vec3_magconstrain = sc.get_constrain();
+
+    std::string str = "read-in magforce";
+    BFGSData::RecPrtMat(str, magforce, n_atom, n_moment_component);
+    str = "read-in magmoment";
+    BFGSData::RecPrtMat(str, magmoment, n_atom, n_moment_component);
+
+//    constrain_magforce(vec3_magforce, vec3_magconstrain);
+    magmoment = matvec3_to_mat(vec3_magmoment, n_atom);
+    str = "magmoment after bfgs";
+    BFGSData::RecPrtMat(str, magmoment, n_atom, n_moment_component);
+
+    std::vector<std::vector<double>> new_magmom = calc_new_magmom(magmoment, magforce);
+    str = "new magmoment";
+    BFGSData::RecPrtMat(str, magmoment, n_atom, n_moment_component);
+
+    std::cout << "converting matrix back to matrix_vec3" << std::endl;
+    const std::vector<ModuleBase::Vector3<double>> vec3_newmag = mat_to_matvec3(new_magmom, n_atom);
+    std::cout << "converting matrix back to matrix_vec3 done" << std::endl;
+    sc.set_target_mag(vec3_newmag);
+    std::cout << "setting new magnetic moments" << std::endl;
+
+    std::cout << "convergence status = " << get_convergence_status() << std::endl;
     return get_convergence_status(); 
 }
 
-void Magmom_BFGS::constrain_magforce(std::vector<ModuleBase::Vector3<double>>& magforce, std::vector<ModuleBase::Vector3<int>> magconstrain)
+void Magmom_BFGS_Opt::constrain_magforce(std::vector<ModuleBase::Vector3<double>>& magforce, std::vector<ModuleBase::Vector3<int>> magconstrain)
 {
     int ncol = 3;
     for (size_t i = 0; i < magforce.size(); ++i)
@@ -70,7 +87,7 @@ void Magmom_BFGS::constrain_magforce(std::vector<ModuleBase::Vector3<double>>& m
     }
 }
 
-std::vector<std::vector<double>> Magmom_BFGS::calc_new_magmom(std::vector<std::vector<double>> _magmom, std::vector<std::vector<double>> _magforce)
+std::vector<std::vector<double>> Magmom_BFGS_Opt::calc_new_magmom(std::vector<std::vector<double>> _magmom, std::vector<std::vector<double>> _magforce)
 {
 //    std::cout << "checking convergence" << std::endl;
     module_force = calc_moment_module(_magforce, n_atom, n_moment_component);
@@ -119,7 +136,7 @@ std::vector<std::vector<double>> Magmom_BFGS::calc_new_magmom(std::vector<std::v
 }
 
 
-std::vector<double> Magmom_BFGS::calc_moment_module(std::vector<std::vector<double>> mat_moment, int nrow, int ncol)
+std::vector<double> Magmom_BFGS_Opt::calc_moment_module(std::vector<std::vector<double>> mat_moment, int nrow, int ncol)
 {
     std::vector<double> result_vec(nrow, 0.0);
     double temp_double;
@@ -136,7 +153,7 @@ std::vector<double> Magmom_BFGS::calc_moment_module(std::vector<std::vector<doub
 }
 
 
-std::vector<double> Magmom_BFGS::mat_to_vec(std::vector<std::vector<double>> mat, int nrow, int ncol)
+std::vector<double> Magmom_BFGS_Opt::mat_to_vec(std::vector<std::vector<double>> mat, int nrow, int ncol)
 {
     int iloc = 0;
     int nelem = nrow * ncol;
@@ -152,7 +169,7 @@ std::vector<double> Magmom_BFGS::mat_to_vec(std::vector<std::vector<double>> mat
     return vec;
 }
 
-std::vector<std::vector<double>> Magmom_BFGS::vec_to_mat(std::vector<double> vec, int nrow, int ncol)
+std::vector<std::vector<double>> Magmom_BFGS_Opt::vec_to_mat(std::vector<double> vec, int nrow, int ncol)
 {
     int iloc = 0;
     int nelem = nrow * ncol;
@@ -168,22 +185,22 @@ std::vector<std::vector<double>> Magmom_BFGS::vec_to_mat(std::vector<double> vec
     return mat;
 }
 
-void Magmom_BFGS::set_convergence_threshold(double _convergence_threshold)
+void Magmom_BFGS_Opt::set_convergence_threshold(double _convergence_threshold)
 {
     convergence_threshold = _convergence_threshold;
 }
 
-void Magmom_BFGS::set_max_delta_moment(double _max_delta_moment)
+void Magmom_BFGS_Opt::set_max_delta_moment(double _max_delta_moment)
 {
     max_delta_moment = _max_delta_moment;
 }
 
-bool Magmom_BFGS::get_convergence_status()
+bool Magmom_BFGS_Opt::get_convergence_status()
 {
     return converged;
 }
 
-double Magmom_BFGS::FindAbsMaxVec(std::vector<double> vec)
+double Magmom_BFGS_Opt::FindAbsMaxVec(std::vector<double> vec)
 {
     if (vec.empty()) {
         return 0.0;
@@ -198,10 +215,11 @@ double Magmom_BFGS::FindAbsMaxVec(std::vector<double> vec)
     return max_value;
 }
 
-std::vector<std::vector<double>> Magmom_BFGS::matvec3_to_mat(std::vector<ModuleBase::Vector3<double>> matvec3, int nrow)
+std::vector<std::vector<double>> Magmom_BFGS_Opt::matvec3_to_mat(std::vector<ModuleBase::Vector3<double>> matvec3, int nrow)
 {
     int ncol = 3;
     std::vector<std::vector<double>> mat(nrow, std::vector<double>(ncol));
+
     for (int irow = 0; irow < nrow; ++irow){
         for (int icol = 0; icol < ncol; ++icol){
             mat[irow][icol] = matvec3[irow][icol];
@@ -211,13 +229,19 @@ std::vector<std::vector<double>> Magmom_BFGS::matvec3_to_mat(std::vector<ModuleB
 }
 
 
-std::vector<ModuleBase::Vector3<double>> Magmom_BFGS::mat_to_matvec3(std::vector<std::vector<double>> mat, int nrow)
+std::vector<ModuleBase::Vector3<double>> Magmom_BFGS_Opt::mat_to_matvec3(std::vector<std::vector<double>> mat, int nrow)
 {
     int ncol = 3;
-    std::vector<ModuleBase::Vector3<double>> matvec3;
+    std::cout << "entering mat_to_matvec3" << std::endl;
+    std::vector<ModuleBase::Vector3<double>> matvec3(nrow);
+    std::cout << "temporary matvec3 created" << std::endl;
+
+    std::cout << mat[0][0] <<  std::endl;
     for (int irow = 0; irow < nrow; ++irow){
         for (int icol = 0; icol < ncol; ++icol){
+            std::cout << irow << " " << icol << std::endl;
             matvec3[irow][icol] = mat[irow][icol];
+            std::cout << matvec3[irow][icol] << " " << mat[irow][icol] << std::endl; 
         }
     }
     return matvec3;

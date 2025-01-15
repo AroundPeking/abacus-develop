@@ -5,6 +5,8 @@
 #include "module_io/json_output/output_info.h"
 #include "module_io/print_info.h"
 #include "module_io/write_wfc_r.h"
+#include "module_parameter/parameter.h"
+#include "relax_old/magmom_bfgs_opt.h"
 
 void Relax_Driver::relax_driver(ModuleESolver::ESolver* p_esolver)
 {
@@ -13,6 +15,13 @@ void Relax_Driver::relax_driver(ModuleESolver::ESolver* p_esolver)
 
     if (GlobalV::CALCULATION == "relax" || GlobalV::CALCULATION == "cell-relax")
     {
+        if (PARAM.inp.sc_mag_switch)
+        {
+            std::cout << std::endl;
+            std::cout << "      will perform magnetic-moment optimization" << std::endl;
+            std::cout << std::endl;
+            magmom_bfgs_optimizer.initialize(ucell.nat, 3);
+        }
         if (!GlobalV::relax_new)
         {
             rl_old.init_relax(GlobalC::ucell.nat);
@@ -74,6 +83,11 @@ void Relax_Driver::relax_driver(ModuleESolver::ESolver* p_esolver)
 
             if (GlobalV::CALCULATION == "relax" || GlobalV::CALCULATION == "cell-relax")
             {
+                if (PARAM.inp.sc_mag_switch)  //always relax magnetic moment if doing relax/cell-relax with nspin=4
+                {
+                    std::cout << "will enter the bfgs_wrapper" << std::endl;
+                    stop = magmom_bfgs_optimizer.bfgs_wrapper();
+                }
                 if (GlobalV::relax_new)
                 {
                     stop = rl.relax_step(force, stress, this->etot);

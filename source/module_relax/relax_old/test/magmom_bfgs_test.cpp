@@ -1,6 +1,7 @@
 #include "module_base/matrix3.h"
 #include "gtest/gtest.h"
 #include "module_relax/relax_old/magmom_bfgs.h"  // Include the original code implementation file
+#include "module_hamilt_lcao/module_deltaspin/spin_constrain.h"
 
 // Test the functionality of the Magmom_BFGS class
 class MagmomBFGS_OptimizerTest : public ::testing::Test {

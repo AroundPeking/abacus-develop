@@ -59,8 +59,8 @@ public:
     std::vector<std::vector<double>> OuterVAndV(std::vector<double>& a, std::vector<double>& b);
     std::vector<std::vector<double>> MatAdd(std::vector<std::vector<double>>& a, std::vector<std::vector<double>>& b);
     double FindMaxVec(std::vector<double> vec);
-    void RecPrtVec(char* info, std::vector<double>& vec, int nrow, int ncol);
-    void RecPrtMat(char* info, std::vector<std::vector<double>>& mat, int nrow, int ncol);
+    void RecPrtVec(std::string info, std::vector<double>& vec, int nrow, int ncol);
+    void RecPrtMat(std::string info, std::vector<std::vector<double>>& mat, int nrow, int ncol);
 private:
     bool first_step;
 

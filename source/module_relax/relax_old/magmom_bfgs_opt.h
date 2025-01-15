@@ -1,5 +1,5 @@
-#ifndef MAGMOM_BFGS_H
-#define MAGMOM_BFGS_H
+#ifndef MAGMOM_BFGS_OPT_H
+#define MAGMOM_BFGS_OPT_H
 
 /**
  * @file bfgs.h
@@ -25,7 +25,7 @@
 
 
 
-class Magmom_BFGS : public BFGSData
+class Magmom_BFGS_Opt : public BFGSData
 {
 
 private:
@@ -47,8 +47,8 @@ public:
     std::vector<double>  module_moment;
     std::vector<double>  module_force;
 
-    Magmom_BFGS();
-    ~Magmom_BFGS();
+    Magmom_BFGS_Opt();
+    ~Magmom_BFGS_Opt();
 
     std::vector<std::vector<double>> calc_new_magmom(std::vector<std::vector<double>> _magmom, std::vector<std::vector<double>> _magforce);
     std::vector<double> mat_to_vec(std::vector<std::vector<double>> mat, int nrow, int ncol);
@@ -65,4 +65,4 @@ public:
     double FindAbsMaxVec(std::vector<double> vec);
     void constrain_magforce(std::vector<ModuleBase::Vector3<double>>& magforce, std::vector<ModuleBase::Vector3<int>> magconstrain);
 };
-#endif // MAGFORCE_BFGS_H
+#endif // MAGMOM_BFGS_OPT_H

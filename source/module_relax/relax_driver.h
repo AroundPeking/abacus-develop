@@ -5,6 +5,8 @@
 #include "module_esolver/esolver_ks.h"
 #include "relax_new/relax.h"
 #include "relax_old/relax_old.h"
+#include "relax_old/bfgsdata.h"
+#include "relax_old/magmom_bfgs_opt.h"
 class Relax_Driver
 {
 
@@ -25,6 +27,8 @@ class Relax_Driver
 
     // old relaxation method
     Relax_old rl_old;
+
+    Magmom_BFGS_Opt magmom_bfgs_optimizer;
 };
 
 #endif
