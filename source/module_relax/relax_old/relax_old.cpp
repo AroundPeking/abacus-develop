@@ -44,7 +44,7 @@ bool Relax_old::relax_step(const int& istep,
     // choose what to do next
     if (GlobalV::CALCULATION != "cell-relax") {
         force_step = istep;
-}
+    }
     if (this->if_do_relax(ucell))
     {
         // do relax calculation and generate next structure
