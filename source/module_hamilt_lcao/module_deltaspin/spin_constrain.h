@@ -269,6 +269,7 @@ public:
     void set_operator(hamilt::Operator<FPTYPE>* op_in);
     /// @brief set is_Mi_converged
     void set_mag_converged(bool is_Mi_converged_in){this->is_Mi_converged = is_Mi_converged_in;}
+    void set_read_target_mag(bool _read_target_mag){this->read_target_mag = _read_target_mag;}
     /// @brief get is_Mi_converged
     bool mag_converged() const {return this->is_Mi_converged;}
   private:
@@ -276,6 +277,7 @@ public:
     hamilt::Operator<FPTYPE>* p_operator = nullptr;
     /// @brief if atomic magnetic moment is converged
     bool is_Mi_converged = false;
+    bool read_target_mag = true;
 
     FPTYPE* sub_h_save;
     FPTYPE* sub_s_save;

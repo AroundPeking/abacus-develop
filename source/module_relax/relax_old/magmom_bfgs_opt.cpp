@@ -69,6 +69,7 @@ bool Magmom_BFGS_Opt::bfgs_wrapper()
     const std::vector<ModuleBase::Vector3<double>> vec3_newmag = mat_to_matvec3(new_magmom, n_atom);
     std::cout << "converting matrix back to matrix_vec3 done" << std::endl;
     sc.set_target_mag(vec3_newmag);
+    sc.set_read_target_mag(false);
     std::cout << "setting new magnetic moments" << std::endl;
 
     std::cout << "convergence status = " << get_convergence_status() << std::endl;
