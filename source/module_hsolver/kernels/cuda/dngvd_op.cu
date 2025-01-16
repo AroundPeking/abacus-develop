@@ -260,8 +260,7 @@ struct dngvx_op<T, base_device::DEVICE_GPU>
                     T* scc,
                     const int m,
                     Real* eigenvalue,
-                    T* vcc,
-                    int* fail_info)
+                    T* vcc)
     {
 
     }
