@@ -51,12 +51,15 @@ bool Magmom_BFGS_Opt::bfgs_wrapper()
     std::cout << "obtaining magmoment constraints" << std::endl;
     std::vector<ModuleBase::Vector3<int>> vec3_magconstrain = sc.get_constrain();
 
+    double factor = -1.0;
+    magforce = BFGSData::ScaleMatrix(magforce, factor);
+
     std::string str = "read-in magforce";
     BFGSData::RecPrtMat(str, magforce, n_atom, n_moment_component);
-    str = "read-in magmoment";
-    BFGSData::RecPrtMat(str, magmoment, n_atom, n_moment_component);
 
 //    constrain_magforce(vec3_magforce, vec3_magconstrain);
+    str = "read-in magmoment";
+    BFGSData::RecPrtMat(str, magmoment, n_atom, n_moment_component);
     magmoment = matvec3_to_mat(vec3_magmoment, n_atom);
     str = "magmoment after bfgs";
     BFGSData::RecPrtMat(str, magmoment, n_atom, n_moment_component);
@@ -111,8 +114,8 @@ std::vector<std::vector<double>> Magmom_BFGS_Opt::calc_new_magmom(std::vector<st
     vec_mag_moment = mat_to_vec(_magmom, n_atom, n_moment_component); 
     vec_mag_force = mat_to_vec(_magforce, n_atom, n_moment_component);
 
-//    BFGSData::RecPrtVec("Converted Moment Vector", vec_mag_moment, n_atom, n_moment_component);
-//    BFGSData::RecPrtVec("Converted Force  Vector", vec_mag_force,  n_atom, n_moment_component);
+    BFGSData::RecPrtVec("Converted Moment Vector", vec_mag_moment, n_atom, n_moment_component);
+    BFGSData::RecPrtVec("Converted Force  Vector", vec_mag_force,  n_atom, n_moment_component);
     vec_delta_moment = BFGSData::relax_step(vec_mag_moment, vec_mag_force);
 //    BFGSData::RecPrtVec("Change in Moment", vec_delta_moment, n_atom, n_moment_component);
 
