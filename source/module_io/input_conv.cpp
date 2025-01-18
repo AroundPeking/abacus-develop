@@ -44,7 +44,8 @@
 #include "module_md/md_func.h"
 
 #ifdef __LCAO
-std::vector<double> Input_Conv::convert_units(std::string params, double c) {
+std::vector<double> Input_Conv::convert_units(std::string params, double c)
+{
     std::vector<double> params_ori;
     std::vector<double> params_out;
     parse_expression(params, params_ori);
@@ -60,13 +61,17 @@ void Input_Conv::read_td_efield()
     if (PARAM.inp.esolver_type == "tddft" && elecstate::H_TDDFT_pw::stype == 1)
     {
         TD_Velocity::tddft_velocity = true;
-    } else {
+    }
+    else
+    {
         TD_Velocity::tddft_velocity = false;
     }
     if (PARAM.inp.out_mat_hs2 == 1)
     {
         TD_Velocity::out_mat_R = true;
-    } else {
+    }
+    else
+    {
         TD_Velocity::out_mat_R = false;
     }
     parse_expression(PARAM.inp.td_ttype, elecstate::H_TDDFT_pw::ttype);
@@ -94,12 +99,15 @@ void Input_Conv::read_td_efield()
     elecstate::H_TDDFT_pw::gauss_amp = convert_units(PARAM.inp.td_gauss_amp,
                                                      ModuleBase::BOHR_TO_A / ModuleBase::Ry_to_eV); // Ry/bohr
     // init ncut for velocity gauge integral
-    for (auto omega: elecstate::H_TDDFT_pw::gauss_omega) {
-        int ncut
-            = int(100.0 * omega * elecstate::H_TDDFT_pw::dt / ModuleBase::PI);
-        if (ncut % 2 == 0) {
+    for (auto omega: elecstate::H_TDDFT_pw::gauss_omega)
+    {
+        int ncut = int(100.0 * omega * elecstate::H_TDDFT_pw::dt / ModuleBase::PI);
+        if (ncut % 2 == 0)
+        {
             ncut += 2;
-        } else {
+        }
+        else
+        {
             ncut += 1;
         }
         if (elecstate::H_TDDFT_pw::stype == 0)
@@ -116,12 +124,15 @@ void Input_Conv::read_td_efield()
     elecstate::H_TDDFT_pw::trape_amp = convert_units(PARAM.inp.td_trape_amp,
                                                      ModuleBase::BOHR_TO_A / ModuleBase::Ry_to_eV); // Ry/bohr
     // init ncut for velocity gauge integral
-    for (auto omega: elecstate::H_TDDFT_pw::trape_omega) {
-        int ncut
-            = int(100.0 * omega * elecstate::H_TDDFT_pw::dt / ModuleBase::PI);
-        if (ncut % 2 == 0) {
+    for (auto omega: elecstate::H_TDDFT_pw::trape_omega)
+    {
+        int ncut = int(100.0 * omega * elecstate::H_TDDFT_pw::dt / ModuleBase::PI);
+        if (ncut % 2 == 0)
+        {
             ncut += 2;
-        } else {
+        }
+        else
+        {
             ncut += 1;
         }
         if (elecstate::H_TDDFT_pw::stype == 0)
@@ -138,12 +149,15 @@ void Input_Conv::read_td_efield()
     elecstate::H_TDDFT_pw::trigo_amp = convert_units(PARAM.inp.td_trigo_amp,
                                                      ModuleBase::BOHR_TO_A / ModuleBase::Ry_to_eV); // Ry/bohr
     // init ncut for velocity gauge integral
-    for (auto omega: elecstate::H_TDDFT_pw::trigo_omega1) {
-        int ncut
-            = int(100.0 * omega * elecstate::H_TDDFT_pw::dt / ModuleBase::PI);
-        if (ncut % 2 == 0) {
+    for (auto omega: elecstate::H_TDDFT_pw::trigo_omega1)
+    {
+        int ncut = int(100.0 * omega * elecstate::H_TDDFT_pw::dt / ModuleBase::PI);
+        if (ncut % 2 == 0)
+        {
             ncut += 2;
-        } else {
+        }
+        else
+        {
             ncut += 1;
         }
         if (elecstate::H_TDDFT_pw::stype == 0)
@@ -180,13 +194,13 @@ void Input_Conv::Convert()
     {
     }
 
-
-    if (PARAM.inp.device  == "gpu" && PARAM.inp.basis_type == "pw")
+    if (PARAM.inp.device == "gpu" && PARAM.inp.basis_type == "pw")
     {
         GlobalV::KPAR = base_device::information::get_device_kpar(PARAM.inp.kpar);
     }
 #ifdef __LCAO
-    else if (PARAM.inp.basis_type == "lcao") {
+    else if (PARAM.inp.basis_type == "lcao")
+    {
         /// GlobalV::KPAR_LCAO is used in LCAO diagonalization only
         GlobalV::KPAR_LCAO = PARAM.inp.kpar;
         /// all other parts of the code use GlobalV::KPAR = 1
@@ -197,17 +211,15 @@ void Input_Conv::Convert()
     {
         GlobalV::KPAR = PARAM.inp.kpar;
     }
-    if (PARAM.inp.device  == "cpu" and PARAM.inp.precision == "single")
+    if (PARAM.inp.device == "cpu" and PARAM.inp.precision == "single")
     {
 // cpu single precision is not supported while float_fftw lib is not available
 #ifndef __ENABLE_FLOAT_FFTW
-        ModuleBase::WARNING_QUIT(
-            "Input_Conv",
-            "Single precision with cpu is not supported while float_fftw lib is not available; \
+        ModuleBase::WARNING_QUIT("Input_Conv",
+                                 "Single precision with cpu is not supported while float_fftw lib is not available; \
             \n Please recompile with cmake flag \"-DENABLE_FLOAT_FFTW=ON\".\n");
 #endif // __ENABLE_FLOAT_FFTW
     }
-
 
 #ifdef __LCAO
     Force_Stress_LCAO<double>::force_invalid_threshold_ev = PARAM.inp.force_thr_ev2;
@@ -224,7 +236,6 @@ void Input_Conv::Convert()
     Ions_Move_Basic::relax_method = PARAM.inp.relax_method;
     Lattice_Change_Basic::fixed_axes = PARAM.inp.fixed_axes;
 
-
     Ions_Move_CG::RELAX_CG_THR = PARAM.inp.relax_cg_thr; // pengfei add 2013-09-09
 
     ModuleSymmetry::Symmetry::symm_flag = std::stoi(PARAM.inp.symmetry);
@@ -237,7 +248,6 @@ void Input_Conv::Convert()
     //----------------------------------------------------------
     // diagonalization  (5/5)
     //----------------------------------------------------------
-
 
     //----------------------------------------------------------
     // iteration (1/3)
@@ -299,8 +309,6 @@ void Input_Conv::Convert()
     read_td_efield();
 #endif
 
-   
-
     //----------------------------------------------------------
     // about restart, // Peize Lin add 2020-04-04
     //----------------------------------------------------------
@@ -314,13 +322,15 @@ void Input_Conv::Convert()
         GlobalC::restart.folder = PARAM.globalv.global_readin_dir + "restart/";
         ModuleBase::GlobalFunc::MAKE_DIR(GlobalC::restart.folder);
         if (dft_functional_lower == "hf" || dft_functional_lower == "pbe0" || dft_functional_lower == "hse"
-            || dft_functional_lower == "opt_orb" || dft_functional_lower == "scan0"|| dft_functional_lower == "lc_pbe"
-            || dft_functional_lower == "lc_wpbe" || dft_functional_lower == "lrc_wpbe"|| dft_functional_lower == "lrc_wpbeh"
-            || dft_functional_lower == "cam_pbeh")
+            || dft_functional_lower == "opt_orb" || dft_functional_lower == "scan0" || dft_functional_lower == "lc_pbe"
+            || dft_functional_lower == "lc_wpbe" || dft_functional_lower == "lrc_wpbe"
+            || dft_functional_lower == "lrc_wpbeh" || dft_functional_lower == "cam_pbeh")
         {
             GlobalC::restart.info_save.save_charge = true;
             GlobalC::restart.info_save.save_H = true;
-        } else {
+        }
+        else
+        {
             GlobalC::restart.info_save.save_charge = true;
         }
     }
@@ -332,18 +342,16 @@ void Input_Conv::Convert()
                        dft_functional_lower.begin(),
                        tolower);
         GlobalC::restart.folder = PARAM.globalv.global_readin_dir + "restart/";
-        if (dft_functional_lower == "hf" || dft_functional_lower == "pbe0"
-            || dft_functional_lower == "hse"
-            || dft_functional_lower == "opt_orb"
-            || dft_functional_lower == "scan0"
-            || dft_functional_lower == "lc_pbe"
-            || dft_functional_lower == "lc_wpbe" 
-            || dft_functional_lower == "lrc_wpbe"
-            || dft_functional_lower == "lrc_wpbeh"
-            || dft_functional_lower == "cam_pbeh") {
+        if (dft_functional_lower == "hf" || dft_functional_lower == "pbe0" || dft_functional_lower == "hse"
+            || dft_functional_lower == "opt_orb" || dft_functional_lower == "scan0" || dft_functional_lower == "lc_pbe"
+            || dft_functional_lower == "lc_wpbe" || dft_functional_lower == "lrc_wpbe"
+            || dft_functional_lower == "lrc_wpbeh" || dft_functional_lower == "cam_pbeh")
+        {
             GlobalC::restart.info_load.load_charge = true;
             GlobalC::restart.info_load.load_H = true;
-        } else {
+        }
+        else
+        {
             GlobalC::restart.info_load.load_charge = true;
         }
     }
@@ -374,17 +382,15 @@ void Input_Conv::Convert()
     else if (dft_functional_lower == "hse")
     {
         GlobalC::exx_info.info_global.cal_exx = true;
-        GlobalC::exx_info.info_global.ccp_type
-            = Conv_Coulomb_Pot_K::Ccp_Type::Hse;
-    } else if (dft_functional_lower == "opt_orb") {
+        GlobalC::exx_info.info_global.ccp_type = Conv_Coulomb_Pot_K::Ccp_Type::Hse;
+    }
+    else if (dft_functional_lower == "opt_orb")
+    {
         GlobalC::exx_info.info_global.cal_exx = false;
         Exx_Abfs::Jle::generate_matrix = true;
     }
-    else if (dft_functional_lower == "lc_pbe"
-            || dft_functional_lower == "lc_wpbe" 
-            || dft_functional_lower == "lrc_wpbe"
-            || dft_functional_lower == "lrc_wpbeh"
-            || dft_functional_lower == "cam_pbeh")
+    else if (dft_functional_lower == "lc_pbe" || dft_functional_lower == "lc_wpbe" || dft_functional_lower == "lrc_wpbe"
+             || dft_functional_lower == "lrc_wpbeh" || dft_functional_lower == "cam_pbeh")
     {
         GlobalC::exx_info.info_global.cal_exx = true;
         if (PARAM.inp.exx_use_ewald)
@@ -407,8 +413,7 @@ void Input_Conv::Convert()
         // GlobalC::exx_info.info_global.cal_exx = true;
         GlobalC::exx_info.info_global.hybrid_alpha = std::stod(PARAM.inp.exx_hybrid_alpha);
         GlobalC::exx_info.info_global.hybrid_beta = std::stod(PARAM.inp.exx_hybrid_beta);
-        XC_Functional::set_hybrid_alpha(std::stod(PARAM.inp.exx_hybrid_alpha), 
-                                            std::stod(PARAM.inp.exx_hybrid_beta));
+        XC_Functional::set_hybrid_alpha(std::stod(PARAM.inp.exx_hybrid_alpha), std::stod(PARAM.inp.exx_hybrid_beta));
         GlobalC::exx_info.info_global.hse_omega = std::stod(PARAM.inp.exx_hse_omega);
         GlobalC::exx_info.info_global.separate_loop = PARAM.inp.exx_separate_loop;
         GlobalC::exx_info.info_global.hybrid_step = PARAM.inp.exx_hybrid_step;
@@ -433,6 +438,12 @@ void Input_Conv::Convert()
         Exx_Abfs::Jle::Lmax = PARAM.inp.exx_opt_orb_lmax;
         Exx_Abfs::Jle::Ecut_exx = PARAM.inp.exx_opt_orb_ecut;
         Exx_Abfs::Jle::tolerence = PARAM.inp.exx_opt_orb_tolerence;
+        if (PARAM.inp.exx_use_ewald)
+        {
+            GlobalC::exx_info.info_global.use_ewald = true;
+            GlobalC::exx_info.info_ewald.fq_type = Singular_Value::Fq_type(PARAM.inp.exx_fq_type);
+            GlobalC::exx_info.info_global.ccp_type = Conv_Coulomb_Pot_K::Ccp_Type::Ccp;
+        }
 
         // EXX does not support symmetry for nspin==4
         if (PARAM.inp.calculation != "nscf" && PARAM.inp.symmetry == "1" && PARAM.inp.nspin == 4)
@@ -496,9 +507,10 @@ void Input_Conv::Convert()
         if (PARAM.globalv.gamma_only_local)
         {
             elecstate::ElecStateLCAO<double>::need_psi_grid = false;
-        } else if (!PARAM.globalv.gamma_only_local) {
-            elecstate::ElecStateLCAO<std::complex<double>>::need_psi_grid
-                = false;
+        }
+        else if (!PARAM.globalv.gamma_only_local)
+        {
+            elecstate::ElecStateLCAO<std::complex<double>>::need_psi_grid = false;
         }
     }
     if (PARAM.inp.calculation == "test_neighbour" && GlobalV::NPROC > 1)
@@ -519,9 +531,9 @@ void Input_Conv::Convert()
     // mohan add 2021-02-16
     berryphase::berry_phase_flag = PARAM.inp.berry_phase;
 
-//-----------------------------------------------
-// caoyu add for DeePKS
-//-----------------------------------------------
+    //-----------------------------------------------
+    // caoyu add for DeePKS
+    //-----------------------------------------------
     //-----------------------------------------------
     // sunml add for implicit solvation model
     //-----------------------------------------------
