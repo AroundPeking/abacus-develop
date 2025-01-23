@@ -47,6 +47,7 @@ void RPA_LRI<T, Tdata>::cal_rpa_cv()
 
     std::map<TA, std::map<TAC, RI::Tensor<Tdata>>> Vs
         = exx_lri_rpa.cv.cal_Vs(list_As_Vs.first, list_As_Vs.second[0], {{"writable_Vws", true}});
+    std::cout << "Use rpa_ccp_rmesh_times=" << this->info.ccp_rmesh_times << " to calculate cut Coulomb" << std::endl;
     this->Vs_period = RI::RI_Tools::cal_period(Vs, period);
 
     const std::array<Tcell, Ndim> period_Cs = LRI_CV_Tools::cal_latvec_range<Tcell>(2, orb_cutoff_);
@@ -117,10 +118,11 @@ void RPA_LRI<T, Tdata>::cal_postSCF_exx(const int istep,
     // set parameters for bare Coulomb potential
     GlobalC::exx_info.info_global.ccp_type = Conv_Coulomb_Pot_K::Ccp_Type::Hf;
     GlobalC::exx_info.info_global.hybrid_alpha = 1;
-    GlobalC::exx_info.info_ri.ccp_rmesh_times = PARAM.inp.rpa_ccp_rmesh_times;
 
     exx_lri_rpa.init(mpi_comm_in, kv, orb);
     exx_lri_rpa.cal_exx_ions(0, PARAM.inp.out_ri_cv);
+
+    GlobalC::exx_info.info_ri.ccp_rmesh_times = PARAM.inp.rpa_ccp_rmesh_times;
 
     if (exx_spacegroup_symmetry && PARAM.inp.exx_symmetry_realspace)
     {

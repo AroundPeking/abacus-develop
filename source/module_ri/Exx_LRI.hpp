@@ -206,6 +206,8 @@ void Exx_LRI<Tdata>::cal_exx_ions(const int istep, const bool write_cv)
         double chi = this->evq.get_singular_chi(this->info_ewald.fq_type, 2.0);
         std::map<TA, std::map<TAC, RI::Tensor<Tdata>>> Vs_full = this->evq.cal_Vs(chi, Vs);
         Vs_full = LRI_CV_Tools::mul2(RI::Global_Func::convert<Tdata>(this->info.hybrid_alpha), Vs_full);
+        std::cout << "Use exx_ccp_rmesh_times=" << this->info.ccp_rmesh_times << " to calculate full Coulomb"
+                  << std::endl;
         Vs = this->info.hybrid_beta ? LRI_CV_Tools::minus(Vs_full, Vs_sr) : Vs_full;
     }
 
