@@ -191,7 +191,7 @@ void Exx_LRI<Tdata>::cal_exx_ions(const int istep, const bool write_cv)
     this->Vs = this->cv.cal_Vs(list_As_Vs.first, list_As_Vs.second[0], {{"writable_Vws", true}});
 
     this->cv.Vws = LRI_CV_Tools::get_CVws(Vs);
-    if (this->info_ewald.use_ewald)
+    if (this->info_ewald.use_ewald && this->info.ccp_type == Conv_Coulomb_Pot_K::Ccp_Type::Ccp)
     {
         std::map<TA, std::map<TAC, RI::Tensor<Tdata>>> Vs_sr;
         if (this->info.hybrid_beta)

@@ -44,7 +44,11 @@ class RPA_LRI
                          const MPI_Comm& mpi_comm_in,
                          const K_Vectors& kv,
                          const LCAO_Orbitals& orb);
-    void out_for_RPA(const Parallel_Orbitals& parav, const psi::Psi<T>& psi, const elecstate::ElecState* pelec);
+    void out_for_RPA(const Parallel_Orbitals& parav,
+                     const psi::Psi<T>& psi,
+                     const elecstate::ElecState* pelec,
+                     const K_Vectors& kv,
+                     const LCAO_Orbitals& orb);
     void out_eigen_vector(const Parallel_Orbitals& parav, const psi::Psi<T>& psi);
     void out_struc();
     void out_bands(const elecstate::ElecState* pelec);
@@ -63,6 +67,8 @@ class RPA_LRI
     const Exx_Info::Exx_Info_Ewald& info_ewald;
     const K_Vectors* p_kv = nullptr;
     MPI_Comm mpi_comm;
+    double exx_ccp_rmesh_times;
+
     std::vector<double> orb_cutoff_;
 
     std::vector<std::vector<std::vector<Numerical_Orbital_Lm>>> lcaos;
@@ -78,6 +84,7 @@ class RPA_LRI
     // Tdata post_process_Erpa( const Tdata &Erpa_in ) const;
 };
 Exx_LRI<double> exx_lri_rpa(GlobalC::exx_info.info_ri, GlobalC::exx_info.info_ewald);
+Exx_LRI<double> exx_full_coulomb(GlobalC::exx_info.info_ri, GlobalC::exx_info.info_ewald);
 #include "RPA_LRI.hpp"
 
 #endif

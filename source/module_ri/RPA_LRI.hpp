@@ -117,12 +117,12 @@ void RPA_LRI<T, Tdata>::cal_postSCF_exx(const int istep,
 
     // set parameters for bare Coulomb potential
     GlobalC::exx_info.info_global.ccp_type = Conv_Coulomb_Pot_K::Ccp_Type::Hf;
+    this->exx_ccp_rmesh_times = GlobalC::exx_info.info_ri.ccp_rmesh_times;
+    GlobalC::exx_info.info_ri.ccp_rmesh_times = PARAM.inp.rpa_ccp_rmesh_times;
     GlobalC::exx_info.info_global.hybrid_alpha = 1;
 
     exx_lri_rpa.init(mpi_comm_in, kv, orb);
     exx_lri_rpa.cal_exx_ions(0, PARAM.inp.out_ri_cv);
-
-    GlobalC::exx_info.info_ri.ccp_rmesh_times = PARAM.inp.rpa_ccp_rmesh_times;
 
     if (exx_spacegroup_symmetry && PARAM.inp.exx_symmetry_realspace)
     {
@@ -138,7 +138,9 @@ void RPA_LRI<T, Tdata>::cal_postSCF_exx(const int istep,
 template <typename T, typename Tdata>
 void RPA_LRI<T, Tdata>::out_for_RPA(const Parallel_Orbitals& parav,
                                     const psi::Psi<T>& psi,
-                                    const elecstate::ElecState* pelec)
+                                    const elecstate::ElecState* pelec,
+                                    const K_Vectors& kv,
+                                    const LCAO_Orbitals& orb)
 {
     ModuleBase::TITLE("DFT_RPA_interface", "out_for_RPA");
     this->out_bands(pelec);
@@ -153,7 +155,13 @@ void RPA_LRI<T, Tdata>::out_for_RPA(const Parallel_Orbitals& parav,
     this->out_coulomb_k(this->Vs_period, "coulomb_cut_");
     if (this->info_ewald.use_ewald)
     {
-        auto& Vs_full = exx_lri_rpa.Vs;
+        GlobalC::exx_info.info_ewald.fq_type = Singular_Value::Fq_type(PARAM.inp.exx_fq_type);
+        GlobalC::exx_info.info_global.ccp_type = Conv_Coulomb_Pot_K::Ccp_Type::Ccp;
+        GlobalC::exx_info.info_ri.ccp_rmesh_times = this->exx_ccp_rmesh_times;
+
+        exx_full_coulomb.init(mpi_comm, kv, orb);
+        exx_full_coulomb.cal_exx_ions(0, PARAM.inp.out_ri_cv);
+        auto& Vs_full = exx_full_coulomb.Vs;
         this->out_coulomb_k(Vs_full, "coulomb_mat_");
     }
 
