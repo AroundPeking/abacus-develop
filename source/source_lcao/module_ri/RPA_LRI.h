@@ -54,7 +54,9 @@ class RPA_LRI
     void out_bands(const elecstate::ElecState* pelec);
 
     void out_Cs();
-    void out_coulomb_k(std::map<TA, std::map<TAC, RI::Tensor<Tdata>>>& Vs, std::string filename);
+    void out_coulomb_k(std::map<TA, std::map<TAC, RI::Tensor<Tdata>>>& Vs,
+                       std::string filename,
+                       Exx_LRI<double>& exx_lri);
     // void print_matrix(char *desc, const ModuleBase::matrix &mat);
     // void print_complex_matrix(char *desc, const ModuleBase::ComplexMatrix &mat);
     // void init(const MPI_Comm &mpi_comm_in);
