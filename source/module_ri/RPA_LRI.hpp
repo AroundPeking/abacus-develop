@@ -152,9 +152,16 @@ void RPA_LRI<T, Tdata>::out_for_RPA(const Parallel_Orbitals& parav,
     std::cout << "rpa_ccp_rmesh_times: " << this->info.ccp_rmesh_times << std::endl;
     std::cout << "rpa_lcao_exx(Ha): " << std::fixed << std::setprecision(15) << exx_lri_rpa.Eexx / 2.0 << std::endl;
     this->out_Cs();
-    this->out_coulomb_k(this->Vs_period, "coulomb_cut_");
+    this->out_coulomb_k(this->Vs_period, "coulomb_cut_", exx_lri_rpa);
+
+    std::cout << "etxc(Ha): " << std::fixed << std::setprecision(15) << pelec->f_en.etxc / 2.0 << std::endl;
+    std::cout << "etot(Ha): " << std::fixed << std::setprecision(15) << pelec->f_en.etot / 2.0 << std::endl;
+    std::cout << "Etot_without_rpa(Ha): " << std::fixed << std::setprecision(15)
+              << (pelec->f_en.etot - pelec->f_en.etxc + exx_lri_rpa.Eexx) / 2.0 << std::endl;
+
     if (this->info_ewald.use_ewald)
     {
+        exx_lri_rpa.~Exx_LRI<double>();
         GlobalC::exx_info.info_ewald.fq_type = Singular_Value::Fq_type(PARAM.inp.exx_fq_type);
         GlobalC::exx_info.info_global.ccp_type = Conv_Coulomb_Pot_K::Ccp_Type::Ccp;
         GlobalC::exx_info.info_ri.ccp_rmesh_times = this->exx_ccp_rmesh_times;
@@ -162,13 +169,8 @@ void RPA_LRI<T, Tdata>::out_for_RPA(const Parallel_Orbitals& parav,
         exx_full_coulomb.init(mpi_comm, kv, orb);
         exx_full_coulomb.cal_exx_ions(0, PARAM.inp.out_ri_cv);
         auto& Vs_full = exx_full_coulomb.Vs;
-        this->out_coulomb_k(Vs_full, "coulomb_mat_");
+        this->out_coulomb_k(Vs_full, "coulomb_mat_", exx_full_coulomb);
     }
-
-    std::cout << "etxc(Ha): " << std::fixed << std::setprecision(15) << pelec->f_en.etxc / 2.0 << std::endl;
-    std::cout << "etot(Ha): " << std::fixed << std::setprecision(15) << pelec->f_en.etot / 2.0 << std::endl;
-    std::cout << "Etot_without_rpa(Ha): " << std::fixed << std::setprecision(15)
-              << (pelec->f_en.etot - pelec->f_en.etxc + exx_lri_rpa.Eexx) / 2.0 << std::endl;
 
     return;
 }
@@ -352,14 +354,16 @@ void RPA_LRI<T, Tdata>::out_Cs()
 }
 
 template <typename T, typename Tdata>
-void RPA_LRI<T, Tdata>::out_coulomb_k(std::map<TA, std::map<TAC, RI::Tensor<Tdata>>>& Vs, std::string filename)
+void RPA_LRI<T, Tdata>::out_coulomb_k(std::map<TA, std::map<TAC, RI::Tensor<Tdata>>>& Vs,
+                                      std::string filename,
+                                      Exx_LRI<double>& exx_lri)
 {
     int all_mu = 0;
     vector<int> mu_shift(GlobalC::ucell.nat);
     for (int I = 0; I != GlobalC::ucell.nat; I++)
     {
         mu_shift[I] = all_mu;
-        all_mu += exx_lri_rpa.cv.get_index_abfs_size(GlobalC::ucell.iat2it[I]);
+        all_mu += exx_lri.cv.get_index_abfs_size(GlobalC::ucell.iat2it[I]);
     }
     const int nks_tot = PARAM.inp.nspin == 2 ? (int)p_kv->get_nks() / 2 : p_kv->get_nks();
     std::stringstream ss;
@@ -372,7 +376,7 @@ void RPA_LRI<T, Tdata>::out_coulomb_k(std::map<TA, std::map<TAC, RI::Tensor<Tdat
     for (auto& Ip: Vs)
     {
         auto I = Ip.first;
-        size_t mu_num = exx_lri_rpa.cv.get_index_abfs_size(GlobalC::ucell.iat2it[I]);
+        size_t mu_num = exx_lri.cv.get_index_abfs_size(GlobalC::ucell.iat2it[I]);
 
         for (int ik = 0; ik != nks_tot; ik++)
         {
@@ -401,7 +405,7 @@ void RPA_LRI<T, Tdata>::out_coulomb_k(std::map<TA, std::map<TAC, RI::Tensor<Tdat
             {
                 auto iJ = vq_Jp.first;
                 auto& vq_J = vq_Jp.second;
-                size_t nu_num = exx_lri_rpa.cv.get_index_abfs_size(GlobalC::ucell.iat2it[iJ]);
+                size_t nu_num = exx_lri.cv.get_index_abfs_size(GlobalC::ucell.iat2it[iJ]);
                 ofs << all_mu << "   " << mu_shift[I] + 1 << "   " << mu_shift[I] + mu_num << "  " << mu_shift[iJ] + 1
                     << "   " << mu_shift[iJ] + nu_num << std::endl;
                 ofs << ik + 1 << "  " << p_kv->wk[ik] / 2.0 * PARAM.inp.nspin << std::endl;
