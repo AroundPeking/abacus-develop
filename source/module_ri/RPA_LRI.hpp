@@ -230,8 +230,8 @@ void RPA_LRI<T, Tdata>::out_eigen_vector(const Parallel_Orbitals& parav, const p
             {
                 for (int is = 0; is < npsin_tmp; is++)
                 {
-                    ofs << std::setw(21) << std::fixed << std::setprecision(15) << is_wfc_ib_iw[is](ib, iw).real()
-                        << std::setw(21) << std::fixed << std::setprecision(15) << is_wfc_ib_iw[is](ib, iw).imag()
+                    ofs << std::setw(30) << std::fixed << std::setprecision(20) << is_wfc_ib_iw[is](ib, iw).real()
+                        << std::setw(30) << std::fixed << std::setprecision(20) << is_wfc_ib_iw[is](ib, iw).imag()
                         << std::endl;
                 }
             }
@@ -305,7 +305,7 @@ void RPA_LRI<T, Tdata>::out_bands(const elecstate::ElecState* pelec)
             for (int ib = 0; ib != PARAM.inp.nbands; ib++)
             {
                 ofs << std::setw(5) << ib + 1 << "   " << std::setw(8) << pelec->wg(ik + is * nks_tot, ib) * nks_tot
-                    << std::setw(18) << std::fixed << std::setprecision(8) << pelec->ekb(ik + is * nks_tot, ib) / 2.0
+                    << std::setw(25) << std::fixed << std::setprecision(20) << pelec->ekb(ik + is * nks_tot, ib) / 2.0
                     << std::setw(18) << std::fixed << std::setprecision(8)
                     << pelec->ekb(ik + is * nks_tot, ib) * ModuleBase::Ry_to_eV << std::endl;
             }
@@ -343,7 +343,7 @@ void RPA_LRI<T, Tdata>::out_Cs()
                 {
                     for (int mu = 0; mu != tmp_Cs.shape[0]; mu++)
                     {
-                        ofs << std::setw(15) << std::fixed << std::setprecision(9) << tmp_Cs(mu, i, j) << std::endl;
+                        ofs << std::setw(30) << std::fixed << std::setprecision(20) << tmp_Cs(mu, i, j) << std::endl;
                     }
                 }
             }
@@ -411,8 +411,8 @@ void RPA_LRI<T, Tdata>::out_coulomb_k(std::map<TA, std::map<TAC, RI::Tensor<Tdat
                 ofs << ik + 1 << "  " << p_kv->wk[ik] / 2.0 * PARAM.inp.nspin << std::endl;
                 for (int i = 0; i != vq_J.data->size(); i++)
                 {
-                    ofs << std::setw(21) << std::fixed << std::setprecision(12) << (*vq_J.data)[i].real()
-                        << std::setw(21) << std::fixed << std::setprecision(12) << (*vq_J.data)[i].imag() << std::endl;
+                    ofs << std::setw(25) << std::fixed << std::setprecision(15) << (*vq_J.data)[i].real()
+                        << std::setw(25) << std::fixed << std::setprecision(15) << (*vq_J.data)[i].imag() << std::endl;
                 }
             }
         }
