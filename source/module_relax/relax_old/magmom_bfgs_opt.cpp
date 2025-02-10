@@ -34,21 +34,14 @@ void Magmom_BFGS_Opt::initialize(const int _n_atom, const int _n_moment_componen
 
 bool Magmom_BFGS_Opt::bfgs_wrapper()
 {
-    std::cout << "hello from bfgs_wrapper" << std::endl;
-    std::cout << "obtainging the sc instance" << std::endl;
     SpinConstrain<std::complex<double>>& sc = SpinConstrain<std::complex<double>>::getScInstance();
 
-    std::cout << "obtaining lambda" << std::endl;
     auto& vec3_magforce = sc.get_sc_lambda();
-    std::cout << "obtaining target magnetic moment" << std::endl;
     auto& vec3_magmoment = sc.get_target_mag();
 
-    std::cout << "converting from matrix_vector3 to matrix, n_atom = " << n_atom << std::endl;
     std::vector<std::vector<double>> magforce = matvec3_to_mat(vec3_magforce, n_atom);
-    std::cout << "conversion of magforce done" << std::endl;
     std::vector<std::vector<double>> magmoment = matvec3_to_mat(vec3_magmoment, n_atom);
 
-    std::cout << "obtaining magmoment constraints" << std::endl;
     std::vector<ModuleBase::Vector3<int>> vec3_magconstrain = sc.get_constrain();
 
     double factor = -1.0;
@@ -68,9 +61,7 @@ bool Magmom_BFGS_Opt::bfgs_wrapper()
     str = "new magmoment";
     BFGSData::RecPrtMat(str, magmoment, n_atom, n_moment_component);
 
-    std::cout << "converting matrix back to matrix_vec3" << std::endl;
     const std::vector<ModuleBase::Vector3<double>> vec3_newmag = mat_to_matvec3(new_magmom, n_atom);
-    std::cout << "converting matrix back to matrix_vec3 done" << std::endl;
     sc.set_target_mag(vec3_newmag);
     sc.set_read_target_mag(false);
     std::cout << "setting new magnetic moments" << std::endl;
@@ -236,16 +227,11 @@ std::vector<std::vector<double>> Magmom_BFGS_Opt::matvec3_to_mat(std::vector<Mod
 std::vector<ModuleBase::Vector3<double>> Magmom_BFGS_Opt::mat_to_matvec3(std::vector<std::vector<double>> mat, int nrow)
 {
     int ncol = 3;
-    std::cout << "entering mat_to_matvec3" << std::endl;
     std::vector<ModuleBase::Vector3<double>> matvec3(nrow);
-    std::cout << "temporary matvec3 created" << std::endl;
 
-    std::cout << mat[0][0] <<  std::endl;
     for (int irow = 0; irow < nrow; ++irow){
         for (int icol = 0; icol < ncol; ++icol){
-            std::cout << irow << " " << icol << std::endl;
             matvec3[irow][icol] = mat[irow][icol];
-            std::cout << matvec3[irow][icol] << " " << mat[irow][icol] << std::endl; 
         }
     }
     return matvec3;

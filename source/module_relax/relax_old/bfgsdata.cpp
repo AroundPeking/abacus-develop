@@ -119,10 +119,10 @@ void BFGSData::UpdateHessian()
 
     auto term3=this->ScaleMatrix(term1, a);
     auto term4=this->ScaleMatrix(term2, b);
-    this->RecPrtMat("hessian matrix to be updated", H, size, size);
+    //this->RecPrtMat("hessian matrix to be updated", H, size, size);
     H = this->MatAdd(H, term3);
     H = this->MatAdd(H, term4);
-    this->RecPrtMat("hessian matrix updated", H, size, size);
+    //this->RecPrtMat("hessian matrix updated", H, size, size);
 }
 
 std::vector<double> BFGSData::VSubV(std::vector<double>& a, std::vector<double>& b) 
