@@ -20,7 +20,7 @@ void Relax_Driver::relax_driver(ModuleESolver::ESolver* p_esolver)
             std::cout << std::endl;
             std::cout << "      will perform magnetic-moment optimization" << std::endl;
             std::cout << std::endl;
-            magmom_bfgs_optimizer.initialize(ucell.nat, 3);
+            magmom_bfgs_optimizer.initialize(GlobalC::ucell.nat, 3);
         }
         if (!GlobalV::relax_new)
         {

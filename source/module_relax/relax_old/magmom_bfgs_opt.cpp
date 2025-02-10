@@ -36,7 +36,7 @@ bool Magmom_BFGS_Opt::bfgs_wrapper()
 {
     std::cout << "hello from bfgs_wrapper" << std::endl;
     std::cout << "obtainging the sc instance" << std::endl;
-    spinconstrain::SpinConstrain<std::complex<double>>& sc = spinconstrain::SpinConstrain<std::complex<double>>::getScInstance();
+    SpinConstrain<std::complex<double>>& sc = SpinConstrain<std::complex<double>>::getScInstance();
 
     std::cout << "obtaining lambda" << std::endl;
     auto& vec3_magforce = sc.get_sc_lambda();
