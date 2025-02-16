@@ -117,7 +117,11 @@ void RPA_LRI<T, Tdata>::cal_postSCF_exx(const int istep,
 
     // set parameters for bare Coulomb potential
     GlobalC::exx_info.info_global.ccp_type = Conv_Coulomb_Pot_K::Ccp_Type::Hf;
+    // reserve exx_ccp_rmesh_times to calculate full Coulomb
     this->exx_ccp_rmesh_times = GlobalC::exx_info.info_ri.ccp_rmesh_times;
+    // rpa=1 set
+    // GlobalC::exx_info.info_ri.ccp_rmesh_times=rpa_ccp_rmesh_times
+    // Using this->info.ccp_rmesh_times to calculate cut Coulomb this->Vs_period
     GlobalC::exx_info.info_ri.ccp_rmesh_times = PARAM.inp.rpa_ccp_rmesh_times;
     GlobalC::exx_info.info_global.hybrid_alpha = 1;
 
@@ -164,6 +168,7 @@ void RPA_LRI<T, Tdata>::out_for_RPA(const Parallel_Orbitals& parav,
         exx_lri_rpa.~Exx_LRI<double>();
         GlobalC::exx_info.info_ewald.fq_type = Singular_Value::Fq_type(PARAM.inp.exx_fq_type);
         GlobalC::exx_info.info_global.ccp_type = Conv_Coulomb_Pot_K::Ccp_Type::Ccp;
+        // Using exx_ccp_rmesh_times to calculate full Coulomb
         GlobalC::exx_info.info_ri.ccp_rmesh_times = this->exx_ccp_rmesh_times;
 
         exx_full_coulomb.init(mpi_comm, kv, orb);
