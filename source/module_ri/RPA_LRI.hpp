@@ -21,9 +21,9 @@ void RPA_LRI<T, Tdata>::init(const MPI_Comm& mpi_comm_in, const K_Vectors& kv_in
     ModuleBase::timer::tick("RPA_LRI", "init");
     this->mpi_comm = mpi_comm_in;
     this->orb_cutoff_ = orb_cutoff;
-    this->lcaos = exx_lri_rpa.lcaos;
-    this->abfs = exx_lri_rpa.abfs;
-    this->abfs_ccp = exx_lri_rpa.abfs_ccp;
+    this->lcaos = exx_lri_rpa->lcaos;
+    this->abfs = exx_lri_rpa->abfs;
+    this->abfs_ccp = exx_lri_rpa->abfs_ccp;
     this->p_kv = &kv_in;
 
     //	this->cv = std::move(exx_lri_rpa.cv);
@@ -46,7 +46,7 @@ void RPA_LRI<T, Tdata>::cal_rpa_cv()
         = RI::Distribute_Equally::distribute_atoms(this->mpi_comm, atoms, period_Vs, 2, false);
 
     std::map<TA, std::map<TAC, RI::Tensor<Tdata>>> Vs
-        = exx_lri_rpa.cv.cal_Vs(list_As_Vs.first, list_As_Vs.second[0], {{"writable_Vws", true}});
+        = exx_lri_rpa->cv.cal_Vs(list_As_Vs.first, list_As_Vs.second[0], {{"writable_Vws", true}});
     std::cout << "Use rpa_ccp_rmesh_times=" << this->info.ccp_rmesh_times << " to calculate cut Coulomb" << std::endl;
     this->Vs_period = RI::RI_Tools::cal_period(Vs, period);
 
@@ -56,13 +56,13 @@ void RPA_LRI<T, Tdata>::cal_rpa_cv()
 
     std::pair<std::map<TA, std::map<TAC, RI::Tensor<Tdata>>>,
               std::map<TA, std::map<TAC, std::array<RI::Tensor<Tdata>, 3>>>>
-        Cs_dCs = exx_lri_rpa.cv.cal_Cs_dCs(list_As_Cs.first,
-                                           list_As_Cs.second[0],
-                                           {{"cal_dC", false},
-                                            {"writable_Cws", true},
-                                            {"writable_dCws", true},
-                                            {"writable_Vws", false},
-                                            {"writable_dVws", false}});
+        Cs_dCs = exx_lri_rpa->cv.cal_Cs_dCs(list_As_Cs.first,
+                                            list_As_Cs.second[0],
+                                            {{"cal_dC", false},
+                                             {"writable_Cws", true},
+                                             {"writable_dCws", true},
+                                             {"writable_Vws", false},
+                                             {"writable_dVws", false}});
     std::map<TA, std::map<TAC, RI::Tensor<Tdata>>>& Cs = std::get<0>(Cs_dCs);
     this->Cs_period = RI::RI_Tools::cal_period(Cs, period);
 }
@@ -124,17 +124,19 @@ void RPA_LRI<T, Tdata>::cal_postSCF_exx(const int istep,
     // Using this->info.ccp_rmesh_times to calculate cut Coulomb this->Vs_period
     GlobalC::exx_info.info_ri.ccp_rmesh_times = PARAM.inp.rpa_ccp_rmesh_times;
     GlobalC::exx_info.info_global.hybrid_alpha = 1;
+    if (!exx_lri_rpa)
+        exx_lri_rpa = new Exx_LRI<double>(GlobalC::exx_info.info_ri, GlobalC::exx_info.info_ewald);
 
-    exx_lri_rpa.init(mpi_comm_in, kv, orb);
-    exx_lri_rpa.cal_exx_ions(0, PARAM.inp.out_ri_cv);
+    exx_lri_rpa->init(mpi_comm_in, kv, orb);
+    exx_lri_rpa->cal_exx_ions(0, PARAM.inp.out_ri_cv);
 
     if (exx_spacegroup_symmetry && PARAM.inp.exx_symmetry_realspace)
     {
-        exx_lri_rpa.cal_exx_elec(Ds, *dm.get_paraV_pointer(), &symrot);
+        exx_lri_rpa->cal_exx_elec(Ds, *dm.get_paraV_pointer(), &symrot);
     }
     else
     {
-        exx_lri_rpa.cal_exx_elec(Ds, *dm.get_paraV_pointer());
+        exx_lri_rpa->cal_exx_elec(Ds, *dm.get_paraV_pointer());
     }
     // cout<<"postSCF_Eexx: "<<exx_lri_rpa.Eexx<<endl;
 }
@@ -154,29 +156,39 @@ void RPA_LRI<T, Tdata>::out_for_RPA(const Parallel_Orbitals& parav,
     this->cal_rpa_cv();
     std::cout << "rpa_pca_threshold: " << this->info.pca_threshold << std::endl;
     std::cout << "rpa_ccp_rmesh_times: " << this->info.ccp_rmesh_times << std::endl;
-    std::cout << "rpa_lcao_exx(Ha): " << std::fixed << std::setprecision(15) << exx_lri_rpa.Eexx / 2.0 << std::endl;
+    std::cout << "rpa_lcao_exx(Ha): " << std::fixed << std::setprecision(15) << exx_lri_rpa->Eexx / 2.0 << std::endl;
     this->out_Cs();
     this->out_coulomb_k(this->Vs_period, "coulomb_cut_", exx_lri_rpa);
 
     std::cout << "etxc(Ha): " << std::fixed << std::setprecision(15) << pelec->f_en.etxc / 2.0 << std::endl;
     std::cout << "etot(Ha): " << std::fixed << std::setprecision(15) << pelec->f_en.etot / 2.0 << std::endl;
     std::cout << "Etot_without_rpa(Ha): " << std::fixed << std::setprecision(15)
-              << (pelec->f_en.etot - pelec->f_en.etxc + exx_lri_rpa.Eexx) / 2.0 << std::endl;
+              << (pelec->f_en.etot - pelec->f_en.etxc + exx_lri_rpa->Eexx) / 2.0 << std::endl;
 
     if (this->info_ewald.use_ewald)
     {
-        exx_lri_rpa.~Exx_LRI<double>();
+        delete exx_lri_rpa;
+        exx_lri_rpa = nullptr;
         Vs_period.clear();
         Cs_period.clear();
+        {
+            std::map<TA, std::map<TAC, RI::Tensor<Tdata>>> tmp;
+            Vs_period.swap(tmp);
+            Cs_period.swap(tmp);
+        }
         GlobalC::exx_info.info_ewald.fq_type = Singular_Value::Fq_type(PARAM.inp.exx_fq_type);
         GlobalC::exx_info.info_global.ccp_type = Conv_Coulomb_Pot_K::Ccp_Type::Ccp;
         // Using exx_ccp_rmesh_times to calculate full Coulomb
         GlobalC::exx_info.info_ri.ccp_rmesh_times = this->exx_ccp_rmesh_times;
+        if (!exx_full_coulomb)
+            exx_full_coulomb = new Exx_LRI<double>(GlobalC::exx_info.info_ri, GlobalC::exx_info.info_ewald);
 
-        exx_full_coulomb.init(mpi_comm, kv, orb);
-        exx_full_coulomb.cal_exx_ions(0, PARAM.inp.out_ri_cv);
-        auto& Vs_full = exx_full_coulomb.Vs;
+        exx_full_coulomb->init(mpi_comm, kv, orb);
+        exx_full_coulomb->cal_exx_ions(0, PARAM.inp.out_ri_cv);
+        auto& Vs_full = exx_full_coulomb->Vs;
         this->out_coulomb_k(Vs_full, "coulomb_mat_", exx_full_coulomb);
+        delete exx_full_coulomb;
+        exx_full_coulomb = nullptr;
     }
 
     return;
@@ -363,14 +375,14 @@ void RPA_LRI<T, Tdata>::out_Cs()
 template <typename T, typename Tdata>
 void RPA_LRI<T, Tdata>::out_coulomb_k(std::map<TA, std::map<TAC, RI::Tensor<Tdata>>>& Vs,
                                       std::string filename,
-                                      Exx_LRI<double>& exx_lri)
+                                      Exx_LRI<double>* exx_lri)
 {
     int all_mu = 0;
     vector<int> mu_shift(GlobalC::ucell.nat);
     for (int I = 0; I != GlobalC::ucell.nat; I++)
     {
         mu_shift[I] = all_mu;
-        all_mu += exx_lri.cv.get_index_abfs_size(GlobalC::ucell.iat2it[I]);
+        all_mu += exx_lri->cv.get_index_abfs_size(GlobalC::ucell.iat2it[I]);
     }
     const int nks_tot = PARAM.inp.nspin == 2 ? (int)p_kv->get_nks() / 2 : p_kv->get_nks();
     std::stringstream ss;
@@ -383,7 +395,7 @@ void RPA_LRI<T, Tdata>::out_coulomb_k(std::map<TA, std::map<TAC, RI::Tensor<Tdat
     for (auto& Ip: Vs)
     {
         auto I = Ip.first;
-        size_t mu_num = exx_lri.cv.get_index_abfs_size(GlobalC::ucell.iat2it[I]);
+        size_t mu_num = exx_lri->cv.get_index_abfs_size(GlobalC::ucell.iat2it[I]);
 
         for (int ik = 0; ik != nks_tot; ik++)
         {
@@ -412,7 +424,7 @@ void RPA_LRI<T, Tdata>::out_coulomb_k(std::map<TA, std::map<TAC, RI::Tensor<Tdat
             {
                 auto iJ = vq_Jp.first;
                 auto& vq_J = vq_Jp.second;
-                size_t nu_num = exx_lri.cv.get_index_abfs_size(GlobalC::ucell.iat2it[iJ]);
+                size_t nu_num = exx_lri->cv.get_index_abfs_size(GlobalC::ucell.iat2it[iJ]);
                 ofs << all_mu << "   " << mu_shift[I] + 1 << "   " << mu_shift[I] + mu_num << "  " << mu_shift[iJ] + 1
                     << "   " << mu_shift[iJ] + nu_num << std::endl;
                 ofs << ik + 1 << "  " << p_kv->wk[ik] / 2.0 * PARAM.inp.nspin << std::endl;

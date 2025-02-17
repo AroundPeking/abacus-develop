@@ -56,7 +56,7 @@ class RPA_LRI
     void out_Cs();
     void out_coulomb_k(std::map<TA, std::map<TAC, RI::Tensor<Tdata>>>& Vs,
                        std::string filename,
-                       Exx_LRI<double>& exx_lri);
+                       Exx_LRI<double>* exx_lri);
     // void print_matrix(char *desc, const ModuleBase::matrix &mat);
     // void print_complex_matrix(char *desc, const ModuleBase::ComplexMatrix &mat);
     // void init(const MPI_Comm &mpi_comm_in);
@@ -84,9 +84,11 @@ class RPA_LRI
     // RI::RPA<TA,Tcell,Ndim,Tdata> rpa_lri;
 
     // Tdata post_process_Erpa( const Tdata &Erpa_in ) const;
+
+    Exx_LRI<double>* exx_lri_rpa = nullptr;
+    Exx_LRI<double>* exx_full_coulomb = nullptr;
 };
-Exx_LRI<double> exx_lri_rpa(GlobalC::exx_info.info_ri, GlobalC::exx_info.info_ewald);
-Exx_LRI<double> exx_full_coulomb(GlobalC::exx_info.info_ri, GlobalC::exx_info.info_ewald);
+
 #include "RPA_LRI.hpp"
 
 #endif
