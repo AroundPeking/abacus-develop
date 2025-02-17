@@ -166,6 +166,8 @@ void RPA_LRI<T, Tdata>::out_for_RPA(const Parallel_Orbitals& parav,
     if (this->info_ewald.use_ewald)
     {
         exx_lri_rpa.~Exx_LRI<double>();
+        Vs_period.clear();
+        Cs_period.clear();
         GlobalC::exx_info.info_ewald.fq_type = Singular_Value::Fq_type(PARAM.inp.exx_fq_type);
         GlobalC::exx_info.info_global.ccp_type = Conv_Coulomb_Pot_K::Ccp_Type::Ccp;
         // Using exx_ccp_rmesh_times to calculate full Coulomb
