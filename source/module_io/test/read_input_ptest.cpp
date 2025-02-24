@@ -404,7 +404,6 @@ TEST_F(InputParaTest, ParaRead)
     EXPECT_DOUBLE_EQ(param.inp.sc_scf_thr, 1e-3);
     EXPECT_DOUBLE_EQ(param.inp.alpha_trial, 0.02);
     EXPECT_DOUBLE_EQ(param.inp.sccut, 4.0);
-    EXPECT_EQ(param.inp.sc_file, "sc.json");
     EXPECT_EQ(param.inp.lr_nstates, 1);
     EXPECT_EQ(param.inp.nocc, param.inp.nbands);
     EXPECT_EQ(param.inp.nvirt, 1);

@@ -7,6 +7,9 @@
 #include <memory>
 #include <module_base/macros.h>
 
+#include "module_relax/relax_old/bfgsdata.h"
+#include "module_relax/relax_old/magmom_bfgs_opt.h"
+
 namespace ModuleESolver
 {
 
@@ -60,6 +63,8 @@ class ESolver_KS_PW : public ESolver_KS<T, Device>
     virtual void deallocate_hsolver();
     virtual void allocate_hamilt();
     virtual void deallocate_hamilt();
+
+    Magmom_BFGS_Opt magmom_bfgs_optimizer;
 
     //! hide the psi in ESolver_KS for tmp use
     psi::Psi<std::complex<double>, base_device::DEVICE_CPU>* psi = nullptr;

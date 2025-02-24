@@ -1518,9 +1518,9 @@ TEST_F(InputTest, Item_test)
         output = testing::internal::GetCapturedStdout();
         EXPECT_THAT(output, testing::HasSubstr("NOTICE"));
     }
-    { // sc_file
-        auto it = find_lable("sc_file", readinput.input_lists);
-        param.input.sc_file = "notexist";
+    { // sc_direction_only
+        auto it = find_lable("sc_direction_only", readinput.input_lists);
+        param.input.sc_direction_only = false;
         param.input.sc_mag_switch = true;
         testing::internal::CaptureStdout();
         EXPECT_EXIT(it->second.check_value(it->second, param), ::testing::ExitedWithCode(0), "");

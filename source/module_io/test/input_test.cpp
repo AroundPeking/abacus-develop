@@ -386,7 +386,6 @@ TEST_F(InputTest, Default)
 	EXPECT_EQ(INPUT.sc_scf_thr, 1e-3);
     EXPECT_DOUBLE_EQ(INPUT.alpha_trial, 0.01);
     EXPECT_DOUBLE_EQ(INPUT.sccut, 3.0);
-    EXPECT_EQ(INPUT.sc_file, "none");
 }
 
 TEST_F(InputTest, Read)
@@ -756,7 +755,6 @@ TEST_F(InputTest, Read)
 	EXPECT_EQ(INPUT.sc_scf_thr, 1e-5);
     EXPECT_DOUBLE_EQ(INPUT.alpha_trial, 0.02);
 	EXPECT_DOUBLE_EQ(INPUT.sccut, 4.0);
-    EXPECT_EQ(INPUT.sc_file, "sc.json");
 }
 
 TEST_F(InputTest, Default_2)

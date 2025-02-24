@@ -9,7 +9,7 @@ void SpinConstrain<FPTYPE>::init_sc(double sc_thr_in,
                                             double sccut_in,
                                             double sc_drop_thr_in,
                                             const UnitCell& ucell,
-                                            std::string sc_file,
+                                            const bool direction_only,
                                             int NPOL,
                                             Parallel_Orbitals* ParaV_in,
                                             int nspin_in,
@@ -31,6 +31,7 @@ void SpinConstrain<FPTYPE>::init_sc(double sc_thr_in,
     this->lambda_ = ucell.get_lambda();
     this->constrain_ = ucell.get_constrain();
     this->atomLabels_ = ucell.get_atomLabels();
+    this->direction_only_ = direction_only;
     this->set_decay_grad();
     this->set_npol(NPOL);
     if(ParaV_in != nullptr) this->set_ParaV(ParaV_in);

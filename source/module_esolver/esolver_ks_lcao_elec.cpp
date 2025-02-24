@@ -225,7 +225,7 @@ void ESolver_KS_LCAO<TK, TR>::beforesolver(const int istep)
                    PARAM.inp.sccut,
                    PARAM.inp.sc_drop_thr,
                    GlobalC::ucell,
-                   PARAM.inp.sc_file,
+                   PARAM.inp.sc_direction_only,
                    GlobalV::NPOL,
                    &(this->ParaV),
                    GlobalV::NSPIN,

@@ -31,7 +31,7 @@ public:
                double sccut_in,
                double sc_drop_thr_in,
                const UnitCell& ucell,
-               std::string sc_file,
+               const bool direction_only,
                int NPOL,
                Parallel_Orbitals* ParaV_in,
                int nspin_in,
@@ -133,8 +133,6 @@ public:
     /// Delete copy and move constructors and assign operators
     SpinConstrain(SpinConstrain const&) = delete;
     SpinConstrain(SpinConstrain&&) = delete;
-    /// parse json input file for non-collinear spin-constrained DFT
-    void Set_ScData_From_Json(const std::string& filename);
     /// get sc_data
     const std::map<int, std::vector<ScAtomData>>& get_ScData() const;
     /// set element index to atom index map
@@ -229,8 +227,6 @@ public:
                                void* psi_in,
                                elecstate::ElecState* pelec_in,
                                std::string KS_SOLVER_in);
-    /// bcast sc data read from json file
-    void bcast_ScData(std::string sc_file, int nat, int ntype);
 
   private:
     SpinConstrain(){};                               // Private constructor
@@ -278,6 +274,7 @@ public:
     /// @brief if atomic magnetic moment is converged
     bool is_Mi_converged = false;
     bool read_target_mag = true;
+    bool direction_only_ = false;
 
     FPTYPE* sub_h_save;
     FPTYPE* sub_s_save;

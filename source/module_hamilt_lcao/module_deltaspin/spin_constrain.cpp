@@ -371,11 +371,6 @@ void SpinConstrain<FPTYPE>::set_target_mag(const std::vector<ModuleBase::Vector3
     }
     else if (this->nspin_ == 4)
     {
-        std::cout << "hello from set_target_mag for nspin_ = 4" << std::endl;
-        for (int i = 0; i < nat; ++i )
-        {
-            std::cout << target_mag_in[i][0] << " "   << target_mag_in[i][1] << " "<< target_mag_in[i][2] << std::endl; 
-        }
         this->target_mag_ = target_mag_in;
     }
     else

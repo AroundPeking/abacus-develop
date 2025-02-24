@@ -17,9 +17,6 @@ void Relax_Driver::relax_driver(ModuleESolver::ESolver* p_esolver)
     {
         if (PARAM.inp.sc_mag_switch)
         {
-            std::cout << std::endl;
-            std::cout << "      will perform magnetic-moment optimization" << std::endl;
-            std::cout << std::endl;
             magmom_bfgs_optimizer.initialize(GlobalC::ucell.nat, 3);
         }
         if (!GlobalV::relax_new)

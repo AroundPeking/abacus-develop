@@ -530,7 +530,7 @@ struct Input_para
     double sc_scf_thr = 1e-3;            ///< minimum number of outer scf loop before initial lambda loop
     double alpha_trial = 0.01;      ///< initial trial step size for lambda in eV/uB^2
     double sccut = 3.0;             ///< restriction of step size in eV/uB
-    std::string sc_file = "none";   ///< file name for Deltaspin (json format)
+    bool sc_direction_only = false; ///< only optimize the direction of magnetization
 
     // ==============   #Parameters (23.Quasiatomic Orbital analysis) =========
     ///<==========================================================

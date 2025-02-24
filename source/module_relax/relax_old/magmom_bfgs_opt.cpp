@@ -47,26 +47,26 @@ bool Magmom_BFGS_Opt::bfgs_wrapper()
     double factor = -1.0;
     magforce = BFGSData::ScaleMatrix(magforce, factor);
 
-    std::string str = "read-in magforce";
-    BFGSData::RecPrtMat(str, magforce, n_atom, n_moment_component);
+    //std::string str = "read-in magforce";
+    //BFGSData::RecPrtMat(str, magforce, n_atom, n_moment_component);
 
 //    constrain_magforce(vec3_magforce, vec3_magconstrain);
-    str = "read-in magmoment";
-    BFGSData::RecPrtMat(str, magmoment, n_atom, n_moment_component);
+    //str = "read-in magmoment";
+    //BFGSData::RecPrtMat(str, magmoment, n_atom, n_moment_component);
     magmoment = matvec3_to_mat(vec3_magmoment, n_atom);
-    str = "magmoment after bfgs";
-    BFGSData::RecPrtMat(str, magmoment, n_atom, n_moment_component);
+    //str = "magmoment after bfgs";
+    //BFGSData::RecPrtMat(str, magmoment, n_atom, n_moment_component);
 
     std::vector<std::vector<double>> new_magmom = calc_new_magmom(magmoment, magforce);
-    str = "new magmoment";
-    BFGSData::RecPrtMat(str, magmoment, n_atom, n_moment_component);
+    //str = "new magmoment";
+    //BFGSData::RecPrtMat(str, magmoment, n_atom, n_moment_component);
 
     const std::vector<ModuleBase::Vector3<double>> vec3_newmag = mat_to_matvec3(new_magmom, n_atom);
     sc.set_target_mag(vec3_newmag);
     sc.set_read_target_mag(false);
-    std::cout << "setting new magnetic moments" << std::endl;
+    //std::cout << "setting new magnetic moments" << std::endl;
 
-    std::cout << "convergence status = " << get_convergence_status() << std::endl;
+    std::cout << "Atomic mag convergence status = " << get_convergence_status() << std::endl;
     return get_convergence_status(); 
 }
 
@@ -105,8 +105,8 @@ std::vector<std::vector<double>> Magmom_BFGS_Opt::calc_new_magmom(std::vector<st
     vec_mag_moment = mat_to_vec(_magmom, n_atom, n_moment_component); 
     vec_mag_force = mat_to_vec(_magforce, n_atom, n_moment_component);
 
-    BFGSData::RecPrtVec("Converted Moment Vector", vec_mag_moment, n_atom, n_moment_component);
-    BFGSData::RecPrtVec("Converted Force  Vector", vec_mag_force,  n_atom, n_moment_component);
+    //BFGSData::RecPrtVec("Converted Moment Vector", vec_mag_moment, n_atom, n_moment_component);
+    //BFGSData::RecPrtVec("Converted Force  Vector", vec_mag_force,  n_atom, n_moment_component);
     vec_delta_moment = BFGSData::relax_step(vec_mag_moment, vec_mag_force);
 //    BFGSData::RecPrtVec("Change in Moment", vec_delta_moment, n_atom, n_moment_component);
 

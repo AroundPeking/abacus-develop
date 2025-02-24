@@ -1539,6 +1539,12 @@ void ReadInput::item_others()
         this->add_item(item);
     }
     {
+        Input_Item item("sc_direction_only");
+        item.annotation = "only control direction of spin-constrained DFT";
+        read_sync_bool(input.sc_direction_only);
+        this->add_item(item);
+    }
+    {
         Input_Item item("sc_drop_thr");
         item.annotation = "Convergence criterion ratio of lambda iteration in Spin-constrained DFT";
         read_sync_double(input.sc_drop_thr);
