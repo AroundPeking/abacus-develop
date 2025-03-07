@@ -17,9 +17,9 @@ void ReadInput::item_exx()
                 std::string& dft_functional = para.input.dft_functional;
                 std::string dft_functional_lower = dft_functional;
                 std::transform(dft_functional.begin(), dft_functional.end(), dft_functional_lower.begin(), tolower);
-                if (dft_functional_lower == "hf" ||
-                    dft_functional_lower == "lc_pbe" || dft_functional_lower == "lc_wpbe" ||
-                    dft_functional_lower == "lrc_wpbe" || dft_functional_lower == "lrc_wpbeh")
+                if (dft_functional_lower == "hf" || dft_functional_lower == "lc_pbe"
+                    || dft_functional_lower == "lc_wpbe" || dft_functional_lower == "lrc_wpbe"
+                    || dft_functional_lower == "lrc_wpbeh")
                 {
                     para.input.exx_hybrid_alpha = "1";
                 }
@@ -76,8 +76,8 @@ void ReadInput::item_exx()
                 std::string& dft_functional = para.input.dft_functional;
                 std::string dft_functional_lower = dft_functional;
                 std::transform(dft_functional.begin(), dft_functional.end(), dft_functional_lower.begin(), tolower);
-                if (dft_functional_lower == "lc_pbe" || dft_functional_lower == "lc_wpbe" ||
-                    dft_functional_lower == "lrc_wpbe")
+                if (dft_functional_lower == "lc_pbe" || dft_functional_lower == "lc_wpbe"
+                    || dft_functional_lower == "lrc_wpbe")
                 {
                     para.input.exx_hybrid_beta = "-1";
                 }
@@ -149,9 +149,12 @@ void ReadInput::item_exx()
                           "start with a GGA-Loop, and then Hybrid-Loop";
         read_sync_bool(input.exx_separate_loop);
         item.check_value = [](const Input_Item& item, const Parameter& para) {
-            if (para.input.esolver_type == "tddft" && (para.input.exx_hybrid_alpha != "0" || para.input.exx_use_ewald != false) && para.input.exx_separate_loop > 0)
+            if (para.input.esolver_type == "tddft"
+                && (para.input.exx_hybrid_alpha != "0" || para.input.exx_use_ewald != false)
+                && para.input.exx_separate_loop > 0)
             {
-                ModuleBase::WARNING_QUIT("ReadInput", "For RT-TDDFT with hybrid functionals, only exx_separate_loop=0 is supported");
+                ModuleBase::WARNING_QUIT("ReadInput",
+                                         "For RT-TDDFT with hybrid functionals, only exx_separate_loop=0 is supported");
             }
         };
         this->add_item(item);
@@ -189,7 +192,7 @@ void ReadInput::item_exx()
         read_sync_string(input.exx_real_number);
         item.reset_value = [](const Input_Item& item, Parameter& para) {
             if (para.input.exx_real_number == "default")
-            {  // to run through here, the default value of para.input.exx_real_number should be "default"
+            { // to run through here, the default value of para.input.exx_real_number should be "default"
                 if (para.input.gamma_only)
                 {
                     para.input.exx_real_number = "1";
@@ -275,6 +278,12 @@ void ReadInput::item_exx()
         this->add_item(item);
     }
     {
+        Input_Item item("shrink_abfs_pca_thr");
+        item.annotation = "threshold to shrink auxiliary basis for GW/RPA";
+        read_sync_double(input.shrink_abfs_pca_thr);
+        this->add_item(item);
+    }
+    {
         Input_Item item("exx_ccp_rmesh_times");
         item.annotation = "how many times larger the radial mesh required for "
                           "calculating Columb potential is to that "
@@ -282,7 +291,7 @@ void ReadInput::item_exx()
         read_sync_string(input.exx_ccp_rmesh_times);
         item.reset_value = [](const Input_Item& item, Parameter& para) {
             if (para.input.exx_ccp_rmesh_times == "default")
-            {   // to run through here, the default value of para.input.exx_ccp_rmesh_times should be "default"
+            { // to run through here, the default value of para.input.exx_ccp_rmesh_times should be "default"
                 std::string& dft_functional = para.input.dft_functional;
                 std::string dft_functional_lower = dft_functional;
                 std::transform(dft_functional.begin(), dft_functional.end(), dft_functional_lower.begin(), tolower);
@@ -365,8 +374,11 @@ void ReadInput::item_exx()
         item.annotation = "whether to reduce real-space sector in Hexx calculation";
         read_sync_bool(input.exx_symmetry_realspace);
         item.reset_value = [](const Input_Item& item, Parameter& para) {
-            if (para.input.symmetry != "1") { para.input.exx_symmetry_realspace = false; }
-            };
+            if (para.input.symmetry != "1")
+            {
+                para.input.exx_symmetry_realspace = false;
+            }
+        };
         this->add_item(item);
     }
     {

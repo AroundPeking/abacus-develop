@@ -33,7 +33,7 @@ struct Input_para
     int kpar = 1;                   ///< ecch pool is for one k point
     int bndpar = 1;                 ///< parallel for stochastic/deterministic bands
     std::string latname = "none";   ///< lattice name
-    double ecutwfc = 0;            ///< energy cutoff for wavefunctions
+    double ecutwfc = 0;             ///< energy cutoff for wavefunctions
     double ecutrho = 0;             ///< energy cutoff for charge/potential
 
     int nx = 0, ny = 0, nz = 0;    ///< three dimension of FFT wavefunc
@@ -51,7 +51,7 @@ struct Input_para
     bool dm_to_rho = false;             ///< read density matrix from npz format and calculate charge density
     std::string chg_extrap = "default"; ///< xiaohui modify 2015-02-01
     bool init_vel = false;              ///< read velocity from STRU or not  liuyu 2021-07-14
-    
+
     std::string input_file = "INPUT";   ///< input file name
     std::string stru_file = "STRU";     ///< file contains atomic positions --
                                         ///< xiaohui modify 2015-02-01
@@ -116,7 +116,7 @@ struct Input_para
     int scf_thr_type = -1;     ///< type of the criterion of scf_thr, 1: reci drho, 2: real drho
     bool final_scf = false;    ///< whether to do final scf
     bool scf_os_stop = false;  ///< whether to stop scf when oscillation is detected
-    double scf_os_thr = -0.01;  ///< drho threshold for oscillation
+    double scf_os_thr = -0.01; ///< drho threshold for oscillation
     int scf_os_ndim = 0;       ///< number of old iterations used for oscillation detection
 
     bool lspinorb = false;   ///< consider the spin-orbit interaction
@@ -223,17 +223,17 @@ struct Input_para
     //==========================================================
     // DeepKS -- added by caoyu and mohan
     //==========================================================
-    bool deepks_out_labels = false;   ///< (need libnpy) prints energy and force labels and
-                                      ///< descriptors for training, wenfei 2022-1-12
-    bool deepks_scf = false;          ///< (need libnpy and libtorch) if set to true, a trained model
-                                      ///< would be needed to calculate V_delta and F_delta
-    bool deepks_bandgap = false;      ///< for bandgap label. QO added 2021-12-15
-    int deepks_v_delta = 0;           ///< for v_delta label. xuan added
-    bool deepks_equiv = false;        ///< whether to use equivariant version of DeePKS
-    bool deepks_out_unittest = false; ///< if set to true, prints intermediate quantities that shall
-                                      ///< be used for making unit test
-    std::string deepks_model = "None";              ///< needed when deepks_scf=1
-    
+    bool deepks_out_labels = false;    ///< (need libnpy) prints energy and force labels and
+                                       ///< descriptors for training, wenfei 2022-1-12
+    bool deepks_scf = false;           ///< (need libnpy and libtorch) if set to true, a trained model
+                                       ///< would be needed to calculate V_delta and F_delta
+    bool deepks_bandgap = false;       ///< for bandgap label. QO added 2021-12-15
+    int deepks_v_delta = 0;            ///< for v_delta label. xuan added
+    bool deepks_equiv = false;         ///< whether to use equivariant version of DeePKS
+    bool deepks_out_unittest = false;  ///< if set to true, prints intermediate quantities that shall
+                                       ///< be used for making unit test
+    std::string deepks_model = "None"; ///< needed when deepks_scf=1
+
     int bessel_descriptor_lmax = 2;                 ///< lmax used in descriptor
     std::string bessel_descriptor_ecut = "default"; ///< energy cutoff for spherical bessel functions(Ry)
     double bessel_descriptor_tolerence = 1e-12;     ///< tolerance for spherical bessel root
@@ -305,11 +305,13 @@ struct Input_para
     std::string lr_solver = "dav"; ///< the eigensolver for LR-TDDFT
     double lr_thr = 1e-2;          ///< convergence threshold of the LR-TDDFT eigensolver
     bool out_wfc_lr = false; ///< whether to output the eigenvectors (excitation amplitudes) in the particle-hole basis
-    bool lr_unrestricted = false; ///< whether to use the unrestricted construction for LR-TDDFT
+    bool lr_unrestricted = false;               ///< whether to use the unrestricted construction for LR-TDDFT
     std::vector<double> abs_wavelen_range = {}; ///< the range of wavelength(nm) to output the absorption spectrum
-    double abs_broadening = 0.01;                     ///< the broadening (eta) for LR-TDDFT absorption spectrum
-    std::string ri_hartree_benchmark = "none"; ///< whether to use the RI approximation for the Hartree potential in LR-TDDFT for benchmark (with FHI-aims/ABACUS read-in style)
-    std::vector<int> aims_nbasis = {};  ///< the number of basis functions for each atom type used in FHI-aims (for benchmark)
+    double abs_broadening = 0.01;               ///< the broadening (eta) for LR-TDDFT absorption spectrum
+    std::string ri_hartree_benchmark = "none";  ///< whether to use the RI approximation for the Hartree potential in
+                                                ///< LR-TDDFT for benchmark (with FHI-aims/ABACUS read-in style)
+    std::vector<int> aims_nbasis
+        = {}; ///< the number of basis functions for each atom type used in FHI-aims (for benchmark)
     // ==============   #Parameters (11.Output) ===========================
     bool out_stru = false;                ///< outut stru file each ion step
     int out_freq_elec = 0;                ///< the frequency ( >= 0) of electronic iter to output charge
@@ -362,7 +364,7 @@ struct Input_para
     std::vector<int> out_wfc_norm = {};   ///< specify the bands to be calculated for norm of wfc
     std::vector<int> out_wfc_re_im = {};  ///< specify the bands to be calculated for real and imaginary parts of wfc
     bool if_separate_k = false; ///< whether to write partial charge for all k-points to individual files or merge them
-    std::vector<int> out_elf = {0, 3};    ///< output the electron localization function (ELF). 0: no; 1: yes
+    std::vector<int> out_elf = {0, 3}; ///< output the electron localization function (ELF). 0: no; 1: yes
 
     // ==============   #Parameters (12.Postprocess) ===========================
     double dos_emin_ev = -15.0;
@@ -464,46 +466,48 @@ struct Input_para
     //  exx
     //  Peize Lin add 2018-06-20
     // ==========================================================
-    std::string exx_hybrid_alpha = "default";   ///< fraction of Fock exchange in hybrid functionals
-    std::string exx_hse_omega = "default";                ///< range-separation parameter in HSE/CAM/LR functional
-    std::string exx_hybrid_beta = "default";                ///< range-separation parameter in CAM/LR functional
-    bool exx_use_ewald = false;              ///< if 1, Ewald method is used for HF or CAM/LR hybrid functions 
-    int exx_spencer_type = 0;              ///< set Spencer scheme type
-    int exx_fq_type = 1;                        /// auxiliary-function fq used in correction to V(q) at q->0
-    bool exx_separate_loop = true;              ///< if 1, a two-step method is employed, else it will start
-                                                ///< with a GGA-Loop, and then Hybrid-Loop
-    int exx_hybrid_step = 100;                  ///< the maximal electronic iteration number in
-                                                ///< the evaluation of Fock exchange
-    double exx_mixing_beta = 1.0;               ///< mixing_beta for outer-loop when exx_separate_loop=1
-    double exx_lambda = 0.3;                    ///< used to compensate for divergence points at G=0 in the
-                                                ///< evaluation of Fock exchange using lcao_in_pw method
-    std::string exx_real_number = "default";          ///< exx calculated in real or complex
-    double exx_pca_threshold = 0.0001;          ///< threshold to screen on-site ABFs in exx
-    double exx_c_threshold = 0.0001;            ///< threshold to screen C matrix in exx
-    double exx_v_threshold = 0.1;               ///< threshold to screen C matrix in exx
-    double exx_dm_threshold = 0.0001;           ///< threshold to screen density matrix in exx
-    double exx_schwarz_threshold = 0;           ///< threshold to screen exx using Cauchy-Schwartz inequality
-    double exx_cauchy_threshold = 1e-07;        ///< threshold to screen exx using Cauchy-Schwartz inequality
-    double exx_c_grad_threshold = 0.0001;       ///< threshold to screen nabla C matrix in exx
-    double exx_v_grad_threshold = 0.1;          ///< threshold to screen nabla V matrix in exx
-    double exx_c_grad_r_threshold = 0.0001;     ///< threshold to screen nabla C matrix in exx
-    double exx_v_grad_r_threshold = 0.1;        ///< threshold to screen nabla V matrix in exx
-    double exx_cauchy_force_threshold = 1e-07;  ///< threshold to screen exx force using Cauchy-Schwartz
-                                                ///< inequality
-    double exx_cauchy_stress_threshold = 1e-07; ///< threshold to screen exx stress using Cauchy-Schwartz
-                                                ///< inequality
-    std::string exx_ccp_rmesh_times = "default";      ///< how many times larger the radial mesh required for
-                                                ///< calculating Columb potential is to that of atomic orbitals
-    std::string exx_distribute_type = "htime";  ///< distribute type (assuming default as no specific value
-                                                ///< provided)
-    int exx_opt_orb_lmax = 0;                   ///< the maximum l of the spherical Bessel functions for opt ABFs
-    double exx_opt_orb_ecut = 0.0;              ///< the cut-off of plane wave expansion for opt ABFs
-    double exx_opt_orb_tolerence = 0.0;         ///< the threshold when solving for the zeros of spherical Bessel
-                                                ///< functions for opt ABFs
-    bool exx_symmetry_realspace = true; ///< whether to reduce the real-space sector in when using symmetry=1 in EXX calculation
-    double rpa_ccp_rmesh_times = 10.0;          ///< how many times larger the radial mesh required for
-                                                ///< calculating Columb potential is to that of atomic orbitals
-    bool out_ri_cv = false;   ///<Whether to output the coefficient tensor C and ABFs-representation Coulomb matrix V
+    std::string exx_hybrid_alpha = "default";    ///< fraction of Fock exchange in hybrid functionals
+    std::string exx_hse_omega = "default";       ///< range-separation parameter in HSE/CAM/LR functional
+    std::string exx_hybrid_beta = "default";     ///< range-separation parameter in CAM/LR functional
+    bool exx_use_ewald = false;                  ///< if 1, Ewald method is used for HF or CAM/LR hybrid functions
+    int exx_spencer_type = 0;                    ///< set Spencer scheme type
+    int exx_fq_type = 1;                         /// auxiliary-function fq used in correction to V(q) at q->0
+    bool exx_separate_loop = true;               ///< if 1, a two-step method is employed, else it will start
+                                                 ///< with a GGA-Loop, and then Hybrid-Loop
+    int exx_hybrid_step = 100;                   ///< the maximal electronic iteration number in
+                                                 ///< the evaluation of Fock exchange
+    double exx_mixing_beta = 1.0;                ///< mixing_beta for outer-loop when exx_separate_loop=1
+    double exx_lambda = 0.3;                     ///< used to compensate for divergence points at G=0 in the
+                                                 ///< evaluation of Fock exchange using lcao_in_pw method
+    std::string exx_real_number = "default";     ///< exx calculated in real or complex
+    double exx_pca_threshold = 0.0001;           ///< threshold to screen on-site ABFs in exx
+    double exx_c_threshold = 0.0001;             ///< threshold to screen C matrix in exx
+    double exx_v_threshold = 0.1;                ///< threshold to screen C matrix in exx
+    double exx_dm_threshold = 0.0001;            ///< threshold to screen density matrix in exx
+    double exx_schwarz_threshold = 0;            ///< threshold to screen exx using Cauchy-Schwartz inequality
+    double exx_cauchy_threshold = 1e-07;         ///< threshold to screen exx using Cauchy-Schwartz inequality
+    double exx_c_grad_threshold = 0.0001;        ///< threshold to screen nabla C matrix in exx
+    double exx_v_grad_threshold = 0.1;           ///< threshold to screen nabla V matrix in exx
+    double exx_c_grad_r_threshold = 0.0001;      ///< threshold to screen nabla C matrix in exx
+    double exx_v_grad_r_threshold = 0.1;         ///< threshold to screen nabla V matrix in exx
+    double exx_cauchy_force_threshold = 1e-07;   ///< threshold to screen exx force using Cauchy-Schwartz
+                                                 ///< inequality
+    double exx_cauchy_stress_threshold = 1e-07;  ///< threshold to screen exx stress using Cauchy-Schwartz
+                                                 ///< inequality
+    std::string exx_ccp_rmesh_times = "default"; ///< how many times larger the radial mesh required for
+                                                 ///< calculating Columb potential is to that of atomic orbitals
+    std::string exx_distribute_type = "htime";   ///< distribute type (assuming default as no specific value
+                                                 ///< provided)
+    int exx_opt_orb_lmax = 0;                    ///< the maximum l of the spherical Bessel functions for opt ABFs
+    double exx_opt_orb_ecut = 0.0;               ///< the cut-off of plane wave expansion for opt ABFs
+    double exx_opt_orb_tolerence = 0.0;          ///< the threshold when solving for the zeros of spherical Bessel
+                                                 ///< functions for opt ABFs
+    bool exx_symmetry_realspace
+        = true; ///< whether to reduce the real-space sector in when using symmetry=1 in EXX calculation
+    double rpa_ccp_rmesh_times = 10.0; ///< how many times larger the radial mesh required for
+                                       ///< calculating Columb potential is to that of atomic orbitals
+    double shrink_abfs_pca_thr = 0.0;  ///< threshold to shrink auxiliary basis for GW/RPA
+    bool out_ri_cv = false; ///< Whether to output the coefficient tensor C and ABFs-representation Coulomb matrix V
     // ==============   #Parameters (16.dft+u) ======================
     //    DFT+U       Xin Qu added on 2020-10-29
     int dft_plus_u = 0;                    ///< 0: standard DFT calculation (default)
@@ -571,27 +575,27 @@ struct Input_para
     double pexsi_zero_thr = 1e-10;
 
     // ==============   #Parameters (20.Test) ====================
-    bool out_alllog = false;         ///< output all logs.
-    int nurse = 0;                   ///< used for debug.
-    bool t_in_h = true;              ///< calculate the T or not.
-    bool vl_in_h = true;             ///< calculate the vloc or not.
-    bool vnl_in_h = true;            ///< calculate the vnl or not.
-    bool vh_in_h = true;             ///< calculate the hartree potential or not
-    bool vion_in_h = true;           ///< calculate the local ionic potential or not
-                                     ///< //only relevant when vl_in_h = 1
-    bool test_force = false;         ///< test the force.
-    bool test_stress = false;        ///< test the stress.
-    bool test_skip_ewald = false;    ///< variables for test only
-    int  test_atom_input = false;    ///< variables for test_atom_input only
-    int  test_symmetry = false;      ///< variables for test_lattice only
-    int  test_wf = 0;                ///< variables for test_wf only
-    int  test_grid = false;          ///< variables for test_grid only
-    int  test_charge = false;        ///< variables for test_vloc only
-    int  test_energy = false;        ///< variables for test_energy only
-    int  test_gridt = false;         ///< variables for test_gridt only
-    int  test_pseudo_cell = false;   ///< variables for test_pseudo_cell only
-    int  test_pp = 0;                ///< variables for test_pp only
-    int  test_relax_method = false;  ///< variables for test_relax_method only
-    int  test_deconstructor = false; ///< variables for test_deconstructor only
+    bool out_alllog = false;        ///< output all logs.
+    int nurse = 0;                  ///< used for debug.
+    bool t_in_h = true;             ///< calculate the T or not.
+    bool vl_in_h = true;            ///< calculate the vloc or not.
+    bool vnl_in_h = true;           ///< calculate the vnl or not.
+    bool vh_in_h = true;            ///< calculate the hartree potential or not
+    bool vion_in_h = true;          ///< calculate the local ionic potential or not
+                                    ///< //only relevant when vl_in_h = 1
+    bool test_force = false;        ///< test the force.
+    bool test_stress = false;       ///< test the stress.
+    bool test_skip_ewald = false;   ///< variables for test only
+    int test_atom_input = false;    ///< variables for test_atom_input only
+    int test_symmetry = false;      ///< variables for test_lattice only
+    int test_wf = 0;                ///< variables for test_wf only
+    int test_grid = false;          ///< variables for test_grid only
+    int test_charge = false;        ///< variables for test_vloc only
+    int test_energy = false;        ///< variables for test_energy only
+    int test_gridt = false;         ///< variables for test_gridt only
+    int test_pseudo_cell = false;   ///< variables for test_pseudo_cell only
+    int test_pp = 0;                ///< variables for test_pp only
+    int test_relax_method = false;  ///< variables for test_relax_method only
+    int test_deconstructor = false; ///< variables for test_deconstructor only
 };
 #endif

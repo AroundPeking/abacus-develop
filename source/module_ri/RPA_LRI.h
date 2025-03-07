@@ -30,7 +30,9 @@ class RPA_LRI
     using Tcell = int;
     static constexpr std::size_t Ndim = 3;
     using TC = std::array<Tcell, Ndim>;
+    using Tq = std::array<double, Ndim>;
     using TAC = std::pair<TA, TC>;
+    using TAq = std::pair<TA, Tq>;
     using TatomR = std::array<double, Ndim>; // tmp
 
   public:
@@ -51,6 +53,15 @@ class RPA_LRI
                      const LCAO_Orbitals& orb);
     void out_eigen_vector(const Parallel_Orbitals& parav, const psi::Psi<T>& psi);
     void out_struc();
+    void cal_abfs_overlap(const LCAO_Orbitals& orb, const K_Vectors& kv);
+    void out_abfs_overlap(std::map<TA, std::map<TAC, RI::Tensor<Tdata>>>& overlap_abfs_abfs,
+                          std::map<TA, std::map<TAC, RI::Tensor<Tdata>>>& overlap_abfs_abf,
+                          std::string filename,
+                          const ModuleBase::Element_Basis_Index::IndexLNM& index_abfs_s,
+                          const ModuleBase::Element_Basis_Index::IndexLNM& index_abfs);
+    void inverse_olp(std::map<TA, std::map<TAq, RI::Tensor<std::complex<double>>>>& overlap_abfs_abfs,
+                     const std::vector<ModuleBase::Vector3<double>>& q_period,
+                     const ModuleBase::Element_Basis_Index::IndexLNM& index_abfs_s);
     void out_bands(const elecstate::ElecState* pelec);
 
     void out_Cs();
@@ -70,6 +81,10 @@ class RPA_LRI
     const K_Vectors* p_kv = nullptr;
     MPI_Comm mpi_comm;
     double exx_ccp_rmesh_times;
+    // <smaller abfs|smaller abfs>
+    Matrix_Orbs11 m_abfs_abfs;
+    // <smaller abfs|larger abfs>
+    Matrix_Orbs11 m_abfs_abf;
 
     std::vector<double> orb_cutoff_;
 
