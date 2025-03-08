@@ -59,6 +59,10 @@ class RPA_LRI
                           std::string filename,
                           const ModuleBase::Element_Basis_Index::IndexLNM& index_abfs_s,
                           const ModuleBase::Element_Basis_Index::IndexLNM& index_abfs);
+    std::array<Tcell, Ndim> get_cell_nearest(const ModuleBase::Vector3<double>& tauA,
+                                             const ModuleBase::Vector3<double>& tauB,
+                                             const std::array<Tcell, Ndim> period,
+                                             const std::array<Tcell, Ndim> R_in);
     void inverse_olp(std::map<TA, std::map<TAq, RI::Tensor<std::complex<double>>>>& overlap_abfs_abfs,
                      const std::vector<ModuleBase::Vector3<double>>& q_period,
                      const ModuleBase::Element_Basis_Index::IndexLNM& index_abfs_s);
