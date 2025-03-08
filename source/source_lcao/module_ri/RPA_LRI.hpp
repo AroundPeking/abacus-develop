@@ -12,6 +12,7 @@
 #include <cstring>
 #include <fstream>
 #include <iostream>
+#include <limits>
 #include <vector>
 
 using TA = int;
@@ -228,10 +229,13 @@ void RPA_LRI<T, Tdata>::cal_abfs_overlap(const LCAO_Orbitals& orb, const K_Vecto
     // const double lcaos_rmax = Exx_Abfs::Construct_Orbs::get_Rmax(this->lcaos);
     // const double abfs_rmax = Exx_Abfs::Construct_Orbs::get_Rmax(this->abfs);
     this->m_abfs_abf.init(2, orb, this->info.kmesh_times, orb.get_Rmax(), Lmax);
+    // std::cout << "Lmax: " << Lmax << std::endl;
+    Lmax = 0;
     for (size_t T = 0; T != this->abfs.size(); ++T)
     {
         Lmax = std::max(Lmax, static_cast<int>(this->abfs[T].size()) - 1);
     }
+    // std::cout << "Lmax: " << Lmax << std::endl;
     MGT.init_Gaunt_CH(Lmax);
     MGT.init_Gaunt(Lmax);
     this->m_abfs_abf.init_radial(abfs_s, this->abfs, MGT);
@@ -270,9 +274,13 @@ void RPA_LRI<T, Tdata>::cal_abfs_overlap(const LCAO_Orbitals& orb, const K_Vecto
 
             for (auto& iR: R_period)
             {
+                const auto R_min = get_cell_nearest(tauA, tauB, period, iR);
+                // debug
+                std::cout << "IJR: " << I << "," << J << "," << R_min[0] << R_min[1] << R_min[2] << "," << iR[0]
+                          << iR[1] << iR[2] << std::endl;
                 const ModuleBase::Vector3<double> tauB_shift
-                    = tauB + (RI_Util::array3_to_Vector3(iR) * GlobalC::ucell.latvec);
-                overlap_abfs_abfs[I][{J, iR}]
+                    = tauB + (RI_Util::array3_to_Vector3(R_min) * GlobalC::ucell.latvec);
+                overlap_abfs_abfs[I][{J, R_min}]
                     = this->m_abfs_abfs.cal_overlap_matrix<Tdata>(TA,
                                                                   TB,
                                                                   tauA,
@@ -280,7 +288,7 @@ void RPA_LRI<T, Tdata>::cal_abfs_overlap(const LCAO_Orbitals& orb, const K_Vecto
                                                                   index_abfs_s,
                                                                   index_abfs_s,
                                                                   Matrix_Orbs11::Matrix_Order::AB);
-                overlap_abfs_abf[I][{J, iR}]
+                overlap_abfs_abf[I][{J, R_min}]
                     = this->m_abfs_abf.cal_overlap_matrix<Tdata>(TA,
                                                                  TB,
                                                                  tauA,
@@ -299,6 +307,46 @@ void RPA_LRI<T, Tdata>::cal_abfs_overlap(const LCAO_Orbitals& orb, const K_Vecto
     //      std::cout << "(59,0): " << overlap_abfs_abfs[1][{0, iR}](0, 0) << std::endl;
     //  }
     out_abfs_overlap(overlap_abfs_abfs, overlap_abfs_abf, "shrink_sinvS_", index_abfs_s, index_abfs);
+}
+
+template <typename T, typename Tdata>
+std::array<Tcell, Ndim> RPA_LRI<T, Tdata>::get_cell_nearest(const ModuleBase::Vector3<double>& tauA,
+                                                            const ModuleBase::Vector3<double>& tauB,
+                                                            const std::array<Tcell, Ndim> period,
+                                                            const std::array<Tcell, Ndim> R_in)
+{
+    std::array<Tcell, Ndim> R_IJ_min;
+    if (GlobalC::ucell.nat > 0)
+    {
+        auto distsq = std::numeric_limits<double>::max();
+        std::array<Tcell, Ndim> R_IJ;
+        for (int i = -1; i < 2; i++)
+        {
+            R_IJ[0] = i * period[0] + R_in[0];
+            for (int j = -1; j < 2; j++)
+            {
+                R_IJ[1] = j * period[1] + R_in[1];
+                for (int k = -1; k < 2; k++)
+                {
+                    R_IJ[2] = k * period[2] + R_in[2];
+                    const auto diff = tauA - tauB - RI_Util::array3_to_Vector3(R_IJ) * GlobalC::ucell.latvec;
+                    const auto norm2 = diff.norm2();
+                    if (norm2 < distsq)
+                    {
+                        distsq = norm2;
+                        R_IJ_min = R_IJ;
+                    }
+                }
+            }
+        }
+    }
+    else
+    {
+        R_IJ_min[0] = R_in[0];
+        R_IJ_min[1] = R_in[1];
+        R_IJ_min[2] = R_in[2];
+    }
+    return R_IJ_min;
 }
 
 template <typename T, typename Tdata>
