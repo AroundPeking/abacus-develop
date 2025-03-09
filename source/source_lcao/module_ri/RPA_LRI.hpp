@@ -231,9 +231,9 @@ void RPA_LRI<T, Tdata>::cal_abfs_overlap(const LCAO_Orbitals& orb, const K_Vecto
     this->m_abfs_abf.init(2, orb, this->info.kmesh_times, orb.get_Rmax(), Lmax);
     // std::cout << "Lmax: " << Lmax << std::endl;
     Lmax = 0;
-    for (size_t T = 0; T != this->abfs.size(); ++T)
+    for (size_t n = 0; n != this->abfs.size(); ++n)
     {
-        Lmax = std::max(Lmax, static_cast<int>(this->abfs[T].size()) - 1);
+        Lmax = std::max(Lmax, static_cast<int>(this->abfs[n].size()) - 1);
     }
     // std::cout << "Lmax: " << Lmax << std::endl;
     MGT.init_Gaunt_CH(Lmax);
@@ -276,26 +276,26 @@ void RPA_LRI<T, Tdata>::cal_abfs_overlap(const LCAO_Orbitals& orb, const K_Vecto
             {
                 const auto R_min = get_cell_nearest(tauA, tauB, period, iR);
                 // debug
-                std::cout << "IJR: " << I << "," << J << "," << R_min[0] << R_min[1] << R_min[2] << "," << iR[0]
-                          << iR[1] << iR[2] << std::endl;
+                // std::cout << "IJR: " << I << "," << J << "," << R_min[0] << R_min[1] << R_min[2] << "," << iR[0]
+                //          << iR[1] << iR[2] << std::endl;
                 const ModuleBase::Vector3<double> tauB_shift
                     = tauB + (RI_Util::array3_to_Vector3(R_min) * GlobalC::ucell.latvec);
                 overlap_abfs_abfs[I][{J, R_min}]
-                    = this->m_abfs_abfs.cal_overlap_matrix<Tdata>(TA,
-                                                                  TB,
-                                                                  tauA,
-                                                                  tauB_shift,
-                                                                  index_abfs_s,
-                                                                  index_abfs_s,
-                                                                  Matrix_Orbs11::Matrix_Order::AB);
+                    = this->m_abfs_abfs.template cal_overlap_matrix<Tdata>(TA,
+                                                                           TB,
+                                                                           tauA,
+                                                                           tauB_shift,
+                                                                           index_abfs_s,
+                                                                           index_abfs_s,
+                                                                           Matrix_Orbs11::Matrix_Order::AB);
                 overlap_abfs_abf[I][{J, R_min}]
-                    = this->m_abfs_abf.cal_overlap_matrix<Tdata>(TA,
-                                                                 TB,
-                                                                 tauA,
-                                                                 tauB_shift,
-                                                                 index_abfs_s,
-                                                                 index_abfs,
-                                                                 Matrix_Orbs11::Matrix_Order::AB);
+                    = this->m_abfs_abf.template cal_overlap_matrix<Tdata>(TA,
+                                                                          TB,
+                                                                          tauA,
+                                                                          tauB_shift,
+                                                                          index_abfs_s,
+                                                                          index_abfs,
+                                                                          Matrix_Orbs11::Matrix_Order::AB);
             }
         }
     }
@@ -354,7 +354,7 @@ void RPA_LRI<T, Tdata>::inverse_olp(std::map<TA, std::map<TAq, RI::Tensor<std::c
                                     const std::vector<ModuleBase::Vector3<double>>& q_period,
                                     const ModuleBase::Element_Basis_Index::IndexLNM& index_abfs_s)
 {
-    int all_mu_s = 0;
+    size_t all_mu_s = 0;
     vector<int> mu_s_shift(GlobalC::ucell.nat);
     for (int I = 0; I != GlobalC::ucell.nat; I++)
     {
