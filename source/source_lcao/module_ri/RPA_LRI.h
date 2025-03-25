@@ -40,7 +40,7 @@ class RPA_LRI
         : info(info_in), info_ewald(info_ewald_in) {};
     ~RPA_LRI() {};
     void init(const MPI_Comm& mpi_comm_in, const K_Vectors& kv_in, const std::vector<double>& orb_cutoff);
-    void cal_rpa_cv();
+    void cal_rpa_cv(const LCAO_Orbitals& orb, const K_Vectors& kv);
     void cal_postSCF_exx(const int istep,
                          const elecstate::DensityMatrix<T, Tdata>& dm,
                          const MPI_Comm& mpi_comm_in,
@@ -58,17 +58,22 @@ class RPA_LRI
                           std::map<TA, std::map<TAC, RI::Tensor<Tdata>>>& overlap_abfs_abf,
                           std::string filename,
                           const ModuleBase::Element_Basis_Index::IndexLNM& index_abfs_s,
-                          const ModuleBase::Element_Basis_Index::IndexLNM& index_abfs);
+                          const ModuleBase::Element_Basis_Index::IndexLNM& index_abfs,
+                          const std::vector<std::array<Tcell, Ndim>>& R_period);
     std::array<Tcell, Ndim> get_cell_nearest(const ModuleBase::Vector3<double>& tauA,
                                              const ModuleBase::Vector3<double>& tauB,
                                              const std::array<Tcell, Ndim> period,
                                              const std::array<Tcell, Ndim> R_in);
     void inverse_olp(std::map<TA, std::map<TAq, RI::Tensor<std::complex<double>>>>& overlap_abfs_abfs,
-                     const std::vector<ModuleBase::Vector3<double>>& q_period,
                      const ModuleBase::Element_Basis_Index::IndexLNM& index_abfs_s);
+    void out_ri_tensor(const std::string fn,
+                       std::map<TA, std::map<TAq, RI::Tensor<std::complex<double>>>>& olp,
+                       const double threshold);
+    void out_pure_ri_tensor(const std::string fn, RI::Tensor<std::complex<double>>& olp, const double threshold);
+    void out_pure_ri_tensor(const std::string fn, RI::Tensor<double>& olp, const double threshold);
     void out_bands(const elecstate::ElecState* pelec);
 
-    void out_Cs();
+    void out_Cs(std::map<TA, std::map<TAC, RI::Tensor<Tdata>>>& Cs_in, std::string filename = "Cs_data_");
     void out_coulomb_k(std::map<TA, std::map<TAC, RI::Tensor<Tdata>>>& Vs,
                        std::string filename,
                        Exx_LRI<double>* exx_lri);
@@ -94,16 +99,25 @@ class RPA_LRI
 
     std::vector<std::vector<std::vector<Numerical_Orbital_Lm>>> lcaos;
     std::vector<std::vector<std::vector<Numerical_Orbital_Lm>>> abfs;
+    std::vector<std::vector<std::vector<Numerical_Orbital_Lm>>> abfs_ccp;
+    // shrinked abfs
+    ORB_gaunt_table MGT;
+    int Lmax;
+    std::vector<std::vector<std::vector<Numerical_Orbital_Lm>>> abfs_s;
+    std::vector<std::vector<std::vector<Numerical_Orbital_Lm>>> abfs_s_ccp;
 
     // Exx_LRI<double> exx_postSCF_double(info);
     // LRI_CV<Tdata> cv;
     std::map<TA, std::map<TAC, RI::Tensor<Tdata>>> Vs_period;
     std::map<TA, std::map<TAC, RI::Tensor<Tdata>>> Cs_period;
+    // shrinked Cs
+    std::map<TA, std::map<TAC, RI::Tensor<Tdata>>> Cs_period_s;
     // RI::RPA<TA,Tcell,Ndim,Tdata> rpa_lri;
 
     // Tdata post_process_Erpa( const Tdata &Erpa_in ) const;
 
     Exx_LRI<double>* exx_lri_rpa = nullptr;
+    Exx_LRI<double>* exx_abfs_s = nullptr;
     Exx_LRI<double>* exx_full_coulomb = nullptr;
 };
 
