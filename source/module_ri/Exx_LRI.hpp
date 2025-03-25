@@ -155,6 +155,128 @@ void Exx_LRI<Tdata>::init(const MPI_Comm& mpi_comm_in, const K_Vectors& kv_in, c
 }
 
 template <typename Tdata>
+void Exx_LRI<Tdata>::init(const MPI_Comm& mpi_comm_in,
+                          const K_Vectors& kv_in,
+                          const LCAO_Orbitals& orb,
+                          const std::vector<std::vector<std::vector<Numerical_Orbital_Lm>>>& abfs_s)
+{
+    ModuleBase::TITLE("Exx_LRI", "init");
+    ModuleBase::timer::tick("Exx_LRI", "init");
+
+    //	if(GlobalC::exx_info.info_global.separate_loop)
+    //	{
+    //		Hexx_para.mixing_mode =
+    // Exx_Abfs::Parallel::Communicate::Hexx::Mixing_Mode::No;
+    //		Hexx_para.mixing_beta = 0;
+    //	}
+    //	else
+    //	{
+    //		if("plain"==GlobalC::CHR.mixing_mode)
+    //			Hexx_para.mixing_mode =
+    // Exx_Abfs::Parallel::Communicate::Hexx::Mixing_Mode::Plain; 		else
+    // if("pulay"==GlobalC::CHR.mixing_mode) 			Hexx_para.mixing_mode =
+    // Exx_Abfs::Parallel::Communicate::Hexx::Mixing_Mode::Pulay; 		else
+    // throw std::invalid_argument("exx mixing error. exx_separate_loop==false,
+    // mixing_mode!=plain or pulay"); 		Hexx_para.mixing_beta =
+    // GlobalC::CHR.mixing_beta;
+    //	}
+
+    this->mpi_comm = mpi_comm_in;
+    this->p_kv = &kv_in;
+    this->orb_cutoff_ = orb.cutoffs();
+
+    this->lcaos = Exx_Abfs::Construct_Orbs::change_orbs(orb, this->info.kmesh_times);
+    this->abfs = abfs_s;
+
+    //	#ifdef __MPI
+    //	Exx_Abfs::Util::bcast( this->info.files_abfs, 0, this->mpi_comm );
+    //	#endif
+
+    auto get_ccp_parameter = [this]() -> std::map<std::string, double> {
+        double hf_Rcut;
+        switch (this->info.Rcut_type)
+        {
+        case 0: {
+            // 4/3 * pi * Rcut^3 = V_{supercell} = V_{unitcell} * Nk
+            const int nspin0 = (PARAM.inp.nspin == 2) ? 2 : 1;
+            hf_Rcut = std::pow(0.75 * this->p_kv->get_nkstot_full() / nspin0 * GlobalC::ucell.omega / (ModuleBase::PI),
+                               1.0 / 3.0);
+            break;
+        }
+        case 1: {
+            double bvk_a1 = GlobalC::ucell.a1.norm() * this->p_kv->nmp[0];
+            double bvk_a2 = GlobalC::ucell.a2.norm() * this->p_kv->nmp[1];
+            double bvk_a3 = GlobalC::ucell.a3.norm() * this->p_kv->nmp[2];
+
+            double min_len = std::min({bvk_a1, bvk_a2, bvk_a3});
+            hf_Rcut = 0.5 * min_len;
+            break;
+        }
+        default:
+            throw std::domain_error(std::string(__FILE__) + " line " + std::to_string(__LINE__));
+            break;
+        }
+
+        switch (this->info.ccp_type)
+        {
+        case Conv_Coulomb_Pot_K::Ccp_Type::Ccp:
+            return {};
+        case Conv_Coulomb_Pot_K::Ccp_Type::Hf: {
+            return {{"Rcut_type", this->info.Rcut_type}, {"hf_Rcut", hf_Rcut}};
+        }
+        case Conv_Coulomb_Pot_K::Ccp_Type::Hse:
+            return {{"hse_omega", this->info.hse_omega}};
+        case Conv_Coulomb_Pot_K::Ccp_Type::Cam: {
+            return {{"hse_omega", this->info.hse_omega},
+                    {"hybrid_alpha", this->info.hybrid_alpha},
+                    {"hybrid_beta", this->info.hybrid_beta},
+                    {"Rcut_type", this->info.Rcut_type},
+                    {"hf_Rcut", hf_Rcut}};
+        }
+        case Conv_Coulomb_Pot_K::Ccp_Type::Ccp_Cam:
+            return {{"hse_omega", this->info.hse_omega},
+                    {"hybrid_alpha", this->info.hybrid_alpha},
+                    {"hybrid_beta", this->info.hybrid_beta}};
+        default:
+            throw std::domain_error(std::string(__FILE__) + " line " + std::to_string(__LINE__));
+            break;
+        }
+    };
+    this->abfs_ccp = Conv_Coulomb_Pot_K::cal_orbs_ccp(this->abfs,
+                                                      this->info.ccp_type,
+                                                      get_ccp_parameter(),
+                                                      this->info.ccp_rmesh_times);
+
+    for (size_t T = 0; T != this->abfs.size(); ++T)
+        GlobalC::exx_info.info_ri.abfs_Lmax
+            = std::max(GlobalC::exx_info.info_ri.abfs_Lmax, static_cast<int>(this->abfs[T].size()) - 1);
+
+    this->cv.set_orbitals(orb, this->lcaos, this->abfs, this->abfs_ccp, this->info.kmesh_times, this->MGT, true, true);
+
+    if (this->info_ewald.use_ewald)
+    {
+        if (this->info.hybrid_beta)
+        {
+            this->abfs_ccp_sr = Conv_Coulomb_Pot_K::cal_orbs_ccp(this->abfs,
+                                                                 Conv_Coulomb_Pot_K::Ccp_Type::Hse,
+                                                                 {{"hse_omega", this->info.hse_omega}},
+                                                                 this->info.ccp_rmesh_times);
+            this->sr_cv.set_orbitals(orb,
+                                     this->lcaos,
+                                     this->abfs,
+                                     this->abfs_ccp_sr,
+                                     this->info.kmesh_times,
+                                     this->MGT,
+                                     false,
+                                     false);
+        }
+        this->evq.init(orb, this->mpi_comm, this->p_kv, this->lcaos, this->abfs, get_ccp_parameter(), this->MGT);
+    }
+
+    ModuleBase::timer::tick("Exx_LRI", "init");
+}
+
+template <typename Tdata>
 void Exx_LRI<Tdata>::cal_exx_ions(const int istep, const bool write_cv)
 {
     ModuleBase::TITLE("Exx_LRI", "cal_exx_ions");

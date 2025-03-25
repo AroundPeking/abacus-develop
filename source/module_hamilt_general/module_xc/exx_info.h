@@ -60,6 +60,7 @@ struct Exx_Info
 
         double pca_threshold = 0;
         std::vector<std::string> files_abfs;
+        std::vector<std::string> files_shrink_abfs;
         double C_threshold = 0;
         double V_threshold = 0;
         double dm_threshold = 0;
@@ -72,7 +73,7 @@ struct Exx_Info
         double cauchy_stress_threshold = 0;
         double ccp_rmesh_times = 10;
         double kmesh_times = 4;
-        double shrink_abfs_pca_thr = 0;
+        double shrink_abfs_pca_thr = -1;
 
         int abfs_Lmax = 0; // tmp
 

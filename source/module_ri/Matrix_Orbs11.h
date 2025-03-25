@@ -20,16 +20,15 @@
 
 class Matrix_Orbs11
 {
-public:
-	// mode:
-	//    1: <lcaos|lcaos>
-	//    2: <jYs|jYs>  <abfs|abfs>
-	void init(
-		const int mode,
-        const LCAO_Orbitals& orb,
-		const double kmesh_times,  		// extend Kcut, keep dK
-		const double rmax,
-        int Lmax);		// extend Rcut, keep dR
+  public:
+    // mode:
+    //    1: <lcaos|lcaos>
+    //    2: <jYs|jYs>  <abfs|abfs>
+    void init(const int mode,
+              const LCAO_Orbitals& orb,
+              const double kmesh_times, // extend Kcut, keep dK
+              const double rmax,
+              int Lmax); // extend Rcut, keep dR
 
     void init_radial(const std::vector<std::vector<std::vector<Numerical_Orbital_Lm>>>& orb_A,
                      const std::vector<std::vector<std::vector<Numerical_Orbital_Lm>>>& orb_B,
@@ -67,11 +66,6 @@ public:
     std::map<size_t, std::map<size_t, std::map<size_t, std::map<size_t, RI::Tensor<Tdata>>>>> cal_overlap_matrix_all(
         const ModuleBase::Element_Basis_Index::IndexLNM& index_r,
         const ModuleBase::Element_Basis_Index::IndexLNM& index_c) const;
-
-  private:
-    ModuleBase::Sph_Bessel_Recursive::D2* psb_ = nullptr;
-    const double lcao_dr_ = 0.01;
-
     std::map<size_t,                                              // TA
              std::map<size_t,                                     // TB
                       std::map<int,                               // LA
@@ -80,6 +74,11 @@ public:
                                                  std::map<size_t, // NB
                                                           Center2_Orb::Orb11>>>>>>
         center2_orb11_s;
+
+  private:
+    ModuleBase::Sph_Bessel_Recursive::D2* psb_ = nullptr;
+    const double lcao_dr_ = 0.01;
+
     // this->center2_orb11_s[TA][TB][LA][NA][LB][NB]
 };
 

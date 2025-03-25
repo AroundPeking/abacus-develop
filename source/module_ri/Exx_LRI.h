@@ -65,6 +65,10 @@ class Exx_LRI
     }
 
     void init(const MPI_Comm& mpi_comm_in, const K_Vectors& kv_in, const LCAO_Orbitals& orb);
+    void init(const MPI_Comm& mpi_comm_in,
+              const K_Vectors& kv_in,
+              const LCAO_Orbitals& orb,
+              const std::vector<std::vector<std::vector<Numerical_Orbital_Lm>>>& abfs_s);
     void cal_exx_force();
     void cal_exx_stress();
     std::vector<std::vector<int>> get_abfs_nchis() const;
