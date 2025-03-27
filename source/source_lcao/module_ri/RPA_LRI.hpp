@@ -345,14 +345,14 @@ void RPA_LRI<T, Tdata>::cal_abfs_overlap(const LCAO_Orbitals& orb, const K_Vecto
     // const double abfs_rmax = Exx_Abfs::Construct_Orbs::get_Rmax(this->abfs);
     int Lmax_flag = 0;
 
-    this->m_abfs_abf.init(2, orb, this->info.kmesh_times, orb.get_Rmax(), Lmax_flag);
+    this->m_abfs_abf.init(2, orb, this->info.kmesh_times, orb.get_Rmax() * 2, Lmax_flag);
     // std::cout << "Lmax: " << Lmax << std::endl;
 
     this->m_abfs_abf.init_radial(abfs_s, this->abfs, this->MGT);
     this->m_abfs_abf.init_radial_table();
 
     // const double abfs_s_rmax = Exx_Abfs::Construct_Orbs::get_Rmax(abfs_s);
-    this->m_abfs_abfs.init(2, orb, this->info.kmesh_times, orb.get_Rmax(), Lmax);
+    this->m_abfs_abfs.init(2, orb, this->info.kmesh_times, orb.get_Rmax() * 2, Lmax);
     this->m_abfs_abfs.init_radial(abfs_s, abfs_s, MGT);
     this->m_abfs_abfs.init_radial_table();
     // get Rlist
@@ -369,72 +369,68 @@ void RPA_LRI<T, Tdata>::cal_abfs_overlap(const LCAO_Orbitals& orb, const K_Vecto
     const ModuleBase::Element_Basis_Index::Range range_abfs = Exx_Abfs::Abfs_Index::construct_range(this->abfs);
     const ModuleBase::Element_Basis_Index::IndexLNM index_abfs
         = ModuleBase::Element_Basis_Index::construct_index(range_abfs);
-    size_t I = 0;
-    size_t J = 0;
-    std::vector<LRI_CV_Tools::TC> R_min_list;
-    for (const auto& co1: m_abfs_abfs.center2_orb11_s)
+
+    auto orb_cutoff_ = orb.cutoffs();
+    const std::array<Tcell, Ndim> period_Vs = LRI_CV_Tools::cal_latvec_range<Tcell>(2, orb_cutoff_);
+    std::vector<TA> atoms(GlobalC::ucell.nat);
+    for (int iat = 0; iat < GlobalC::ucell.nat; ++iat)
+        atoms[iat] = iat;
+    const std::pair<std::vector<TA>, std::vector<std::vector<std::pair<TA, std::array<Tcell, Ndim>>>>> list_As_Vs
+        = RI::Distribute_Equally::distribute_atoms_periods(this->mpi_comm, atoms, period_Vs, 2, false);
+    for (const auto& A: list_As_Vs.first)
     {
-        const size_t TA = co1.first;
-        for (size_t IA = 0; IA != GlobalC::ucell.atoms[TA].na; ++IA)
+        const size_t TA = GlobalC::ucell.iat2it[A];
+        const size_t IA = GlobalC::ucell.iat2ia[A];
+        const ModuleBase::Vector3<double>& tauA(GlobalC::ucell.atoms[TA].tau[IA]);
+        for (const auto& BR: list_As_Vs.second[0])
         {
-            const ModuleBase::Vector3<double>& tauA(GlobalC::ucell.atoms[TA].tau[IA]);
-            J = 0;
-            for (const auto& co2: co1.second)
-            {
-                const size_t TB = co2.first;
-                for (size_t IB = 0; IB != GlobalC::ucell.atoms[TB].na; ++IB)
-                {
-                    const ModuleBase::Vector3<double>& tauB(GlobalC::ucell.atoms[TB].tau[IB]);
+            const auto B = BR.first;
+            const auto R = BR.second;
+            const size_t TB = GlobalC::ucell.iat2it[B];
+            const size_t IB = GlobalC::ucell.iat2ia[B];
+            const ModuleBase::Vector3<double>& tauB(GlobalC::ucell.atoms[TB].tau[IB]);
 
-                    for (auto& iR: R_period)
-                    {
-                        const auto R_min = get_cell_nearest(tauA, tauB, period, iR);
-                        R_min_list.emplace_back(R_min);
-                        // debug
-                        // std::cout << "IJR: " << I << "," << J << "," << R_min[0] << R_min[1] << R_min[2] << "," <<
-                        // iR[0]
-                        //          << iR[1] << iR[2] << std::endl;
+            // const auto R_min = get_cell_nearest(tauA, tauB, period, iR);
+            // debug
+            // std::cout << "IJR: " << I << "," << J << "," << R_min[0] << R_min[1] << R_min[2] << "," <<
+            // iR[0]
+            //          << iR[1] << iR[2] << std::endl;
 
-                        const ModuleBase::Vector3<double> tauB_shift
-                            = tauB + (RI_Util::array3_to_Vector3(R_min) * GlobalC::ucell.latvec);
-                        auto tau_delta = tauB_shift - tauA;
-                        ModuleBase::Vector3<double> tau0;
-                        // tau_delta.x = std::abs(tau_delta.x);
-                        // tau_delta.y = std::abs(tau_delta.y);
-                        // tau_delta.z = std::abs(tau_delta.z);
-                        tau0.x = 0.0;
-                        tau0.y = 0.0;
-                        tau0.z = 0.0;
-                        overlap_abfs_abfs[I][{J, R_min}]
-                            = this->m_abfs_abfs.template cal_overlap_matrix<Tdata>(TA,
-                                                                                   TB,
-                                                                                   tau0,
-                                                                                   tau_delta,
-                                                                                   index_abfs_s,
-                                                                                   index_abfs_s,
-                                                                                   Matrix_Orbs11::Matrix_Order::AB);
+            const ModuleBase::Vector3<double> tauB_shift
+                = tauB + (RI_Util::array3_to_Vector3(R) * GlobalC::ucell.latvec);
+            auto tau_delta = tauB_shift - tauA;
+            ModuleBase::Vector3<double> tau0;
+            // tau_delta.x = std::abs(tau_delta.x);
+            // tau_delta.y = std::abs(tau_delta.y);
+            // tau_delta.z = std::abs(tau_delta.z);
+            tau0.x = 0.0;
+            tau0.y = 0.0;
+            tau0.z = 0.0;
+            overlap_abfs_abfs[A][{B, R}]
+                = this->m_abfs_abfs.template cal_overlap_matrix<double>(TA,
+                                                                        TB,
+                                                                        tau0,
+                                                                        tau_delta,
+                                                                        index_abfs_s,
+                                                                        index_abfs_s,
+                                                                        Matrix_Orbs11::Matrix_Order::AB);
 
-                        std::cout << "I,J: " << I << "," << J << std::endl;
-                        std::cout << "tauA: " << tauA.x << tauA.y << tauA.z << std::endl;
-                        std::cout << "tauB: " << tauB.x << tauB.y << tauB.z << std::endl;
-                        std::cout << "tauB shift: " << tauB_shift.x << tauB_shift.y << tauB_shift.z << std::endl;
-                        std::cout << "iR: " << iR[0] << iR[1] << iR[2] << std::endl;
-                        std::cout << "Rmin: " << R_min[0] << R_min[0] << R_min[0] << std::endl;
-                        std::cout << "delta: " << tau_delta.x << tau_delta.y << tau_delta.z << std::endl;
+            /* std::cout << "I,J: " << I << "," << J << std::endl;
+            std::cout << "tauA: " << tauA.x << tauA.y << tauA.z << std::endl;
+            std::cout << "tauB: " << tauB.x << tauB.y << tauB.z << std::endl;
+            std::cout << "tauB shift: " << tauB_shift.x << tauB_shift.y << tauB_shift.z << std::endl;
+            std::cout << "iR: " << iR[0] << iR[1] << iR[2] << std::endl;
+            std::cout << "Rmin: " << R_min[0] << R_min[0] << R_min[0] << std::endl;
+            std::cout << "delta: " << tau_delta.x << tau_delta.y << tau_delta.z << std::endl; */
 
-                        overlap_abfs_abf[I][{J, R_min}]
-                            = this->m_abfs_abf.template cal_overlap_matrix<Tdata>(TA,
-                                                                                  TB,
-                                                                                  tau0,
-                                                                                  tau_delta,
-                                                                                  index_abfs_s,
-                                                                                  index_abfs,
-                                                                                  Matrix_Orbs11::Matrix_Order::AB);
-                    }
-                    J += 1;
-                }
-            }
-            I += 1;
+            overlap_abfs_abf[A][{B, R}]
+                = this->m_abfs_abf.template cal_overlap_matrix<double>(TA,
+                                                                       TB,
+                                                                       tau0,
+                                                                       tau_delta,
+                                                                       index_abfs_s,
+                                                                       index_abfs,
+                                                                       Matrix_Orbs11::Matrix_Order::AB);
         }
     }
     // debug
@@ -519,7 +515,7 @@ void RPA_LRI<T, Tdata>::inverse_olp(std::map<TA, std::map<TAq, RI::Tensor<std::c
                 auto q = JPp.first.second;
                 if (q != RI_Util::Vector3_to_array3(p_kv->kvec_c[ik]))
                     continue;
-                std::cout << "IJ: " << I << "," << J << std::endl;
+                // std::cout << "IJ: " << I << "," << J << std::endl;
                 auto mu_s_J = index_abfs_s[GlobalC::ucell.iat2it[J]].count_size;
                 for (int ir = 0; ir < mu_s_I; ir++)
                 {
@@ -541,13 +537,13 @@ void RPA_LRI<T, Tdata>::inverse_olp(std::map<TA, std::map<TAq, RI::Tensor<std::c
         // check Hermitian
         for (int ir = 0; ir < all_mu_s; ir++)
         {
-            for (int ic = 0; ic < all_mu_s; ic++)
+            for (int ic = ir; ic < all_mu_s; ic++)
             {
                 auto delta = std::abs(olp_all(ir, ic) - std::conj(olp_all(ic, ir)));
                 if (delta > 1e-10)
                 {
                     std::cout << "Warning: olp_all is not Hermitian!" << std::endl;
-                    std::cout << "ir,ic: " << ir << "," << ic << std::endl;
+                    std::cout << "ik,ir,ic: " << ik << "," << ir << "," << ic << std::endl;
                     std::cout << "delta(ir, ic): " << delta << std::endl;
                 }
             }
