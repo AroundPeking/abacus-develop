@@ -406,6 +406,7 @@ void RPA_LRI<T, Tdata>::cal_abfs_overlap(const LCAO_Orbitals& orb, const K_Vecto
             tau0.x = 0.0;
             tau0.y = 0.0;
             tau0.z = 0.0;
+            std::cout << "ABR: " << A << B << "," << R.at(0) << R.at(1) << R.at(2) << std::endl;
             overlap_abfs_abfs[A][{B, R}]
                 = this->m_abfs_abfs.template cal_overlap_matrix<double>(TA,
                                                                         TB,
@@ -550,6 +551,13 @@ void RPA_LRI<T, Tdata>::inverse_olp(std::map<TA, std::map<TAq, RI::Tensor<std::c
         }
         out_pure_ri_tensor("olp_all.dat", olp_all, 0.);
         auto olp_inv = LRI_CV_Tools::cal_I(olp_all);
+        for (int ir = 0; ir < all_mu_s; ir++)
+        {
+            for (int ic = ir; ic < all_mu_s; ic++)
+            {
+                olp_inv(ic, ir) = std::conj(olp_inv(ir, ic));
+            }
+        }
         out_pure_ri_tensor("olp_inv.dat", olp_inv, 0.);
         for (auto& Ip: overlap_abfs_abfs)
         {
@@ -654,6 +662,7 @@ void RPA_LRI<T, Tdata>::out_ri_tensor(const std::string fn,
             int nc = mat.shape[1];
             size_t nnz = nr * nc;
             fs << "%%MatrixMarket matrix coordinate complex general" << std::endl;
+            fs << I << " " << J << " " << q.at(0) << " " << q.at(1) << " " << q.at(2) << std::endl;
             fs << "%" << std::endl;
 
             fs << nr << " " << nc << " " << nnz << std::endl;
@@ -1016,8 +1025,7 @@ void RPA_LRI<T, Tdata>::out_coulomb_k(std::map<TA, std::map<TAC, RI::Tensor<Tdat
                     continue;
                 }
                 RI::Tensor<std::complex<double>> tmp_VR = RI::Global_Func::convert<std::complex<double>>(JPp.second);
-
-                const double arg = 1 * (p_kv->kvec_c[ik] * (RI_Util::array3_to_Vector3(R) * ucell.latvec))
+                const double arg = 1 * (p_kv->kvec_c[ik] * (RI_Util::array3_to_Vector3(R) * GlobalC::ucell.latvec))
                                    * ModuleBase::TWO_PI; // latvec
                 const std::complex<double> kphase = std::complex<double>(cos(arg), sin(arg));
                 if (Vq_k_IJ[J].empty())
