@@ -58,8 +58,7 @@ class RPA_LRI
                           std::map<TA, std::map<TAC, RI::Tensor<Tdata>>>& overlap_abfs_abf,
                           std::string filename,
                           const ModuleBase::Element_Basis_Index::IndexLNM& index_abfs_s,
-                          const ModuleBase::Element_Basis_Index::IndexLNM& index_abfs,
-                          const std::vector<std::array<Tcell, Ndim>>& R_period);
+                          const ModuleBase::Element_Basis_Index::IndexLNM& index_abfs);
     std::array<Tcell, Ndim> get_cell_nearest(const ModuleBase::Vector3<double>& tauA,
                                              const ModuleBase::Vector3<double>& tauB,
                                              const std::array<Tcell, Ndim> period,
