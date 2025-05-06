@@ -397,7 +397,7 @@ void RPA_LRI<T, Tdata>::cal_abfs_overlap(const LCAO_Orbitals& orb, const K_Vecto
             ofs << "ABR: " << A << B << "," << R.at(0) << R.at(1) << R.at(2) << std::endl;
         }
     }
-    ofs.close(); 
+    ofs.close();
     /* #pragma omp parallel
         for (const auto& A: list_As_Vs.first)
         {
@@ -819,40 +819,40 @@ void RPA_LRI<T, Tdata>::out_abfs_overlap(std::map<TA, std::map<TAC, RI::Tensor<T
         }
     }
     // for multi-mpi
-    for(int I = 0; I!= GlobalC::ucell.nat; I++)
+    for (int I = 0; I != GlobalC::ucell.nat; I++)
     {
-        for(int J = 0; J!= GlobalC::ucell.nat; J++)
+        for (int J = 0; J != GlobalC::ucell.nat; J++)
         {
-            for(int ik = 0; ik != nks_tot; ik++)
+            for (int ik = 0; ik != nks_tot; ik++)
             {
                 auto q = RI_Util::Vector3_to_array3(p_kv->kvec_c[ik]);
                 if (olp_q_ss[I][{J, q}].empty())
                 {
-                    auto mu=index_abfs_s[GlobalC::ucell.iat2it[I]].count_size;
-                    auto nu=index_abfs_s[GlobalC::ucell.iat2it[J]].count_size;
+                    auto mu = index_abfs_s[GlobalC::ucell.iat2it[I]].count_size;
+                    auto nu = index_abfs_s[GlobalC::ucell.iat2it[J]].count_size;
                     olp_q_ss[I][{J, q}] = RI::Tensor<std::complex<double>>({mu, nu});
                 }
                 if (olp_q_s[I][{J, q}].empty())
                 {
-                    auto mu=index_abfs_s[GlobalC::ucell.iat2it[I]].count_size;
-                    auto nu=index_abfs[GlobalC::ucell.iat2it[J]].count_size;
+                    auto mu = index_abfs_s[GlobalC::ucell.iat2it[I]].count_size;
+                    auto nu = index_abfs[GlobalC::ucell.iat2it[J]].count_size;
                     olp_q_s[I][{J, q}] = RI::Tensor<std::complex<double>>({mu, nu});
                 }
                 for (int ir = 0; ir < olp_q_ss[I][{J, q}].shape[0]; ir++)
                 {
-                    for (int ic = 0; ic < olp_q_ss[I][{J, q}].shape[1]; ic++)   
+                    for (int ic = 0; ic < olp_q_ss[I][{J, q}].shape[1]; ic++)
                     {
                         Parallel_Reduce::reduce_all<std::complex<double>>(olp_q_ss[I][{J, q}](ir, ic));
                     }
-                    for (int ic = 0; ic < olp_q_s[I][{J, q}].shape[1]; ic++)   
+                    for (int ic = 0; ic < olp_q_s[I][{J, q}].shape[1]; ic++)
                     {
                         Parallel_Reduce::reduce_all<std::complex<double>>(olp_q_s[I][{J, q}](ir, ic));
                     }
-                } 
+                }
             }
         }
     }
-                    
+
     // out_ri_tensor("olp_ss.dat", olp_q_ss, 0.);
     // Inverse of overlap(q)
     inverse_olp(olp_q_ss, index_abfs_s);
@@ -1030,7 +1030,7 @@ void RPA_LRI<T, Tdata>::out_bands(const elecstate::ElecState* pelec)
     std::ofstream ofs;
     ofs.open(ss.str().c_str(), std::ios::out);
     ofs << nks_tot << std::endl;
-    ofs << PARAM.inp.nspin << std::endl;
+    ofs << nspin_tmp << std::endl;
     ofs << PARAM.inp.nbands << std::endl;
     ofs << PARAM.globalv.nlocal << std::endl;
     ofs << (pelec->eferm.ef / 2.0) << std::endl;
