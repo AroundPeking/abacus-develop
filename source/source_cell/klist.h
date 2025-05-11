@@ -11,9 +11,9 @@
 
 class K_Vectors
 {
-public:
-    std::vector<ModuleBase::Vector3<double>> kvec_c; /// Cartesian coordinates of k points
-    std::vector<ModuleBase::Vector3<double>> kvec_d; /// Direct coordinates of k points
+  public:
+    std::vector<ModuleBase::Vector3<double>> kvec_c;      /// Cartesian coordinates of k points
+    std::vector<ModuleBase::Vector3<double>> kvec_d;      /// Direct coordinates of k points
     std::vector<ModuleBase::Vector3<double>> kvec_c_full; // Cartesian coordinates of full k mesh match with nkstot_full
 
     std::vector<double> wk; /// wk, weight of k points
@@ -24,7 +24,7 @@ public:
     int nmp[3]={0};                 /// Number of Monhorst-Pack
     std::vector<int> kl_segids; /// index of kline segment
 
-    /// @brief equal k points to each ibz-kpont, corresponding to a certain symmetry operations. 
+    /// @brief equal k points to each ibz-kpont, corresponding to a certain symmetry operations.
     /// dim: [iks_ibz][(isym, kvec_d)]
     std::vector<std::map<int, ModuleBase::Vector3<double>>> kstars;
 
@@ -58,13 +58,74 @@ public:
      *       it will output a warning and suggest possible solutions.
      * @note Only available for nspin = 1 or 2 or 4.
      */
-    void set(const UnitCell& ucell,
-        const ModuleSymmetry::Symmetry& symm,
-        const std::string& k_file_name,
-        const int& nspin,
-        const ModuleBase::Matrix3& reciprocal_vec,
-        const ModuleBase::Matrix3& latvec,
-        std::ofstream& ofs);
+    void set(const ModuleSymmetry::Symmetry& symm,
+             const std::string& k_file_name,
+             const int& nspin,
+             const ModuleBase::Matrix3& reciprocal_vec,
+             const ModuleBase::Matrix3& latvec,
+             std::ofstream& ofs);
+
+    /**
+     * @brief Generates irreducible k-points in the Brillouin zone considering symmetry operations.
+     *
+     * This function calculates the irreducible k-points (IBZ) from the given k-points, taking into
+     * account the symmetry of the unit cell. It updates the symmetry-matched k-points and generates
+     * the corresponding weight for each k-point.
+     *
+     * @param symm The symmetry information of the system.
+     * @param use_symm A flag indicating whether to use symmetry operations.
+     * @param skpt A string to store the formatted k-points information.
+     * @param ucell The unit cell of the crystal.
+     * @param match A boolean flag that indicates if the results matches the real condition.
+     */
+    void ibz_kpoint(const ModuleSymmetry::Symmetry& symm,
+                    bool use_symm,
+                    std::string& skpt,
+                    const UnitCell& ucell,
+                    bool& match);
+    // LiuXh add 20180515
+
+    /**
+     * @brief Sets up the k-points after a volume change.
+     *
+     * This function sets up the k-points after a volume change in the system.
+     * It sets the Cartesian and direct k-vectors based on the new reciprocal and real space lattice vectors.
+     *
+     * @param nspin_in The number of spins. 1 for non-spin-polarized calculations and 2 for spin-polarized calculations.
+     * @param reciprocal_vec The new reciprocal lattice matrix.
+     * @param latvec The new real space lattice matrix.
+     *
+     * @return void
+     *
+     * @note The function first sets the number of spins (nspin) to the input value.
+     * @note If the direct k-vectors have been set (kd_done = true) and the Cartesian k-vectors have not (kc_done =
+     * false), the function calculates the Cartesian k-vectors by multiplying the direct k-vectors with the reciprocal
+     * lattice matrix.
+     * @note If the Cartesian k-vectors have been set (kc_done = true) and the direct k-vectors have not (kd_done =
+     * false), the function calculates the direct k-vectors by multiplying the Cartesian k-vectors with the transpose of
+     * the real space lattice matrix.
+     * @note The function also prints a table of the direct k-vectors and their weights.
+     * @note The function calls the print_klists function to print the k-points in both Cartesian and direct
+     * coordinates.
+     */
+    void set_after_vc(const int& nspin, const ModuleBase::Matrix3& reciprocal_vec, const ModuleBase::Matrix3& latvec);
+
+    /**
+     * @brief Gets the global index of a k-point.
+     *
+     * This function gets the global index of a k-point based on its local index and the process pool ID.
+     * The global index is used when the k-points are distributed among multiple process pools.
+     *
+     * @param nkstot The total number of k-points.
+     * @param ik The local index of the k-point.
+     *
+     * @return int Returns the global index of the k-point.
+     *
+     * @note The function calculates the global index by dividing the total number of k-points (nkstot) by the number of
+     * process pools (KPAR), and adding the remainder if the process pool ID (MY_POOL) is less than the remainder.
+     * @note The function is declared as inline for efficiency.
+     */
+    static int get_ik_global(const int& ik, const int& nkstot);
 
     int get_nks() const
     {
@@ -116,49 +177,20 @@ public:
         this->nkstot_full = value;
     }
 
-    void set_nspin(int value)
-    {
-        this->nspin = value;
-    }
-
-    bool get_is_mp() const
-    {
-        return is_mp;
-    }
-
-    std::vector<int> ik2iktot; ///<[nks] map ik to the global index of k points
-
-    /**
-     * @brief Updates the k-points to use the irreducible Brillouin zone (IBZ).
-     *
-     * This function updates the k-points to use the irreducible Brillouin zone (IBZ) instead of the full Brillouin
-     * zone.
-     *
-     * @return void
-     *
-     * @note This function should only be called by the master process (MY_RANK == 0).
-     * @note This function assumes that the number of k-points in the IBZ (nkstot_ibz) is greater than 0.
-     * @note This function updates the total number of k-points (nkstot) to be the number of k-points in the IBZ.
-     * @note This function resizes the vector of k-points (kvec_d) and updates its values to be the k-points in the IBZ.
-     * @note This function also updates the weights of the k-points (wk) to be the weights in the IBZ.
-     * @note After this function is called, the flag kd_done is set to true to indicate that the k-points have been
-     * updated, and the flag kc_done is set to false to indicate that the Cartesian coordinates of the k-points need to
-     * be recalculated.
-     */
-    void update_use_ibz(const int& nkstot_ibz,
-                        const std::vector<ModuleBase::Vector3<double>>& kvec_d_ibz,
-                        const std::vector<double>& wk_ibz);
-
   private:
-    int nks = 0;         ///< number of symmetry-reduced k points in this pool(processor, up+dw)
-    int nkstot = 0;      ///< number of symmetry-reduced k points in full k mesh
-    int nkstot_full = 0; ///< number of k points before symmetry reduction in full k mesh
+    int nks;         // number of symmetry-reduced k points in this pool(processor, up+dw)
+    int nkstot;      /// number of symmetry-reduced k points in full k mesh
+    int nkstot_full; /// number of k points before symmetry reduction in full k mesh
 
-    int nspin = 0;
-    double koffset[3] = {0.0}; // used only in automatic k-points.
-    std::string k_kword;       // LiuXh add 20180619
-    int k_nkstot = 0;          // LiuXh add 20180619 // WHAT IS THIS?????
-    bool is_mp = false;        // Monkhorst-Pack
+    int nspin;
+    bool kc_done;
+    bool kd_done;
+    bool kc_done_full;
+    bool kd_done_full;
+    double koffset[3];   // used only in automatic k-points.
+    std::string k_kword; // LiuXh add 20180619
+    int k_nkstot;        // LiuXh add 20180619
+    bool is_mp = false;  // Monkhorst-Pack
 
     /**
      * @brief Resize the k-point related vectors according to the new k-point number.
@@ -259,7 +291,47 @@ public:
 
     // step 2 : set both kvec and kved; normalize weight
 
-    //    void set_both_kvec(const ModuleBase::Matrix3& G, const ModuleBase::Matrix3& R, std::string& skpt);
+    /**
+     * @brief Updates the k-points to use the irreducible Brillouin zone (IBZ).
+     *
+     * This function updates the k-points to use the irreducible Brillouin zone (IBZ) instead of the full Brillouin
+     * zone.
+     *
+     * @return void
+     *
+     * @note This function should only be called by the master process (MY_RANK == 0).
+     * @note This function assumes that the number of k-points in the IBZ (nkstot_ibz) is greater than 0.
+     * @note This function updates the total number of k-points (nkstot) to be the number of k-points in the IBZ.
+     * @note This function resizes the vector of k-points (kvec_d) and updates its values to be the k-points in the IBZ.
+     * @note This function also updates the weights of the k-points (wk) to be the weights in the IBZ.
+     * @note After this function is called, the flag kd_done is set to true to indicate that the k-points have been
+     * updated, and the flag kc_done is set to false to indicate that the Cartesian coordinates of the k-points need to
+     * be recalculated.
+     */
+    void update_use_ibz(const int& nkstot_ibz,
+                        const std::vector<ModuleBase::Vector3<double>>& kvec_d_ibz,
+                        const std::vector<double>& wk_ibz);
+
+    /**
+     * @brief Sets both the direct and Cartesian k-vectors.
+     *
+     * This function sets both the direct and Cartesian k-vectors based on the input parameters.
+     * It also checks the k-point type and sets the corresponding flags.
+     *
+     * @param G The reciprocal lattice matrix.
+     * @param R The real space lattice matrix.
+     * @param skpt A string to store the k-point table.
+     *
+     * @return void
+     *
+     * @note If the k-point type is neither "Cartesian" nor "Direct", an error message will be printed.
+     * @note The function sets the flags kd_done and kc_done to indicate whether the direct and Cartesian k-vectors have
+     * been set, respectively.
+     * @note The function also prints a table of the direct k-vectors and their weights.
+     * @note If the function is called by the master process (MY_RANK == 0), the k-point table is also stored in the
+     * string skpt.
+     */
+    void set_both_kvec(const ModuleBase::Matrix3& G, const ModuleBase::Matrix3& R, std::string& skpt);
 
     /**
      * @brief Normalizes the weights of the k-points.

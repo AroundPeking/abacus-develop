@@ -384,21 +384,21 @@ void RPA_LRI<T, Tdata>::cal_abfs_overlap(const LCAO_Orbitals& orb, const K_Vecto
     const std::pair<std::vector<TA>, std::vector<std::vector<std::pair<TA, std::array<Tcell, Ndim>>>>> list_As_Vs
         = RI::Distribute_Equally::distribute_atoms_periods(this->mpi_comm, atoms, period_Vs, 2, false);
 
-    std::stringstream ss;
-    ss << "IJR_" << GlobalV::MY_RANK << ".txt";
-    std::ofstream ofs;
-    ofs.open(ss.str().c_str(), std::ios::out);
-    for (size_t iA = 0; iA < list_As_Vs.first.size(); ++iA)
-    {
-        const auto& A = list_As_Vs.first[iA];
-        for (const auto& BR: list_As_Vs.second[0])
-        {
-            const auto& B = BR.first;
-            const auto& R = BR.second;
-            ofs << "ABR: " << A << B << "," << R.at(0) << R.at(1) << R.at(2) << std::endl;
-        }
-    }
-    ofs.close();
+    // std::stringstream ss;
+    //  ss << "IJR_" << GlobalV::MY_RANK << ".txt";
+    // std::ofstream ofs;
+    // ofs.open(ss.str().c_str(), std::ios::out);
+    // for (size_t iA = 0; iA < list_As_Vs.first.size(); ++iA)
+    // {
+    //     const auto& A = list_As_Vs.first[iA];
+    //     for (const auto& BR: list_As_Vs.second[0])
+    //     {
+    //         const auto& B = BR.first;
+    //         const auto& R = BR.second;
+    //         ofs << "ABR: " << A << B << "," << R.at(0) << R.at(1) << R.at(2) << std::endl;
+    //     }
+    // }
+    // ofs.close();
     /* #pragma omp parallel
         for (const auto& A: list_As_Vs.first)
         {
@@ -499,17 +499,25 @@ void RPA_LRI<T, Tdata>::cal_abfs_overlap(const LCAO_Orbitals& orb, const K_Vecto
 
 #pragma omp critical(RPA_LRI_merge)
         {
-            for (auto& [aKey, aSubMap]: overlap_abfs_abfs_local)
+            for (auto& aPair: overlap_abfs_abfs_local)
             {
-                for (auto& [key, value]: aSubMap)
+                auto& aKey = aPair.first;
+                auto& aSubMap = aPair.second;
+                for (auto& subPair: aSubMap)
                 {
+                    auto& key = subPair.first;
+                    auto& value = subPair.second;
                     overlap_abfs_abfs[aKey][key] = std::move(value);
                 }
             }
-            for (auto& [aKey, aSubMap]: overlap_abfs_abf_local)
+            for (auto& aPair: overlap_abfs_abf_local)
             {
-                for (auto& [key, value]: aSubMap)
+                auto& aKey = aPair.first;
+                auto& aSubMap = aPair.second;
+                for (auto& subPair: aSubMap)
                 {
+                    auto& key = subPair.first;
+                    auto& value = subPair.second;
                     overlap_abfs_abf[aKey][key] = std::move(value);
                 }
             }
