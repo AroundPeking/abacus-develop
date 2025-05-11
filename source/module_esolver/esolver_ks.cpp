@@ -56,7 +56,7 @@ ESolver_KS<T, Device>::ESolver_KS()
     // temporary, it will be removed
     std::string fft_device = PARAM.inp.device;
     // LCAO basis doesn't support GPU acceleration on FFT currently
-    if(PARAM.inp.basis_type == "lcao")
+    if (PARAM.inp.basis_type == "lcao")
     {
         fft_device = "cpu";
     }
@@ -161,7 +161,8 @@ void ESolver_KS<T, Device>::before_all_runners(const Input_para& inp, UnitCell& 
             while (!ifa.eof())
             {
                 getline(ifa, line);
-                if (line.find("PAW_FILES") != std::string::npos) {
+                if (line.find("PAW_FILES") != std::string::npos)
+                {
                     break;
                 }
             }
@@ -534,7 +535,8 @@ void ESolver_KS<T, Device>::runner(const int istep, UnitCell& ucell)
 
             if (PARAM.inp.scf_os_stop) // if oscillation is detected, SCF will stop
             {
-                this->oscillate_esolver = this->p_chgmix->if_scf_oscillate(iter, drho, PARAM.inp.scf_os_ndim, PARAM.inp.scf_os_thr);
+                this->oscillate_esolver
+                    = this->p_chgmix->if_scf_oscillate(iter, drho, PARAM.inp.scf_os_ndim, PARAM.inp.scf_os_thr);
             }
 
             // drho will be 0 at this->p_chgmix->mixing_restart step, which is
@@ -561,7 +563,8 @@ void ESolver_KS<T, Device>::runner(const int istep, UnitCell& ucell)
                 // now, etot_old is the energy of input density, while etot is the energy of output density
                 this->pelec->f_en.etot_delta = this->pelec->f_en.etot - this->pelec->f_en.etot_old;
                 // output etot_delta
-                GlobalV::ofs_running << " DeltaE_womix = " << this->pelec->f_en.etot_delta * ModuleBase::Ry_to_eV << " eV" << std::endl;
+                GlobalV::ofs_running << " DeltaE_womix = " << this->pelec->f_en.etot_delta * ModuleBase::Ry_to_eV
+                                     << " eV" << std::endl;
                 if (iter > 1 && this->conv_esolver == 1) // only check when density is converged
                 {
                     // update the convergence flag
@@ -656,7 +659,8 @@ void ESolver_KS<T, Device>::runner(const int istep, UnitCell& ucell)
         }
 
         // notice for restart
-        if (PARAM.inp.mixing_restart > 0 && iter == this->p_chgmix->mixing_restart_step - 1 && iter != PARAM.inp.scf_nmax)
+        if (PARAM.inp.mixing_restart > 0 && iter == this->p_chgmix->mixing_restart_step - 1
+            && iter != PARAM.inp.scf_nmax)
         {
             std::cout << " SCF restart after this step!" << std::endl;
         }
