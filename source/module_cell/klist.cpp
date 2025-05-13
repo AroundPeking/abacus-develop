@@ -31,6 +31,8 @@ K_Vectors::K_Vectors()
     nspin = 0; // default spin.
     kc_done = false;
     kd_done = false;
+    kc_done_full = false;
+    kd_done_full = false;
 
     nks = 0;
     nkstot = 0;
@@ -106,6 +108,8 @@ void K_Vectors::set(const ModuleSymmetry::Symmetry& symm,
     std::string skpt1;
     std::string skpt2;
 
+    Parallel_Common::bcast_bool(kc_done);
+    Parallel_Common::bcast_bool(kd_done);
     this->kd_done_full = this->kd_done;
     this->kc_done_full = this->kc_done;
 
@@ -193,6 +197,10 @@ void K_Vectors::set(const ModuleSymmetry::Symmetry& symm,
         for (size_t ik = 0; ik != this->nkstot_full; ++ik)
             this->kvec_c_full[ik] = this->kvec_c[ik];
     }
+    /* for (int i = 0; i < kvec_c_full.size(); i++)
+        GlobalV::ofs_running << "kvec_c_full:" << kvec_c_full[i].x << kvec_c_full[i].y << kvec_c_full[i].z << std::endl;
+    for (int i = 0; i < kvec_c.size(); i++)
+        GlobalV::ofs_running << "kvec_c:" << kvec_c[i].x << kvec_c[i].y << kvec_c[i].z << std::endl; */
 
     // std::cout << " NUMBER OF K-POINTS   : " << nkstot << std::endl;
 
