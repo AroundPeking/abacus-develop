@@ -83,8 +83,7 @@ void Ewald_Vq<Tdata>::init_ions(const UnitCell& ucell, const std::array<Tcell, N
 
     const double Rmax = Exx_Abfs::Construct_Orbs::get_Rmax(this->g_lcaos);
     const std::array<Tcell, Ndim> period_Vs
-        = LRI_CV_Tools::cal_latvec_range<Tcell>(1 + this->info.ccp_rmesh_times,
-                                                Rmax);
+        = LRI_CV_Tools::cal_latvec_range<Tcell>(1 + this->info.ccp_rmesh_times, ucell, this->g_lcaos_rcut);
 
     const std::pair<
         std::vector<TA>,
@@ -152,7 +151,7 @@ void Ewald_Vq<Tdata>::init_ions(const UnitCell& ucell, const std::array<Tcell, N
                    this->kvec_c.end(),
                    neg_kvec.begin(),
                    [](ModuleBase::Vector3<double>& vec) -> ModuleBase::Vector3<double> { return -vec; });
-    this->gaussian_abfs.init(2 * GlobalC::exx_info.info_ri.abfs_Lmax + 1, neg_kvec, ucell.G, this->ewald_lambda);
+    this->gaussian_abfs.init(ucell, 2 * GlobalC::exx_info.info_ri.abfs_Lmax + 1, neg_kvec, ucell.G, this->ewald_lambda);
 
     ModuleBase::timer::tick("Ewald_Vq", "init_ions");
 }
