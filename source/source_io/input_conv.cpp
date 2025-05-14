@@ -321,10 +321,21 @@ void Input_Conv::Convert()
                        dft_functional_lower.begin(),
                        tolower);
         GlobalC::restart.folder = PARAM.globalv.global_readin_dir + "restart/";
-        if (dft_functional_lower == "hf" || dft_functional_lower == "pbe0" || dft_functional_lower == "hse"
-            || dft_functional_lower == "opt_orb" || dft_functional_lower == "scan0" || dft_functional_lower == "lc_pbe"
-            || dft_functional_lower == "lc_wpbe" || dft_functional_lower == "lrc_wpbe"
-            || dft_functional_lower == "lrc_wpbeh" || dft_functional_lower == "cam_pbeh")
+        if (dft_functional_lower == "hf" || dft_functional_lower == "pbe0"
+            || dft_functional_lower == "hse"
+            || dft_functional_lower == "opt_orb"
+            || dft_functional_lower == "scan0"
+            || dft_functional_lower == "lc_pbe"
+            || dft_functional_lower == "lc_wpbe" 
+            || dft_functional_lower == "lrc_wpbe"
+            || dft_functional_lower == "lrc_wpbeh"
+            || dft_functional_lower == "cam_pbeh") {
+            GlobalC::restart.info_load.load_charge = true;
+            GlobalC::restart.info_load.load_H = true;
+        }
+        else if ( dft_functional_lower == "muller" || dft_functional_lower == "power" 
+            || dft_functional_lower == "wp22" 
+            || dft_functional_lower == "cwp22" ) // added by jghan, 2024-07-07
         {
             GlobalC::restart.info_load.load_charge = true;
             GlobalC::restart.info_load.load_H = true;
