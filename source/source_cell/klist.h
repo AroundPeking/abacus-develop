@@ -182,15 +182,13 @@ class K_Vectors
     int nkstot;      /// number of symmetry-reduced k points in full k mesh
     int nkstot_full; /// number of k points before symmetry reduction in full k mesh
 
-    int nspin;
-    bool kc_done;
-    bool kd_done;
-    bool kc_done_full;
-    bool kd_done_full;
-    double koffset[3];   // used only in automatic k-points.
-    std::string k_kword; // LiuXh add 20180619
-    int k_nkstot;        // LiuXh add 20180619
-    bool is_mp = false;  // Monkhorst-Pack
+    int nspin = 0;
+    bool kc_done = false;
+    bool kd_done = false;
+    double koffset[3] = {0.0}; // used only in automatic k-points.
+    std::string k_kword;       // LiuXh add 20180619
+    int k_nkstot = 0;          // LiuXh add 20180619
+    bool is_mp = false;        // Monkhorst-Pack
 
     /**
      * @brief Resize the k-point related vectors according to the new k-point number.
