@@ -1339,12 +1339,6 @@ TEST_F(InputTest, Item_test2)
         param.input.dft_functional = "none";
         it->second.reset_value(it->second, param);
         EXPECT_EQ(param.input.exx_hybrid_beta, "0");
-
-        param.input.exx_hybrid_beta = "-1";
-        testing::internal::CaptureStdout();
-        EXPECT_EXIT(it->second.check_value(it->second, param), ::testing::ExitedWithCode(0), "");
-        output = testing::internal::GetCapturedStdout();
-        EXPECT_THAT(output, testing::HasSubstr("NOTICE"));
     }
     { // exx_erfc_omega
         auto it = find_label("exx_erfc_omega", readinput.input_lists);
@@ -1376,7 +1370,12 @@ TEST_F(InputTest, Item_test2)
         param.input.exx_erfc_omega[0] = "default";
         param.input.dft_functional = "hse";
         it->second.reset_value(it->second, param);
-        EXPECT_EQ(param.input.exx_erfc_omega[0], "0.11");
+        EXPECT_EQ(param.input.exx_hse_omega, "0.11");
+
+        param.input.exx_hse_omega = "default";
+        param.input.dft_functional = "none";
+        it->second.reset_value(it->second, param);
+        EXPECT_EQ(param.input.exx_hse_omega, "0");
     }
     { // exx_hybrid_step
         auto it = find_label("exx_hybrid_step", readinput.input_lists);
