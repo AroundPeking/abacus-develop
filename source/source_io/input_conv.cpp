@@ -372,7 +372,7 @@ void Input_Conv::Convert()
         for(std::size_t i=0; i<fock_alpha.size(); ++i)
         {
             GlobalC::exx_info.info_global.use_ewald = true;
-            GlobalC::exx_info.info_ewald.fq_type = Singular_Value::Fq_type(PARAM.inp.exx_fq_type);
+            GlobalC::exx_info.info_ri.fq_type = Singular_Value::Fq_type(PARAM.inp.exx_fq_type);
             GlobalC::exx_info.info_global.ccp_type = Conv_Coulomb_Pot_K::Ccp_Type::Ccp;
         }
     }
@@ -394,7 +394,7 @@ void Input_Conv::Convert()
         if (PARAM.inp.exx_use_ewald)
         {
             GlobalC::exx_info.info_global.use_ewald = true;
-            GlobalC::exx_info.info_ewald.fq_type = Singular_Value::Fq_type(PARAM.inp.exx_fq_type);
+            GlobalC::exx_info.info_ri.fq_type = Singular_Value::Fq_type(PARAM.inp.exx_fq_type);
             GlobalC::exx_info.info_global.ccp_type = Conv_Coulomb_Pot_K::Ccp_Type::Ccp;
         }
         else

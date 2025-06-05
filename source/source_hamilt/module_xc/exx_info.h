@@ -15,19 +15,6 @@ struct Exx_Info
     {
         bool cal_exx = false;
 
-        std::map<Conv_Coulomb_Pot_K::Coulomb_Type, std::vector<std::map<std::string,std::string>>> coulomb_param;
-
-		// Fock:
-		//		"alpha":		"0"
-		//		"singularity_correction":	"limits" / "spencer" / "revised_spencer" / "massidda" / "carrier"
-		//		"lambda":		"0.3"
-        //      "Rcut"
-		// Erfc:
-		//		"alpha":		"0"
-		//		"omega":		"0.11"
-		//		"singularity_correction":	"limits" / "spencer" / "revised_spencer"
-        //      "Rcut"
-
         Conv_Coulomb_Pot_K::Ccp_Type ccp_type;
         double hybrid_alpha = 0.25;
         double hybrid_beta = 0.0;
@@ -51,17 +38,6 @@ struct Exx_Info
     };
     Exx_Info_Lip info_lip;
 
-    struct Exx_Info_Ewald
-    {
-        Singular_Value::Fq_type fq_type;
-        const bool& use_ewald;
-
-        Exx_Info_Ewald(const Exx_Info::Exx_Info_Global& info_global) : use_ewald(info_global.use_ewald)
-        {
-        }
-    };
-    Exx_Info_Ewald info_ewald;
-
     struct Exx_Info_RI
     {
         const Conv_Coulomb_Pot_K::Ccp_Type& ccp_type;
@@ -71,6 +47,8 @@ struct Exx_Info
 
         bool real_number = false;
         int Rcut_type = 1;
+        Singular_Value::Fq_type fq_type;
+        const bool& use_ewald;
 
         double pca_threshold = 0;
         std::vector<std::string> files_abfs;
