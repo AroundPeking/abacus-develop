@@ -9,7 +9,7 @@ void ReadInput::item_exx()
     // EXX
     {
         Input_Item item("exx_hybrid_alpha");
-        item.annotation = "fraction of Fock exchange in hybrid functionals";
+        item.annotation = "fraction of Fock exchange in range-separated hybrid funtionals";
         read_sync_string(input.exx_hybrid_alpha);
         item.reset_value = [](const Input_Item& item, Parameter& para) {
             if (para.input.exx_hybrid_alpha == "default")
@@ -17,9 +17,11 @@ void ReadInput::item_exx()
                 std::string& dft_functional = para.input.dft_functional;
                 std::string dft_functional_lower = dft_functional;
                 std::transform(dft_functional.begin(), dft_functional.end(), dft_functional_lower.begin(), tolower);
-                if (dft_functional_lower == "hf" || dft_functional_lower == "lc_pbe"
-                    || dft_functional_lower == "lc_wpbe" || dft_functional_lower == "lrc_wpbe"
-                    || dft_functional_lower == "lrc_wpbeh")
+                if (dft_functional_lower == "hf" ||
+                    dft_functional_lower == "lc_pbe" || dft_functional_lower == "lc_wpbe" ||
+                    dft_functional_lower == "lrc_wpbe" || dft_functional_lower == "lrc_wpbeh" ||
+                    dft_functional_lower == "muller" || dft_functional_lower == "power"      // added by jghan 2024-07-06
+                    || dft_functional_lower == "wp22" )
                 {
                     para.input.exx_hybrid_alpha = "1";
                 }
@@ -27,18 +29,14 @@ void ReadInput::item_exx()
                 {
                     para.input.exx_hybrid_alpha = "0.25";
                 }
-                else if (dft_functional_lower == "cam_pbeh")
+
+                else if (dft_functional_lower == "b3lyp")
                 {
                     para.input.exx_hybrid_alpha = "0.2";
                 }
-                else if (dft_functional_lower == "hse")
+                else if (dft_functional_lower == "cam_pbeh")
                 {
-                    if (para.input.exx_use_ewald)
-                    {
-                        para.input.exx_hybrid_alpha = "0";
-                    }
-                    else
-                        para.input.exx_hybrid_alpha = "0.25";
+                    para.input.exx_hybrid_alpha = "0.2";
                 }
                 else
                 { // no exx in scf, but will change to non-zero in
@@ -76,7 +74,7 @@ void ReadInput::item_exx()
     }
     {
         Input_Item item("exx_hybrid_beta");
-        item.annotation = "another fraction of Fock exchange in range-separated hybrid funtionals";
+        item.annotation = "fraction of Fock exchange in range-separated hybrid funtionals";
         read_sync_string(input.exx_hybrid_beta);
         item.reset_value = [](const Input_Item& item, Parameter& para) {
             if (para.input.exx_hybrid_beta == "default")
@@ -84,8 +82,8 @@ void ReadInput::item_exx()
                 std::string& dft_functional = para.input.dft_functional;
                 std::string dft_functional_lower = dft_functional;
                 std::transform(dft_functional.begin(), dft_functional.end(), dft_functional_lower.begin(), tolower);
-                if (dft_functional_lower == "lc_pbe" || dft_functional_lower == "lc_wpbe"
-                    || dft_functional_lower == "lrc_wpbe")
+                if (dft_functional_lower == "lc_pbe" || dft_functional_lower == "lc_wpbe" ||
+                    dft_functional_lower == "lrc_wpbe" || dft_functional_lower == "wp22" )
                 {
                     para.input.exx_hybrid_beta = "-1";
                 }
@@ -97,9 +95,13 @@ void ReadInput::item_exx()
                 {
                     para.input.exx_hybrid_beta = "0.8";
                 }
-                else if (para.input.exx_use_ewald && dft_functional_lower == "hse")
+                else if (dft_functional_lower == "hse")
                 {
                     para.input.exx_hybrid_beta = "0.25";
+                }
+                else if (dft_functional_lower == "cwp22")
+                {
+                    para.input.exx_hybrid_beta = "1";
                 }
                 else
                 {
@@ -173,9 +175,7 @@ void ReadInput::item_exx()
                           "start with a GGA-Loop, and then Hybrid-Loop";
         read_sync_bool(input.exx_separate_loop);
         item.check_value = [](const Input_Item& item, const Parameter& para) {
-            if (para.input.esolver_type == "tddft"
-                && (para.input.exx_hybrid_alpha != "0" || para.input.exx_use_ewald != false)
-                && para.input.exx_separate_loop > 0)
+            if (para.input.esolver_type == "tddft" && (para.input.exx_hybrid_alpha != "0" || para.input.exx_hybrid_beta != "0") && para.input.exx_separate_loop > 0)
             {
                 ModuleBase::WARNING_QUIT("ReadInput",
                                          "For RT-TDDFT with hybrid functionals, only exx_separate_loop=0 is supported");

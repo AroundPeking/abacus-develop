@@ -18,7 +18,7 @@ bool XC_Functional::use_libxc = true;
 double XC_Functional::hybrid_alpha = 0.25;
 double XC_Functional::hybrid_beta = 0.0;
 
-void XC_Functional::set_hybrid_alpha(const double alpha_in, const double beta_in)
+void XC_Functional::set_hybrid_param(const double alpha_in, const double beta_in)
 {
     hybrid_alpha = alpha_in;
     hybrid_beta = beta_in;

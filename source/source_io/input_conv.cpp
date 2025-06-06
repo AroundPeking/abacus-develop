@@ -371,7 +371,7 @@ void Input_Conv::Convert()
         std::vector<double> fock_alpha(PARAM.inp.exx_fock_alpha.size());
         for(std::size_t i=0; i<fock_alpha.size(); ++i)
         {
-            GlobalC::exx_info.info_global.use_ewald = true;
+            GlobalC::exx_info.info_ri.use_ewald = true;
             GlobalC::exx_info.info_ri.fq_type = Singular_Value::Fq_type(PARAM.inp.exx_fq_type);
             GlobalC::exx_info.info_global.ccp_type = Conv_Coulomb_Pot_K::Ccp_Type::Ccp;
         }
@@ -387,13 +387,35 @@ void Input_Conv::Convert()
         GlobalC::exx_info.info_global.cal_exx = false;
         Exx_Abfs::Jle::generate_matrix = true;
     }
-    else if (dft_functional_lower == "lc_pbe" || dft_functional_lower == "lc_wpbe" || dft_functional_lower == "lrc_wpbe"
-             || dft_functional_lower == "lrc_wpbeh" || dft_functional_lower == "cam_pbeh")
+#endif
+    // muller, power, wp22, cwp22 added by jghan, 2024-07-07
+    else if ( dft_functional_lower == "muller" || dft_functional_lower == "power" )
+    {
+        GlobalC::exx_info.info_global.cal_exx = true;
+        GlobalC::exx_info.info_global.ccp_type = Conv_Coulomb_Pot_K::Ccp_Type::Hf;
+    }
+    else if ( dft_functional_lower == "cwp22" )
+    {
+        GlobalC::exx_info.info_global.cal_exx = true;
+        GlobalC::exx_info.info_global.ccp_type = Conv_Coulomb_Pot_K::Ccp_Type::Erfc; // use the erfc(w|r-r'|), exx just has the short-range part
+    }
+    else if (dft_functional_lower == "b3lyp")
+    {
+        GlobalC::exx_info.info_global.cal_exx = true;
+        GlobalC::exx_info.info_global.ccp_type
+            = Conv_Coulomb_Pot_K::Ccp_Type::Hf;
+    }
+    else if (dft_functional_lower == "lc_pbe"
+            || dft_functional_lower == "lc_wpbe" 
+            || dft_functional_lower == "lrc_wpbe"
+            || dft_functional_lower == "lrc_wpbeh"
+            || dft_functional_lower == "cam_pbeh"
+            || dft_functional_lower == "wp22" )
     {
         GlobalC::exx_info.info_global.cal_exx = true;
         if (PARAM.inp.exx_use_ewald)
         {
-            GlobalC::exx_info.info_global.use_ewald = true;
+            GlobalC::exx_info.info_ri.use_ewald = true;
             GlobalC::exx_info.info_ri.fq_type = Singular_Value::Fq_type(PARAM.inp.exx_fq_type);
             GlobalC::exx_info.info_global.ccp_type = Conv_Coulomb_Pot_K::Ccp_Type::Ccp;
         }
@@ -436,7 +458,8 @@ void Input_Conv::Convert()
         // GlobalC::exx_info.info_global.cal_exx = true;
         GlobalC::exx_info.info_global.hybrid_alpha = std::stod(PARAM.inp.exx_hybrid_alpha);
         GlobalC::exx_info.info_global.hybrid_beta = std::stod(PARAM.inp.exx_hybrid_beta);
-        XC_Functional::set_hybrid_alpha(std::stod(PARAM.inp.exx_hybrid_alpha), std::stod(PARAM.inp.exx_hybrid_beta));
+        XC_Functional::set_hybrid_param(std::stod(PARAM.inp.exx_hybrid_alpha), 
+                                            std::stod(PARAM.inp.exx_hybrid_beta));
         GlobalC::exx_info.info_global.hse_omega = std::stod(PARAM.inp.exx_hse_omega);
         GlobalC::exx_info.info_global.separate_loop = PARAM.inp.exx_separate_loop;
         GlobalC::exx_info.info_global.hybrid_step = PARAM.inp.exx_hybrid_step;

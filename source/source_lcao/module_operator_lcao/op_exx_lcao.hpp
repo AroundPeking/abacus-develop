@@ -314,7 +314,6 @@ void OperatorEXX<OperatorLCAO<TK, TR>>::contributeHR()
         {
             RI_2D_Comm::add_HexxR(
                 this->current_spin,
-                GlobalC::exx_info.info_global.hybrid_alpha,
                 *this->Hexxd,
                 *this->hR->get_paraV(),
                 PARAM.globalv.npol,
@@ -325,7 +324,6 @@ void OperatorEXX<OperatorLCAO<TK, TR>>::contributeHR()
         {
             RI_2D_Comm::add_HexxR(
                 this->current_spin,
-                GlobalC::exx_info.info_global.hybrid_alpha,
                 *this->Hexxc,
                 *this->hR->get_paraV(),
                 PARAM.globalv.npol,
@@ -369,13 +367,11 @@ void OperatorEXX<OperatorLCAO<TK, TR>>::contributeHk(int ik)
             }
         }
         // cal H(k) from H(R) normally
-
         if (GlobalC::exx_info.info_ri.real_number) {
             RI_2D_Comm::add_Hexx(
                 ucell,
                 this->kv,
                 ik,
-                GlobalC::exx_info.info_global.hybrid_alpha,
                 *this->Hexxd,
                 *this->hR->get_paraV(),
                 this->hsk->get_hk());
@@ -384,7 +380,6 @@ void OperatorEXX<OperatorLCAO<TK, TR>>::contributeHk(int ik)
                 ucell,
                 this->kv,
                 ik,
-                GlobalC::exx_info.info_global.hybrid_alpha,
                 *this->Hexxc,
                 *this->hR->get_paraV(),
                 this->hsk->get_hk());

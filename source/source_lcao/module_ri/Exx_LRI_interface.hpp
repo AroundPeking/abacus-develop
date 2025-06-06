@@ -288,7 +288,6 @@ void Exx_LRI_Interface<T, Tdata>::exx_hamilt2rho(elecstate::ElecState& elec, con
                     { std::cout << "WARNING: Cannot read Eexx from disk, the energy of the 1st loop will be wrong, sbut it does not influence the subsequent loops." << std::endl; }
             }
             Parallel_Common::bcast_double(this->exx_ptr->Eexx);
-            this->exx_ptr->Eexx /= GlobalC::exx_info.info_global.hybrid_alpha;
         }
         elec.set_exx(this->get_Eexx());
     }

@@ -78,7 +78,8 @@ namespace RI_Util
 	update_coulomb_settings(
 		const std::map<Conv_Coulomb_Pot_K::Coulomb_Type, std::vector<std::map<std::string,std::string>>> &coulomb_param,
 		const UnitCell &ucell,
-		const K_Vectors *p_kv);
+		const K_Vectors *p_kv,
+		const int nspin0);
 }
 
 #include "RI_Util.hpp"
