@@ -62,8 +62,8 @@ psi::Psi<std::complex<double>>* wavefunc::allocate(const int nkstot, const int n
 			std::cout << " Memory for wanf2 (MB): " << double(memory_cost)/1024.0/1024.0 << std::endl;
 			ModuleBase::Memory::record("WF::wanf2", memory_cost) ;
 		}
-		const size_t memory_cost = GlobalV::NBANDS*(GlobalV::NPOL*npwx) * sizeof(std::complex<double>);
-		std::cout << " MEMORY FOR PSI (MB)  : " << double(memory_cost)/1024.0/1024.0 << std::endl;
+		const double memory_cost = 1.0 / 1024.0 / 1024.0 * GlobalV::NBANDS*(GlobalV::NPOL*npwx) * sizeof(std::complex<double>);
+		std::cout << " MEMORY FOR PSI (MB)  : " << memory_cost << std::endl;
 		ModuleBase::Memory::record("Psi_PW", memory_cost);
 	}
 	else if(GlobalV::BASIS_TYPE!="pw")
@@ -81,8 +81,8 @@ psi::Psi<std::complex<double>>* wavefunc::allocate(const int nkstot, const int n
 				this->wanf2[ik].create(GlobalV::NLOCAL, npwx * GlobalV::NPOL);
 			}
 
-			const size_t memory_cost = nks2 * GlobalV::NLOCAL*(npwx * GlobalV::NPOL) * sizeof(std::complex<double>);
-			std::cout << " Memory for wanf2 (MB): " << double(memory_cost)/1024.0/1024.0 << std::endl;
+			const double memory_cost = 1.0 / 1024.0 / 1024.0 * nks2 * GlobalV::NLOCAL*(npwx * GlobalV::NPOL) * sizeof(std::complex<double>);
+			std::cout << " Memory for wanf2 (MB): " << memory_cost << std::endl;
 			ModuleBase::Memory::record("WF::wanf2", memory_cost) ;
         }
     }
@@ -90,8 +90,8 @@ psi::Psi<std::complex<double>>* wavefunc::allocate(const int nkstot, const int n
     {
         // initial psi rather than evc
         psi_out = new psi::Psi<std::complex<double>>(nks2, GlobalV::NBANDS, npwx * GlobalV::NPOL, ngk);
-		const size_t memory_cost = nks2 * GlobalV::NBANDS*(GlobalV::NPOL*npwx) * sizeof(std::complex<double>);
-		std::cout << " MEMORY FOR PSI (MB)  : " << double(memory_cost)/1024.0/1024.0 << std::endl;
+		const double memory_cost = 1.0 / 1024.0 / 1024.0 * nks2 * GlobalV::NBANDS*(GlobalV::NPOL*npwx) * sizeof(std::complex<double>);
+		std::cout << " MEMORY FOR PSI (MB)  : " << memory_cost << std::endl;
 		ModuleBase::Memory::record("Psi_PW", memory_cost);
     }
     return psi_out;
