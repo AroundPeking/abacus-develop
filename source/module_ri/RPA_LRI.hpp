@@ -1011,6 +1011,27 @@ void RPA_LRI<T, Tdata>::out_struc()
     ofs << G.e21 << std::setw(15) << G.e22 << std::setw(15) << G.e23 << std::endl;
     ofs << G.e31 << std::setw(15) << G.e32 << std::setw(15) << G.e33 << std::endl;
 
+    ofs << GlobalC::ucell.nat << std::endl;
+    std::string& Coordinate = GlobalC::ucell.Coordinate;
+    bool direct = (Coordinate == "Direct");
+    // Only consider Direct or Cartesian
+    for (int it = 0; it < GlobalC::ucell.ntype; it++)
+    {
+        Atom* atom = &GlobalC::ucell.atoms[it];
+        for (int ia = 0; ia < GlobalC::ucell.atoms[it].na; ia++)
+        {
+            const double& x = direct ? GlobalC::ucell.atoms[it].tau[ia].x * GlobalC::ucell.lat0
+                                     : GlobalC::ucell.atoms[it].tau[ia].x;
+            const double& y = direct ? GlobalC::ucell.atoms[it].tau[ia].y * GlobalC::ucell.lat0
+                                     : GlobalC::ucell.atoms[it].tau[ia].y;
+            const double& z = direct ? GlobalC::ucell.atoms[it].tau[ia].z * GlobalC::ucell.lat0
+                                     : GlobalC::ucell.atoms[it].tau[ia].z;
+            ofs << std::setw(15) << std::fixed << std::setprecision(9) << x << std::setw(15) << std::fixed
+                << std::setprecision(9) << y << std::setw(15) << std::fixed << std::setprecision(9) << z
+                << std::setw(15) << 1 << std::endl;
+        }
+    }
+
     ofs << p_kv->nmp[0] << std::setw(6) << p_kv->nmp[1] << std::setw(6) << p_kv->nmp[2] << std::setw(6) << std::endl;
 
     for (int ik = 0; ik != nks_tot; ik++)
@@ -1018,6 +1039,14 @@ void RPA_LRI<T, Tdata>::out_struc()
         ofs << std::setw(15) << std::fixed << std::setprecision(9) << p_kv->kvec_c[ik].x * TWOPI_Bohr2A << std::setw(15)
             << std::fixed << std::setprecision(9) << p_kv->kvec_c[ik].y * TWOPI_Bohr2A << std::setw(15) << std::fixed
             << std::setprecision(9) << p_kv->kvec_c[ik].z * TWOPI_Bohr2A << std::endl;
+    }
+    // added for BZ to IBZ (actually LibRPA interface only support BZ by 2025/03/30)
+    if (PARAM.inp.symmetry == "-1")
+    {
+        for (int ik = 0; ik != nks_tot; ++ik)
+        {
+            ofs << (ik + 1) << std::endl;
+        }
     }
     ofs.close();
     return;
