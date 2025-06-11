@@ -284,7 +284,7 @@ struct cal_force_nl_op<FPTYPE, base_device::DEVICE_CPU>
             {
                 for (int ib = 0; ib < nbands_occ; ib++)
                 {
-                    const int ib2 = ib*2;
+                    const int ib2 = ib * 2;
                     FPTYPE local_force[3] = {0, 0, 0};
                     FPTYPE fac = d_wg[ik * wg_nc + ib] * 2.0 * tpiba;
                     int iat = iat0 + ia;

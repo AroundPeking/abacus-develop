@@ -216,6 +216,7 @@ struct cal_stress_nl_op<FPTYPE, base_device::DEVICE_CPU>
                     const int& ntype,
                     const int& wg_nc,
                     const int& ik,
+                    const int& npol,
                     const int* atom_nh,
                     const int* atom_na,
                     const FPTYPE* d_wg,

@@ -74,6 +74,62 @@ __global__ void onsite_op(const int npm,
 }
 
 template <typename FPTYPE>
+__global__ void onsite_np1_op(const int npm,
+                          const int* ip_iat,
+                          const int tnp,
+                          const thrust::complex<FPTYPE>* lambda_coeff,
+                          thrust::complex<FPTYPE>* ps,
+                          const thrust::complex<FPTYPE>* becp)
+{
+    const int ip = blockIdx.x;
+    const int nbands = npm;
+    for (int ib = threadIdx.x; ib < nbands; ib += blockDim.x)
+    {
+        int iat = ip_iat[ip];
+        const int psind = ip * npm + ib;
+        const int becpind = ib * tnp + ip;
+        ps[psind] += lambda_coeff[iat] * becp[becpind];
+    }
+}
+
+template <typename FPTYPE>
+__global__ void onsite_np1_op(const int npm,
+                          const int* orb_l_iat,
+                          const int* ip_iat,
+                          const int* ip_m,
+                          const int* vu_begin_iat,
+                          const int tnp,
+                          const thrust::complex<FPTYPE>* vu,
+                          thrust::complex<FPTYPE>* ps,
+                          const thrust::complex<FPTYPE>* becp)
+{
+    const int ip = blockIdx.x;
+    int m1 = ip_m[ip];
+    if (m1 >= 0)
+    {
+        const int nbands = npm;
+        for (int ib = threadIdx.x; ib < nbands; ib += blockDim.x)
+        {
+            int iat = ip_iat[ip];
+            const thrust::complex<FPTYPE>* vu_iat = vu + vu_begin_iat[iat];
+            int orb_l = orb_l_iat[iat];
+            int tlp1 = 2 * orb_l + 1;
+            int tlp1_2 = tlp1 * tlp1;
+            int ip2_begin = ip - m1;
+            int ip2_end = ip - m1 + tlp1;
+            const int psind = ip * npm + ib;
+            for (int ip2 = ip2_begin; ip2 < ip2_end; ip2++)
+            {
+                const int becpind = ib * tnp + ip2;
+                int m2 = ip_m[ip2];
+                const int index_mm = m1 * tlp1 + m2;
+                ps[psind] += vu_iat[index_mm] * becp[becpind];
+            }
+        }
+    }
+}
+
+template <typename FPTYPE>
 void hamilt::onsite_ps_op<FPTYPE, base_device::DEVICE_GPU>::operator()(const base_device::DEVICE_GPU* dev,
                                                                        const int& npm,
                                                                        const int npol,
@@ -85,15 +141,27 @@ void hamilt::onsite_ps_op<FPTYPE, base_device::DEVICE_GPU>::operator()(const bas
 {
     // denghui implement 20221019
     // <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
-    onsite_op<FPTYPE>
-        <<<tnp, THREADS_PER_BLOCK>>>(npm,
+    if(npol == 2)
+    {
+        onsite_op<FPTYPE>
+            <<<tnp, THREADS_PER_BLOCK>>>(npm,
                                      npol,
                                      ip_iat,
                                      tnp,
                                      reinterpret_cast<const thrust::complex<FPTYPE>*>(lambda_coeff),
                                      reinterpret_cast<thrust::complex<FPTYPE>*>(ps),          // array of data
                                      reinterpret_cast<const thrust::complex<FPTYPE>*>(becp)); // array of data
-
+    }
+    else if(npol == 1)
+    {
+        onsite_np1_op<FPTYPE>
+            <<<tnp, THREADS_PER_BLOCK>>>(npm,
+                                     ip_iat,
+                                     tnp,
+                                     reinterpret_cast<const thrust::complex<FPTYPE>*>(lambda_coeff),
+                                     reinterpret_cast<thrust::complex<FPTYPE>*>(ps),          // array of data
+                                     reinterpret_cast<const thrust::complex<FPTYPE>*>(becp)); // array of data
+    }
     cudaCheckOnDebug();
 }
 
@@ -112,8 +180,10 @@ void hamilt::onsite_ps_op<FPTYPE, base_device::DEVICE_GPU>::operator()(const bas
 {
     // denghui implement 20221109
     // <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
-    onsite_op<FPTYPE>
-        <<<tnp, THREADS_PER_BLOCK>>>(npm,
+    if(npol == 2)
+    {
+        onsite_op<FPTYPE>
+            <<<tnp, THREADS_PER_BLOCK>>>(npm,
                                      npol,
                                      orb_l_iat,
                                      ip_iat,
@@ -123,7 +193,20 @@ void hamilt::onsite_ps_op<FPTYPE, base_device::DEVICE_GPU>::operator()(const bas
                                      reinterpret_cast<const thrust::complex<FPTYPE>*>(vu),
                                      reinterpret_cast<thrust::complex<FPTYPE>*>(ps),          // array of data
                                      reinterpret_cast<const thrust::complex<FPTYPE>*>(becp)); // array of data
-
+    }
+    else if(npol == 1)
+    {
+        onsite_np1_op<FPTYPE>
+            <<<tnp, THREADS_PER_BLOCK>>>(npm,
+                                     orb_l_iat,
+                                     ip_iat,
+                                     ip_m,
+                                     vu_begin_iat,
+                                     tnp,
+                                     reinterpret_cast<const thrust::complex<FPTYPE>*>(vu),
+                                     reinterpret_cast<thrust::complex<FPTYPE>*>(ps),          // array of data
+                                     reinterpret_cast<const thrust::complex<FPTYPE>*>(becp)); // array of data
+    }
     cudaCheckOnDebug();
     // >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 }

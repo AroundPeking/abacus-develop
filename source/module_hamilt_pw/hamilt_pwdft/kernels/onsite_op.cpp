@@ -67,6 +67,8 @@ struct onsite_ps_op<FPTYPE, base_device::DEVICE_CPU>
       std::complex<FPTYPE>* ps,
       const std::complex<FPTYPE>* becp)
   {
+        if(npol == 2)
+        {
 #ifdef _OPENMP
 #pragma omp parallel for collapse(2)
 #endif
@@ -97,6 +99,36 @@ struct onsite_ps_op<FPTYPE, base_device::DEVICE_CPU>
                 }
             } // end ip
         } // end ib
+        }
+        else if(npol == 1)
+        {
+#ifdef _OPENMP
+#pragma omp parallel for collapse(2)
+#endif
+        for (int ib = 0; ib < npm; ib++)
+        {
+            for (int ip = 0; ip < tnp; ip++)
+            {
+                int m1 = ip_m[ip];
+                if(m1 < 0) continue;
+                int iat = ip_iat[ip];
+                const std::complex<FPTYPE>* vu_iat = vu + vu_begin_iat[iat];
+                int orb_l = orb_l_iat[iat];
+                int tlp1 = 2 * orb_l + 1;
+                int tlp1_2 = tlp1 * tlp1;
+                int ip2_begin = ip - m1;
+                int ip2_end = ip - m1 + tlp1;
+                const int psind = ip * npm + ib;
+                for(int ip2 = ip2_begin;ip2<ip2_end;ip2++)
+                {
+                    const int becpind = ib * tnp + ip2;
+                    int m2 = ip_m[ip2];
+                    const int index_mm = m1 * tlp1 + m2;
+                    ps[psind] += vu_iat[index_mm] * becp[becpind];
+                }
+            } // end ip
+        } // end ib
+        }
   }
 };
 

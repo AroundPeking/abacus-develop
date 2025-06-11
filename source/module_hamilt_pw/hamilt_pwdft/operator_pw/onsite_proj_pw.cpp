@@ -180,45 +180,6 @@ void OnsiteProj<OperatorPW<T, Device>>::cal_ps_delta_spin(const int npol, const 
         this->lambda_coeff,
         this->ps, becp);
 
-    /*int sum = 0;
-    if (npol == 1)
-    {
-        const int current_spin = this->isk[this->ik];
-    }
-    else
-    {
-        for (int iat = 0; iat < this->ucell->nat; iat++)
-        {
-            const int nproj = onsite_p->get_nh(iat);
-            if(constrain[iat].x == 0 && constrain[iat].y == 0 && constrain[iat].z == 0)
-            {
-                sum += nproj;
-                continue;
-            }
-            const std::complex<double> coefficients0(lambda[iat][2], 0.0);
-            const std::complex<double> coefficients1(lambda[iat][0] , lambda[iat][1]);
-            const std::complex<double> coefficients2(lambda[iat][0] , -1 * lambda[iat][1]);
-            const std::complex<double> coefficients3(-1 * lambda[iat][2], 0.0);
-            // each atom has nproj, means this is with structure factor;
-            // each projector (each atom) must multiply coefficient
-            // with all the other projectors.
-            for (int ib = 0; ib < m; ib+=2)
-            {
-                for (int ip = 0; ip < nproj; ip++)
-                {
-                    const int psind = (sum + ip) * m + ib;
-                    const int becpind = ib * tnp + sum + ip;
-                    const std::complex<double> becp1 = becp[becpind];
-                    const std::complex<double> becp2 = becp[becpind + tnp];
-                    ps[psind] += coefficients0 * becp1
-                                    + coefficients2 * becp2;
-                    ps[psind + 1] += coefficients1 * becp1
-                                        + coefficients3 * becp2;
-                } // end ip
-            } // end ib
-            sum += nproj;
-        } // end iat
-    }*/
 }
 
 template<typename T, typename Device>
@@ -302,7 +263,15 @@ void OnsiteProj<OperatorPW<T, Device>>::cal_ps_dftu(const int npol, const int m)
         resmem_complex_op()(this->ctx, this->vu_device, dftu->get_size_eff_pot_pw());
     }
 
-    syncmem_complex_h2d_op()(this->ctx, this->cpu_ctx, this->vu_device, dftu->get_eff_pot_pw(0), dftu->get_size_eff_pot_pw());
+    if(GlobalV::NSPIN == 2 && this->isk[this->ik] == 1)
+    {
+        const int size_eff_pot_pw = dftu->get_size_eff_pot_pw() / 2;
+        syncmem_complex_h2d_op()(this->ctx, this->cpu_ctx, this->vu_device, dftu->get_eff_pot_pw(0) + size_eff_pot_pw, size_eff_pot_pw);
+    }
+    else
+    {
+        syncmem_complex_h2d_op()(this->ctx, this->cpu_ctx, this->vu_device, dftu->get_eff_pot_pw(0), dftu->get_size_eff_pot_pw());
+    }
 
     hamilt::onsite_ps_op<Real, Device>()(
         this->ctx,   // device context
@@ -315,55 +284,6 @@ void OnsiteProj<OperatorPW<T, Device>>::cal_ps_dftu(const int npol, const int m)
         tnp,  
         this->vu_device,
         this->ps, becp);
-
-    /*
-    int sum = 0;
-    if (npol == 1)
-    {
-        const int current_spin = this->isk[this->ik];
-    }
-    else
-    {
-        for (int iat = 0; iat < this->ucell->nat; iat++)
-        {
-            const int it = this->ucell->iat2it[iat];
-            const int target_l = dftu->orbital_corr[it];
-            const int nproj = onsite_p->get_nh(iat);
-            if(target_l == -1)
-            {
-                sum += nproj;
-                continue;
-            }
-            const int ip_begin = target_l * target_l;
-            const int ip_end = (target_l + 1) * (target_l + 1);
-            const int tlp1 = 2 * target_l + 1;
-            const int tlp1_2 = tlp1 * tlp1;
-            const std::complex<double>* vu = dftu->get_eff_pot_pw(iat);
-            // each projector (each atom) must multiply coefficient
-            // with all the other projectors.
-            for (int ib = 0; ib < m; ib+=2)
-            {
-                for (int ip2 = ip_begin; ip2 < ip_end; ip2++)
-                {
-                    const int psind = (sum + ip2) * m + ib;
-                    const int m2 = ip2 - ip_begin;
-                    for (int ip1 = ip_begin; ip1 < ip_end; ip1++)
-                    {
-                        const int becpind1 = ib * tnp + sum + ip1;
-                        const int m1 = ip1 - ip_begin;
-                        const int index_mm = m1 * tlp1 + m2;
-                        const std::complex<double> becp1 = becp[becpind1];
-                        const std::complex<double> becp2 = becp[becpind1 + tnp];
-                        ps[psind] += vu[index_mm] * becp1
-                                    + vu[index_mm + tlp1_2 * 2] * becp2;
-                        ps[psind + 1] += vu[index_mm + tlp1_2 * 1] * becp1
-                                    + vu[index_mm + tlp1_2 * 3] * becp2;
-                    } // end ip1
-                } // end ip2
-            } // end ib
-            sum += nproj;
-        } // end iat
-    }*/
 }
 
 template<>

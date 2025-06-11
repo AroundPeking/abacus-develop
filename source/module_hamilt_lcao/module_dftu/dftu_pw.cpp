@@ -26,6 +26,11 @@ void DFTU::cal_occ_pw(const int iter, const void* psi_in, const ModuleBase::matr
         const int nbands = psi_p->get_nbands();
         for(int ik = 0; ik < psi_p->get_nk(); ik++)
         {
+            int is = 0;
+            if(GlobalV::NSPIN == 2 && ik >= psi_p->get_nk()/2)
+            {
+                is = 1; 
+            }
             psi_p->fix_k(ik);
             onsite_p->tabulate_atomic(ik);
 
@@ -49,6 +54,8 @@ void DFTU::cal_occ_pw(const int iter, const void* psi_in, const ModuleBase::matr
                 const int m_begin = target_l * target_l;
                 const int tlp1 = 2 * target_l + 1;
                 const int tlp1_2 = tlp1 * tlp1;
+                if(GlobalV::NSPIN == 4)
+                {
                 for(int ib = 0;ib<nbands;ib++)
                 {
                     const double weight = wg_in(ik, ib);
@@ -72,6 +79,24 @@ void DFTU::cal_occ_pw(const int iter, const void* psi_in, const ModuleBase::matr
                         }
                     }
                 }// ib
+                }
+                else{
+                for(int ib = 0;ib<nbands;ib++)
+                {
+                    const double weight = wg_in(ik, ib);
+                    int ind_m1m2 = 0;
+                    for(int m1 = 0; m1 < tlp1; m1++)
+                    {
+                        const int index_m1 = ib*nkb + begin_ih + m_begin + m1;
+                        for(int m2 = 0; m2 < tlp1; m2++)
+                        {
+                            const int index_m2 = ib*nkb + begin_ih + m_begin + m2;
+                            this->locale[iat][target_l][0][is].c[ind_m1m2] = weight * (conj(becp[index_m1]) * becp[index_m2]).real();
+                            ind_m1m2++;
+                        }
+                    }
+                }// ib
+                }
                 begin_ih += nh;
             }// iat
         }// ik
@@ -153,14 +178,43 @@ void DFTU::cal_occ_pw(const int iter, const void* psi_in, const ModuleBase::matr
         const double u_value = this->U[it];
         std::complex<double>* vu_iat = &(this->eff_pot_pw[this->eff_pot_pw_index[iat]]);
         const int m_size = 2 * target_l + 1;
+        double weight_eu = 1;
+        switch(GlobalV::NSPIN)
+        {
+            case 1:
+                weight_eu = 1.0;
+                break;
+            case 2:
+                weight_eu = 0.5;
+                break;
+            case 4:
+                weight_eu = 0.25;
+                break;
+            default:
+                break;
+        }
         for (int m1 = 0; m1 < m_size; m1++)
         {
             for (int m2 = 0; m2 < m_size; m2++)
             {
                 vu_iat[m1 * m_size + m2] = u_value * (1.0 * (m1 == m2) - this->locale[iat][target_l][0][0].c[m2 * m_size + m1]);
-                this->EU += u_value * 0.25 * this->locale[iat][target_l][0][0].c[m2 * m_size + m1] * this->locale[iat][target_l][0][0].c[m1 * m_size + m2];
+                this->EU += u_value * weight_eu * this->locale[iat][target_l][0][0].c[m2 * m_size + m1] * this->locale[iat][target_l][0][0].c[m1 * m_size + m2];
             }
         }
+        if(GlobalV::NSPIN == 2)
+        { // spin polarized case, we need to add the spin down part
+            std::complex<double>* vu_iat1 = &(this->eff_pot_pw[this->eff_pot_pw.size()/2 + this->eff_pot_pw_index[iat]]);
+            for (int m1 = 0; m1 < m_size; m1++)
+            {
+                for (int m2 = 0; m2 < m_size; m2++)
+                {
+                    vu_iat1[m1 * m_size + m2] = u_value * (1.0 * (m1 == m2) - this->locale[iat][target_l][0][1].c[m2 * m_size + m1]);
+                    this->EU += u_value * weight_eu * this->locale[iat][target_l][0][1].c[m2 * m_size + m1] * this->locale[iat][target_l][0][1].c[m1 * m_size + m2];
+                }
+            }
+        }
+        if(GlobalV::NSPIN == 4)
+        {
         for (int is = 1; is < 4; ++is)
         {
             int start = is * m_size * m_size;
@@ -169,7 +223,7 @@ void DFTU::cal_occ_pw(const int iter, const void* psi_in, const ModuleBase::matr
                 for (int m2 = 0; m2 < m_size; m2++)
                 {
                     vu_iat[start + m1 * m_size + m2] = u_value * (0 - this->locale[iat][target_l][0][0].c[start + m2 * m_size + m1]);
-                    this->EU += u_value * 0.25 * this->locale[iat][target_l][0][0].c[start + m2 * m_size + m1] * this->locale[iat][target_l][0][0].c[start + m1 * m_size + m2];
+                    this->EU += u_value * weight_eu * this->locale[iat][target_l][0][0].c[start + m2 * m_size + m1] * this->locale[iat][target_l][0][0].c[start + m1 * m_size + m2];
                 }
             }
         }
@@ -193,6 +247,7 @@ void DFTU::cal_occ_pw(const int iter, const void* psi_in, const ModuleBase::matr
                 vu_iat[index[1]] = 0.5 * (vu_tmp[1] + std::complex<double>(0.0, 1.0) * vu_tmp[2]);
                 vu_iat[index[2]] = 0.5 * (vu_tmp[1] - std::complex<double>(0.0, 1.0) * vu_tmp[2]);
             }
+        }
         }
     }
 
