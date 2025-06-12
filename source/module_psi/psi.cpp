@@ -244,7 +244,7 @@ template <typename T, typename Device> const Device* Psi<T, Device>::get_device(
     return this->ctx;
 }
 
-template <typename T, typename Device> const int& Psi<T, Device>::get_psi_bias() const
+template <typename T, typename Device> const size_t& Psi<T, Device>::get_psi_bias() const
 {
     return this->psi_bias;
 }

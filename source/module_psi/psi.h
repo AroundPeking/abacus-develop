@@ -108,7 +108,7 @@ class Psi
     // return device type of psi
     const Device* get_device() const;
     // return psi_bias
-    const int& get_psi_bias() const;
+    const size_t& get_psi_bias() const;
 
     // mark
     void zero_out();
