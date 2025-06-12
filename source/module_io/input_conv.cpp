@@ -20,11 +20,11 @@
 #include "module_ri/exx_abfs-jle.h"
 #endif
 
+#include "module_hamilt_lcao/module_dftu/dftu.h"
 #ifdef __LCAO
 #include "module_basis/module_ao/ORB_read.h"
 #include "module_elecstate/potentials/H_TDDFT_pw.h"
 #include "module_hamilt_lcao/hamilt_lcaodft/FORCE_STRESS.h"
-#include "module_hamilt_lcao/module_dftu/dftu.h"
 #include "module_hamilt_lcao/module_tddft/evolve_elec.h"
 #include "module_hamilt_lcao/module_tddft/td_velocity.h"
 #endif
@@ -322,7 +322,6 @@ void Input_Conv::Convert()
     GlobalV::SCF_THR_TYPE = PARAM.inp.scf_thr_type;
     GlobalV::onsite_radius = PARAM.inp.onsite_radius;
 
-#ifdef __LCAO
     if (PARAM.inp.dft_plus_u)
     {
         GlobalV::dft_plus_u = PARAM.inp.dft_plus_u;
@@ -338,7 +337,6 @@ void Input_Conv::Convert()
             ModuleBase::GlobalFunc::ZEROS(GlobalC::dftu.U, GlobalC::ucell.ntype);
         }
     }
-#endif
     //--------------------------------------------
     // added by zhengdy-soc
     //--------------------------------------------
