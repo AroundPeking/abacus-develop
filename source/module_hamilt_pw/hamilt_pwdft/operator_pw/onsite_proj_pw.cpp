@@ -238,7 +238,7 @@ void OnsiteProj<OperatorPW<T, Device>>::cal_ps_dftu(const int npol, const int m)
             {
                 const int tlp1 = 2 * target_l + 1;
                 vu_begin_iat0[iat] = vu_begin;
-                vu_begin += tlp1 * tlp1 * 4;
+                vu_begin += tlp1 * tlp1 * npol * npol;
                 const int m_begin = target_l * target_l;
                 const int m_end  = (target_l + 1) * (target_l + 1);
                 for(int ip=0;ip<nproj;ip++)
