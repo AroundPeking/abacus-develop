@@ -301,10 +301,10 @@ void OnsiteProj<OperatorPW<std::complex<float>, base_device::DEVICE_CPU>>::cal_p
 
 #if ((defined __CUDA) || (defined __ROCM))
 template<>
-void OnsiteProj<OperatorPW<std::complex<float>, base_device::DEVICE_GPU>>::add_onsite_proj(std::complex<float> *hpsi_in, const int npol, const int m) const
+void OnsiteProj<OperatorPW<std::complex<float>, base_device::DEVICE_GPU>>::add_onsite_proj(std::complex<float> *hpsi_in, const int npol, const int m, const int npwx) const
 {}
 template<>
-void OnsiteProj<OperatorPW<std::complex<float>, base_device::DEVICE_GPU>>::update_becp(const std::complex<float> *psi_in, const int npol, const int m) const
+void OnsiteProj<OperatorPW<std::complex<float>, base_device::DEVICE_GPU>>::update_becp(const std::complex<float> *psi_in, const int npol, const int m, const int npwx) const
 {}
 template<>
 void OnsiteProj<OperatorPW<std::complex<float>, base_device::DEVICE_GPU>>::cal_ps_delta_spin(const int npol, const int m) const
