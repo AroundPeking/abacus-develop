@@ -515,7 +515,7 @@ __global__ void cal_force_onsite_np1(int wg_nc,
             for (int ipol = 0; ipol < 3; ipol++)
             {
                 const int inkb0 = ipol * nbands * nkb + inkb1;
-                const FPTYPE tmp = - fac * vu[mm] * (conj(dbecp[inkb0]) * becp[inkb2]).real();
+                const FPTYPE tmp = - fac * (vu[mm] * conj(dbecp[inkb0]) * becp[inkb2]).real();
                 atomicAdd(force + iat * forcenl_nc + ipol, tmp);
             }
         }
