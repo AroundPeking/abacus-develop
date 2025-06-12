@@ -226,6 +226,7 @@ struct cal_force_nl_op<FPTYPE, base_device::DEVICE_GPU>
                     const int& nbands,
                     const int& ik,
                     const int& nkb,
+                    const int& npol,
                     const int* atom_nh,
                     const int* atom_na,
                     const FPTYPE& tpiba,
