@@ -147,8 +147,8 @@ double Ewald_Vq<Tdata>::get_singular_chi(const Singular_Value::Fq_type& fq_type,
 }
 
 template <typename Tdata>
-auto Ewald_Vq<Tdata>::cal_Vs_gauss(const std::vector<TA>& list_A0,
-                                   const std::vector<TAC>& list_A1) -> std::map<TA, std::map<TAC, RI::Tensor<Tdata>>>
+auto Ewald_Vq<Tdata>::cal_Vs_gauss(const std::vector<TA>& list_A0, const std::vector<TAC>& list_A1)
+    -> std::map<TA, std::map<TAC, RI::Tensor<Tdata>>>
 {
     ModuleBase::TITLE("Ewald_Vq", "cal_Vs_gauss");
     ModuleBase::timer::tick("Ewald_Vq", "cal_Vs_gauss");
@@ -644,23 +644,50 @@ auto Ewald_Vq<Tdata>::set_Vq_dVq(const std::vector<TA>& list_A0_pair_k,
         for (const auto& innerPair: outerPair.second)
             atoms01.insert(innerPair.first.first);
     }
+    for (const auto& elem: atoms00)
+    {
+        GlobalV::ofs_running << "atoms00" << " " << elem << std::endl;
+    }
+    for (const auto& elem: atoms01)
+    {
+        GlobalV::ofs_running << "atoms01" << " " << elem << std::endl;
+    }
+    GlobalV::ofs_running << "before 1comm" << std::endl;
     std::map<TA, std::map<TAC, Tin>> Vs_dVs_minus_gauss
         = RI_2D_Comm::comm_map2_first(this->mpi_comm, Vs_dVs_minus_gauss_in, atoms00, atoms01);
+    GlobalV::ofs_running << "after 1comm" << std::endl;
     std::map<TA, std::map<TAK, Tout>> Vq_dVq_minus_gauss = func_cal_Vq_dVq_minus_gauss(Vs_dVs_minus_gauss); //{ia0, ia1}
 
     // MPI: {ia0, {ia1, k}} to {ia0, ia1}
     std::map<TA, std::map<TAK, Tout>> Vq_dVq_gauss_out = func_cal_Vq_dVq_gauss(shift_for_mpi); //{ia0, {ia1, k}}
-    std::set<TA> atoms10;
-    std::set<TA> atoms11;
-    for (const auto& outerPair: Vq_dVq_gauss_out)
-    {
-        atoms10.insert(outerPair.first);
+    // std::set<TA> atoms10;
+    // std::set<TA> atoms11;
+    //  for (const auto& outerPair: Vq_dVq_gauss_out)
+    //  {
+    //      atoms10.insert(outerPair.first);
 
-        for (const auto& innerPair: outerPair.second)
-            atoms11.insert(innerPair.first.first);
+    //     for (const auto& innerPair: outerPair.second)
+    //         atoms11.insert(innerPair.first.first);
+    // }
+    std::set<TA> atoms10{list_A0_pair_k.begin(), list_A0_pair_k.end()};
+    std::set<TA> atoms11;
+    for (const auto& pair: list_A1_pair_k)
+    {
+        atoms11.insert(pair.first);
     }
+
+    for (const auto& elem: atoms10)
+    {
+        GlobalV::ofs_running << "atoms10" << " " << elem << std::endl;
+    }
+    for (const auto& elem: atoms11)
+    {
+        GlobalV::ofs_running << "atoms11" << " " << elem << std::endl;
+    }
+    GlobalV::ofs_running << "before 2comm" << std::endl;
     std::map<TA, std::map<TAK, Tout>> Vq_dVq_gauss
         = RI_2D_Comm::comm_map2_first(this->mpi_comm, Vq_dVq_gauss_out, atoms10, atoms11); //{ia0, ia1}
+    GlobalV::ofs_running << "after 2comm" << std::endl;
 
 #pragma omp parallel
     for (size_t i0 = 0; i0 < list_A0_pair_k.size(); ++i0)

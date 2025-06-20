@@ -41,6 +41,8 @@ void RPA_LRI<T, Tdata>::init(const MPI_Comm& mpi_comm_in, const K_Vectors& kv_in
 template <typename T, typename Tdata>
 void RPA_LRI<T, Tdata>::cal_rpa_cv(const LCAO_Orbitals& orb, const K_Vectors& kv)
 {
+    ModuleBase::TITLE("RPA_LRI", "cal_rpa_cv");
+    ModuleBase::timer::tick("RPA_LRI", "cal_rpa_cv");
     std::vector<TA> atoms(GlobalC::ucell.nat);
     for (int iat = 0; iat < GlobalC::ucell.nat; ++iat)
     {
@@ -66,14 +68,14 @@ void RPA_LRI<T, Tdata>::cal_rpa_cv(const LCAO_Orbitals& orb, const K_Vectors& kv
 
     if (GlobalC::exx_info.info_ri.shrink_abfs_pca_thr >= 0.0)
     {
-        this->Lmax = 0;
-        for (size_t n = 0; n != this->abfs.size(); ++n)
-        {
-            Lmax = std::max(Lmax, static_cast<int>(this->abfs[n].size()) - 1);
-        }
+        // this->Lmax = 0;
+        // for (size_t n = 0; n != this->abfs.size(); ++n)
+        // {
+        //     Lmax = std::max(Lmax, static_cast<int>(this->abfs[n].size()) - 1);
+        // }
         // std::cout << "Lmax: " << Lmax << std::endl;
-        this->MGT.init_Gaunt_CH(Lmax);
-        this->MGT.init_Gaunt(Lmax);
+        // this->MGT.init_Gaunt_CH(Lmax);
+        // this->MGT.init_Gaunt(Lmax);
         const std::vector<std::vector<std::vector<Numerical_Orbital_Lm>>> abfs_same_atom
             = Exx_Abfs::Construct_Orbs::abfs_same_atom(orb,
                                                        this->lcaos,
@@ -164,7 +166,7 @@ void RPA_LRI<T, Tdata>::cal_rpa_cv(const LCAO_Orbitals& orb, const K_Vectors& kv
                                     this->abfs_s,
                                     this->abfs_s_ccp,
                                     this->info.kmesh_times,
-                                    this->MGT,
+                                    this->exx_lri_rpa->MGT,
                                     false,
                                     true);
     }
@@ -194,6 +196,7 @@ void RPA_LRI<T, Tdata>::cal_rpa_cv(const LCAO_Orbitals& orb, const K_Vectors& kv
     }
     std::cout << "Use rpa_ccp_rmesh_times=" << this->info.ccp_rmesh_times << " to calculate cut Coulomb" << std::endl;
     this->Vs_period = RI::RI_Tools::cal_period(Vs, period);
+    ModuleBase::timer::tick("RPA_LRI", "cal_rpa_cv");
 }
 
 template <typename T, typename Tdata>
@@ -203,6 +206,8 @@ void RPA_LRI<T, Tdata>::cal_postSCF_exx(const int istep,
                                         const K_Vectors& kv,
                                         const LCAO_Orbitals& orb)
 {
+    ModuleBase::TITLE("RPA_LRI", "cal_postSCF_exx");
+    ModuleBase::timer::tick("RPA_LRI", "cal_postSCF_exx");
     Mix_DMk_2D mix_DMk_2D;
     bool exx_spacegroup_symmetry = (PARAM.inp.nspin < 4 && ModuleSymmetry::Symmetry::symm_flag == 1);
     if (exx_spacegroup_symmetry)
@@ -268,6 +273,7 @@ void RPA_LRI<T, Tdata>::cal_postSCF_exx(const int istep,
         exx_lri_rpa->cal_exx_elec(Ds, *dm.get_paraV_pointer());
     }
     // cout<<"postSCF_Eexx: "<<exx_lri_rpa.Eexx<<endl;
+    ModuleBase::timer::tick("RPA_LRI", "cal_postSCF_exx");
 }
 
 template <typename T, typename Tdata>
@@ -303,23 +309,31 @@ void RPA_LRI<T, Tdata>::out_for_RPA(const Parallel_Orbitals& parav,
     std::cout << "Etot_without_rpa(Ha): " << std::fixed << std::setprecision(15)
               << (pelec->f_en.etot - pelec->f_en.etxc + exx_lri_rpa->Eexx) / 2.0 << std::endl;
 
+    delete exx_lri_rpa;
+    exx_lri_rpa = nullptr;
+    Vs_period.clear();
+    Cs_period.clear();
+    Cs_period_s.clear();
+    {
+        std::map<TA, std::map<TAC, RI::Tensor<Tdata>>> tmp;
+        Vs_period.swap(tmp);
+        Cs_period.swap(tmp);
+        Cs_period_s.swap(tmp);
+    }
     if (GlobalC::exx_info.info_ri.shrink_abfs_pca_thr >= 0.0)
     {
+        int Lmax = 0;
+        for (size_t n = 0; n != this->abfs.size(); ++n)
+        {
+            Lmax = std::max(Lmax, static_cast<int>(this->abfs[n].size()) - 1);
+        }
+        this->MGT.init_Gaunt_CH(Lmax);
+        this->MGT.init_Gaunt(Lmax);
+
         cal_abfs_overlap(orb, kv);
     }
     if (this->info_ewald.use_ewald)
     {
-        delete exx_lri_rpa;
-        exx_lri_rpa = nullptr;
-        Vs_period.clear();
-        Cs_period.clear();
-        Cs_period_s.clear();
-        {
-            std::map<TA, std::map<TAC, RI::Tensor<Tdata>>> tmp;
-            Vs_period.swap(tmp);
-            Cs_period.swap(tmp);
-            Cs_period_s.swap(tmp);
-        }
         GlobalC::exx_info.info_ewald.fq_type = Singular_Value::Fq_type(PARAM.inp.exx_fq_type);
         GlobalC::exx_info.info_global.ccp_type = Conv_Coulomb_Pot_K::Ccp_Type::Ccp;
         // Using exx_ccp_rmesh_times to calculate full Coulomb
@@ -344,21 +358,18 @@ void RPA_LRI<T, Tdata>::out_for_RPA(const Parallel_Orbitals& parav,
 template <typename T, typename Tdata>
 void RPA_LRI<T, Tdata>::cal_abfs_overlap(const LCAO_Orbitals& orb, const K_Vectors& kv)
 {
-    ModuleBase::TITLE("DFT_RPA_interface", "out_abfs_overlap");
+    ModuleBase::TITLE("DFT_RPA_interface", "cal_abfs_overlap");
 
     // const double lcaos_rmax = Exx_Abfs::Construct_Orbs::get_Rmax(this->lcaos);
     // const double abfs_rmax = Exx_Abfs::Construct_Orbs::get_Rmax(this->abfs);
     int Lmax_flag = 0;
 
     this->m_abfs_abf.init(2, orb, this->info.kmesh_times, orb.get_Rmax() * 2, Lmax_flag);
-    // std::cout << "Lmax: " << Lmax << std::endl;
-
     this->m_abfs_abf.init_radial(abfs_s, this->abfs, this->MGT);
     this->m_abfs_abf.init_radial_table();
 
-    // const double abfs_s_rmax = Exx_Abfs::Construct_Orbs::get_Rmax(abfs_s);
-    this->m_abfs_abfs.init(2, orb, this->info.kmesh_times, orb.get_Rmax() * 2, Lmax);
-    this->m_abfs_abfs.init_radial(abfs_s, abfs_s, MGT);
+    this->m_abfs_abfs.init(2, orb, this->info.kmesh_times, orb.get_Rmax() * 2, Lmax_flag);
+    this->m_abfs_abfs.init_radial(abfs_s, abfs_s, this->MGT);
     this->m_abfs_abfs.init_radial_table();
     // get Rlist
     const std::array<Tcell, Ndim> period = RI_Util::get_Born_vonKarmen_period(kv);
@@ -383,70 +394,22 @@ void RPA_LRI<T, Tdata>::cal_abfs_overlap(const LCAO_Orbitals& orb, const K_Vecto
     const std::pair<std::vector<TA>, std::vector<std::vector<std::pair<TA, std::array<Tcell, Ndim>>>>> list_As_Vs
         = RI::Distribute_Equally::distribute_atoms_periods(this->mpi_comm, atoms, period_Vs, 2, false);
 
-    // std::stringstream ss;
-    //  ss << "IJR_" << GlobalV::MY_RANK << ".txt";
-    // std::ofstream ofs;
-    // ofs.open(ss.str().c_str(), std::ios::out);
-    // for (size_t iA = 0; iA < list_As_Vs.first.size(); ++iA)
-    // {
-    //     const auto& A = list_As_Vs.first[iA];
-    //     for (const auto& BR: list_As_Vs.second[0])
-    //     {
-    //         const auto& B = BR.first;
-    //         const auto& R = BR.second;
-    //         ofs << "ABR: " << A << B << "," << R.at(0) << R.at(1) << R.at(2) << std::endl;
-    //     }
-    // }
-    // ofs.close();
-    /* #pragma omp parallel
-        for (const auto& A: list_As_Vs.first)
-        {
-    #pragma omp for schedule(dynamic) nowait
-            for (const auto& BR: list_As_Vs.second[0])
-            {
-                const size_t TA = GlobalC::ucell.iat2it[A];
-                const size_t IA = GlobalC::ucell.iat2ia[A];
-                const ModuleBase::Vector3<double>& tauA(GlobalC::ucell.atoms[TA].tau[IA]);
-                const auto B = BR.first;
-                const auto R = BR.second;
-                const size_t TB = GlobalC::ucell.iat2it[B];
-                const size_t IB = GlobalC::ucell.iat2ia[B];
-                const ModuleBase::Vector3<double>& tauB(GlobalC::ucell.atoms[TB].tau[IB]);
-
-                // const auto R_min = get_cell_nearest(tauA, tauB, period, iR);
-                // debug
-                // std::cout << "IJR: " << I << "," << J << "," << R_min[0] << R_min[1] << R_min[2] << "," <<
-                // iR[0]
-                //          << iR[1] << iR[2] << std::endl;
-
-                const ModuleBase::Vector3<double> tauB_shift
-                    = tauB + (RI_Util::array3_to_Vector3(R) * GlobalC::ucell.latvec);
-                auto tau_delta = tauB_shift - tauA;
-                ModuleBase::Vector3<double> tau0;
-                tau0.x = 0.0;
-                tau0.y = 0.0;
-                tau0.z = 0.0;
-                // std::cout << "ABR: " << A << B << "," << R.at(0) << R.at(1) << R.at(2) << std::endl;
-    #pragma omp critical(RPA_LRI_cal_overlap_ss)
-                overlap_abfs_abfs[A][{B, R}]
-                    = this->m_abfs_abfs.template cal_overlap_matrix<double>(TA,
-                                                                            TB,
-                                                                            tau0,
-                                                                            tau_delta,
-                                                                            index_abfs_s,
-                                                                            index_abfs_s,
-                                                                            Matrix_Orbs11::Matrix_Order::AB);
-    #pragma omp critical(RPA_LRI_cal_overlap_s)
-                overlap_abfs_abf[A][{B, R}]
-                    = this->m_abfs_abf.template cal_overlap_matrix<double>(TA,
-                                                                           TB,
-                                                                           tau0,
-                                                                           tau_delta,
-                                                                           index_abfs_s,
-                                                                           index_abfs,
-                                                                           Matrix_Orbs11::Matrix_Order::AB);
-            }
-        } */
+// Huanjing Gong debug
+// std::stringstream ss;
+//  ss << "IJR_" << GlobalV::MY_RANK << ".txt";
+// std::ofstream ofs;
+// ofs.open(ss.str().c_str(), std::ios::out);
+// for (size_t iA = 0; iA < list_As_Vs.first.size(); ++iA)
+// {
+//     const auto& A = list_As_Vs.first[iA];
+//     for (const auto& BR: list_As_Vs.second[0])
+//     {
+//         const auto& B = BR.first;
+//         const auto& R = BR.second;
+//         ofs << "ABR: " << A << B << "," << R.at(0) << R.at(1) << R.at(2) << std::endl;
+//     }
+// }
+// ofs.close();
 #pragma omp parallel
     {
         using LocalMapType = std::map<std::pair<int, std::array<int, 3>>, RI::Tensor<double>>;
