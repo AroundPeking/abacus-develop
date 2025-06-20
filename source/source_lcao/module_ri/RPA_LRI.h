@@ -101,7 +101,6 @@ class RPA_LRI
     std::vector<std::vector<std::vector<Numerical_Orbital_Lm>>> abfs_ccp;
     // shrinked abfs
     ORB_gaunt_table MGT;
-    int Lmax;
     std::vector<std::vector<std::vector<Numerical_Orbital_Lm>>> abfs_s;
     std::vector<std::vector<std::vector<Numerical_Orbital_Lm>>> abfs_s_ccp;
 
