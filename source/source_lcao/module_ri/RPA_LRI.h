@@ -40,7 +40,7 @@ class RPA_LRI
         : info(info_in), info_ewald(info_ewald_in) {};
     ~RPA_LRI() {};
     void init(const MPI_Comm& mpi_comm_in, const K_Vectors& kv_in, const std::vector<double>& orb_cutoff);
-    void cal_rpa_cv(const LCAO_Orbitals& orb, const K_Vectors& kv);
+    void cal_large_Cs(const LCAO_Orbitals& orb, const K_Vectors& kv);
     void cal_postSCF_exx(const int istep,
                          const elecstate::DensityMatrix<T, Tdata>& dm,
                          const MPI_Comm& mpi_comm_in,
@@ -108,14 +108,11 @@ class RPA_LRI
     // LRI_CV<Tdata> cv;
     std::map<TA, std::map<TAC, RI::Tensor<Tdata>>> Vs_period;
     std::map<TA, std::map<TAC, RI::Tensor<Tdata>>> Cs_period;
-    // shrinked Cs
-    std::map<TA, std::map<TAC, RI::Tensor<Tdata>>> Cs_period_s;
     // RI::RPA<TA,Tcell,Ndim,Tdata> rpa_lri;
 
     // Tdata post_process_Erpa( const Tdata &Erpa_in ) const;
 
     Exx_LRI<double>* exx_lri_rpa = nullptr;
-    Exx_LRI<double>* exx_abfs_s = nullptr;
     Exx_LRI<double>* exx_full_coulomb = nullptr;
 };
 

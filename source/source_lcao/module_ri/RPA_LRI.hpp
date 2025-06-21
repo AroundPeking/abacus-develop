@@ -39,10 +39,15 @@ void RPA_LRI<T, Tdata>::init(const MPI_Comm& mpi_comm_in, const K_Vectors& kv_in
 }
 
 template <typename T, typename Tdata>
-void RPA_LRI<T, Tdata>::cal_rpa_cv(const LCAO_Orbitals& orb, const K_Vectors& kv)
+void RPA_LRI<T, Tdata>::cal_large_Cs(const LCAO_Orbitals& orb, const K_Vectors& kv)
 {
-    ModuleBase::TITLE("RPA_LRI", "cal_rpa_cv");
-    ModuleBase::timer::tick("RPA_LRI", "cal_rpa_cv");
+    ModuleBase::TITLE("RPA_LRI", "cal_large_Cs");
+    ModuleBase::timer::tick("RPA_LRI", "cal_large_Cs");
+    if (!exx_lri_rpa)
+        exx_lri_rpa = new Exx_LRI<double>(GlobalC::exx_info.info_ri, GlobalC::exx_info.info_ewald);
+    exx_lri_rpa->init(mpi_comm, kv, orb);
+    this->abfs = exx_lri_rpa->abfs;
+    this->abfs_ccp = exx_lri_rpa->abfs_ccp;
     std::vector<TA> atoms(GlobalC::ucell.nat);
     for (int iat = 0; iat < GlobalC::ucell.nat; ++iat)
     {
@@ -53,6 +58,22 @@ void RPA_LRI<T, Tdata>::cal_rpa_cv(const LCAO_Orbitals& orb, const K_Vectors& kv
     const std::array<Tcell, Ndim> period_Cs = LRI_CV_Tools::cal_latvec_range<Tcell>(2, orb_cutoff_);
     const std::pair<std::vector<TA>, std::vector<std::vector<std::pair<TA, std::array<Tcell, Ndim>>>>> list_As_Cs
         = RI::Distribute_Equally::distribute_atoms_periods(this->mpi_comm, atoms, period_Cs, 2, false);
+    std::map<TA, TatomR> atoms_pos;
+    for (int iat = 0; iat < GlobalC::ucell.nat; ++iat)
+        atoms_pos[iat] = RI_Util::Vector3_to_array3(
+            GlobalC::ucell.atoms[GlobalC::ucell.iat2it[iat]].tau[GlobalC::ucell.iat2ia[iat]]);
+    const std::array<TatomR, Ndim> latvec = {RI_Util::Vector3_to_array3(GlobalC::ucell.a1),
+                                             RI_Util::Vector3_to_array3(GlobalC::ucell.a2),
+                                             RI_Util::Vector3_to_array3(GlobalC::ucell.a3)};
+    this->exx_lri_rpa->exx_lri.set_parallel(this->mpi_comm, atoms_pos, latvec, period);
+    this->exx_lri_rpa->cv.set_orbitals(orb,
+                                       this->lcaos,
+                                       exx_lri_rpa->abfs,
+                                       exx_lri_rpa->abfs_ccp,
+                                       this->info.kmesh_times,
+                                       this->MGT,
+                                       false,
+                                       true);
 
     std::pair<std::map<TA, std::map<TAC, RI::Tensor<Tdata>>>,
               std::map<TA, std::map<TAC, std::array<RI::Tensor<Tdata>, 3>>>>
@@ -64,18 +85,82 @@ void RPA_LRI<T, Tdata>::cal_rpa_cv(const LCAO_Orbitals& orb, const K_Vectors& kv
                                              {"writable_Vws", false},
                                              {"writable_dVws", false}});
     std::map<TA, std::map<TAC, RI::Tensor<Tdata>>>& Cs = std::get<0>(Cs_dCs);
+    std::map<TA, std::map<TAC, RI::Tensor<Tdata>>> tmp;
     this->Cs_period = RI::RI_Tools::cal_period(Cs, period);
+    this->out_Cs(this->Cs_period, "Cs_data_");
+    Cs_period.clear();
+    Cs_period.swap(tmp);
+    delete exx_lri_rpa;
+    exx_lri_rpa = nullptr;
 
+    ModuleBase::timer::tick("RPA_LRI", "cal_large_Cs");
+}
+
+template <typename T, typename Tdata>
+void RPA_LRI<T, Tdata>::cal_postSCF_exx(const int istep,
+                                        const elecstate::DensityMatrix<T, Tdata>& dm,
+                                        const MPI_Comm& mpi_comm_in,
+                                        const K_Vectors& kv,
+                                        const LCAO_Orbitals& orb)
+{
+    ModuleBase::TITLE("RPA_LRI", "cal_postSCF_exx");
+    ModuleBase::timer::tick("RPA_LRI", "cal_postSCF_exx");
+    this->p_kv = &kv;
+    Mix_DMk_2D mix_DMk_2D;
+    bool exx_spacegroup_symmetry = (PARAM.inp.nspin < 4 && ModuleSymmetry::Symmetry::symm_flag == 1);
+    if (exx_spacegroup_symmetry)
+    {
+        mix_DMk_2D.set_nks(kv.get_nkstot_full() * (PARAM.inp.nspin == 2 ? 2 : 1), PARAM.globalv.gamma_only_local);
+    }
+    else
+    {
+        mix_DMk_2D.set_nks(kv.get_nks(), PARAM.globalv.gamma_only_local);
+    }
+
+    mix_DMk_2D.set_mixing(nullptr);
+    ModuleSymmetry::Symmetry_rotation symrot;
+    if (exx_spacegroup_symmetry)
+    {
+        const std::array<Tcell, Ndim> period = RI_Util::get_Born_vonKarmen_period(kv);
+        symrot.find_irreducible_sector(GlobalC::ucell.symm,
+                                       GlobalC::ucell.atoms,
+                                       GlobalC::ucell.st,
+                                       RI_Util::get_Born_von_Karmen_cells(period),
+                                       period,
+                                       GlobalC::ucell.lat);
+        symrot.cal_Ms(kv, GlobalC::ucell, *dm.get_paraV_pointer());
+        mix_DMk_2D.mix(symrot.restore_dm(kv, dm.get_DMK_vector(), *dm.get_paraV_pointer()), true);
+    }
+    else
+    {
+        mix_DMk_2D.mix(dm.get_DMK_vector(), true);
+    }
+
+    const std::vector<std::map<TA, std::map<TAC, RI::Tensor<Tdata>>>> Ds
+        = PARAM.globalv.gamma_only_local ? RI_2D_Comm::split_m2D_ktoR<Tdata>(kv,
+                                                                             mix_DMk_2D.get_DMk_gamma_out(),
+                                                                             *dm.get_paraV_pointer(),
+                                                                             PARAM.inp.nspin)
+                                         : RI_2D_Comm::split_m2D_ktoR<Tdata>(kv,
+                                                                             mix_DMk_2D.get_DMk_k_out(),
+                                                                             *dm.get_paraV_pointer(),
+                                                                             PARAM.inp.nspin,
+                                                                             exx_spacegroup_symmetry);
+
+    // set parameters for bare Coulomb potential
+    GlobalC::exx_info.info_global.ccp_type = Conv_Coulomb_Pot_K::Ccp_Type::Hf;
+    // reserve exx_ccp_rmesh_times to calculate full Coulomb
+    this->exx_ccp_rmesh_times = GlobalC::exx_info.info_ri.ccp_rmesh_times;
+    // rpa=1 set
+    // GlobalC::exx_info.info_ri.ccp_rmesh_times=rpa_ccp_rmesh_times
+    // Using this->info.ccp_rmesh_times to calculate cut Coulomb this->Vs_period
+    GlobalC::exx_info.info_ri.ccp_rmesh_times = PARAM.inp.rpa_ccp_rmesh_times;
+    GlobalC::exx_info.info_global.hybrid_alpha = 1;
+    if (!exx_lri_rpa)
+        exx_lri_rpa = new Exx_LRI<double>(GlobalC::exx_info.info_ri, GlobalC::exx_info.info_ewald);
     if (GlobalC::exx_info.info_ri.shrink_abfs_pca_thr >= 0.0)
     {
-        // this->Lmax = 0;
-        // for (size_t n = 0; n != this->abfs.size(); ++n)
-        // {
-        //     Lmax = std::max(Lmax, static_cast<int>(this->abfs[n].size()) - 1);
-        // }
-        // std::cout << "Lmax: " << Lmax << std::endl;
-        // this->MGT.init_Gaunt_CH(Lmax);
-        // this->MGT.init_Gaunt(Lmax);
+        this->lcaos = Exx_Abfs::Construct_Orbs::change_orbs(orb, this->info.kmesh_times);
         const std::vector<std::vector<std::vector<Numerical_Orbital_Lm>>> abfs_same_atom
             = Exx_Abfs::Construct_Orbs::abfs_same_atom(orb,
                                                        this->lcaos,
@@ -148,121 +233,29 @@ void RPA_LRI<T, Tdata>::cal_rpa_cv(const LCAO_Orbitals& orb, const K_Vectors& kv
                                                             this->info.ccp_type,
                                                             get_ccp_parameter(),
                                                             this->info.ccp_rmesh_times);
-        if (!exx_abfs_s)
-            exx_abfs_s = new Exx_LRI<double>(GlobalC::exx_info.info_ri, GlobalC::exx_info.info_ewald);
-        exx_abfs_s->init(mpi_comm, kv, orb, this->abfs_s);
-
-        std::map<TA, TatomR> atoms_pos;
-        for (int iat = 0; iat < GlobalC::ucell.nat; ++iat)
-            atoms_pos[iat] = RI_Util::Vector3_to_array3(
-                GlobalC::ucell.atoms[GlobalC::ucell.iat2it[iat]].tau[GlobalC::ucell.iat2ia[iat]]);
-        const std::array<TatomR, Ndim> latvec = {RI_Util::Vector3_to_array3(GlobalC::ucell.a1),
-                                                 RI_Util::Vector3_to_array3(GlobalC::ucell.a2),
-                                                 RI_Util::Vector3_to_array3(GlobalC::ucell.a3)};
-        exx_abfs_s->exx_lri.set_parallel(this->mpi_comm, atoms_pos, latvec, period);
-
-        exx_abfs_s->cv.set_orbitals(orb,
-                                    this->lcaos,
-                                    this->abfs_s,
-                                    this->abfs_s_ccp,
-                                    this->info.kmesh_times,
-                                    this->exx_lri_rpa->MGT,
-                                    false,
-                                    true);
-    }
-    const std::array<Tcell, Ndim> period_Vs
-        = LRI_CV_Tools::cal_latvec_range<Tcell>(1 + this->info.ccp_rmesh_times, orb_cutoff_);
-    const std::pair<std::vector<TA>, std::vector<std::vector<std::pair<TA, std::array<Tcell, Ndim>>>>> list_As_Vs
-        = RI::Distribute_Equally::distribute_atoms(this->mpi_comm, atoms, period_Vs, 2, false);
-    std::map<TA, std::map<TAC, RI::Tensor<Tdata>>> Vs;
-    if (GlobalC::exx_info.info_ri.shrink_abfs_pca_thr >= 0.0)
-    {
-        Vs = exx_abfs_s->cv.cal_Vs(list_As_Vs.first, list_As_Vs.second[0], {{"writable_Vws", true}});
-        std::pair<std::map<TA, std::map<TAC, RI::Tensor<Tdata>>>,
-                  std::map<TA, std::map<TAC, std::array<RI::Tensor<Tdata>, 3>>>>
-            Cs_dCs_s = exx_abfs_s->cv.cal_Cs_dCs(list_As_Cs.first,
-                                                 list_As_Cs.second[0],
-                                                 {{"cal_dC", false},
-                                                  {"writable_Cws", true},
-                                                  {"writable_dCws", true},
-                                                  {"writable_Vws", false},
-                                                  {"writable_dVws", false}});
-        std::map<TA, std::map<TAC, RI::Tensor<Tdata>>>& Cs_s = std::get<0>(Cs_dCs_s);
-        this->Cs_period_s = RI::RI_Tools::cal_period(Cs_s, period);
+        exx_lri_rpa->init(mpi_comm_in, kv, orb, abfs_s);
     }
     else
-    {
-        Vs = exx_lri_rpa->cv.cal_Vs(list_As_Vs.first, list_As_Vs.second[0], {{"writable_Vws", true}});
-    }
+        exx_lri_rpa->init(mpi_comm_in, kv, orb);
+    std::map<TA, std::map<TAC, RI::Tensor<Tdata>>> Vs_cut;
+    std::map<TA, std::map<TAC, RI::Tensor<Tdata>>> Cs;
+    std::map<TA, std::map<TAC, RI::Tensor<Tdata>>> tmp;
     std::cout << "Use rpa_ccp_rmesh_times=" << this->info.ccp_rmesh_times << " to calculate cut Coulomb" << std::endl;
-    this->Vs_period = RI::RI_Tools::cal_period(Vs, period);
-    ModuleBase::timer::tick("RPA_LRI", "cal_rpa_cv");
-}
+    exx_lri_rpa->cal_exx_ions_rpa(Vs_cut, Cs, 0, PARAM.inp.out_ri_cv);
+    const std::array<Tcell, Ndim> period = {p_kv->nmp[0], p_kv->nmp[1], p_kv->nmp[2]};
+    this->Vs_period = RI::RI_Tools::cal_period(Vs_cut, period);
+    this->out_coulomb_k(this->Vs_period, "coulomb_cut_", exx_lri_rpa);
+    Vs_period.clear();
+    Vs_period.swap(tmp);
 
-template <typename T, typename Tdata>
-void RPA_LRI<T, Tdata>::cal_postSCF_exx(const int istep,
-                                        const elecstate::DensityMatrix<T, Tdata>& dm,
-                                        const MPI_Comm& mpi_comm_in,
-                                        const K_Vectors& kv,
-                                        const LCAO_Orbitals& orb)
-{
-    ModuleBase::TITLE("RPA_LRI", "cal_postSCF_exx");
-    ModuleBase::timer::tick("RPA_LRI", "cal_postSCF_exx");
-    Mix_DMk_2D mix_DMk_2D;
-    bool exx_spacegroup_symmetry = (PARAM.inp.nspin < 4 && ModuleSymmetry::Symmetry::symm_flag == 1);
-    if (exx_spacegroup_symmetry)
-    {
-        mix_DMk_2D.set_nks(kv.get_nkstot_full() * (PARAM.inp.nspin == 2 ? 2 : 1), PARAM.globalv.gamma_only_local);
-    }
+    this->Cs_period = RI::RI_Tools::cal_period(Cs, period);
+
+    if (GlobalC::exx_info.info_ri.shrink_abfs_pca_thr >= 0.0)
+        this->out_Cs(this->Cs_period, "Cs_shrinked_data_");
     else
-    {
-        mix_DMk_2D.set_nks(kv.get_nks(), PARAM.globalv.gamma_only_local);
-    }
-
-    mix_DMk_2D.set_mixing(nullptr);
-    ModuleSymmetry::Symmetry_rotation symrot;
-    if (exx_spacegroup_symmetry)
-    {
-        const std::array<Tcell, Ndim> period = RI_Util::get_Born_vonKarmen_period(kv);
-        symrot.find_irreducible_sector(GlobalC::ucell.symm,
-                                       GlobalC::ucell.atoms,
-                                       GlobalC::ucell.st,
-                                       RI_Util::get_Born_von_Karmen_cells(period),
-                                       period,
-                                       GlobalC::ucell.lat);
-        symrot.cal_Ms(kv, GlobalC::ucell, *dm.get_paraV_pointer());
-        mix_DMk_2D.mix(symrot.restore_dm(kv, dm.get_DMK_vector(), *dm.get_paraV_pointer()), true);
-    }
-    else
-    {
-        mix_DMk_2D.mix(dm.get_DMK_vector(), true);
-    }
-
-    const std::vector<std::map<TA, std::map<TAC, RI::Tensor<Tdata>>>> Ds
-        = PARAM.globalv.gamma_only_local ? RI_2D_Comm::split_m2D_ktoR<Tdata>(kv,
-                                                                             mix_DMk_2D.get_DMk_gamma_out(),
-                                                                             *dm.get_paraV_pointer(),
-                                                                             PARAM.inp.nspin)
-                                         : RI_2D_Comm::split_m2D_ktoR<Tdata>(kv,
-                                                                             mix_DMk_2D.get_DMk_k_out(),
-                                                                             *dm.get_paraV_pointer(),
-                                                                             PARAM.inp.nspin,
-                                                                             exx_spacegroup_symmetry);
-
-    // set parameters for bare Coulomb potential
-    GlobalC::exx_info.info_global.ccp_type = Conv_Coulomb_Pot_K::Ccp_Type::Hf;
-    // reserve exx_ccp_rmesh_times to calculate full Coulomb
-    this->exx_ccp_rmesh_times = GlobalC::exx_info.info_ri.ccp_rmesh_times;
-    // rpa=1 set
-    // GlobalC::exx_info.info_ri.ccp_rmesh_times=rpa_ccp_rmesh_times
-    // Using this->info.ccp_rmesh_times to calculate cut Coulomb this->Vs_period
-    GlobalC::exx_info.info_ri.ccp_rmesh_times = PARAM.inp.rpa_ccp_rmesh_times;
-    GlobalC::exx_info.info_global.hybrid_alpha = 1;
-    if (!exx_lri_rpa)
-        exx_lri_rpa = new Exx_LRI<double>(GlobalC::exx_info.info_ri, GlobalC::exx_info.info_ewald);
-
-    exx_lri_rpa->init(mpi_comm_in, kv, orb);
-    exx_lri_rpa->cal_exx_ions(0, PARAM.inp.out_ri_cv);
+        this->out_Cs(this->Cs_period, "Cs_data_");
+    Cs_period.clear();
+    Cs_period.swap(tmp);
 
     if (exx_spacegroup_symmetry && PARAM.inp.exx_symmetry_realspace)
     {
@@ -288,39 +281,18 @@ void RPA_LRI<T, Tdata>::out_for_RPA(const UnitCell& ucell,
     this->out_bands(pelec);
     this->out_eigen_vector(parav, psi);
     this->out_struc();
-    this->cal_rpa_cv(orb, kv);
+    // this->cal_rpa_cv(orb, kv);
     std::cout << "rpa_pca_threshold: " << this->info.pca_threshold << std::endl;
     std::cout << "rpa_ccp_rmesh_times: " << this->info.ccp_rmesh_times << std::endl;
     std::cout << "rpa_lcao_exx(Ha): " << std::fixed << std::setprecision(15) << exx_lri_rpa->Eexx / 2.0 << std::endl;
-    this->out_Cs(this->Cs_period);
-    if (GlobalC::exx_info.info_ri.shrink_abfs_pca_thr >= 0.0)
-    {
-        this->out_Cs(this->Cs_period_s, "Cs_shrinked_data_");
-        this->out_coulomb_k(this->Vs_period, "coulomb_cut_", exx_abfs_s);
-        delete exx_abfs_s;
-        exx_abfs_s = nullptr;
-    }
-    else
-    {
-        this->out_coulomb_k(this->Vs_period, "coulomb_cut_", exx_lri_rpa);
-    }
 
     std::cout << "etxc(Ha): " << std::fixed << std::setprecision(15) << pelec->f_en.etxc / 2.0 << std::endl;
     std::cout << "etot(Ha): " << std::fixed << std::setprecision(15) << pelec->f_en.etot / 2.0 << std::endl;
     std::cout << "Etot_without_rpa(Ha): " << std::fixed << std::setprecision(15)
               << (pelec->f_en.etot - pelec->f_en.etxc + exx_lri_rpa->Eexx) / 2.0 << std::endl;
-
     delete exx_lri_rpa;
     exx_lri_rpa = nullptr;
-    Vs_period.clear();
-    Cs_period.clear();
-    Cs_period_s.clear();
-    {
-        std::map<TA, std::map<TAC, RI::Tensor<Tdata>>> tmp;
-        Vs_period.swap(tmp);
-        Cs_period.swap(tmp);
-        Cs_period_s.swap(tmp);
-    }
+
     if (GlobalC::exx_info.info_ri.shrink_abfs_pca_thr >= 0.0)
     {
         int Lmax = 0;
@@ -330,7 +302,7 @@ void RPA_LRI<T, Tdata>::out_for_RPA(const UnitCell& ucell,
         }
         this->MGT.init_Gaunt_CH(Lmax);
         this->MGT.init_Gaunt(Lmax);
-
+        cal_large_Cs(orb, kv);
         cal_abfs_overlap(orb, kv);
     }
     if (this->info_ewald.use_ewald)
@@ -346,9 +318,18 @@ void RPA_LRI<T, Tdata>::out_for_RPA(const UnitCell& ucell,
             exx_full_coulomb->init(mpi_comm, kv, orb, this->abfs_s);
         else
             exx_full_coulomb->init(mpi_comm, kv, orb, this->abfs);
-        exx_full_coulomb->cal_exx_ions(0, PARAM.inp.out_ri_cv);
-        auto& Vs_full = exx_full_coulomb->Vs;
+        std::map<TA, std::map<TAC, RI::Tensor<Tdata>>> Vs_full;
+        std::map<TA, std::map<TAC, RI::Tensor<Tdata>>> Cs;
+        std::map<TA, std::map<TAC, RI::Tensor<Tdata>>> tmp;
+        exx_full_coulomb->cal_exx_ions_rpa(Vs_full, Cs, 0, PARAM.inp.out_ri_cv);
+        const std::array<Tcell, Ndim> period = {p_kv->nmp[0], p_kv->nmp[1], p_kv->nmp[2]};
+        this->Vs_period = RI::RI_Tools::cal_period(Vs_full, period);
         this->out_coulomb_k(Vs_full, "coulomb_mat_", exx_full_coulomb);
+        Vs_period.clear();
+        Vs_period.swap(tmp);
+        Cs.clear();
+        Cs.swap(tmp);
+
         delete exx_full_coulomb;
         exx_full_coulomb = nullptr;
     }
