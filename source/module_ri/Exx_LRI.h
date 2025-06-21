@@ -94,9 +94,12 @@ class Exx_LRI
     LRI_CV<Tdata> sr_cv;
     RI::Exx<TA, Tcell, Ndim, Tdata> exx_lri;
     Ewald_Vq<Tdata> evq;
-    std::map<TA, std::map<TAC, RI::Tensor<Tdata>>> Vs;
 
     void cal_exx_ions(const int istep, const bool write_cv = false);
+    void cal_exx_ions_rpa(std::map<TA, std::map<TAC, RI::Tensor<Tdata>>>& Vs_cut,
+                          std::map<TA, std::map<TAC, RI::Tensor<Tdata>>>& Cs,
+                          const int istep,
+                          const bool write_cv = false);
     void cal_exx_elec(const std::vector<std::map<TA, std::map<TAC, RI::Tensor<Tdata>>>>& Ds,
                       const Parallel_Orbitals& pv,
                       const ModuleSymmetry::Symmetry_rotation* p_symrot = nullptr);

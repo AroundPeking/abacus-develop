@@ -310,7 +310,8 @@ void Exx_LRI<Tdata>::cal_exx_ions(const int istep, const bool write_cv)
     const std::pair<std::vector<TA>, std::vector<std::vector<std::pair<TA, std::array<Tcell, Ndim>>>>> list_As_Vs
         = RI::Distribute_Equally::distribute_atoms_periods(this->mpi_comm, atoms, period_Vs, 2, false);
 
-    this->Vs = this->cv.cal_Vs(list_As_Vs.first, list_As_Vs.second[0], {{"writable_Vws", true}});
+    std::map<TA, std::map<TAC, RI::Tensor<Tdata>>> Vs
+        = this->cv.cal_Vs(list_As_Vs.first, list_As_Vs.second[0], {{"writable_Vws", true}});
 
     this->cv.Vws = LRI_CV_Tools::get_CVws(Vs);
     if (this->info_ewald.use_ewald && this->info.ccp_type == Conv_Coulomb_Pot_K::Ccp_Type::Ccp)
@@ -409,6 +410,139 @@ void Exx_LRI<Tdata>::cal_exx_ions(const int istep, const bool write_cv)
         }
     }
     ModuleBase::timer::tick("Exx_LRI", "cal_exx_ions");
+}
+
+template <typename Tdata>
+void Exx_LRI<Tdata>::cal_exx_ions_rpa(std::map<TA, std::map<TAC, RI::Tensor<Tdata>>>& Vs_cut,
+                                      std::map<TA, std::map<TAC, RI::Tensor<Tdata>>>& Cs,
+                                      const int istep,
+                                      const bool write_cv)
+{
+    ModuleBase::TITLE("Exx_LRI", "cal_exx_ions_rpa");
+    ModuleBase::timer::tick("Exx_LRI", "cal_exx_ions_rpa");
+
+    if (istep > 0 && !GlobalC::ucell.if_atoms_can_move())
+        return;
+
+    std::vector<TA> atoms(GlobalC::ucell.nat);
+    for (int iat = 0; iat < GlobalC::ucell.nat; ++iat)
+        atoms[iat] = iat;
+    std::map<TA, TatomR> atoms_pos;
+    for (int iat = 0; iat < GlobalC::ucell.nat; ++iat)
+        atoms_pos[iat] = RI_Util::Vector3_to_array3(
+            GlobalC::ucell.atoms[GlobalC::ucell.iat2it[iat]].tau[GlobalC::ucell.iat2ia[iat]]);
+    const std::array<TatomR, Ndim> latvec = {RI_Util::Vector3_to_array3(GlobalC::ucell.a1),
+                                             RI_Util::Vector3_to_array3(GlobalC::ucell.a2),
+                                             RI_Util::Vector3_to_array3(GlobalC::ucell.a3)};
+    const std::array<Tcell, Ndim> period = {this->p_kv->nmp[0], this->p_kv->nmp[1], this->p_kv->nmp[2]};
+
+    this->exx_lri.set_parallel(this->mpi_comm, atoms_pos, latvec, period);
+
+    // std::max(3) for gamma_only, list_A2 should contain cell {-1,0,1}. In the future distribute will be neighbour.
+    const std::array<Tcell, Ndim> period_Vs
+        = LRI_CV_Tools::cal_latvec_range<Tcell>(1 + this->info.ccp_rmesh_times, orb_cutoff_);
+    const std::pair<std::vector<TA>, std::vector<std::vector<std::pair<TA, std::array<Tcell, Ndim>>>>> list_As_Vs
+        = RI::Distribute_Equally::distribute_atoms_periods(this->mpi_comm, atoms, period_Vs, 2, false);
+
+    Vs_cut = this->cv.cal_Vs(list_As_Vs.first, list_As_Vs.second[0], {{"writable_Vws", true}});
+
+    this->cv.Vws = LRI_CV_Tools::get_CVws(Vs_cut);
+    if (this->info_ewald.use_ewald && this->info.ccp_type == Conv_Coulomb_Pot_K::Ccp_Type::Ccp)
+    {
+        std::map<TA, std::map<TAC, RI::Tensor<Tdata>>> Vs_sr;
+        if (this->info.hybrid_beta)
+        {
+            Vs_sr = this->sr_cv.cal_Vs(list_As_Vs.first, list_As_Vs.second[0], {{"writable_Vws", true}});
+            Vs_sr = LRI_CV_Tools::mul2(RI::Global_Func::convert<Tdata>(-this->info.hybrid_beta), Vs_sr);
+            this->sr_cv.Vws = LRI_CV_Tools::get_CVws(Vs_sr);
+        }
+        if (PARAM.inp.cal_stress || istep == 0)
+            this->evq.init_ions(period_Vs);
+
+        double chi = this->evq.get_singular_chi(this->info_ewald.fq_type, 2.0);
+        std::map<TA, std::map<TAC, RI::Tensor<Tdata>>> Vs_full = this->evq.cal_Vs(chi, Vs_cut);
+        Vs_full = LRI_CV_Tools::mul2(RI::Global_Func::convert<Tdata>(this->info.hybrid_alpha), Vs_full);
+        std::cout << "Use exx_ccp_rmesh_times=" << this->info.ccp_rmesh_times << " to calculate full Coulomb"
+                  << std::endl;
+        Vs_cut = this->info.hybrid_beta ? LRI_CV_Tools::minus(Vs_full, Vs_sr) : Vs_full;
+    }
+
+    if (write_cv && GlobalV::MY_RANK == 0)
+    {
+        LRI_CV_Tools::write_Vs_abf(Vs_cut, PARAM.globalv.global_out_dir + "Vs_cut");
+    }
+    this->exx_lri.set_Vs(std::move(Vs_cut), this->info.V_threshold);
+
+    if (PARAM.inp.cal_force || PARAM.inp.cal_stress)
+    {
+        std::map<TA, std::map<TAC, std::array<RI::Tensor<Tdata>, Ndim>>> dVs
+            = this->cv.cal_dVs(list_As_Vs.first, list_As_Vs.second[0], {{"writable_dVws", true}});
+        this->cv.dVws = LRI_CV_Tools::get_dCVws(dVs);
+
+        if (this->info_ewald.use_ewald)
+        {
+            std::map<TA, std::map<TAC, std::array<RI::Tensor<Tdata>, Ndim>>> dVs_sr;
+            if (this->info.hybrid_beta)
+            {
+                dVs_sr = this->sr_cv.cal_dVs(list_As_Vs.first, list_As_Vs.second[0], {{"writable_dVws", true}});
+                dVs_sr = LRI_CV_Tools::mul2(RI::Global_Func::convert<Tdata>(-this->info.hybrid_beta), dVs_sr);
+                this->sr_cv.dVws = LRI_CV_Tools::get_dCVws(dVs_sr);
+            }
+            // const double chi = 1.0 / this->lambda;
+            // dVs = this->evq.cal_dVs(chi, dVs);
+            std::map<TA, std::map<TAC, std::array<RI::Tensor<Tdata>, Ndim>>> dVs_full
+                = LRI_CV_Tools::mul2(RI::Global_Func::convert<Tdata>(this->info.hybrid_alpha), dVs);
+            dVs = this->info.hybrid_beta ? LRI_CV_Tools::minus(dVs_full, dVs_sr) : dVs_full;
+        }
+
+        std::array<std::map<TA, std::map<TAC, RI::Tensor<Tdata>>>, Ndim> dVs_order
+            = LRI_CV_Tools::change_order(std::move(dVs));
+
+        this->exx_lri.set_dVs(std::move(dVs_order), this->info.V_grad_threshold);
+        if (PARAM.inp.cal_stress)
+        {
+            std::array<std::array<std::map<TA, std::map<TAC, RI::Tensor<Tdata>>>, 3>, 3> dVRs
+                = LRI_CV_Tools::cal_dMRs(dVs_order);
+            this->exx_lri.set_dVRs(std::move(dVRs), this->info.V_grad_R_threshold);
+        }
+    }
+
+    const std::array<Tcell, Ndim> period_Cs = LRI_CV_Tools::cal_latvec_range<Tcell>(2, orb_cutoff_);
+    const std::pair<std::vector<TA>, std::vector<std::vector<std::pair<TA, std::array<Tcell, Ndim>>>>> list_As_Cs
+        = RI::Distribute_Equally::distribute_atoms_periods(this->mpi_comm, atoms, period_Cs, 2, false);
+
+    std::pair<std::map<TA, std::map<TAC, RI::Tensor<Tdata>>>,
+              std::map<TA, std::map<TAC, std::array<RI::Tensor<Tdata>, 3>>>>
+        Cs_dCs = this->cv.cal_Cs_dCs(list_As_Cs.first,
+                                     list_As_Cs.second[0],
+                                     {{"cal_dC", PARAM.inp.cal_force || PARAM.inp.cal_stress},
+                                      {"writable_Cws", true},
+                                      {"writable_dCws", true},
+                                      {"writable_Vws", false},
+                                      {"writable_dVws", false}});
+    Cs = std::get<0>(Cs_dCs);
+    this->cv.Cws = LRI_CV_Tools::get_CVws(Cs);
+    if (write_cv && GlobalV::MY_RANK == 0)
+    {
+        LRI_CV_Tools::write_Cs_ao(Cs, PARAM.globalv.global_out_dir + "Cs");
+    }
+    this->exx_lri.set_Cs(Cs, this->info.C_threshold);
+
+    if (PARAM.inp.cal_force || PARAM.inp.cal_stress)
+    {
+        std::map<TA, std::map<TAC, std::array<RI::Tensor<Tdata>, 3>>>& dCs = std::get<1>(Cs_dCs);
+        this->cv.dCws = LRI_CV_Tools::get_dCVws(dCs);
+        std::array<std::map<TA, std::map<TAC, RI::Tensor<Tdata>>>, Ndim> dCs_order
+            = LRI_CV_Tools::change_order(std::move(dCs));
+        this->exx_lri.set_dCs(std::move(dCs_order), this->info.C_grad_threshold);
+        if (PARAM.inp.cal_stress)
+        {
+            std::array<std::array<std::map<TA, std::map<TAC, RI::Tensor<Tdata>>>, 3>, 3> dCRs
+                = LRI_CV_Tools::cal_dMRs(dCs_order);
+            this->exx_lri.set_dCRs(std::move(dCRs), this->info.C_grad_R_threshold);
+        }
+    }
+    ModuleBase::timer::tick("Exx_LRI", "cal_exx_ions_rpa");
 }
 
 template <typename Tdata>
