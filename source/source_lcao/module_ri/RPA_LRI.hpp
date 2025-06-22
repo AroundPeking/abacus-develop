@@ -31,9 +31,18 @@ void RPA_LRI<T, Tdata>::init(const MPI_Comm& mpi_comm_in, const K_Vectors& kv_in
     this->mpi_comm = mpi_comm_in;
     this->orb_cutoff_ = orb_cutoff;
     this->lcaos = exx_lri_rpa->lcaos;
-    this->abfs = exx_lri_rpa->abfs;
-    this->abfs_ccp = exx_lri_rpa->abfs_ccp;
     this->p_kv = &kv_in;
+    if (GlobalC::exx_info.info_ri.shrink_abfs_pca_thr >= 0.0)
+    {
+        this->abfs_s = exx_lri_rpa->abfs;
+        this->abfs_s_ccp = exx_lri_rpa->abfs_ccp;
+    }
+    else
+    {
+        this->abfs = exx_lri_rpa->abfs;
+        this->abfs_ccp = exx_lri_rpa->abfs_ccp;
+    }
+
     //	this->cv = std::move(exx_lri_rpa.cv);
     //    exx_lri_rpa.cv = exx_lri_rpa.cv;
 }
@@ -72,7 +81,7 @@ void RPA_LRI<T, Tdata>::cal_large_Cs(const LCAO_Orbitals& orb, const K_Vectors& 
                                        exx_lri_rpa->abfs_ccp,
                                        this->info.kmesh_times,
                                        this->MGT,
-                                       false,
+                                       true,
                                        true);
 
     std::pair<std::map<TA, std::map<TAC, RI::Tensor<Tdata>>>,
@@ -295,13 +304,13 @@ void RPA_LRI<T, Tdata>::out_for_RPA(const UnitCell& ucell,
 
     if (GlobalC::exx_info.info_ri.shrink_abfs_pca_thr >= 0.0)
     {
-        int Lmax = 0;
-        for (size_t n = 0; n != this->abfs.size(); ++n)
-        {
-            Lmax = std::max(Lmax, static_cast<int>(this->abfs[n].size()) - 1);
-        }
-        this->MGT.init_Gaunt_CH(Lmax);
-        this->MGT.init_Gaunt(Lmax);
+        // int Lmax = 0;
+        // for (size_t n = 0; n != this->abfs.size(); ++n)
+        // {
+        //     Lmax = std::max(Lmax, static_cast<int>(this->abfs[n].size()) - 1);
+        // }
+        // this->MGT.init_Gaunt_CH(Lmax);
+        // this->MGT.init_Gaunt(Lmax);
         cal_large_Cs(orb, kv);
         cal_abfs_overlap(orb, kv);
     }
