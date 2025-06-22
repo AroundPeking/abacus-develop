@@ -36,34 +36,32 @@ class RPA_LRI
     using TatomR = std::array<double, Ndim>; // tmp
 
   public:
-    RPA_LRI(const Exx_Info::Exx_Info_RI& info_in, const Exx_Info::Exx_Info_Ewald& info_ewald_in)
-        : info(info_in), info_ewald(info_ewald_in) {};
+    RPA_LRI(const Exx_Info::Exx_Info_RI& info_in) : info(info_in) {};
     ~RPA_LRI() {};
     void init(const MPI_Comm& mpi_comm_in, const K_Vectors& kv_in, const std::vector<double>& orb_cutoff);
-    void cal_large_Cs(const LCAO_Orbitals& orb, const K_Vectors& kv);
-    void cal_postSCF_exx(const int istep,
-                         const elecstate::DensityMatrix<T, Tdata>& dm,
+    void cal_large_Cs(const UnitCell& ucell, const LCAO_Orbitals& orb, const K_Vectors& kv);
+    void cal_postSCF_exx(const elecstate::DensityMatrix<T, Tdata>& dm,
                          const MPI_Comm& mpi_comm_in,
+                         const UnitCell& ucell,
                          const K_Vectors& kv,
                          const LCAO_Orbitals& orb);
-    void out_for_RPA(const Parallel_Orbitals& parav,
+    void out_for_RPA(const UnitCell& ucell,
+                     const Parallel_Orbitals& parav,
                      const psi::Psi<T>& psi,
                      const elecstate::ElecState* pelec,
                      const K_Vectors& kv,
                      const LCAO_Orbitals& orb);
     void out_eigen_vector(const Parallel_Orbitals& parav, const psi::Psi<T>& psi);
-    void out_struc();
-    void cal_abfs_overlap(const LCAO_Orbitals& orb, const K_Vectors& kv);
-    void out_abfs_overlap(std::map<TA, std::map<TAC, RI::Tensor<Tdata>>>& overlap_abfs_abfs,
+    void out_struc(const UnitCell& ucell, const ModuleBase::Matrix3& latvec, const ModuleBase::Matrix3& G);
+    void cal_abfs_overlap(const UnitCell& ucell, const LCAO_Orbitals& orb, const K_Vectors& kv);
+    void out_abfs_overlap(const UnitCell& ucell,
+                          std::map<TA, std::map<TAC, RI::Tensor<Tdata>>>& overlap_abfs_abfs,
                           std::map<TA, std::map<TAC, RI::Tensor<Tdata>>>& overlap_abfs_abf,
                           std::string filename,
                           const ModuleBase::Element_Basis_Index::IndexLNM& index_abfs_s,
                           const ModuleBase::Element_Basis_Index::IndexLNM& index_abfs);
-    std::array<Tcell, Ndim> get_cell_nearest(const ModuleBase::Vector3<double>& tauA,
-                                             const ModuleBase::Vector3<double>& tauB,
-                                             const std::array<Tcell, Ndim> period,
-                                             const std::array<Tcell, Ndim> R_in);
-    void inverse_olp(std::map<TA, std::map<TAq, RI::Tensor<std::complex<double>>>>& overlap_abfs_abfs,
+    void inverse_olp(const UnitCell& ucell,
+                     std::map<TA, std::map<TAq, RI::Tensor<std::complex<double>>>>& overlap_abfs_abfs,
                      const ModuleBase::Element_Basis_Index::IndexLNM& index_abfs_s);
     void out_ri_tensor(const std::string fn,
                        std::map<TA, std::map<TAq, RI::Tensor<std::complex<double>>>>& olp,
@@ -72,8 +70,11 @@ class RPA_LRI
     void out_pure_ri_tensor(const std::string fn, RI::Tensor<double>& olp, const double threshold);
     void out_bands(const elecstate::ElecState* pelec);
 
-    void out_Cs(std::map<TA, std::map<TAC, RI::Tensor<Tdata>>>& Cs_in, std::string filename = "Cs_data_");
-    void out_coulomb_k(std::map<TA, std::map<TAC, RI::Tensor<Tdata>>>& Vs,
+    void out_Cs(const UnitCell& ucell,
+                std::map<TA, std::map<TAC, RI::Tensor<Tdata>>>& Cs_in,
+                std::string filename = "Cs_data_");
+    void out_coulomb_k(const UnitCell& ucell,
+                       std::map<TA, std::map<TAC, RI::Tensor<Tdata>>>& Vs,
                        std::string filename,
                        Exx_LRI<double>* exx_lri);
     // void print_matrix(char *desc, const ModuleBase::matrix &mat);
@@ -85,7 +86,6 @@ class RPA_LRI
 
   private:
     const Exx_Info::Exx_Info_RI& info;
-    const Exx_Info::Exx_Info_Ewald& info_ewald;
     const K_Vectors* p_kv = nullptr;
     MPI_Comm mpi_comm;
     double exx_ccp_rmesh_times;
@@ -115,7 +115,6 @@ class RPA_LRI
     Exx_LRI<double>* exx_lri_rpa = nullptr;
     Exx_LRI<double>* exx_full_coulomb = nullptr;
 };
-
 #include "RPA_LRI.hpp"
 
 #endif

@@ -28,7 +28,6 @@ namespace LR
             const ModuleBase::matrix& eig_ks,
 #ifdef __EXX
             std::weak_ptr<Exx_LRI<T>> exx_lri_in,
-            const double& exx_alpha,
 #endif 
             TGint* gint_in,
             std::vector<std::shared_ptr<PotHxcLR>>& pot_in,
@@ -62,21 +61,20 @@ namespace LR
                 for (int is : {0, 1})
                 {
                     this->ops[(is << 1) + is]->add(new OperatorLREXX<T>(nspin, naos, nocc[is], nvirt[is], ucell_in, psi_ks_spin[is],
-                        this->DM_trans, exx_lri_in, kv_in, pX_in[is], pc_in, pmat_in,
-                        xc_kernel == "hf" ? 1.0 : exx_alpha));
+                        this->DM_trans, exx_lri_in, kv_in, pX_in[is], pc_in, pmat_in));
                 }
             }
 #endif
 
-            this->cal_dm_trans = [&, this](const int& is, const T* X)->void
+            this->cal_dm_trans = [&, this](const int& is, const T* const X)->void
                 {
                     const auto psi_ks_is = LR_Util::get_psi_spin(psi_ks_in, is, nk);
                     // LR_Util::print_value(X, pX_in[is].get_local_size());
 #ifdef __MPI
-                    std::vector<ct::Tensor>  dm_trans_2d = cal_dm_trans_pblas(X, pX[is], psi_ks_is, pc_in, naos, nocc[is], nvirt[is], pmat_in);
+                    std::vector<ct::Tensor>  dm_trans_2d = cal_dm_trans_pblas(X, pX[is], psi_ks_is, pc_in, naos, nocc[is], nvirt[is], pmat_in, (T)1.0 / (T)nk);
                     if (this->tdm_sym) for (auto& t : dm_trans_2d) LR_Util::matsym(t.data<T>(), naos, pmat_in);
 #else
-                    std::vector<ct::Tensor>  dm_trans_2d = cal_dm_trans_blas(X, psi_ks_is, nocc[is], nvirt[is]);
+                    std::vector<ct::Tensor>  dm_trans_2d = cal_dm_trans_blas(X, psi_ks_is, nocc[is], nvirt[is], (T)1.0 / (T)nk);
                     if (this->tdm_sym) for (auto& t : dm_trans_2d) LR_Util::matsym(t.data<T>(), naos);
 #endif
                     // LR_Util::print_tensor<T>(dm_trans_2d[0], "DMtrans(k=0)", &pmat_in);
@@ -88,7 +86,7 @@ namespace LR
         {
             for (auto& op : ops) { delete op; }
         }
-        void hPsi(const T* psi_in, T* hpsi, const int ld_psi, const int& nband) const
+        void hPsi(const T* const psi_in, T* const hpsi, const int ld_psi, const int& nband) const
         {
             ModuleBase::TITLE("HamiltULR", "hPsi");
             assert(ld_psi == this->ldim);
@@ -224,7 +222,7 @@ namespace LR
         /// Hxc+Exx: size=nbands, store the result of each bands for common use
         std::unique_ptr<elecstate::DensityMatrix<T, T>> DM_trans;
 
-        std::function<void(const int&, const T*)> cal_dm_trans;
+        std::function<void(const int&, const T* const)> cal_dm_trans;
         const bool tdm_sym = false;     ///< whether to symmetrize the transition density matrix
     };
 }

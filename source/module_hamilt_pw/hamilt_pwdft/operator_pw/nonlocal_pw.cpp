@@ -5,9 +5,7 @@
 #include "module_base/timer.h"
 #include "module_base/parallel_reduce.h"
 #include "module_base/tool_quit.h"
-#ifdef USE_PAW
-#include "module_cell/module_paw/paw_cell.h"
-#endif
+
 
 namespace hamilt {
 
@@ -17,6 +15,10 @@ Nonlocal<OperatorPW<T, Device>>::Nonlocal(const int* isk_in,
                                                const UnitCell* ucell_in,
                                                const ModulePW::PW_Basis_K* wfc_basis)
 {
+    if( isk_in == nullptr || ppcell_in == nullptr || ucell_in == nullptr)
+    {
+        ModuleBase::WARNING_QUIT("NonlocalPW", "Constuctor of Operator::NonlocalPW is failed, please check your code!");
+    }
     this->classname = "Nonlocal";
     this->cal_type = calculation_type::pw_nonlocal;
     this->wfcpw = wfc_basis;
@@ -26,16 +28,13 @@ Nonlocal<OperatorPW<T, Device>>::Nonlocal(const int* isk_in,
     this->deeq = this->ppcell->template get_deeq_data<Real>();
     this->deeq_nc = this->ppcell->template get_deeq_nc_data<Real>();
     this->vkb = this->ppcell->template get_vkb_data<Real>();
-    if( this->isk == nullptr || this->ppcell == nullptr || this->ucell == nullptr)
-    {
-        ModuleBase::WARNING_QUIT("NonlocalPW", "Constuctor of Operator::NonlocalPW is failed, please check your code!");
-    }
+
 }
 
 template<typename T, typename Device>
 Nonlocal<OperatorPW<T, Device>>::~Nonlocal() {
-    delmem_complex_op()(this->ctx, this->ps);
-    delmem_complex_op()(this->ctx, this->becp);
+    delmem_complex_op()(this->ps);
+    delmem_complex_op()(this->becp);
 }
 
 template<typename T, typename Device>
@@ -46,7 +45,7 @@ void Nonlocal<OperatorPW<T, Device>>::init(const int ik_in)
     // Calculate nonlocal pseudopotential vkb
 	if(this->ppcell->nkb > 0) //xiaohui add 2013-09-02. Attention...
 	{
-		this->ppcell->getvnl(this->ctx, this->ik, this->vkb);
+		this->ppcell->getvnl(this->ctx, *this->ucell, this->ik, this->vkb);
 	}
 
     if(this->next_op != nullptr)
@@ -71,10 +70,10 @@ void Nonlocal<OperatorPW<T, Device>>::add_nonlocal_pp(T *hpsi_in, const T *becp,
     // T *ps = new T[nkb * m];
     // ModuleBase::GlobalFunc::ZEROS(ps, m * nkb);
     if (this->nkb_m < m * nkb) {
-        resmem_complex_op()(this->ctx, this->ps, nkb * m, "Nonlocal<PW>::ps");
+        resmem_complex_op()(this->ps, nkb * m, "Nonlocal<PW>::ps");
         this->nkb_m = m * nkb;
     }
-    setmem_complex_op()(this->ctx, this->ps, 0, nkb * m);
+    setmem_complex_op()(this->ps, 0, nkb * m);
 
     int sum = 0;
     int iat = 0;
@@ -169,7 +168,6 @@ void Nonlocal<OperatorPW<T, Device>>::add_nonlocal_pp(T *hpsi_in, const T *becp,
         // denghui replace 2022-10-20
         // <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
         gemv_op()(
-            this->ctx,
             transa,
             this->npw,
             this->ppcell->nkb,
@@ -187,8 +185,12 @@ void Nonlocal<OperatorPW<T, Device>>::add_nonlocal_pp(T *hpsi_in, const T *becp,
         int npm = m;
         //<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
         // denghui replace 2022-10-20
-        gemm_op()(
-            this->ctx,
+        #ifdef __DSP
+            ModuleBase::gemm_op_mt<T, Device>()
+        #else
+            gemm_op()
+        #endif
+            (
             transa,
             transb,
             this->npw,
@@ -217,95 +219,79 @@ void Nonlocal<OperatorPW<T, Device>>::act(
     const int ngk_ik,
     const bool is_first_node)const
 {
-    ModuleBase::timer::tick("Operator", "NonlocalPW");
+    ModuleBase::timer::tick("Operator", "nonlocal_pw");
     if(is_first_node)
     {
-        setmem_complex_op()(this->ctx, tmhpsi, 0, nbasis*nbands/npol);
+        setmem_complex_op()(tmhpsi, 0, nbasis*nbands/npol);
     }
-    if(!PARAM.inp.use_paw)
-    {
-        this->npw = ngk_ik;
-        this->max_npw = nbasis / npol;
-        this->npol = npol;
 
-        if (this->ppcell->nkb > 0)
+    this->npw = ngk_ik;
+    this->max_npw = nbasis / npol;
+    this->npol = npol;
+
+    if (this->ppcell->nkb > 0)
+    {
+        //<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
+        // qianrui optimize 2021-3-31
+        int nkb = this->ppcell->nkb;
+        if (this->nkb_m < nbands * nkb) 
         {
+            resmem_complex_op()(this->becp, nbands * nkb, "Nonlocal<PW>::becp");
+        }
+        // ModuleBase::ComplexMatrix becp(nbands, nkb, false);
+        char transa = 'C';
+        char transb = 'N';
+        if (nbands == 1)
+        {
+            int inc = 1;
+            // denghui replace 2022-10-20
+            // <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
+            gemv_op()(
+                transa,
+                this->npw,
+                nkb,
+                &this->one,
+                this->vkb,
+                this->ppcell->vkb.nc,
+                tmpsi_in,
+                inc,
+                &this->zero,
+                this->becp,
+                inc);
+        }
+        else
+        {
+            int npm = nbands;
             //<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
-            // qianrui optimize 2021-3-31
-            int nkb = this->ppcell->nkb;
-            if (this->nkb_m < nbands * nkb) {
-                resmem_complex_op()(this->ctx, this->becp, nbands * nkb, "Nonlocal<PW>::becp");
-            }
-            // ModuleBase::ComplexMatrix becp(nbands, nkb, false);
-            char transa = 'C';
-            char transb = 'N';
-            if (nbands == 1)
-            {
-                int inc = 1;
-                // denghui replace 2022-10-20
-                // <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
-                gemv_op()(
-                    this->ctx,
-                    transa,
-                    this->npw,
-                    nkb,
-                    &this->one,
-                    this->vkb,
-                    this->ppcell->vkb.nc,
-                    tmpsi_in,
-                    inc,
-                    &this->zero,
-                    this->becp,
-                    inc);
-            }
-            else
-            {
-                int npm = nbands;
-                //<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
-                // denghui replace 2022-10-20
-                gemm_op()(
-                    this->ctx,
-                    transa,
-                    transb,
-                    nkb,
-                    npm,
-                    this->npw,
-                    &this->one,
-                    this->vkb,
-                    this->ppcell->vkb.nc,
-                    tmpsi_in,
-                    max_npw,
-                    &this->zero,
-                    this->becp,
-                    nkb
-                );
-            }
-
-            Parallel_Reduce::reduce_pool(becp, nkb * nbands);
-
-            this->add_nonlocal_pp(tmhpsi, becp, nbands);
+            // denghui replace 2022-10-20
+            #ifdef __DSP
+            ModuleBase::gemm_op_mt<T, Device>()
+            #else
+            gemm_op()
+            #endif
+            (
+                transa,
+                transb,
+                nkb,
+                npm,
+                this->npw,
+                &this->one,
+                this->vkb,
+                this->ppcell->vkb.nc,
+                tmpsi_in,
+                max_npw,
+                &this->zero,
+                this->becp,
+                nkb
+            );
         }
+
+        Parallel_Reduce::reduce_pool(becp, nkb * nbands);
+
+        this->add_nonlocal_pp(tmhpsi, becp, nbands);
     }
-    else
-    {
-#ifdef USE_PAW
-        this->npw = ngk_ik;
-        this->max_npw = nbasis / npol;
-        this->npol = npol;
-        std::complex<double> *vnlpsi;
-        vnlpsi = new std::complex<double> [npw];
-        for(int ibands = 0; ibands < nbands; ibands++)
-        {
-            GlobalC::paw_cell.paw_nl_psi(0,reinterpret_cast<const std::complex<double>*> (&tmpsi_in[ibands*max_npw]),vnlpsi);
-            for(int i = 0; i < npw; i++)
-            {
-                tmhpsi[ibands*max_npw+i] += vnlpsi[i];
-            }
-        }
-        delete[] vnlpsi;
-#endif
-    }
-    ModuleBase::timer::tick("Operator", "NonlocalPW");
+
+    ModuleBase::timer::tick("Operator", "nonlocal_pw");
 }
 
 template<typename T, typename Device>

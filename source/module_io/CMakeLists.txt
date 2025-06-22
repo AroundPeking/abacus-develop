@@ -3,9 +3,11 @@ list(APPEND objects
     bessel_basis.cpp
     cal_test.cpp
     cal_dos.cpp
+    cal_ldos.cpp
     cif_io.cpp
     write_dos_pw.cpp
     nscf_band.cpp
+    nscf_fermi_surf.cpp
     write_istate_info.cpp
     numerical_basis.cpp
     numerical_basis_jyjy.cpp
@@ -16,10 +18,11 @@ list(APPEND objects
     rhog_io.cpp
     read_exit_file.cpp
     read_wfc_pw.cpp
-    read_wfc_to_rho.cpp
+    read_wf2rho_pw.cpp
     restart.cpp
     binstream.cpp
     write_wfc_pw.cpp
+    write_pao.cpp
     write_cube.cpp
     write_elecstat_pot.cpp
     write_elf.cpp
@@ -30,6 +33,7 @@ list(APPEND objects
     para_json.cpp
     parse_args.cpp
     orb_io.cpp
+    filename.cpp
 )
 
 list(APPEND objects_advanced
@@ -46,9 +50,10 @@ list(APPEND objects_advanced
 if(ENABLE_LCAO)
   list(APPEND objects
       write_dos_lcao.cpp
+      cal_pdos_gamma.cpp
+      cal_pdos_multik.cpp
       write_orb_info.cpp
       write_proj_band_lcao.cpp
-      nscf_fermi_surf.cpp
       get_pchg_lcao.cpp
       get_wf_lcao.cpp
       read_wfc_nao.cpp
@@ -56,7 +61,6 @@ if(ENABLE_LCAO)
       write_wfc_nao.cpp
       io_dmk.cpp
       write_dmr.cpp
-      dos_nao.cpp
       sparse_matrix.cpp
       file_reader.cpp
       csr_reader.cpp
@@ -66,6 +70,8 @@ if(ENABLE_LCAO)
       output_sk.cpp
       output_dmk.cpp
       output_mulliken.cpp
+      io_npz.cpp
+      cal_pLpR.cpp
   )
   list(APPEND objects_advanced
       unk_overlap_lcao.cpp
@@ -74,6 +80,7 @@ if(ENABLE_LCAO)
       single_R_io.cpp
       cal_r_overlap_R.cpp
       output_mat_sparse.cpp
+      ctrl_output_lcao.cpp
   )
 endif()
 

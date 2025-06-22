@@ -11,6 +11,7 @@
 #include "module_base/vector3.h"
 #include "module_basis/module_ao/ORB_gaunt_table.h"
 #include "module_basis/module_ao/ORB_read.h"
+#include "module_cell/unitcell.h"
 #include "module_hamilt_lcao/hamilt_lcaodft/center2_orb-orb11.h"
 
 #include <RI/global/Tensor.h>
@@ -25,6 +26,7 @@ class Matrix_Orbs11
     //    1: <lcaos|lcaos>
     //    2: <jYs|jYs>  <abfs|abfs>
     void init(const int mode,
+              const UnitCell& ucell,
               const LCAO_Orbitals& orb,
               const double kmesh_times, // extend Kcut, keep dK
               const double rmax,
@@ -64,8 +66,14 @@ class Matrix_Orbs11
 
     template <typename Tdata>
     std::map<size_t, std::map<size_t, std::map<size_t, std::map<size_t, RI::Tensor<Tdata>>>>> cal_overlap_matrix_all(
+        const UnitCell& ucell,
         const ModuleBase::Element_Basis_Index::IndexLNM& index_r,
         const ModuleBase::Element_Basis_Index::IndexLNM& index_c) const;
+
+  private:
+    ModuleBase::Sph_Bessel_Recursive::D2* psb_ = nullptr;
+    const double lcao_dr_ = 0.01;
+    double* lat0 = nullptr;                                       // restore ucell.lat0
     std::map<size_t,                                              // TA
              std::map<size_t,                                     // TB
                       std::map<int,                               // LA

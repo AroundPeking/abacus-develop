@@ -1,5 +1,5 @@
-#ifndef ISTATE_ENVELOPE_H
-#define ISTATE_ENVELOPE_H
+#ifndef GET_WF_LCAO_H
+#define GET_WF_LCAO_H
 #include "module_basis/module_ao/parallel_orbitals.h"
 #include "module_basis/module_pw/pw_basis_k.h"
 #include "module_cell/klist.h"
@@ -10,21 +10,22 @@
 #include "module_psi/psi.h"
 
 #include <stdexcept>
-class IState_Envelope
+class Get_wf_lcao
 {
   public:
-    IState_Envelope(const elecstate::ElecState* pes);
-    ~IState_Envelope();
+    Get_wf_lcao(const elecstate::ElecState* pes);
+    ~Get_wf_lcao();
 
     /// For gamma_only
-    void begin(const psi::Psi<double>* psid,
+    void begin(const UnitCell& ucell,
+               const psi::Psi<double>* psid,
                const ModulePW::PW_Basis* pw_rhod,
                const ModulePW::PW_Basis_K* pw_wfc,
                const ModulePW::PW_Basis_Big* pw_big,
+               const Parallel_Grid& pgrid,
                const Parallel_Orbitals& para_orb,
                Gint_Gamma& gg,
                const int& out_wfc_pw,
-               const int& out_wfc_r,
                const K_Vectors& kv,
                const double nelec,
                const int nbands_istate,
@@ -36,14 +37,15 @@ class IState_Envelope
                const std::string& global_out_dir);
 
     /// tmp, delete after Gint is refactored.
-    void begin(const psi::Psi<double>* psid,
+    void begin(const UnitCell& ucell,
+               const psi::Psi<double>* psid,
                const ModulePW::PW_Basis* pw_rhod,
                const ModulePW::PW_Basis_K* pw_wfc,
                const ModulePW::PW_Basis_Big* pw_big,
+               const Parallel_Grid& pgrid,
                const Parallel_Orbitals& para_orb,
                Gint_k& gg,
                const int& out_wfc_pw,
-               const int& out_wfc_r,
                const K_Vectors& kv,
                const double nelec,
                const int nbands_istate,
@@ -58,14 +60,15 @@ class IState_Envelope
     };
 
     /// For multi-k
-    void begin(const psi::Psi<std::complex<double>>* psi,
+    void begin(const UnitCell& ucell,
+               const psi::Psi<std::complex<double>>* psi,
                const ModulePW::PW_Basis* pw_rhod,
                const ModulePW::PW_Basis_K* pw_wfc,
                const ModulePW::PW_Basis_Big* pw_big,
+               const Parallel_Grid& pgrid,
                const Parallel_Orbitals& para_orb,
                Gint_k& gk,
                const int& out_wfc_pw,
-               const int& out_wfc_r,
                const K_Vectors& kv,
                const double nelec,
                const int nbands_istate,
@@ -77,14 +80,15 @@ class IState_Envelope
                const std::string& global_out_dir);
 
     /// tmp, delete after Gint is refactored.
-    void begin(const psi::Psi<std::complex<double>>* psi,
+    void begin(const UnitCell& ucell,
+               const psi::Psi<std::complex<double>>* psi,
                const ModulePW::PW_Basis* pw_rhod,
                const ModulePW::PW_Basis_K* pw_wfc,
                const ModulePW::PW_Basis_Big* pw_big,
+               const Parallel_Grid& pgrid,
                const Parallel_Orbitals& para_orb,
                Gint_Gamma& gk,
                const int& out_wfc_pw,
-               const int& out_wfc_r,
                const K_Vectors& kv,
                const double nelec,
                const int nbands_istate,
@@ -99,6 +103,9 @@ class IState_Envelope
     };
 
   private:
+
+    void prepare_get_wf(std::ofstream &ofs_running, const int nelec, int& fermi_band);
+
     void select_bands(const int nbands_istate,
                       const std::vector<int>& out_wfc_kb,
                       const int nbands,

@@ -3,21 +3,15 @@ remove_definitions(-D__ROCM)
 
 if(USE_CUDA OR USE_ROCM)
     AddTest(
-        TARGET Hsolver_Kernels_UTs
+        TARGET MODULE_HSOLVER_KERNELS_Unittests
         LIBS parameter ${math_libs} base device
-        SOURCES math_kernel_test.cpp math_dngvd_test.cpp
-    )
-elseif()
-    AddTest(
-        TARGET Hsolver_Kernels_UTs
-        LIBS parameter ${math_libs} base device
-        SOURCES math_kernel_test.cpp ../../../module_base/blas_connector.cpp
+        SOURCES math_dngvd_test.cpp
     )
 endif()
 
 if(ENABLE_GOOGLEBENCH)
     AddTest(
-        TARGET Perf_Hsolver_Kernels
+        TARGET PERF_MODULE_HSOLVER_KERNELS
         LIBS parameter ${math_libs} base device
         SOURCES perf_math_kernel.cpp
     )

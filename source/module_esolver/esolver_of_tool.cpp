@@ -1,10 +1,11 @@
 #include "esolver_of.h"
 #include "module_base/formatter.h"
 #include "module_base/memory.h"
-#include "module_elecstate/potentials/efield.h"
-#include "module_elecstate/potentials/gatefield.h"
+#include "module_elecstate/module_pot/efield.h"
+#include "module_elecstate/module_pot/gatefield.h"
 #include "module_hamilt_pw/hamilt_pwdft/global.h"
 #include "module_parameter/parameter.h"
+#include "module_elecstate/cal_ux.h"
 
 namespace ModuleESolver
 {
@@ -19,7 +20,7 @@ void ESolver_OF::init_elecstate(UnitCell& ucell)
     if (this->pelec == nullptr)
     {
         this->pelec = new elecstate::ElecState((Charge*)(&chr), this->pw_rho, pw_big);
-        this->pelec->charge->allocate(PARAM.inp.nspin);
+        this->chr.allocate(PARAM.inp.nspin);
     }
     this->pelec->omega = ucell.omega;
 
@@ -27,8 +28,9 @@ void ESolver_OF::init_elecstate(UnitCell& ucell)
     this->pelec->pot = new elecstate::Potential(this->pw_rhod,
                                                 this->pw_rho,
                                                 &ucell,
-                                                &(GlobalC::ppcell.vloc),
+                                                &(this->locpp.vloc),
                                                 &(this->sf),
+                                                &(this->solvent),
                                                 &(this->pelec->f_en.etxc),
                                                 &(this->pelec->f_en.vtxc));
     // There is no Operator in ESolver_OF, register Potentials here!
@@ -69,7 +71,11 @@ void ESolver_OF::init_elecstate(UnitCell& ucell)
 void ESolver_OF::allocate_array()
 {
     // Initialize the "wavefunction", which is sqrt(rho)
-    this->psi_ = new psi::Psi<double>(1, PARAM.inp.nspin, this->pw_rho->nrxx);
+    this->psi_ = new psi::Psi<double>(1, 
+                                      PARAM.inp.nspin, 
+                                      this->pw_rho->nrxx,
+                                      this->pw_rho->nrxx,
+                                      true);
     ModuleBase::Memory::record("OFDFT::Psi", sizeof(double) * PARAM.inp.nspin * this->pw_rho->nrxx);
     this->pphi_ = new double*[PARAM.inp.nspin];
     for (int is = 0; is < PARAM.inp.nspin; ++is)
@@ -110,7 +116,7 @@ void ESolver_OF::allocate_array()
  * @param [in] ptemp_phi phi
  * @param [out] rdLdphi dL/dphi
  */
-void ESolver_OF::cal_potential(double* ptemp_phi, double* rdLdphi)
+void ESolver_OF::cal_potential(double* ptemp_phi, double* rdLdphi, UnitCell& ucell)
 {
     double** dEdtemp_phi = new double*[PARAM.inp.nspin];
     double** temp_phi = new double*[PARAM.inp.nspin];
@@ -132,11 +138,8 @@ void ESolver_OF::cal_potential(double* ptemp_phi, double* rdLdphi)
         }
     }
 
-    if (PARAM.inp.nspin == 4) 
-    {
-        GlobalC::ucell.cal_ux();
-    }
-    this->pelec->pot->update_from_charge(this->ptemp_rho_, &GlobalC::ucell);
+    elecstate::cal_ux(ucell);
+    this->pelec->pot->update_from_charge(this->ptemp_rho_, &ucell);
     ModuleBase::matrix& vr_eff = this->pelec->pot->get_effective_v();
 
     this->kinetic_potential(this->ptemp_rho_->rho, temp_phi, vr_eff);
@@ -172,9 +175,7 @@ void ESolver_OF::cal_dEdtheta(double** ptemp_phi, Charge* temp_rho, UnitCell& uc
 {
     double* dphi_dtheta = new double[this->pw_rho->nrxx];
 
-    if (PARAM.inp.nspin == 4) {
-        ucell.cal_ux();
-}
+    elecstate::cal_ux(ucell);
     this->pelec->pot->update_from_charge(temp_rho, &ucell);
     ModuleBase::matrix& vr_eff = this->pelec->pot->get_effective_v();
 
@@ -385,42 +386,36 @@ void ESolver_OF::test_direction(double* dEdtheta, double** ptemp_phi, UnitCell& 
  * @brief Print nessecary information to the screen,
  * and write the components of the total energy into running_log.
  */
-void ESolver_OF::print_info()
+void ESolver_OF::print_info(const bool conv_esolver)
 {
     if (this->iter_ == 0)
     {
-        std::cout << "============================== Running OFDFT "
+        std::cout << " ============================= Running OFDFT "
                      "=============================="
                   << std::endl;
-        std::cout << "Iter        Etot(Ha)          Mu(Ha)      Theta      "
-                     "PotNorm     deltaE(Ha)"
+        std::cout << " ITER       ETOT/eV           EDIFF/eV        EFERMI/eV    POTNORM   TIME/s"
                   << std::endl;
-        // cout << "======================================== Running OFDFT
-        // ========================================" << endl; cout << "Iter
-        // Etot(Ha)          Theta       PotNorm        min/max(den)
-        // min/max(dE/dPhi)" << endl;
     }
-    // ============ used to compare with PROFESS3.0 ================
-    // double minDen = pelec->charge->rho[0][0];
-    // double maxDen = pelec->charge->rho[0][0];
-    // double minPot = this->pdEdphi_[0][0];
-    // double maxPot = this->pdEdphi_[0][0];
-    // for (int i = 0; i < this->pw_rho->nrxx; ++i)
-    // {
-    //     if (pelec->charge->rho[0][i] < minDen) minDen =
-    //     pelec->charge->rho[0][i]; if (pelec->charge->rho[0][i] > maxDen)
-    //     maxDen = pelec->charge->rho[0][i]; if (this->pdEdphi_[0][i] < minPot)
-    //     minPot = this->pdEdphi_[0][i]; if (this->pdEdphi_[0][i] > maxPot)
-    //     maxPot = this->pdEdphi_[0][i];
-    // }
-    std::cout << std::setw(6) << this->iter_ << std::setw(22) << std::scientific << std::setprecision(12)
-              << this->energy_current_ / 2. << std::setw(12) << std::setprecision(3) << this->pelec->eferm.get_efval(0) / 2.
-              << std::setw(12) << this->theta_[0] << std::setw(12) << this->normdLdphi_ << std::setw(12)
-              << (this->energy_current_ - this->energy_last_) / 2. << std::endl;
-    // ============ used to compare with PROFESS3.0 ================
-    // << setw(10) << minDen << "/ " << setw(12) << maxDen
-    // << setw(10) << minPot << "/ " << setw(10) << maxPot << endl;
-    // =============================================================
+
+    std::map<std::string, std::string> prefix_map = {
+        {"cg1", "CG"},
+        {"cg2", "CG"},
+        {"tn", "TN"}
+    };
+    std::string iteration = prefix_map[PARAM.inp.of_method] + std::to_string(this->iter_);
+#ifdef __MPI
+    double duration = (double)(MPI_Wtime() - this->iter_time);
+#else
+    double duration
+        = (std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::system_clock::now() - this->iter_time)).count()
+          / static_cast<double>(1e6);
+#endif
+    std::cout << " " << std::setw(8) << iteration
+              << std::setw(18) << std::scientific << std::setprecision(8) << this->energy_current_ * ModuleBase::Ry_to_eV
+              << std::setw(18) << (this->energy_current_ - this->energy_last_) * ModuleBase::Ry_to_eV
+              << std::setw(13) << std::setprecision(4) << this->pelec->eferm.get_efval(0) * ModuleBase::Ry_to_eV
+              << std::setw(13) << std::setprecision(4) << this->normdLdphi_
+              << std::setw(6) << std::fixed << std::setprecision(2) << duration << std::endl;
 
     GlobalV::ofs_running << std::setprecision(12);
     GlobalV::ofs_running << std::setiosflags(std::ios::right);
@@ -430,8 +425,11 @@ void ESolver_OF::print_info()
     std::vector<std::string> titles;
     std::vector<double> energies_Ry;
     std::vector<double> energies_eV;
-    if (PARAM.inp.printe > 0
-        && ((this->iter_ + 1) % PARAM.inp.printe == 0 || this->conv_esolver || this->iter_ == PARAM.inp.scf_nmax))
+	if ((PARAM.inp.printe > 0 && 
+				((this->iter_ + 1) % PARAM.inp.printe == 0 || 
+				 conv_esolver || 
+				 this->iter_ == PARAM.inp.scf_nmax)) || 
+			PARAM.inp.init_chg == "file")
     {
         titles.push_back("E_Total");
         energies_Ry.push_back(this->pelec->f_en.etot);
@@ -441,8 +439,8 @@ void ESolver_OF::print_info()
         energies_Ry.push_back(this->pelec->f_en.hartree_energy);
         titles.push_back("E_xc");
         energies_Ry.push_back(this->pelec->f_en.etxc - this->pelec->f_en.etxcc);
-        titles.push_back("E_IonElec");
-        energies_Ry.push_back(this->pelec->f_en.eion_elec);
+        titles.push_back("E_LocalPP");
+        energies_Ry.push_back(this->pelec->f_en.e_local_pp);
         titles.push_back("E_Ewald");
         energies_Ry.push_back(this->pelec->f_en.ewald_energy);
         if (this->of_kinetic_ == "tf" || this->of_kinetic_ == "tf+" || this->of_kinetic_ == "wt")
@@ -451,7 +449,7 @@ void ESolver_OF::print_info()
             energies_Ry.push_back(this->tf_->tf_energy);
         }
         if (this->of_kinetic_ == "vw" || this->of_kinetic_ == "tf+" || this->of_kinetic_ == "wt"
-            || this->of_kinetic_ == "lkt")
+            || this->of_kinetic_ == "lkt" || this->of_kinetic_ == "ml")
         {
             titles.push_back("vW KEDF");
             energies_Ry.push_back(this->vw_->vw_energy);
@@ -466,6 +464,13 @@ void ESolver_OF::print_info()
             titles.push_back("LKT KEDF");
             energies_Ry.push_back(this->lkt_->lkt_energy);
         }
+#ifdef __MLKEDF
+        if (this->of_kinetic_ == "ml")
+        {
+            titles.push_back("MPN KEDF");
+            energies_Ry.push_back(this->ml_->ml_energy);
+        }
+#endif
         std::string vdw_method = PARAM.inp.vdw_method;
         if (vdw_method == "d2") // Peize Lin add 2014-04, update 2021-03-09
         {
@@ -517,8 +522,17 @@ void ESolver_OF::print_info()
     std::transform(energies_Ry.begin(), energies_Ry.end(), energies_eV.begin(), [](double energy) {
         return energy * ModuleBase::Ry_to_eV;
     });
-    FmtTable table({"Energy", "Rydberg", "eV"}, titles.size(), {"%20s", "%20.12f", "%20.12f"});
+    FmtTable table(/*titles=*/{"Energy", "Rydberg", "eV"}, 
+                   /*nrows=*/titles.size(), 
+                   /*formats=*/{"%20s", "%20.12f", "%20.12f"}, 0);
     table << titles << energies_Ry << energies_eV;
     GlobalV::ofs_running << table.str() << std::endl;
+
+    // reset the iter_time for the next iteration
+#ifdef __MPI
+    this->iter_time = MPI_Wtime();
+#else
+    this->iter_time = std::chrono::system_clock::now();
+#endif
 }
 } // namespace ModuleESolver

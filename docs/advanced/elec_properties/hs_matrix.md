@@ -12,7 +12,7 @@ and
 
 ## out_mat_hs
 
-Users may set the keyword [out_mat_hs](../input_files/input-main.md#out_mat_hs) to true for outputting the upper triangular part of the Hamiltonian matrices and overlap matrices for each k point into files in the directory `OUT.${suffix}`. It is available for both gamma_only and multi-k calculations. 
+Users can set the keyword [out_mat_hs](../input_files/input-main.md#out_mat_hs) to true for outputting the upper triangular part of the Hamiltonian matrices and overlap matrices for each k point into files in the directory `OUT.${suffix}`. It is available for both gamma_only and multi-k calculations. 
 
 The files are named `data-$k-H` and `data-$k-S`, where `$k` is a composite index consisting of the k point index as well as the spin index. The corresponding sequence of the orbitals can be seen in [Basis Set](../pp_orb.md#basis-set).
 
@@ -35,7 +35,7 @@ The rest of the file contains the upper triangular part of the specified matrice
 
 The output of R-space matrices is controlled by the keyword [out_mat_hs2](../input_files/input-main.md#out_mat_hs2). This functionality is not available for gamma_only calculations. To generate such matrices for gamma only calculations, users should turn off [gamma_only](../input_files/input-main.md#gamma_only), and explicitly specify that gamma point is the only k point in the KPT file.
 
-For single-point SCF calculations, if nspin = 1 or nspin = 4, two files `data-HR-sparse_SPIN0.csr` and `data-SR-sparse_SPIN0.csr` are generated, which contain the Hamiltonian matrix $H(R)$ and overlap matrix $S(R)$ respectively. For nspin = 2, three files `data-HR-sparse_SPIN0.csr` and `data-HR-sparse_SPIN1.csr` and `data-SR-sparse_SPIN0.csr` are created, where the first two contain $H(R)$ for spin up and spin down, respectively.
+For single-point SCF calculations, if nspin = 1 or nspin = 4, two files `hrs1_nao.csr` and `sr_nao.csr` are generated, which contain the Hamiltonian matrix $H(R)$ and overlap matrix $S(R)$ respectively. For nspin = 2, three files `hrs1_nao.csr` and `hrs2_nao.csr` and `sr_nao.csr` are created, where the first two files correspodn to $H(R)$ for spin up and spin down, respectively.
 
 As for molecular dynamics calculations, the format is controlled by [out_interval](../input_files/input-main.md#out_interval) and [out_app_flag](../input_files/input-main.md#out_app_flag) in the same manner as the position matrix as detailed in [out_mat_r](../input_files/input-main.md#out_mat_r).
 
@@ -60,6 +60,11 @@ The CSR format stores a sparse m × n matrix M in row form using three (one-dime
 We also offer the option of only calculating the overlap matrix without running SCF. For that purpose, in `INPUT` file we need to set the value keyword [calculation](../input_files/input-main.md#calculation) to be `get_S`.
 
 A file named `SR.csr` will be generated in the working directory, which contains the overlap matrix.
+
+> When `nspin` is set to 1 or 2, the dimension of the overlap matrix is nlocal $\times$ nlocal, where nlocal is the total number of numerical atomic orbitals. 
+These numerical atomic orbitals are ordered from outer to inner loop as atom, angular quantum number $l$, zeta (multiple radial orbitals corresponding to each $l$), and magnetic quantum number $m$. 
+When `nspin` is set to 4, the dimension of the overlap matrix is (2 $\times$ nlocal) $\times$ (2 $\times$ nlocal). In this case, the numerical atomic orbitals are ordered from outer to inner loop as atom, angular quantum number $l$, zeta (multiple radial orbitals corresponding to each $l$), magnetic quantum number $m$, and npol (index of spin, ranges from 0 to 1).
+
 
 ## examples
 We provide [examples](https://github.com/deepmodeling/abacus-develop/tree/develop/examples/matrix_hs) of outputting the matrices. There are four examples:

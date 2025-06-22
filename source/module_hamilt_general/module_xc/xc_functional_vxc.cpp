@@ -25,7 +25,7 @@ std::tuple<double,double,ModuleBase::matrix> XC_Functional::v_xc(
     if(use_libxc)
     {
 #ifdef USE_LIBXC
-        return XC_Functional_Libxc::v_xc_libxc(XC_Functional::get_func_id(), nrxx, ucell->omega, ucell->tpiba, chr);
+        return XC_Functional_Libxc::v_xc_libxc(XC_Functional::get_func_id(), nrxx, ucell->omega, ucell->tpiba, chr, &(scaling_factor_xc));
 #else
         ModuleBase::WARNING_QUIT("v_xc","compile with LIBXC");
 #endif
@@ -52,8 +52,7 @@ std::tuple<double,double,ModuleBase::matrix> XC_Functional::v_xc(
         {
             // total electron charge density
             double rhox = chr->rho[0][ir] + chr->rho_core[ir];
-            if(PARAM.inp.use_paw && rhox < 1e-14) { rhox = 1e-14;
-}
+            
             double arhox = std::abs(rhox);
             if (arhox > vanishing_charge)
             {

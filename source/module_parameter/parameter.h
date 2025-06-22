@@ -4,9 +4,11 @@
 #include "system_parameter.h"
 namespace ModuleIO
 {
-class ReadInput;
+	class ReadInput;
 }
+
 class CalAtomInfo;
+
 class Parameter
 {
   public:
@@ -32,7 +34,6 @@ class Parameter
     void set_pal_param(const int& myrank, const int& nproc, const int& nthread_per_proc);
     // Set the start time
     void set_start_time(const std::time_t& start_time);
-
   private:
     // Only ReadInput and CalAtomInfo can modify the value of Parameter.
     // Do not add extra friend class here!!!
@@ -51,9 +52,9 @@ extern Parameter PARAM;
 // temperarily put here
 namespace GlobalV
 {
-extern int NPROC;
-extern int MY_RANK;
-extern std::ofstream ofs_running;
-extern std::ofstream ofs_warning;
+	extern int NPROC;
+	extern int MY_RANK;
+	extern std::ofstream ofs_running;
+	extern std::ofstream ofs_warning;
 } // namespace GlobalV
 #endif

@@ -3,14 +3,6 @@
 #include "module_base/parallel_common.h"
 #include "module_base/parallel_global.h"
 
-Parallel_Kpoints::Parallel_Kpoints()
-{
-}
-
-Parallel_Kpoints::~Parallel_Kpoints()
-{
-}
-
 // the kpoints here are reduced after symmetry applied.
 void Parallel_Kpoints::kinfo(int& nkstot_in,
                              const int& kpar_in,
@@ -56,17 +48,12 @@ void Parallel_Kpoints::get_whichpool(const int& nkstot)
 {
     this->whichpool.resize(nkstot, 0);
 
-    // std::cout << " calculate : whichpool" << std::endl;
-    // std::cout << " nkstot is " << nkstot << std::endl;
-
-
     for (int i = 0; i < this->kpar; i++)
     {
         for (int ik = 0; ik < this->nks_pool[i]; ik++)
         {
             const int k_now = ik + startk_pool[i];
             this->whichpool[k_now] = i;
-            // ofs_running << "\n whichpool[" << k_now <<"] = " << whichpool[k_now];
         }
     }
 
@@ -80,19 +67,13 @@ void Parallel_Kpoints::get_nks_pool(const int& nkstot)
     const int nks_ave = nkstot / this->kpar;
     const int remain = nkstot % this->kpar;
 
-    // ofs_running << "\n nkstot = " << nkstot;
-    // ofs_running << "\n this->kpar = " << this->kpar;
-    // ofs_running << "\n nks_ave = " << nks_ave;
-
     for (int i = 0; i < this->kpar; i++)
-
     {
         this->nks_pool[i] = nks_ave;
         if (i < remain)
         {
             nks_pool[i]++;
         }
-        // ofs_running << "\n nks_pool[i] = " << nks_pool[i];
     }
     return;
 }
@@ -101,14 +82,10 @@ void Parallel_Kpoints::get_startk_pool(const int& nkstot)
 {
     startk_pool.resize(this->kpar, 0);
 
-    // const int remain = nkstot%this->kpar;
-
     startk_pool[0] = 0;
     for (int i = 1; i < this->kpar; i++)
-
     {
         startk_pool[i] = startk_pool[i - 1] + nks_pool[i - 1];
-        // ofs_running << "\n startk_pool[i] = " << startk_pool[i];
     }
     return;
 }
@@ -128,7 +105,6 @@ void Parallel_Kpoints::set_startpro_pool()
         {
             startpro_pool[i]++;
         }
-        // ofs_running << "\n startpro_pool[i] = " << startpro_pool[i];
     }
     return;
 }
@@ -146,8 +122,6 @@ void Parallel_Kpoints::gatherkvec(const std::vector<ModuleBase::Vector3<double>>
         {
             vec_global[i + startk_pool[this->my_pool]] = vec_local[i];
         }
-        // vec_global[i + startk_pool[MY_POOL]] = vec_local[i] / double(NPROC_IN_POOL);
-
     }
 
     MPI_Allreduce(MPI_IN_PLACE, &vec_global[0], 3 * this->nkstot_np, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
@@ -160,7 +134,6 @@ void Parallel_Kpoints::pool_collection(double& value, const double* wk, const in
 #ifdef __MPI
 
     const int ik_now = ik - this->startk_pool[this->my_pool];
-    // ofs_running << "\n\n ik=" << ik << " ik_now=" << ik_now;
 
     const int pool = this->whichpool[ik];
 
@@ -175,8 +148,6 @@ void Parallel_Kpoints::pool_collection(double& value, const double* wk, const in
             }
             else
             {
-
-                // ofs_running << " receive data.";
                 MPI_Status ierror;
                 MPI_Recv(&value, 1, MPI_DOUBLE, this->startpro_pool[pool], ik, MPI_COMM_WORLD, &ierror);
 
@@ -186,18 +157,12 @@ void Parallel_Kpoints::pool_collection(double& value, const double* wk, const in
         {
             if (this->my_pool == pool)
             {
-
-                // ofs_running << " send data.";
-
                 MPI_Send(&wk[ik_now], 1, MPI_DOUBLE, 0, ik, MPI_COMM_WORLD);
             }
         }
     }
     else
     {
-
-        // ofs_running << "\n do nothing.";
-
     }
 
     MPI_Barrier(MPI_COMM_WORLD);
@@ -227,7 +192,7 @@ void Parallel_Kpoints::pool_collection(double* value_re,
     return;
 }
 
-void Parallel_Kpoints::pool_collection(std::complex<double>* value, const ModuleBase::ComplexArray& w, const int& ik)
+void Parallel_Kpoints::pool_collection(std::complex<double>* value, const ModuleBase::ComplexArray& w, const int& ik) const
 {
     const int dim2 = w.getBound2();
     const int dim3 = w.getBound3();
@@ -237,7 +202,7 @@ void Parallel_Kpoints::pool_collection(std::complex<double>* value, const Module
 }
 
 template <class T, class V>
-void Parallel_Kpoints::pool_collection_aux(T* value, const V& w, const int& dim, const int& ik)
+void Parallel_Kpoints::pool_collection_aux(T* value, const V& w, const int& dim, const int& ik) const
 {
 #ifdef __MPI
     const int ik_now = ik - this->startk_pool[this->my_pool];
@@ -246,13 +211,10 @@ void Parallel_Kpoints::pool_collection_aux(T* value, const V& w, const int& dim,
     T* p = &w.ptr[begin];
     // temprary restrict kpar=1 for NSPIN=2 case for generating_orbitals
     int pool = 0;
-    if (this->nspin != 2) {
-        pool = this->whichpool[ik];
-}
-
-
-    // ofs_running << "\n ik=" << ik;
-
+	if (this->nspin != 2) 
+	{
+		pool = this->whichpool[ik];
+	}
 
     if (this->rank_in_pool == 0)
     {
@@ -269,7 +231,6 @@ void Parallel_Kpoints::pool_collection_aux(T* value, const V& w, const int& dim,
             }
             else
             {
-                // ofs_running << " receive data.";
                 MPI_Status ierror;
                 MPI_Recv(value, dim, MPI_DOUBLE, this->startpro_pool[pool], ik * 2 + 0, MPI_COMM_WORLD, &ierror);
             }
@@ -278,14 +239,12 @@ void Parallel_Kpoints::pool_collection_aux(T* value, const V& w, const int& dim,
         {
             if (this->my_pool == pool)
             {
-                // ofs_running << " send data.";
                 MPI_Send(p, dim, MPI_DOUBLE, 0, ik * 2 + 0, MPI_COMM_WORLD);
             }
         }
     }
     else
     {
-        // ofs_running << "\n do nothing.";
     }
     MPI_Barrier(MPI_COMM_WORLD);
 

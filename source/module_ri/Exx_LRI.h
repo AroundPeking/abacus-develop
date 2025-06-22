@@ -48,12 +48,29 @@ class Exx_LRI
     using TatomR = std::array<double, Ndim>; // tmp
 
   public:
-    Exx_LRI(const Exx_Info::Exx_Info_RI& info_in, const Exx_Info::Exx_Info_Ewald& info_ewald_in)
-        : info(info_in), info_ewald(info_ewald_in), evq(info, info_ewald)
+    Exx_LRI(const Exx_Info::Exx_Info_RI& info_in) : info(info_in), evq(info)
     {
     }
     Exx_LRI operator=(const Exx_LRI&) = delete;
     Exx_LRI operator=(Exx_LRI&&);
+
+    void init(const MPI_Comm& mpi_comm_in, const UnitCell& ucell, const K_Vectors& kv_in, const LCAO_Orbitals& orb);
+    void init(const MPI_Comm& mpi_comm_in,
+              const UnitCell& ucell,
+              const K_Vectors& kv_in,
+              const LCAO_Orbitals& orb,
+              const std::vector<std::vector<std::vector<Numerical_Orbital_Lm>>>& abfs_s);
+    void cal_exx_ions(const UnitCell& ucell, const bool write_cv = false);
+    void cal_exx_ions_rpa(std::map<TA, std::map<TAC, RI::Tensor<Tdata>>>& Vs_cut,
+                          std::map<TA, std::map<TAC, RI::Tensor<Tdata>>>& Cs,
+                          const UnitCell& ucell,
+                          const bool write_cv = false);
+    void cal_exx_elec(const std::vector<std::map<TA, std::map<TAC, RI::Tensor<Tdata>>>>& Ds,
+                      const UnitCell& ucell,
+                      const Parallel_Orbitals& pv,
+                      const ModuleSymmetry::Symmetry_rotation* p_symrot = nullptr);
+    void cal_exx_force(const int& nat);
+    void cal_exx_stress(const double& omega, const double& lat0);
 
     void reset_Cs(const std::map<TA, std::map<TAC, RI::Tensor<Tdata>>>& Cs_in)
     {
@@ -63,15 +80,7 @@ class Exx_LRI
     {
         this->exx_lri.set_Vs(Vs_in, this->info.V_threshold);
     }
-
-    void init(const MPI_Comm& mpi_comm_in, const K_Vectors& kv_in, const LCAO_Orbitals& orb);
-    void init(const MPI_Comm& mpi_comm_in,
-              const K_Vectors& kv_in,
-              const LCAO_Orbitals& orb,
-              const std::vector<std::vector<std::vector<Numerical_Orbital_Lm>>>& abfs_s);
-    void cal_exx_force();
-    void cal_exx_stress();
-    std::vector<std::vector<int>> get_abfs_nchis() const;
+    // std::vector<std::vector<int>> get_abfs_nchis() const;
 
     std::vector<std::map<TA, std::map<TAC, RI::Tensor<Tdata>>>> Hexxs;
     double Eexx;
@@ -80,7 +89,6 @@ class Exx_LRI
 
   private:
     const Exx_Info::Exx_Info_RI& info;
-    const Exx_Info::Exx_Info_Ewald& info_ewald;
     MPI_Comm mpi_comm;
     const K_Vectors* p_kv = nullptr;
     ORB_gaunt_table MGT;
@@ -95,14 +103,6 @@ class Exx_LRI
     RI::Exx<TA, Tcell, Ndim, Tdata> exx_lri;
     Ewald_Vq<Tdata> evq;
 
-    void cal_exx_ions(const int istep, const bool write_cv = false);
-    void cal_exx_ions_rpa(std::map<TA, std::map<TAC, RI::Tensor<Tdata>>>& Vs_cut,
-                          std::map<TA, std::map<TAC, RI::Tensor<Tdata>>>& Cs,
-                          const int istep,
-                          const bool write_cv = false);
-    void cal_exx_elec(const std::vector<std::map<TA, std::map<TAC, RI::Tensor<Tdata>>>>& Ds,
-                      const Parallel_Orbitals& pv,
-                      const ModuleSymmetry::Symmetry_rotation* p_symrot = nullptr);
     void post_process_Hexx(std::map<TA, std::map<TAC, RI::Tensor<Tdata>>>& Hexxs_io) const;
     double post_process_Eexx(const double& Eexx_in) const;
 
