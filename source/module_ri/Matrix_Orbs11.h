@@ -1,3 +1,4 @@
+
 //=======================
 // AUTHOR : Peize Lin
 // DATE :   2022-08-17
@@ -82,11 +83,6 @@ class Matrix_Orbs11
                                                  std::map<size_t, // NB
                                                           Center2_Orb::Orb11>>>>>>
         center2_orb11_s;
-
-  private:
-    ModuleBase::Sph_Bessel_Recursive::D2* psb_ = nullptr;
-    const double lcao_dr_ = 0.01;
-
     // this->center2_orb11_s[TA][TB][LA][NA][LB][NB]
 };
 

@@ -167,7 +167,7 @@ void Exx_LRI<Tdata>::init(const MPI_Comm& mpi_comm_in,
 }
 
 template <typename Tdata>
-void Exx_LRI<Tdata>::cal_exx_ions(const int istep, const bool write_cv)
+void Exx_LRI<Tdata>::cal_exx_ions(const UnitCell& ucell, const bool write_cv)
 {
     ModuleBase::TITLE("Exx_LRI", "cal_exx_ions");
     ModuleBase::timer::tick("Exx_LRI", "cal_exx_ions");
@@ -294,6 +294,7 @@ void Exx_LRI<Tdata>::cal_exx_ions(const int istep, const bool write_cv)
     ModuleBase::timer::tick("Exx_LRI", "cal_exx_ions");
 }
 
+template <typename Tdata>
 void Exx_LRI<Tdata>::cal_exx_ions_rpa(std::map<TA, std::map<TAC, RI::Tensor<Tdata>>>& Vs_cut,
                                       std::map<TA, std::map<TAC, RI::Tensor<Tdata>>>& Cs,
                                       const UnitCell& ucell,
@@ -317,14 +318,14 @@ void Exx_LRI<Tdata>::cal_exx_ions_rpa(std::map<TA, std::map<TAC, RI::Tensor<Tdat
 
     // std::max(3) for gamma_only, list_A2 should contain cell {-1,0,1}. In the future distribute will be neighbour.
     const std::array<Tcell, Ndim> period_Vs
-        = LRI_CV_Tools::cal_latvec_range<Tcell>(1 + this->info.ccp_rmesh_times, orb_cutoff_);
+        = LRI_CV_Tools::cal_latvec_range<Tcell>(1 + this->info.ccp_rmesh_times, ucell, orb_cutoff_);
     const std::pair<std::vector<TA>, std::vector<std::vector<std::pair<TA, std::array<Tcell, Ndim>>>>> list_As_Vs
         = RI::Distribute_Equally::distribute_atoms_periods(this->mpi_comm, atoms, period_Vs, 2, false);
 
     Vs_cut = this->cv.cal_Vs(ucell, list_As_Vs.first, list_As_Vs.second[0], {{"writable_Vws", true}});
 
     this->cv.Vws = LRI_CV_Tools::get_CVws(ucell, Vs_cut);
-    if (this->info_ewald.use_ewald && this->info.ccp_type == Conv_Coulomb_Pot_K::Ccp_Type::Ccp)
+    if (this->info.use_ewald && this->info.ccp_type == Conv_Coulomb_Pot_K::Ccp_Type::Ccp)
     {
         std::map<TA, std::map<TAC, RI::Tensor<Tdata>>> Vs_sr;
         if (this->info.hybrid_beta)
@@ -334,7 +335,7 @@ void Exx_LRI<Tdata>::cal_exx_ions_rpa(std::map<TA, std::map<TAC, RI::Tensor<Tdat
         }
         this->evq.init_ions(ucell, period_Vs);
 
-        double chi = this->evq.get_singular_chi(ucell, this->info_ewald.fq_type, 2.0);
+        double chi = this->evq.get_singular_chi(ucell, this->info.fq_type, 2.0);
         std::map<TA, std::map<TAC, RI::Tensor<Tdata>>> Vs_full = this->evq.cal_Vs(ucell, chi, Vs_cut);
         std::cout << "Use exx_ccp_rmesh_times=" << this->info.ccp_rmesh_times << " to calculate full Coulomb"
                   << std::endl;
@@ -384,7 +385,8 @@ void Exx_LRI<Tdata>::cal_exx_ions_rpa(std::map<TA, std::map<TAC, RI::Tensor<Tdat
 
     std::pair<std::map<TA, std::map<TAC, RI::Tensor<Tdata>>>,
               std::map<TA, std::map<TAC, std::array<RI::Tensor<Tdata>, 3>>>>
-        Cs_dCs = this->cv.cal_Cs_dCs(list_As_Cs.first,
+        Cs_dCs = this->cv.cal_Cs_dCs(ucell,
+                                     list_As_Cs.first,
                                      list_As_Cs.second[0],
                                      {{"cal_dC", PARAM.inp.cal_force || PARAM.inp.cal_stress},
                                       {"writable_Cws", true},
@@ -402,14 +404,14 @@ void Exx_LRI<Tdata>::cal_exx_ions_rpa(std::map<TA, std::map<TAC, RI::Tensor<Tdat
     if (PARAM.inp.cal_force || PARAM.inp.cal_stress)
     {
         std::map<TA, std::map<TAC, std::array<RI::Tensor<Tdata>, 3>>>& dCs = std::get<1>(Cs_dCs);
-        this->cv.dCws = LRI_CV_Tools::get_dCVws(dCs);
+        this->cv.dCws = LRI_CV_Tools::get_dCVws(ucell, dCs);
         std::array<std::map<TA, std::map<TAC, RI::Tensor<Tdata>>>, Ndim> dCs_order
             = LRI_CV_Tools::change_order(std::move(dCs));
         this->exx_lri.set_dCs(std::move(dCs_order), this->info.C_grad_threshold);
         if (PARAM.inp.cal_stress)
         {
             std::array<std::array<std::map<TA, std::map<TAC, RI::Tensor<Tdata>>>, 3>, 3> dCRs
-                = LRI_CV_Tools::cal_dMRs(dCs_order);
+                = LRI_CV_Tools::cal_dMRs(ucell, dCs_order);
             this->exx_lri.set_dCRs(std::move(dCRs), this->info.C_grad_R_threshold);
         }
     }
@@ -420,12 +422,12 @@ template <typename Tdata>
 void Exx_LRI<Tdata>::cal_exx_elec(const std::vector<std::map<TA, std::map<TAC, RI::Tensor<Tdata>>>>& Ds,
                                   const UnitCell& ucell,
                                   const Parallel_Orbitals& pv,
-                                  const ModuleSymmetry::Symmetry_rotation* p_symrot) template <typename Tdata>
+                                  const ModuleSymmetry::Symmetry_rotation* p_symrot)
 {
     ModuleBase::TITLE("Exx_LRI", "cal_exx_elec");
     ModuleBase::timer::tick("Exx_LRI", "cal_exx_elec");
 
-    const std::vector<std::tuple<std::set<TA>, std::set<TA>>> judge = RI_2D_Comm::get_2D_judge(pv);
+    const std::vector<std::tuple<std::set<TA>, std::set<TA>>> judge = RI_2D_Comm::get_2D_judge(ucell, pv);
 
     this->Hexxs.resize(PARAM.inp.nspin);
     this->Eexx = 0;
@@ -434,54 +436,6 @@ void Exx_LRI<Tdata>::cal_exx_elec(const std::vector<std::map<TA, std::map<TAC, R
     for (int is = 0; is < PARAM.inp.nspin; ++is)
     {
         std::string suffix = ((PARAM.inp.cal_force || PARAM.inp.cal_stress) ? std::to_string(is) : "");
-
-        this->exx_lri.set_Ds(Ds[is], this->info.dm_threshold, suffix);
-        this->exx_lri.cal_Hs({"", "", suffix});
-
-        if (!p_symrot)
-        {
-            this->Hexxs[is] = RI::Communicate_Tensors_Map_Judge::comm_map2_first(this->mpi_comm,
-                                                                                 std::move(this->exx_lri.Hs),
-                                                                                 std::get<0>(judge[is]),
-                                                                                 std::get<1>(judge[is]));
-        }
-        else
-        {
-            // reduce but not repeat
-            auto Hs_a2D = this->exx_lri.post_2D.set_tensors_map2(this->exx_lri.Hs);
-            // rotate locally without repeat
-            Hs_a2D = p_symrot->restore_HR(GlobalC::ucell.symm, GlobalC::ucell.atoms, GlobalC::ucell.st, 'H', Hs_a2D);
-            // cal energy using full Hs without repeat
-            this->exx_lri.energy = this->exx_lri.post_2D.cal_energy(this->exx_lri.post_2D.saves["Ds_" + suffix],
-                                                                    this->exx_lri.post_2D.set_tensors_map2(Hs_a2D));
-            // get repeated full Hs for abacus
-            this->Hexxs[is] = RI::Communicate_Tensors_Map_Judge::comm_map2_first(this->mpi_comm,
-                                                                                 std::move(Hs_a2D),
-                                                                                 std::get<0>(judge[is]),
-                                                                                 std::get<1>(judge[is]));
-        }
-        this->Eexx += std::real(this->exx_lri.energy);
-        post_process_Hexx(this->Hexxs[is]);
-    }
-    this->Eexx = post_process_Eexx(this->Eexx);
-    this->exx_lri.set_symmetry(false, {});
-    ModuleBase::timer::tick("Exx_LRI", "cal_exx_elec");
-    const std::vector<std::tuple<std::set<TA>, std::set<TA>>> judge = RI_2D_Comm::get_2D_judge(ucell, pv);
-
-    if (p_symrot)
-    {
-        this->exx_lri.set_symmetry(true, p_symrot->get_irreducible_sector());
-    }
-    else
-    {
-        this->exx_lri.set_symmetry(false, {});
-    }
-
-    this->Hexxs.resize(PARAM.inp.nspin);
-    this->Eexx = 0;
-    for (int is = 0; is < PARAM.inp.nspin; ++is)
-    {
-        const std::string suffix = ((PARAM.inp.cal_force || PARAM.inp.cal_stress) ? std::to_string(is) : "");
 
         this->exx_lri.set_Ds(Ds[is], this->info.dm_threshold, suffix);
         this->exx_lri.cal_Hs({"", "", suffix});

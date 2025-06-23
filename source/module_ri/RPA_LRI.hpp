@@ -54,7 +54,7 @@ void RPA_LRI<T, Tdata>::cal_large_Cs(const UnitCell& ucell, const LCAO_Orbitals&
     ModuleBase::timer::tick("RPA_LRI", "cal_large_Cs");
     if (!exx_lri_rpa)
         exx_lri_rpa = new Exx_LRI<double>(GlobalC::exx_info.info_ri);
-    exx_lri_rpa->init(mpi_comm, kv, orb);
+    exx_lri_rpa->init(mpi_comm, ucell, kv, orb);
     this->abfs = exx_lri_rpa->abfs;
     this->abfs_ccp = exx_lri_rpa->abfs_ccp;
     std::vector<TA> atoms(ucell.nat);
@@ -70,7 +70,7 @@ void RPA_LRI<T, Tdata>::cal_large_Cs(const UnitCell& ucell, const LCAO_Orbitals&
         = RI::Distribute_Equally::distribute_atoms_periods(this->mpi_comm, atoms, period_Cs, 2, false);
     std::map<TA, TatomR> atoms_pos;
     for (int iat = 0; iat < ucell.nat; ++iat)
-        atoms_pos[iat] = RI_Util::Vector3_to_array3(ucell.atoms[iat].tau[GlobalC::ucell.iat2ia[iat]]);
+        atoms_pos[iat] = RI_Util::Vector3_to_array3(ucell.atoms[iat].tau[ucell.iat2ia[iat]]);
     const std::array<TatomR, Ndim> latvec = {RI_Util::Vector3_to_array3(ucell.a1),
                                              RI_Util::Vector3_to_array3(ucell.a2),
                                              RI_Util::Vector3_to_array3(ucell.a3)};
@@ -98,7 +98,7 @@ void RPA_LRI<T, Tdata>::cal_large_Cs(const UnitCell& ucell, const LCAO_Orbitals&
     std::map<TA, std::map<TAC, RI::Tensor<Tdata>>>& Cs = std::get<0>(Cs_dCs);
     std::map<TA, std::map<TAC, RI::Tensor<Tdata>>> tmp;
     this->Cs_period = RI::RI_Tools::cal_period(Cs, period);
-    this->out_Cs(this->Cs_period, "Cs_data_");
+    this->out_Cs(ucell, this->Cs_period, "Cs_data_");
     Cs_period.clear();
     Cs_period.swap(tmp);
     delete exx_lri_rpa;
@@ -170,14 +170,14 @@ void RPA_LRI<T, Tdata>::cal_postSCF_exx(const elecstate::DensityMatrix<T, Tdata>
     // GlobalC::exx_info.info_ri.ccp_rmesh_times=rpa_ccp_rmesh_times
     // Using this->info.ccp_rmesh_times to calculate cut Coulomb this->Vs_period
     GlobalC::exx_info.info_ri.ccp_rmesh_times = PARAM.inp.rpa_ccp_rmesh_times;
-    GlobalC::exx_info.info_global.hybrid_alpha = 1;
     if (!exx_lri_rpa)
         exx_lri_rpa = new Exx_LRI<double>(GlobalC::exx_info.info_ri);
     if (GlobalC::exx_info.info_ri.shrink_abfs_pca_thr >= 0.0)
     {
         this->lcaos = Exx_Abfs::Construct_Orbs::change_orbs(orb, this->info.kmesh_times);
         const std::vector<std::vector<std::vector<Numerical_Orbital_Lm>>> abfs_same_atom
-            = Exx_Abfs::Construct_Orbs::abfs_same_atom(orb,
+            = Exx_Abfs::Construct_Orbs::abfs_same_atom(ucell,
+                                                       orb,
                                                        this->lcaos,
                                                        this->info.kmesh_times,
                                                        this->info.shrink_abfs_pca_thr);
@@ -192,7 +192,7 @@ void RPA_LRI<T, Tdata>::cal_postSCF_exx(const elecstate::DensityMatrix<T, Tdata>
                                                         this->info.files_shrink_abfs,
                                                         this->info.kmesh_times);
         }
-        Exx_Abfs::Construct_Orbs::print_orbs_size(abfs_s, GlobalV::ofs_running);
+        Exx_Abfs::Construct_Orbs::print_orbs_size(ucell, abfs_s, GlobalV::ofs_running);
 
         const int nspin0 = (PARAM.inp.nspin == 2) ? 2 : 1;
         const std::map<std::string, double> ccp_parameter
@@ -248,7 +248,7 @@ void RPA_LRI<T, Tdata>::out_for_RPA(const UnitCell& ucell,
     ModuleBase::TITLE("DFT_RPA_interface", "out_for_RPA");
     this->out_bands(pelec);
     this->out_eigen_vector(parav, psi);
-    this->out_struc(ucell.latvec, ucell.G);
+    this->out_struc(ucell, ucell.latvec, ucell.G);
     // this->cal_rpa_cv(ucell);
     std::cout << "rpa_pca_threshold: " << this->info.pca_threshold << std::endl;
     std::cout << "rpa_ccp_rmesh_times: " << this->info.ccp_rmesh_times << std::endl;
@@ -271,11 +271,11 @@ void RPA_LRI<T, Tdata>::out_for_RPA(const UnitCell& ucell,
         // this->MGT.init_Gaunt_CH(Lmax);
         // this->MGT.init_Gaunt(Lmax);
         cal_large_Cs(ucell, orb, kv);
-        cal_abfs_overlap(orb, kv);
+        cal_abfs_overlap(ucell, orb, kv);
     }
-    if (this->info_ewald.use_ewald)
+    if (this->info.use_ewald)
     {
-        GlobalC::exx_info.info_ewald.fq_type = Singular_Value::Fq_type(PARAM.inp.exx_fq_type);
+        GlobalC::exx_info.info_ri.fq_type = Singular_Value::Fq_type(PARAM.inp.exx_fq_type);
         GlobalC::exx_info.info_global.ccp_type = Conv_Coulomb_Pot_K::Ccp_Type::Ccp;
         // Using exx_ccp_rmesh_times to calculate full Coulomb
         GlobalC::exx_info.info_ri.ccp_rmesh_times = this->exx_ccp_rmesh_times;
@@ -435,7 +435,7 @@ void RPA_LRI<T, Tdata>::cal_abfs_overlap(const UnitCell& ucell, const LCAO_Orbit
         }
     }
 
-    out_abfs_overlap(overlap_abfs_abfs, overlap_abfs_abf, "shrink_sinvS_", index_abfs_s, index_abfs);
+    out_abfs_overlap(ucell, overlap_abfs_abfs, overlap_abfs_abf, "shrink_sinvS_", index_abfs_s, index_abfs);
 }
 
 template <typename T, typename Tdata>
@@ -459,7 +459,7 @@ void RPA_LRI<T, Tdata>::inverse_olp(const UnitCell& ucell,
         for (auto& Ip: overlap_abfs_abfs)
         {
             auto I = Ip.first;
-            size_t mu_s_I = index_abfs_s[GlobalC::ucell.iat2it[I]].count_size;
+            size_t mu_s_I = index_abfs_s[ucell.iat2it[I]].count_size;
             for (auto& JPp: Ip.second)
             {
                 auto J = JPp.first.first;
@@ -691,7 +691,7 @@ void RPA_LRI<T, Tdata>::out_abfs_overlap(const UnitCell& ucell,
                     olp_q_ss[I][{J, q}] = RI::Tensor<std::complex<double>>({tmp_olp_ss.shape[0], tmp_olp_ss.shape[1]});
                     olp_q_s[I][{J, q}] = RI::Tensor<std::complex<double>>({tmp_olp_s.shape[0], tmp_olp_s.shape[1]});
                 }
-                const double arg = 1 * (p_kv->kvec_c[ik] * (RI_Util::array3_to_Vector3(R) * GlobalC::ucell.latvec))
+                const double arg = 1 * (p_kv->kvec_c[ik] * (RI_Util::array3_to_Vector3(R) * ucell.latvec))
                                    * ModuleBase::TWO_PI; // latvec
                 const std::complex<double> kphase = std::complex<double>(cos(arg), sin(arg));
 
@@ -737,7 +737,7 @@ void RPA_LRI<T, Tdata>::out_abfs_overlap(const UnitCell& ucell,
 
     // out_ri_tensor("olp_ss.dat", olp_q_ss, 0.);
     // Inverse of overlap(q)
-    inverse_olp(olp_q_ss, index_abfs_s);
+    inverse_olp(ucell, olp_q_ss, index_abfs_s);
     // out_ri_tensor("olp_ss_inv.dat", olp_q_ss, 0.);
     // out_ri_tensor("olp_s.dat", olp_q_s, 0.);
     for (auto& Ip: overlap_abfs_abf)

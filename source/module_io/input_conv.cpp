@@ -422,6 +422,12 @@ void Input_Conv::Convert()
         GlobalC::exx_info.info_ri.cauchy_stress_threshold = PARAM.inp.exx_cauchy_stress_threshold;
         GlobalC::exx_info.info_ri.ccp_rmesh_times = std::stod(PARAM.inp.exx_ccp_rmesh_times);
         GlobalC::exx_info.info_ri.shrink_abfs_pca_thr = PARAM.inp.shrink_abfs_pca_thr;
+        if (PARAM.inp.exx_use_ewald)
+        {
+            GlobalC::exx_info.info_ri.use_ewald = true;
+            GlobalC::exx_info.info_ri.fq_type = Singular_Value::Fq_type(PARAM.inp.exx_fq_type);
+            GlobalC::exx_info.info_global.ccp_type = Conv_Coulomb_Pot_K::Ccp_Type::Ccp;
+        }
 
 #ifdef __EXX
         Exx_Abfs::Jle::Lmax = PARAM.inp.exx_opt_orb_lmax;

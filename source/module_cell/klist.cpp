@@ -1,3 +1,4 @@
+
 #include "klist.h"
 
 #include "module_base/formatter.h"
@@ -173,21 +174,6 @@ void K_Vectors::set(const UnitCell& ucell,
     this->cal_ik_global();
 
     this->print_klists(ofs);
-
-    if (!this->kc_done_full && this->kd_done_full)
-    {
-        for (size_t ik = 0; ik != this->nkstot_full; ++ik)
-            this->kvec_c_full[ik] = this->kvec_d[ik] * reciprocal_vec;
-    }
-    else if (this->kc_done_full && !this->kd_done_full)
-    {
-        for (size_t ik = 0; ik != this->nkstot_full; ++ik)
-            this->kvec_c_full[ik] = this->kvec_c[ik];
-    }
-    /* for (int i = 0; i < kvec_c_full.size(); i++)
-        GlobalV::ofs_running << "kvec_c_full:" << kvec_c_full[i].x << kvec_c_full[i].y << kvec_c_full[i].z << std::endl;
-    for (int i = 0; i < kvec_c.size(); i++)
-        GlobalV::ofs_running << "kvec_c:" << kvec_c[i].x << kvec_c[i].y << kvec_c[i].z << std::endl; */
 
     // std::cout << " NUMBER OF K-POINTS   : " << nkstot << std::endl;
 
