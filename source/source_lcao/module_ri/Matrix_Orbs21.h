@@ -1,3 +1,4 @@
+
 //=======================
 // AUTHOR : Peize Lin
 // DATE :   2022-08-17
@@ -81,20 +82,3 @@ class Matrix_Orbs21
   private:
     ModuleBase::Sph_Bessel_Recursive::D2* psb_ = nullptr;
     const double lcao_dr_ = 0.01;
-    double* lat0 = nullptr;                                                         // restore ucell.lat0
-    std::map<size_t,                                                                // TA
-             std::map<size_t,                                                       // TB
-                      std::map<int,                                                 // LA1
-                               std::map<size_t,                                     // NA1
-                                        std::map<int,                               // LA2
-                                                 std::map<size_t,                   // NA2
-                                                          std::map<int,             // LB
-                                                                   std::map<size_t, // NB
-                                                                            Center2_Orb::Orb21>>>>>>>>
-        center2_orb21_s;
-    // this->center2_orb21_s[TA][TB][LA1][NA1][LA2][NA2][LB][NB]
-};
-
-#include "Matrix_Orbs21.hpp"
-
-#endif

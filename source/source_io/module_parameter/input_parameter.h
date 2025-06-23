@@ -643,6 +643,8 @@ struct Input_para
     int test_pp = 0;                ///< variables for test_pp only
     int test_relax_method = false;  ///< variables for test_relax_method only
     int test_deconstructor = false; ///< variables for test_deconstructor only
+
+    // ==============   #Parameters (21.RDMFT) =====================
     // RDMFT    jghan added on 2024-07-06
     bool rdmft = false;               // rdmft, reduced density matrix funcional theory
     double rdmft_power_alpha = 0.656; // the alpha parameter of power-functional, g(occ_number) = occ_number^alpha
@@ -651,9 +653,6 @@ struct Input_para
     // ==============   #Parameters (22.EXX PW) =====================
     // EXX for planewave basis, rhx0820 2025-03-10
     bool exxace = true; // exxace, exact exchange for planewave basis, https://doi.org/10.1021/acs.jctc.6b00092
-    bool exx_gamma_extrapolation = true; // gamma point extrapolation for exx, https://doi.org/10.1103/PhysRevB.79.205114
-
-    // ====   #Parameters (23.XC external parameterization) ========
     /*
      * the following two sets of parameters are for the XC parameterization.
      * The first element should be the LibXC id, to assign the analytical
@@ -683,5 +682,8 @@ struct Input_para
     std::vector<double> xc_corr_ext = {
         130, 0.06672455060314922, 0.031090690869654895034, 1.00000}; 
 =======
+=======
+    bool exx_gamma_extrapolation
+        = true; // gamma point extrapolation for exx, https://doi.org/10.1103/PhysRevB.79.205114
 };
 #endif

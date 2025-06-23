@@ -36,8 +36,7 @@ class RPA_LRI
     using TatomR = std::array<double, Ndim>; // tmp
 
   public:
-    RPA_LRI(const Exx_Info::Exx_Info_RI& info_in, const Exx_Info::Exx_Info_Ewald& info_ewald_in)
-        : info(info_in), info_ewald(info_ewald_in) {};
+    RPA_LRI(Exx_Info::Exx_Info_RI& info_in) : info(info_in) {};
     ~RPA_LRI() {};
     void init(const MPI_Comm& mpi_comm_in, const K_Vectors& kv_in, const std::vector<double>& orb_cutoff);
     void cal_large_Cs(const LCAO_Orbitals& orb, const K_Vectors& kv);
@@ -84,8 +83,7 @@ class RPA_LRI
     Tdata Erpa;
 
   private:
-    const Exx_Info::Exx_Info_RI& info;
-    const Exx_Info::Exx_Info_Ewald& info_ewald;
+    Exx_Info::Exx_Info_RI& info;
     const K_Vectors* p_kv = nullptr;
     MPI_Comm mpi_comm;
     double exx_ccp_rmesh_times;
