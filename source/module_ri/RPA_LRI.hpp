@@ -13,6 +13,7 @@
 #include <fstream>
 #include <iostream>
 #include <limits>
+#include <malloc.h>
 #include <vector>
 
 using TA = int;
@@ -70,7 +71,7 @@ void RPA_LRI<T, Tdata>::cal_large_Cs(const UnitCell& ucell, const LCAO_Orbitals&
         = RI::Distribute_Equally::distribute_atoms_periods(this->mpi_comm, atoms, period_Cs, 2, false);
     std::map<TA, TatomR> atoms_pos;
     for (int iat = 0; iat < ucell.nat; ++iat)
-        atoms_pos[iat] = RI_Util::Vector3_to_array3(ucell.atoms[iat].tau[ucell.iat2ia[iat]]);
+        atoms_pos[iat] = RI_Util::Vector3_to_array3(ucell.atoms[ucell.iat2it[iat]].tau[ucell.iat2ia[iat]]);
     const std::array<TatomR, Ndim> latvec = {RI_Util::Vector3_to_array3(ucell.a1),
                                              RI_Util::Vector3_to_array3(ucell.a2),
                                              RI_Util::Vector3_to_array3(ucell.a3)};
@@ -103,6 +104,7 @@ void RPA_LRI<T, Tdata>::cal_large_Cs(const UnitCell& ucell, const LCAO_Orbitals&
     Cs_period.swap(tmp);
     delete exx_lri_rpa;
     exx_lri_rpa = nullptr;
+    malloc_trim(0);
 
     ModuleBase::timer::tick("RPA_LRI", "cal_large_Cs");
 }
@@ -260,6 +262,7 @@ void RPA_LRI<T, Tdata>::out_for_RPA(const UnitCell& ucell,
               << (pelec->f_en.etot - pelec->f_en.etxc + exx_lri_rpa->Eexx) / 2.0 << std::endl;
     delete exx_lri_rpa;
     exx_lri_rpa = nullptr;
+    malloc_trim(0);
 
     if (GlobalC::exx_info.info_ri.shrink_abfs_pca_thr >= 0.0)
     {
@@ -300,6 +303,7 @@ void RPA_LRI<T, Tdata>::out_for_RPA(const UnitCell& ucell,
 
         delete exx_full_coulomb;
         exx_full_coulomb = nullptr;
+        malloc_trim(0);
     }
 
     return;
