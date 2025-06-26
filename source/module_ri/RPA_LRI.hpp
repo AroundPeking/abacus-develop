@@ -275,6 +275,7 @@ void RPA_LRI<T, Tdata>::out_for_RPA(const UnitCell& ucell,
         // this->MGT.init_Gaunt(Lmax);
         cal_large_Cs(ucell, orb, kv);
         cal_abfs_overlap(ucell, orb, kv);
+        malloc_trim(0);
     }
     if (this->info.use_ewald)
     {
@@ -314,17 +315,19 @@ void RPA_LRI<T, Tdata>::cal_abfs_overlap(const UnitCell& ucell, const LCAO_Orbit
 {
     ModuleBase::TITLE("DFT_RPA_interface", "cal_abfs_overlap");
 
-    // const double lcaos_rmax = Exx_Abfs::Construct_Orbs::get_Rmax(this->lcaos);
-    // const double abfs_rmax = Exx_Abfs::Construct_Orbs::get_Rmax(this->abfs);
+    // <smaller abfs|smaller abfs>
+    Matrix_Orbs11 m_abfs_abfs;
+    // <smaller abfs|larger abfs>
+    Matrix_Orbs11 m_abfs_abf;
     int Lmax_flag = 0;
 
-    this->m_abfs_abf.init(2, ucell, orb, this->info.kmesh_times, orb.get_Rmax() * 2, Lmax_flag);
-    this->m_abfs_abf.init_radial(abfs_s, this->abfs, this->MGT);
-    this->m_abfs_abf.init_radial_table();
+    m_abfs_abf.init(2, ucell, orb, this->info.kmesh_times, orb.get_Rmax() * 2, Lmax_flag);
+    m_abfs_abf.init_radial(abfs_s, this->abfs, this->MGT);
+    m_abfs_abf.init_radial_table();
 
-    this->m_abfs_abfs.init(2, ucell, orb, this->info.kmesh_times, orb.get_Rmax() * 2, Lmax_flag);
-    this->m_abfs_abfs.init_radial(abfs_s, abfs_s, this->MGT);
-    this->m_abfs_abfs.init_radial_table();
+    m_abfs_abfs.init(2, ucell, orb, this->info.kmesh_times, orb.get_Rmax() * 2, Lmax_flag);
+    m_abfs_abfs.init_radial(abfs_s, abfs_s, this->MGT);
+    m_abfs_abfs.init_radial_table();
     // get Rlist
     const std::array<Tcell, Ndim> period = RI_Util::get_Born_vonKarmen_period(kv);
     const auto R_period = RI_Util::get_Born_von_Karmen_cells(period);
@@ -392,23 +395,23 @@ void RPA_LRI<T, Tdata>::cal_abfs_overlap(const UnitCell& ucell, const LCAO_Orbit
 
                 auto& local_abfs_abfs = overlap_abfs_abfs_local[A];
                 local_abfs_abfs[{B, R}]
-                    = this->m_abfs_abfs.template cal_overlap_matrix<double>(TA,
-                                                                            TB,
-                                                                            tau0,
-                                                                            tau_delta,
-                                                                            index_abfs_s,
-                                                                            index_abfs_s,
-                                                                            Matrix_Orbs11::Matrix_Order::AB);
+                    = m_abfs_abfs.template cal_overlap_matrix<double>(TA,
+                                                                      TB,
+                                                                      tau0,
+                                                                      tau_delta,
+                                                                      index_abfs_s,
+                                                                      index_abfs_s,
+                                                                      Matrix_Orbs11::Matrix_Order::AB);
 
                 auto& local_abfs_abf = overlap_abfs_abf_local[A];
                 local_abfs_abf[{B, R}]
-                    = this->m_abfs_abf.template cal_overlap_matrix<double>(TA,
-                                                                           TB,
-                                                                           tau0,
-                                                                           tau_delta,
-                                                                           index_abfs_s,
-                                                                           index_abfs,
-                                                                           Matrix_Orbs11::Matrix_Order::AB);
+                    = m_abfs_abf.template cal_overlap_matrix<double>(TA,
+                                                                     TB,
+                                                                     tau0,
+                                                                     tau_delta,
+                                                                     index_abfs_s,
+                                                                     index_abfs,
+                                                                     Matrix_Orbs11::Matrix_Order::AB);
             }
         }
 
