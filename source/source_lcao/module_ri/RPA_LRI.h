@@ -87,10 +87,6 @@ class RPA_LRI
     const K_Vectors* p_kv = nullptr;
     MPI_Comm mpi_comm;
     double exx_ccp_rmesh_times;
-    // <smaller abfs|smaller abfs>
-    Matrix_Orbs11 m_abfs_abfs;
-    // <smaller abfs|larger abfs>
-    Matrix_Orbs11 m_abfs_abf;
 
     std::vector<double> orb_cutoff_;
 
