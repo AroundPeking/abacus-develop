@@ -560,7 +560,10 @@ struct Input_para
     double rpa_ccp_rmesh_times = 10.0; ///< how many times larger the radial mesh required for
                                        ///< calculating Columb potential is to that of atomic orbitals
     bool out_ri_cv = false; ///< Whether to output the coefficient tensor C and ABFs-representation Coulomb matrix V
-    double shrink_abfs_pca_thr = -1; ///< threshold to shrink auxiliary basis for GW/RPA
+    double shrink_abfs_pca_thr = -1;             ///< threshold to shrink auxiliary basis for GW/RPA
+    bool exx_rotate_abfs = false;                ///< whether to rotate auxiliary basis for Coulomb calculation
+    double exx_multip_moments_threshold = 1e-10; ///< threshold to screen multipole moments in Coulomb calculation
+
     // ==============   #Parameters (16.dft+u) ======================
     //    DFT+U       Xin Qu added on 2020-10-29
     int dft_plus_u = 0;                    ///< 0: standard DFT calculation (default)
