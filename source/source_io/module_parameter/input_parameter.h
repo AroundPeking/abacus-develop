@@ -513,46 +513,51 @@ struct Input_para
     //  exx
     //  Peize Lin add 2018-06-20
     // ==========================================================
-    std::string exx_hybrid_alpha = "default";   ///< range-separation parameter in hybrid functionals
-    std::string exx_hse_omega = "default";                ///< screen parameter in hybrid functionals
-    std::string exx_hybrid_beta = "default";                ///< range-separation parameter in hybrid functionals
-    bool exx_use_ewald = false;              ///< if 1, Ewald method is used for HF or CAM/LR hybrid functions 
-    int exx_spencer_type = 0;              ///< set Spencer scheme type
-    int exx_fq_type = 1;                        /// auxiliary-function fq used in correction to V(q) at q->0
-    bool exx_separate_loop = true;              ///< if 1, a two-step method is employed, else it will start
-                                                ///< with a GGA-Loop, and then Hybrid-Loop
-    int exx_hybrid_step = 100;                  ///< the maximal electronic iteration number in
-                                                ///< the evaluation of Fock exchange
-    double exx_mixing_beta = 1.0;               ///< mixing_beta for outer-loop when exx_separate_loop=1
-    double exx_lambda = 0.3;                    ///< used to compensate for divergence points at G=0 in the
-                                                ///< evaluation of Fock exchange using lcao_in_pw method
-    std::string exx_real_number = "default";          ///< exx calculated in real or complex
-    double exx_pca_threshold = 0.0001;          ///< threshold to screen on-site ABFs in exx
-    double exx_c_threshold = 0.0001;            ///< threshold to screen C matrix in exx
-    double exx_v_threshold = 0.1;               ///< threshold to screen V matrix in exx
-    double exx_dm_threshold = 0.0001;           ///< threshold to screen density matrix in exx
-    double exx_schwarz_threshold = 0;           ///< threshold to screen exx using Cauchy-Schwartz inequality
-    double exx_cauchy_threshold = 1e-07;        ///< threshold to screen exx using Cauchy-Schwartz inequality
-    double exx_c_grad_threshold = 0.0001;       ///< threshold to screen nabla C matrix in exx
-    double exx_v_grad_threshold = 0.1;          ///< threshold to screen nabla V matrix in exx
-    double exx_c_grad_r_threshold = 0.0001;     ///< threshold to screen nabla C matrix in exx
-    double exx_v_grad_r_threshold = 0.1;        ///< threshold to screen nabla V matrix in exx
-    double exx_cauchy_force_threshold = 1e-07;  ///< threshold to screen exx force using Cauchy-Schwartz
-                                                ///< inequality
-    double exx_cauchy_stress_threshold = 1e-07; ///< threshold to screen exx stress using Cauchy-Schwartz
-                                                ///< inequality
-    std::string exx_ccp_rmesh_times = "default";      ///< how many times larger the radial mesh required for
-                                                ///< calculating Columb potential is to that of atomic orbitals
-    std::string exx_distribute_type = "htime";  ///< distribute type (assuming default as no specific value
-                                                ///< provided)
-    int exx_opt_orb_lmax = 0;                   ///< the maximum l of the spherical Bessel functions for opt ABFs
-    double exx_opt_orb_ecut = 0.0;              ///< the cut-off of plane wave expansion for opt ABFs
-    double exx_opt_orb_tolerence = 0.0;         ///< the threshold when solving for the zeros of spherical Bessel
-                                                ///< functions for opt ABFs
-    bool exx_symmetry_realspace = true; ///< whether to reduce the real-space sector in when using symmetry=1 in EXX calculation
-    double rpa_ccp_rmesh_times = 10.0;          ///< how many times larger the radial mesh required for
-                                                ///< calculating Columb potential is to that of atomic orbitals
-    bool out_ri_cv = false;   ///<Whether to output the coefficient tensor C and ABFs-representation Coulomb matrix V
+    std::string exx_hybrid_alpha = "default";    ///< range-separation parameter in hybrid functionals
+    std::string exx_hse_omega = "default";       ///< screen parameter in hybrid functionals
+    std::string exx_hybrid_beta = "default";     ///< range-separation parameter in hybrid functionals
+    bool exx_use_ewald = false;                  ///< if 1, Ewald method is used for HF or CAM/LR hybrid functions
+    int exx_spencer_type = 0;                    ///< set Spencer scheme type
+    int exx_fq_type = 1;                         /// auxiliary-function fq used in correction to V(q) at q->0
+    bool exx_separate_loop = true;               ///< if 1, a two-step method is employed, else it will start
+                                                 ///< with a GGA-Loop, and then Hybrid-Loop
+    int exx_hybrid_step = 100;                   ///< the maximal electronic iteration number in
+                                                 ///< the evaluation of Fock exchange
+    double exx_mixing_beta = 1.0;                ///< mixing_beta for outer-loop when exx_separate_loop=1
+    double exx_lambda = 0.3;                     ///< used to compensate for divergence points at G=0 in the
+                                                 ///< evaluation of Fock exchange using lcao_in_pw method
+    std::string exx_real_number = "default";     ///< exx calculated in real or complex
+    double exx_pca_threshold = 0.0001;           ///< threshold to screen on-site ABFs in exx
+    double exx_c_threshold = 0.0001;             ///< threshold to screen C matrix in exx
+    double exx_v_threshold = 0.1;                ///< threshold to screen V matrix in exx
+    double exx_dm_threshold = 0.0001;            ///< threshold to screen density matrix in exx
+    double exx_schwarz_threshold = 0;            ///< threshold to screen exx using Cauchy-Schwartz inequality
+    double exx_cauchy_threshold = 1e-07;         ///< threshold to screen exx using Cauchy-Schwartz inequality
+    double exx_c_grad_threshold = 0.0001;        ///< threshold to screen nabla C matrix in exx
+    double exx_v_grad_threshold = 0.1;           ///< threshold to screen nabla V matrix in exx
+    double exx_c_grad_r_threshold = 0.0001;      ///< threshold to screen nabla C matrix in exx
+    double exx_v_grad_r_threshold = 0.1;         ///< threshold to screen nabla V matrix in exx
+    double exx_cauchy_force_threshold = 1e-07;   ///< threshold to screen exx force using Cauchy-Schwartz
+                                                 ///< inequality
+    double exx_cauchy_stress_threshold = 1e-07;  ///< threshold to screen exx stress using Cauchy-Schwartz
+                                                 ///< inequality
+    std::string exx_ccp_rmesh_times = "default"; ///< how many times larger the radial mesh required for
+                                                 ///< calculating Columb potential is to that of atomic orbitals
+    std::string exx_distribute_type = "htime";   ///< distribute type (assuming default as no specific value
+                                                 ///< provided)
+    int exx_opt_orb_lmax = 0;                    ///< the maximum l of the spherical Bessel functions for opt ABFs
+    double exx_opt_orb_ecut = 0.0;               ///< the cut-off of plane wave expansion for opt ABFs
+    double exx_opt_orb_tolerence = 0.0;          ///< the threshold when solving for the zeros of spherical Bessel
+                                                 ///< functions for opt ABFs
+    bool exx_symmetry_realspace
+        = true; ///< whether to reduce the real-space sector in when using symmetry=1 in EXX calculation
+    double rpa_ccp_rmesh_times = 10.0; ///< how many times larger the radial mesh required for
+                                       ///< calculating Columb potential is to that of atomic orbitals
+    bool out_ri_cv = false; ///< Whether to output the coefficient tensor C and ABFs-representation Coulomb matrix V
+    double shrink_abfs_pca_thr = -1;             ///< threshold to shrink auxiliary basis for GW/RPA
+    bool exx_rotate_abfs = false;                ///< whether to rotate auxiliary basis for Coulomb calculation
+    double exx_multip_moments_threshold = 1e-10; ///< threshold to screen multipole moments in Coulomb calculation
+
     // ==============   #Parameters (16.dft+u) ======================
     //    DFT+U       Xin Qu added on 2020-10-29
     int dft_plus_u = 0;                    ///< 0: standard DFT calculation (default)

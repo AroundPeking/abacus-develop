@@ -49,6 +49,7 @@ struct Exx_Info
         int Rcut_type = 1;
         Singular_Value::Fq_type fq_type;
         bool use_ewald = false;
+        bool rotate_abfs = false;
 
         double pca_threshold = 0;
         std::vector<std::string> files_abfs;
@@ -64,6 +65,7 @@ struct Exx_Info
         bool exx_symmetry_realspace = true;
         double kmesh_times = 4;
         double shrink_abfs_pca_thr = -1;
+        double multip_moments_threshold = 1e-10;
 
         int abfs_Lmax = 0; // tmp
 

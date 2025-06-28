@@ -717,6 +717,10 @@ auto Ewald_Vq<Tdata>::set_Vq_dVq(const UnitCell& ucell,
         for (const auto& innerPair: outerPair.second)
             atoms01.insert(innerPair.first.first);
     }
+    for (const auto& elem: Vs_dVs_minus_gauss_in)
+    {
+        GlobalV::ofs_running << "Vq_in" << " " << elem.first << std::endl;
+    }
     for (const auto& elem: atoms00)
     {
         GlobalV::ofs_running << "atoms00" << " " << elem << std::endl;
@@ -748,7 +752,10 @@ auto Ewald_Vq<Tdata>::set_Vq_dVq(const UnitCell& ucell,
     {
         atoms11.insert(pair.first);
     }
-
+    for (const auto& elem: Vq_dVq_gauss_out)
+    {
+        GlobalV::ofs_running << "Vq" << " " << elem.first << std::endl;
+    }
     for (const auto& elem: atoms10)
     {
         GlobalV::ofs_running << "atoms10" << " " << elem << std::endl;
@@ -757,6 +764,7 @@ auto Ewald_Vq<Tdata>::set_Vq_dVq(const UnitCell& ucell,
     {
         GlobalV::ofs_running << "atoms11" << " " << elem << std::endl;
     }
+
     GlobalV::ofs_running << "before 2comm" << std::endl;
     std::map<TA, std::map<TAK, Tout>> Vq_dVq_gauss
         = RI_2D_Comm::comm_map2_first(this->mpi_comm, Vq_dVq_gauss_out, atoms10, atoms11); //{ia0, ia1}

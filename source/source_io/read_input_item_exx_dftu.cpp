@@ -323,6 +323,19 @@ void ReadInput::item_exx()
         this->add_item(item);
     }
     {
+        Input_Item item("exx_rotate_abfs");
+        item.annotation = "whether to rotate auxiliary basis for Coulomb calculation";
+        read_sync_bool(input.exx_rotate_abfs);
+        this->add_item(item);
+    }
+    {
+        Input_Item item("exx_multip_moments_threshold");
+        item.annotation = "threshold to screen multipole moments in Coulomb calculation";
+        read_sync_double(input.exx_multip_moments_threshold);
+        this->add_item(item);
+    }
+
+    {
         Input_Item item("exx_ccp_rmesh_times");
         item.annotation = "how many times larger the radial mesh required for "
                           "calculating Columb potential is to that "
