@@ -249,14 +249,14 @@ auto Ewald_Vq<Tdata>::cal_dVs_minus_gauss(const UnitCell& ucell,
 template <typename Tdata>
 double Ewald_Vq<Tdata>::cal_V_Rcut(const int it0, const int it1)
 {
-    return this->g_abfs_ccp_rcut[it0] + this->g_lcaos_rcut[it1];
+    return this->g_abfs_ccp_rcut.at(it0) + this->g_lcaos_rcut.at(it1);
 }
 
 template <typename Tdata>
 double Ewald_Vq<Tdata>::get_Rcut_max(const int it0, const int it1)
 {
-    double lcaos_rmax = this->lcaos_rcut[it0] * this->info.ccp_rmesh_times + this->lcaos_rcut[it1];
-    double g_lcaos_rmax = this->g_lcaos_rcut[it0] * this->info.ccp_rmesh_times + this->g_lcaos_rcut[it1];
+    double lcaos_rmax = this->lcaos_rcut.at(it0) * this->info.ccp_rmesh_times + this->lcaos_rcut.at(it1);
+    double g_lcaos_rmax = this->g_lcaos_rcut.at(it0) * this->info.ccp_rmesh_times + this->g_lcaos_rcut.at(it1);
     return std::min(lcaos_rmax, g_lcaos_rmax);
 }
 
@@ -301,36 +301,31 @@ auto Ewald_Vq<Tdata>::set_Vs_dVs_minus_gauss(const UnitCell& ucell,
                 LRI_CV_Tools::init_elem(data, size0, size1);
 
                 // pA * pB * V(R)_gauss
-                for (int l0 = 0; l0 != this->g_abfs_ccp[it0].size(); ++l0) {
-                    for (int l1 = 0; l1 != this->g_abfs[it1].size(); ++l1) {
-                        for (size_t n0 = 0;
-                             n0 != this->g_abfs_ccp[it0][l0].size();
-                             ++n0) {
-                            const double pA = this->multipole[it0][l0][n0];
-                            for (size_t n1 = 0;
-                                 n1 != this->g_abfs[it1][l1].size();
-                                 ++n1) {
-                                const double pB = this->multipole[it1][l1][n1];
-                                Tin_convert pp
-                                    = RI::Global_Func::convert<Tin_convert>(
-                                        pA * pB);
-                                for (size_t m0 = 0; m0 != 2 * l0 + 1; ++m0) {
-                                    for (size_t m1 = 0; m1 != 2 * l1 + 1;
-                                         ++m1) {
-                                        const size_t index0
-                                            = this->index_abfs[it0][l0][n0][m0];
-                                        const size_t index1
-                                            = this->index_abfs[it1][l1][n1][m1];
+                for (int l0 = 0; l0 != this->g_abfs_ccp.at(it0).size(); ++l0)
+                {
+                    for (int l1 = 0; l1 != this->g_abfs.at(it1).size(); ++l1)
+                    {
+                        for (size_t n0 = 0; n0 != this->g_abfs_ccp.at(it0).at(l0).size(); ++n0)
+                        {
+                            const double pA = this->multipole.at(it0).at(l0).at(n0);
+                            for (size_t n1 = 0; n1 != this->g_abfs.at(it1).at(l1).size(); ++n1)
+                            {
+                                const double pB = this->multipole.at(it1).at(l1).at(n1);
+                                Tin_convert pp = RI::Global_Func::convert<Tin_convert>(pA * pB);
+                                for (size_t m0 = 0; m0 != 2 * l0 + 1; ++m0)
+                                {
+                                    for (size_t m1 = 0; m1 != 2 * l1 + 1; ++m1)
+                                    {
+                                        const size_t index0 = this->index_abfs.at(it0).at(l0).at(n0).at(m0);
+                                        const size_t index1 = this->index_abfs.at(it1).at(l1).at(n1).at(m1);
 
-                                        LRI_CV_Tools::add_elem(
-                                            data,
-                                            index0,
-                                            index1,
-                                            Vs_dVs_gauss_in[list_A0[i0]]
-                                                           [list_A1[i1]],
-                                            index0,
-                                            index1,
-                                            pp);
+                                        LRI_CV_Tools::add_elem(data,
+                                                               index0,
+                                                               index1,
+                                                               Vs_dVs_gauss_in.at(list_A0[i0]).at(list_A1[i1]),
+                                                               index0,
+                                                               index1,
+                                                               pp);
                                     }
                                 }
                             }
@@ -410,12 +405,12 @@ auto Ewald_Vq<Tdata>::cal_dVq_gauss(const UnitCell& ucell,
             {
                 const int ik = list_A1_k[i1].second[0];
                 const TAK index0 = std::make_pair(iat1, TK{ik});
-                dVq_gauss[iat0][index0] = -res[list_A0_k[i0]][list_A1_k[i1]];
+                dVq_gauss[iat0][index0] = -res.at(list_A0_k[i0]).at(list_A1_k[i1]);
                 const TAK index1 = std::make_pair(iat0, TK{ik});
-                dVq_gauss[iat1][index1] = res[list_A0_k[i0]][list_A1_k[i1]];
-            } else
-                dVq_gauss[list_A0_k[i0]][list_A1_k[i1]]
-                    = res[list_A0_k[i0]][list_A1_k[i1]];
+                dVq_gauss[iat1][index1] = res.at(list_A0_k[i0]).at(list_A1_k[i1]);
+            }
+            else
+                dVq_gauss[list_A0_k[i0]][list_A1_k[i1]] = res.at(list_A0_k[i0]).at(list_A1_k[i1]);
         }
     }
 
@@ -453,10 +448,8 @@ auto Ewald_Vq<Tdata>::set_Vq_dVq_gauss(const UnitCell& ucell,
             const size_t ik = list_A1_k[i1].second[0] + shift_for_mpi;
 
             const ModuleBase::Vector3<double> tau = tau0 - tau1;
-            auto data = func_DPget_Vq_dVq(this->g_abfs_ccp[it0].size() - 1,
-                                          this->g_abfs[it1].size() - 1,
-                                          ik,
-                                          tau);
+            auto data
+                = func_DPget_Vq_dVq(this->g_abfs_ccp.at(it0).size() - 1, this->g_abfs.at(it1).size() - 1, ik, tau);
 
 #pragma omp critical(Ewald_Vq_set_Vq_dVq_gauss)
             Vq_dVq_gauss_out[list_A0_k[i0]][list_A1_k[i1]] = data;
@@ -518,6 +511,27 @@ auto Ewald_Vq<Tdata>::set_Vq_dVq_minus_gauss(const UnitCell& ucell,
     ModuleBase::TITLE("Ewald_Vq", "set_Vq_dVq_minus_gauss");
     ModuleBase::timer::tick("Ewald_Vq", "set_Vq_dVq_minus_gauss");
 
+    // Huanjing Gong debug
+    // GlobalV::ofs_running << "begin check IJ" << std::endl;
+    // for (const auto& IJRc: Vs_dVs_minus_gauss)
+    // {
+    //     const auto& I = IJRc.first;
+    //     for (const auto& JRc: IJRc.second)
+    //     {
+    //         const auto& J = JRc.first.first;
+    //         const auto& R = JRc.first.second;
+    //         const auto& cc = JRc.second;
+    //         GlobalV::ofs_running << "IJ R " << I << " " << J << " " << R[0] << R[1] << R[2] << std::endl;
+    //         for (int i = 0; i < cc.shape[0]; i++)
+    //         {
+    //             for (int j = 0; j < cc.shape[1]; j++)
+    //             {
+    //                 GlobalV::ofs_running << "cc" << " " << i << " " << j << " " << cc(i, j) << std::endl;
+    //             }
+    //         }
+    //     }
+    // }
+    // GlobalV::ofs_running << "end check IJ" << std::endl;
     using namespace RI::Array_Operator;
     using Tin_convert = typename LRI_CV_Tools::TinType<Tout>::type;
     std::map<TA, std::map<TAK, Tout>> datas;
@@ -554,16 +568,14 @@ auto Ewald_Vq<Tdata>::set_Vq_dVq_minus_gauss(const UnitCell& ucell,
 
                         Tout Vs_dVs_tmp = LRI_CV_Tools::mul2(
                             phase,
-                            LRI_CV_Tools::convert<Tin_convert>(std::move(
-                                Vs_dVs_minus_gauss[iat0][list_A1[i1]])));
+                            LRI_CV_Tools::convert<Tin_convert>(std::move(Vs_dVs_minus_gauss.at(iat0).at(list_A1[i1]))));
 
                         const TAK index
                             = std::make_pair(iat1, TK{static_cast<int>(ik)});
                         if (!LRI_CV_Tools::exist(local_datas[iat0][index]))
                             local_datas[iat0][index] = Vs_dVs_tmp;
                         else
-                            local_datas[iat0][index]
-                                = local_datas[iat0][index] + Vs_dVs_tmp;
+                            local_datas.at(iat0).at(index) = local_datas.at(iat0).at(index) + Vs_dVs_tmp;
                     }
                 }
             }
@@ -582,7 +594,7 @@ auto Ewald_Vq<Tdata>::set_Vq_dVq_minus_gauss(const UnitCell& ucell,
                     if (!LRI_CV_Tools::exist(datas[key0][key1]))
                         datas[key0][key1] = value;
                     else
-                        datas[key0][key1] = datas[key0][key1] + value;
+                        datas[key0][key1] = datas.at(key0).at(key1) + value;
                 }
             }
         }
@@ -710,65 +722,36 @@ auto Ewald_Vq<Tdata>::set_Vq_dVq(const UnitCell& ucell,
     // MPI: {ia0, {ia1, R}} to {ia0, ia1}
     std::set<TA> atoms00;
     std::set<TA> atoms01;
-    for (const auto& outerPair: Vs_dVs_minus_gauss_in)
+    for (const auto& I: this->list_A0_pair_R)
     {
-        atoms00.insert(outerPair.first);
+        atoms00.insert(I);
+    }
+    for (const auto& JR: this->list_A1_pair_R)
+    {
+        atoms01.insert(JR.first);
+    }
 
-        for (const auto& innerPair: outerPair.second)
-            atoms01.insert(innerPair.first.first);
-    }
-    for (const auto& elem: Vs_dVs_minus_gauss_in)
-    {
-        GlobalV::ofs_running << "Vq_in" << " " << elem.first << std::endl;
-    }
-    for (const auto& elem: atoms00)
-    {
-        GlobalV::ofs_running << "atoms00" << " " << elem << std::endl;
-    }
-    for (const auto& elem: atoms01)
-    {
-        GlobalV::ofs_running << "atoms01" << " " << elem << std::endl;
-    }
-    GlobalV::ofs_running << "before 1comm" << std::endl;
     std::map<TA, std::map<TAC, Tin>> Vs_dVs_minus_gauss
         = RI_2D_Comm::comm_map2_first(this->mpi_comm, Vs_dVs_minus_gauss_in, atoms00, atoms01);
-    GlobalV::ofs_running << "after 1comm" << std::endl;
+
     std::map<TA, std::map<TAK, Tout>> Vq_dVq_minus_gauss = func_cal_Vq_dVq_minus_gauss(Vs_dVs_minus_gauss); //{ia0, ia1}
 
     // MPI: {ia0, {ia1, k}} to {ia0, ia1}
     std::map<TA, std::map<TAK, Tout>> Vq_dVq_gauss_out = func_cal_Vq_dVq_gauss(shift_for_mpi); //{ia0, {ia1, k}}
-    // std::set<TA> atoms10;
-    // std::set<TA> atoms11;
-    //  for (const auto& outerPair: Vq_dVq_gauss_out)
-    //  {
-    //      atoms10.insert(outerPair.first);
-
-    //     for (const auto& innerPair: outerPair.second)
-    //         atoms11.insert(innerPair.first.first);
-    // }
-    std::set<TA> atoms10{list_A0_pair_k.begin(), list_A0_pair_k.end()};
+    // MPI: {ia0, {ia1, k}} to {ia0, ia1}
+    std::set<TA> atoms10;
     std::set<TA> atoms11;
-    for (const auto& pair: list_A1_pair_k)
+    for (const auto& I: this->list_A0_pair_k)
     {
-        atoms11.insert(pair.first);
+        atoms10.insert(I);
     }
-    for (const auto& elem: Vq_dVq_gauss_out)
+    for (const auto& JR: this->list_A1_pair_k)
     {
-        GlobalV::ofs_running << "Vq" << " " << elem.first << std::endl;
-    }
-    for (const auto& elem: atoms10)
-    {
-        GlobalV::ofs_running << "atoms10" << " " << elem << std::endl;
-    }
-    for (const auto& elem: atoms11)
-    {
-        GlobalV::ofs_running << "atoms11" << " " << elem << std::endl;
+        atoms11.insert(JR.first);
     }
 
-    GlobalV::ofs_running << "before 2comm" << std::endl;
     std::map<TA, std::map<TAK, Tout>> Vq_dVq_gauss
         = RI_2D_Comm::comm_map2_first(this->mpi_comm, Vq_dVq_gauss_out, atoms10, atoms11); //{ia0, ia1}
-    GlobalV::ofs_running << "after 2comm" << std::endl;
 
 #pragma omp parallel
     for (size_t i0 = 0; i0 < list_A0_pair_k.size(); ++i0) {
@@ -785,28 +768,30 @@ auto Ewald_Vq<Tdata>::set_Vq_dVq(const UnitCell& ucell,
             const size_t size1 = this->index_abfs[it1].count_size;
             Tout data;
             LRI_CV_Tools::init_elem(data, size0, size1);
-            for (int l0 = 0; l0 != this->g_abfs_ccp[it0].size(); ++l0) {
-                for (int l1 = 0; l1 != this->g_abfs[it1].size(); ++l1) {
-                    for (size_t n0 = 0; n0 != this->g_abfs_ccp[it0][l0].size();
-                         ++n0) {
-                        const double pA = this->multipole[it0][l0][n0];
-                        for (size_t n1 = 0; n1 != this->g_abfs[it1][l1].size();
-                             ++n1) {
-                            const double pB = this->multipole[it1][l1][n1];
+            for (int l0 = 0; l0 != this->g_abfs_ccp.at(it0).size(); ++l0)
+            {
+                for (int l1 = 0; l1 != this->g_abfs.at(it1).size(); ++l1)
+                {
+                    for (size_t n0 = 0; n0 != this->g_abfs_ccp.at(it0).at(l0).size(); ++n0)
+                    {
+                        const double pA = this->multipole.at(it0).at(l0).at(n0);
+                        for (size_t n1 = 0; n1 != this->g_abfs.at(it1).at(l1).size(); ++n1)
+                        {
+                            const double pB = this->multipole.at(it1).at(l1).at(n1);
                             Tin_convert frac = RI::Global_Func::convert<Tin_convert>(pA * pB * this->info.hybrid_alpha);
                             for (size_t m0 = 0; m0 != 2 * l0 + 1; ++m0)
                             {
-                                const size_t index0 = this->index_abfs[it0][l0][n0][m0];
+                                const size_t index0 = this->index_abfs.at(it0).at(l0).at(n0).at(m0);
                                 const size_t lm0 = l0 * l0 + m0;
-                                for (size_t m1 = 0; m1 != 2 * l1 + 1; ++m1) {
-                                    const size_t index1
-                                        = this->index_abfs[it1][l1][n1][m1];
+                                for (size_t m1 = 0; m1 != 2 * l1 + 1; ++m1)
+                                {
+                                    const size_t index1 = this->index_abfs.at(it1).at(l1).at(n1).at(m1);
                                     const size_t lm1 = l1 * l1 + m1;
 
                                     LRI_CV_Tools::add_elem(data,
                                                            index0,
                                                            index1,
-                                                           Vq_dVq_gauss[list_A0_pair_k[i0]][list_A1_pair_k[i1]],
+                                                           Vq_dVq_gauss.at(list_A0_pair_k[i0]).at(list_A1_pair_k[i1]),
                                                            lm0,
                                                            lm1,
                                                            frac);
@@ -818,8 +803,8 @@ auto Ewald_Vq<Tdata>::set_Vq_dVq(const UnitCell& ucell,
             }
 
 #pragma omp critical(Ewald_Vq_set_Vq_dVq)
-            if (LRI_CV_Tools::exist(Vq_dVq_minus_gauss[list_A0_pair_k[i0]][re_index]))
-                Vq_dVq[list_A0_pair_k[i0]][re_index] = Vq_dVq_minus_gauss[list_A0_pair_k[i0]][re_index] + data;
+            if (LRI_CV_Tools::exist(Vq_dVq_minus_gauss.at(list_A0_pair_k[i0]).at(re_index)))
+                Vq_dVq[list_A0_pair_k[i0]][re_index] = Vq_dVq_minus_gauss.at(list_A0_pair_k[i0]).at(re_index) + data;
         }
     }
 
@@ -904,14 +889,16 @@ auto Ewald_Vq<Tdata>::set_Vs_dVs(const UnitCell& ucell,
                           * cfrac;
 
                     const TAK index = std::make_pair(iat1, std::array<int, 1>{static_cast<int>(ik)});
-                    if (LRI_CV_Tools::exist(Vq[iat0][index]))
+                    if (LRI_CV_Tools::exist(Vq.at(iat0).at(index)))
                     {
-                        Tout Vq_tmp = LRI_CV_Tools::convert<Tin_convert>(LRI_CV_Tools::mul2(frac, Vq[iat0][index]));
+                        Tout Vq_tmp
+                            = LRI_CV_Tools::convert<Tin_convert>(LRI_CV_Tools::mul2(frac, Vq.at(iat0).at(index)));
 
                         if (!LRI_CV_Tools::exist(local_datas[iat0][list_A1_pair_R[i1]]))
                             local_datas[iat0][list_A1_pair_R[i1]] = Vq_tmp;
                         else
-                            local_datas[iat0][list_A1_pair_R[i1]] = local_datas[iat0][list_A1_pair_R[i1]] + Vq_tmp;
+                            local_datas[iat0][list_A1_pair_R[i1]]
+                                = local_datas.at(iat0).at(list_A1_pair_R[i1]) + Vq_tmp;
                     }
                 }
             }
@@ -926,7 +913,7 @@ auto Ewald_Vq<Tdata>::set_Vs_dVs(const UnitCell& ucell,
                     if (!LRI_CV_Tools::exist(datas[key0][key1]))
                         datas[key0][key1] = value;
                     else
-                        datas[key0][key1] = datas[key0][key1] + value;
+                        datas[key0][key1] = datas.at(key0).at(key1) + value;
                 }
             }
         }
