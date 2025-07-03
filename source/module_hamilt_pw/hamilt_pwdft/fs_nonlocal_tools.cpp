@@ -925,11 +925,17 @@ void FS_Nonlocal_tools<FPTYPE, Device>::cal_force_dftu(int ik,
                                                        FPTYPE* force,
                                                        const int* orbital_corr,
                                                        const std::complex<FPTYPE>* vu,
-                                                       const int size_vu,
+                                                       int size_vu,
                                                        const FPTYPE* h_wg)
 {
     int* orbital_corr_tmp = nullptr;
     std::complex<FPTYPE>* vu_tmp = nullptr;
+    // nspin=2 and spin-down should move the pointer to the second half of vu
+    if(this->kv_->isk[ik] == 1)
+    {
+        size_vu /= 2;
+        vu += size_vu;
+    }
 #if defined(__CUDA) || defined(__ROCM)
     if (this->device == base_device::GpuDevice)
     {
@@ -1036,11 +1042,17 @@ void FS_Nonlocal_tools<FPTYPE, Device>::cal_stress_dftu(int ik,
                                                         FPTYPE* stress,
                                                         const int* orbital_corr,
                                                         const std::complex<FPTYPE>* vu,
-                                                        const int size_vu,
+                                                        int size_vu,
                                                         const FPTYPE* h_wg)
 {
     int* orbital_corr_tmp = nullptr;
     std::complex<FPTYPE>* vu_tmp = nullptr;
+    // nspin=2 and spin-down should move the pointer to the second half of vu
+    if(this->kv_->isk[ik] == 1)
+    {
+        size_vu /= 2;
+        vu += size_vu;
+    }
 #if defined(__CUDA) || defined(__ROCM)
     if (this->device == base_device::GpuDevice)
     {

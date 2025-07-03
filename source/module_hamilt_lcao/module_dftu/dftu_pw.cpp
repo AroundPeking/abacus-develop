@@ -91,7 +91,7 @@ void DFTU::cal_occ_pw(const int iter, const void* psi_in, const ModuleBase::matr
                         for(int m2 = 0; m2 < tlp1; m2++)
                         {
                             const int index_m2 = ib*nkb + begin_ih + m_begin + m2;
-                            this->locale[iat][target_l][0][is].c[ind_m1m2] = weight * (conj(becp[index_m1]) * becp[index_m2]).real();
+                            this->locale[iat][target_l][0][is].c[ind_m1m2] += weight * (conj(becp[index_m1]) * becp[index_m2]).real();
                             ind_m1m2++;
                         }
                     }
@@ -172,8 +172,13 @@ void DFTU::cal_occ_pw(const int iter, const void* psi_in, const ModuleBase::matr
         {
             continue;
         }
+        const int fold = GlobalV::NSPIN == 4 ? 4 : 1;
         const int size = (2 * target_l + 1) * (2 * target_l + 1);
-        Parallel_Reduce::reduce_double_allpool(GlobalV::KPAR, GlobalV::NPROC_IN_POOL, this->locale[iat][target_l][0][0].c, size * GlobalV::NSPIN);
+        Parallel_Reduce::reduce_double_allpool(GlobalV::KPAR, GlobalV::NPROC_IN_POOL, this->locale[iat][target_l][0][0].c, size * fold);
+        if(GlobalV::NSPIN == 2)
+        {
+            Parallel_Reduce::reduce_double_allpool(GlobalV::KPAR, GlobalV::NPROC_IN_POOL, this->locale[iat][target_l][0][1].c, size);
+        }
         //update effective potential
         const double u_value = this->U[it];
         std::complex<double>* vu_iat = &(this->eff_pot_pw[this->eff_pot_pw_index[iat]]);
@@ -193,11 +198,12 @@ void DFTU::cal_occ_pw(const int iter, const void* psi_in, const ModuleBase::matr
             default:
                 break;
         }
+        const double diag_coeff = GlobalV::NSPIN == 4 ? 1.0 : 0.5;
         for (int m1 = 0; m1 < m_size; m1++)
         {
             for (int m2 = 0; m2 < m_size; m2++)
             {
-                vu_iat[m1 * m_size + m2] = u_value * (1.0 * (m1 == m2) - this->locale[iat][target_l][0][0].c[m2 * m_size + m1]);
+                vu_iat[m1 * m_size + m2] = u_value * (diag_coeff * (m1 == m2) - this->locale[iat][target_l][0][0].c[m2 * m_size + m1]);
                 this->EU += u_value * weight_eu * this->locale[iat][target_l][0][0].c[m2 * m_size + m1] * this->locale[iat][target_l][0][0].c[m1 * m_size + m2];
             }
         }
@@ -208,7 +214,7 @@ void DFTU::cal_occ_pw(const int iter, const void* psi_in, const ModuleBase::matr
             {
                 for (int m2 = 0; m2 < m_size; m2++)
                 {
-                    vu_iat1[m1 * m_size + m2] = u_value * (1.0 * (m1 == m2) - this->locale[iat][target_l][0][1].c[m2 * m_size + m1]);
+                    vu_iat1[m1 * m_size + m2] = u_value * (diag_coeff * (m1 == m2) - this->locale[iat][target_l][0][1].c[m2 * m_size + m1]);
                     this->EU += u_value * weight_eu * this->locale[iat][target_l][0][1].c[m2 * m_size + m1] * this->locale[iat][target_l][0][1].c[m1 * m_size + m2];
                 }
             }
