@@ -2944,7 +2944,9 @@ These variables are relevant when using hybrid functionals with *[basis_type](#b
 - **Description**:
   - spencer: see Phys. Rev. B 77, 193110 (2008).
   - revised_spencer: see Phys. Rev. Mater. 5, 013807 (2021).
-  Set the scheme of Coulomb singularity correction.
+  - massidda: see Phys. Rev. B, 1993, 48: 5058-5068.
+  - carrier: see Phys. Rev. B, 2007, 75: 205126. (under development)
+  Set the scheme of Coulomb singularity correction. The "spencer" and "revised_spencer" methods are based on the Spencer–Alavi truncated Coulomb potential approach, whereas "massidda" and "carrier" are auxiliary-function-based schemes for singularity correction. The latter are commonly used in combination with Ewald summation for GW calculations and long-range corrected hybrid functionals.
 - **Default**: default
 
 ### rpa_ccp_rmesh_times
