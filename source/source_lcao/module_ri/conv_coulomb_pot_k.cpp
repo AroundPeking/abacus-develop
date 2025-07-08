@@ -84,7 +84,7 @@ namespace Conv_Coulomb_Pot_K
 				{
 					for(const auto &param : param_list.second)
 					{
-						if(param.at("singularity_correction") == "limits")
+						if(param.at("singularity_correction") == "limits" || param.at("singularity_correction") == "massidda" || param.at("singularity_correction") == "carrier")
 							{ psik2_ccp = psik2_ccp + std::stod(param.at("alpha")) * cal_psi_fock_limits( orbs.get_psif() ); }
 						else if(param.at("singularity_correction") == "spencer" || param.at("singularity_correction") == "revised_spencer")
 							{ psik2_ccp = psik2_ccp + std::stod(param.at("alpha")) * cal_psi_fock_spencer( orbs.get_psif(), orbs.get_k_radial(), std::stod(param.at("Rcut")) ); }
@@ -97,7 +97,7 @@ namespace Conv_Coulomb_Pot_K
 				{
 					for(const auto &param : param_list.second)
 					{
-						if(param.at("singularity_correction") == "limits")
+						if(param.at("singularity_correction") == "limits" || param.at("singularity_correction") == "massidda" || param.at("singularity_correction") == "carrier")
 							{ psik2_ccp = psik2_ccp + std::stod(param.at("alpha")) * cal_psi_erfc_limits( orbs.get_psif(), orbs.get_k_radial(), std::stod(param.at("omega")) ); }
 						else if(param.at("singularity_correction") == "spencer" || param.at("singularity_correction") == "revised_spencer")
 							{ psik2_ccp = psik2_ccp + std::stod(param.at("alpha")) * cal_psi_erfc_spencer( orbs.get_psif(), orbs.get_k_radial(), std::stod(param.at("omega")), std::stod(param.at("Rcut")) ); }

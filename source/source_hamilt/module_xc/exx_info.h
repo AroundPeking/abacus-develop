@@ -18,7 +18,7 @@ struct Exx_Info
 
 		// Fock:
 		//		"alpha":		"0"
-		//		"singularity_correction":	"limits" / "spencer" / "revised_spencer"
+		//		"singularity_correction":	"limits" / "spencer" / "revised_spencer" / "massidda" / "carrier"
 		//		"lambda":		"0.3"
         //      "Rcut"
 		// Erfc:

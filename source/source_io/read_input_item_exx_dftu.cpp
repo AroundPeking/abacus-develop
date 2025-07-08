@@ -221,10 +221,6 @@ void ReadInput::item_exx()
                     || dft_functional_lower == "scan0"
                     || dft_functional_lower == "muller" || dft_functional_lower == "power"
                     || dft_functional_lower == "wp22" 
-                    || dft_functional_lower == "lc_pbe"
-                    || dft_functional_lower == "lc_wpbe" 
-                    || dft_functional_lower == "lrc_wpbe"
-                    || dft_functional_lower == "lrc_wpbeh"
                     || dft_functional_lower == "cam_pbeh")
                 {
                     para.input.exx_singularity_correction = "spencer";
@@ -232,6 +228,13 @@ void ReadInput::item_exx()
                 else if (dft_functional_lower == "hse" || dft_functional_lower == "cwp22")
                 {
                     para.input.exx_singularity_correction = "limits";
+                }
+                else if (dft_functional_lower == "lc_pbe"
+                    || dft_functional_lower == "lc_wpbe" 
+                    || dft_functional_lower == "lrc_wpbe"
+                    || dft_functional_lower == "lrc_wpbeh")
+                {
+                    para.input.exx_singularity_correction = "massidda";
                 }
             }
         };
