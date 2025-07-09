@@ -275,7 +275,7 @@ void kvec_mpi_k(K_Vectors& kv)
             kvec_d_aux[3 * ik] = kv.kvec_d[ik].x;
             kvec_d_aux[3 * ik + 1] = kv.kvec_d[ik].y;
             kvec_d_aux[3 * ik + 2] = kv.kvec_d[ik].z;
-            kvec_c_full_aux[3 * ik] = kvec_c_full[ik].x;
+            kvec_c_full_aux[3 * ik] = kv.kvec_c_full[ik].x;
             kvec_c_full_aux[3 * ik + 1] = kv.kvec_c_full[ik].y;
             kvec_c_full_aux[3 * ik + 2] = kv.kvec_c_full[ik].z;
         }
@@ -305,9 +305,9 @@ void kvec_mpi_k(K_Vectors& kv)
         kv.kvec_d[i].x = kvec_d_aux[k_index * 3];
         kv.kvec_d[i].y = kvec_d_aux[k_index * 3 + 1];
         kv.kvec_d[i].z = kvec_d_aux[k_index * 3 + 2];
-        kvec_c_full[i].x = kvec_c_full_aux[k_index * 3];
-        kvec_c_full[i].y = kvec_c_full_aux[k_index * 3 + 1];
-        kvec_c_full[i].z = kvec_c_full_aux[k_index * 3 + 2];
+        kv.kvec_c_full[i].x = kvec_c_full_aux[k_index * 3];
+        kv.kvec_c_full[i].y = kvec_c_full_aux[k_index * 3 + 1];
+        kv.kvec_c_full[i].z = kvec_c_full_aux[k_index * 3 + 2];
         kv.wk[i] = wk_aux[k_index];
         kv.isk[i] = isk_aux[k_index];
     }

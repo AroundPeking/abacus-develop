@@ -6,7 +6,6 @@
 #ifndef AUXILIARY_FUNC_H
 #define AUXILIARY_FUNC_H
 
-#include "fq_type.h"
 #include "gaussian_abfs.h"
 //#include "source_basis/module_pw/pw_basis_k.h"
 #include "source_cell/klist.h"
@@ -19,21 +18,21 @@ namespace Singular_Value
 /**
      * @brief Calculating correction of Coulomb singularity
      * 
-        Type_0, // Phys. Rev. B, 75:205126, May 2007.
-        Type_1, // Phys. Rev. B 48, 5058. August 1993.
+        carrier, // Phys. Rev. B, 75:205126, May 2007.
+        massidda, // Phys. Rev. B 48, 5058. August 1993.
     */
 
 using T_cal_fq_type = std::function<double(const ModuleBase::Vector3<double>& gk)>;
 using T_cal_fq_type_no = std::function<double()>;
 
-double cal_type_0(const UnitCell& ucell,
+double cal_carrier(const UnitCell& ucell,
                   const std::vector<ModuleBase::Vector3<double>>& kvec_c,
                   const int& qdiv,
                   const double& qdense,
                   const int& niter,
                   const double& eps,
                   const int& a_rate);
-double cal_type_1(const UnitCell& ucell,
+double cal_massidda(const UnitCell& ucell,
                   const std::array<int, 3>& nmp,
                   const int& qdiv,
                   const double& start_lambda,
@@ -65,13 +64,13 @@ double Iter_Integral(const ModuleBase::Matrix3& G,
 
 // qdiv=2 i.e. q^{-2} for 3D;
 // qdiv=1 i.e. q^{-1} for 2D.
-double fq_type_0(const double& tpiba,
+double fq_carrier(const double& tpiba,
                  const ModuleBase::Vector3<double>& qvec,
                  const int& qdiv,
                  std::vector<ModuleBase::Vector3<double>>& avec,
                  std::vector<ModuleBase::Vector3<double>>& bvec);
 // gamma: chosen as the radius of sphere which has the same volume as the Brillouin zone.
-double fq_type_1(const double& tpiba,
+double fq_massidda(const double& tpiba,
                  Gaussian_Abfs& gaussian_abfs,
                  const int& qdiv,
                  const double& lambda,

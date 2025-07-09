@@ -24,6 +24,12 @@
 
 #include <cmath>
 
+template<typename Tdata>
+Ewald_Vq<Tdata>::Ewald_Vq(){}
+
+template<typename Tdata>
+Ewald_Vq<Tdata>::~Ewald_Vq(){}
+
 template <typename Tdata>
 void Ewald_Vq<Tdata>::init(const UnitCell& ucell,
                            const LCAO_Orbitals& orb,
@@ -31,8 +37,10 @@ void Ewald_Vq<Tdata>::init(const UnitCell& ucell,
                            const K_Vectors* kv_in,
                            std::vector<std::vector<std::vector<Numerical_Orbital_Lm>>>& lcaos_in,
                            std::vector<std::vector<std::vector<Numerical_Orbital_Lm>>>& abfs_in,
-                           const std::map<std::string, double>& parameter,
-                           ORB_gaunt_table& MGT_in)
+                           const std::map<Conv_Coulomb_Pot_K::Coulomb_Type, std::vector<std::map<std::string,std::string>>> &coulomb_param,
+                           ORB_gaunt_table& MGT_in,
+                           const double &ccp_rmesh_times_in,
+                           const double &kmesh_times_in)
 {
     ModuleBase::TITLE("Ewald_Vq", "init");
     ModuleBase::timer::tick("Ewald_Vq", "init");
@@ -41,13 +49,13 @@ void Ewald_Vq<Tdata>::init(const UnitCell& ucell,
     this->p_kv = kv_in;
     this->nks0 = this->p_kv->get_nkstot_full() / this->nspin0;
     this->kvec_c.resize(this->nks0);
+    this->ccp_rmesh_times = ccp_rmesh_times_in;
 
     this->g_lcaos = this->init_gauss(lcaos_in);
     this->g_abfs = this->init_gauss(abfs_in);
     this->g_abfs_ccp = Conv_Coulomb_Pot_K::cal_orbs_ccp(this->g_abfs,
-                                                        this->info.ccp_type,
-                                                        parameter,
-                                                        this->info.ccp_rmesh_times);
+                                                        coulomb_param,
+                                                        this->ccp_rmesh_times);
     this->multipole = Exx_Abfs::Construct_Orbs::get_multipole(abfs_in);
     this->lcaos_rcut = Exx_Abfs::Construct_Orbs::get_Rcut(lcaos_in);
     this->g_lcaos_rcut = Exx_Abfs::Construct_Orbs::get_Rcut(this->g_lcaos);
@@ -57,7 +65,7 @@ void Ewald_Vq<Tdata>::init(const UnitCell& ucell,
     this->index_abfs = ModuleBase::Element_Basis_Index::construct_index(range_abfs);
 
     this->cv
-        .set_orbitals(ucell, orb, this->g_lcaos, this->g_abfs, this->g_abfs_ccp, this->info.kmesh_times, MGT_in, false, false);
+        .set_orbitals(ucell, orb, this->g_lcaos, this->g_abfs, this->g_abfs_ccp, kmesh_times_in, MGT_in, false, false);
     this->gaunt.create(MGT_in.Gaunt_Coefficients.getBound1(),
                        MGT_in.Gaunt_Coefficients.getBound2(),
                        MGT_in.Gaunt_Coefficients.getBound3());
@@ -77,7 +85,7 @@ void Ewald_Vq<Tdata>::init_ions(const UnitCell& ucell, const std::array<Tcell, N
     ModuleBase::timer::tick("Ewald_Vq", "init_ions");
 
     const std::array<Tcell, Ndim> period_Vs
-        = LRI_CV_Tools::cal_latvec_range<Tcell>(1 + this->info.ccp_rmesh_times, ucell, this->g_lcaos_rcut);
+        = LRI_CV_Tools::cal_latvec_range<Tcell>(1 + this->ccp_rmesh_times, ucell, this->g_lcaos_rcut);
 
     const std::pair<std::vector<TA>, std::vector<std::vector<std::pair<TA, std::array<Tcell, Ndim>>>>> list_As_Vs
         = RI::Distribute_Equally::distribute_atoms_periods(this->mpi_comm, this->atoms_vec, period_Vs, 2, false);
@@ -120,23 +128,27 @@ void Ewald_Vq<Tdata>::init_ions(const UnitCell& ucell, const std::array<Tcell, N
 }
 
 template <typename Tdata>
-double Ewald_Vq<Tdata>::get_singular_chi(const UnitCell& ucell, const Singular_Value::Fq_type& fq_type, const double& qdiv)
+double Ewald_Vq<Tdata>::get_singular_chi(const UnitCell& ucell, const std::vector<std::map<std::string,std::string>>& param_list, const double& qdiv)
 {
     ModuleBase::TITLE("Ewald_Vq", "get_singular_chi");
     ModuleBase::timer::tick("Ewald_Vq", "get_singular_chi");
 
     double chi = 0.0;
-    switch (fq_type)
-    {
-    case Singular_Value::Fq_type::Type_0:
-        chi = Singular_Value::cal_type_0(ucell, this->kvec_c, qdiv, 100, 30, 1e-6, 3);
-        break;
-    case Singular_Value::Fq_type::Type_1:
-        chi = Singular_Value::cal_type_1(ucell, this->nmp, qdiv, 1, 5, 1e-4);
-        break;
-    default:
-        throw std::domain_error(std::string(__FILE__) + " line " + std::to_string(__LINE__));
-        break;
+    for(const auto &param : param_list)
+	{
+        if(param.at("singularity_correction") == "carrier")
+		{
+            chi = Singular_Value::cal_carrier(ucell, this->kvec_c, qdiv, 100, 30, 1e-6, 3);
+        }
+        else if(param.at("singularity_correction") == "massidda")
+		{
+            chi = Singular_Value::cal_massidda(ucell, this->nmp, qdiv, 1, 5, 1e-4);
+        }
+        else
+        {            
+            throw std::domain_error(std::string(__FILE__) + " line " + std::to_string(__LINE__)
+                                    + ": singularity_correction must be carrier or massidda");
+        }
     }
 
     ModuleBase::timer::tick("Ewald_Vq", "get_singular_chi");
@@ -220,8 +232,8 @@ double Ewald_Vq<Tdata>::cal_V_Rcut(const int it0, const int it1)
 template <typename Tdata>
 double Ewald_Vq<Tdata>::get_Rcut_max(const int it0, const int it1)
 {
-    double lcaos_rmax = this->lcaos_rcut[it0] * this->info.ccp_rmesh_times + this->lcaos_rcut[it1];
-    double g_lcaos_rmax = this->g_lcaos_rcut[it0] * this->info.ccp_rmesh_times + this->g_lcaos_rcut[it1];
+    double lcaos_rmax = this->lcaos_rcut[it0] * this->ccp_rmesh_times + this->lcaos_rcut[it1];
+    double g_lcaos_rmax = this->g_lcaos_rcut[it0] * this->ccp_rmesh_times + this->g_lcaos_rcut[it1];
     return std::min(lcaos_rmax, g_lcaos_rmax);
 }
 
@@ -713,7 +725,7 @@ auto Ewald_Vq<Tdata>::set_Vq_dVq(const UnitCell& ucell,
                         for (size_t n1 = 0; n1 != this->g_abfs[it1][l1].size(); ++n1)
                         {
                             const double pB = this->multipole[it1][l1][n1];
-                            Tin_convert frac = RI::Global_Func::convert<Tin_convert>(pA * pB * this->info.hybrid_alpha);
+                            Tin_convert frac = RI::Global_Func::convert<Tin_convert>(pA * pB);
                             for (size_t m0 = 0; m0 != 2 * l0 + 1; ++m0)
                             {
                                 const size_t index0 = this->index_abfs[it0][l0][n0][m0];

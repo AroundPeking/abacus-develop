@@ -69,7 +69,7 @@ double solve_chi(const int& nks, const T_cal_fq_type_no& func_cal_fq, const doub
     return chi;
 }
 
-double fq_type_0(const double& tpiba,
+double fq_carrier(const double& tpiba,
                  const ModuleBase::Vector3<double>& qvec,
                  const int& qdiv,
                  std::vector<ModuleBase::Vector3<double>>& avec,
@@ -103,7 +103,7 @@ double fq_type_0(const double& tpiba,
     return fq;
 }
 
-double cal_type_0(const UnitCell& ucell,
+double cal_carrier(const UnitCell& ucell,
                   const std::vector<ModuleBase::Vector3<double>>& kvec_c,
                   const int& qdiv,
                   const double& qdense,
@@ -111,8 +111,8 @@ double cal_type_0(const UnitCell& ucell,
                   const double& eps,
                   const int& a_rate)
 {
-    ModuleBase::TITLE("Singular_Value", "cal_type_0");
-    ModuleBase::timer::tick("Singular_Value", "cal_type_0");
+    ModuleBase::TITLE("Singular_Value", "cal_carrier");
+    ModuleBase::timer::tick("Singular_Value", "cal_carrier");
 
     std::vector<ModuleBase::Vector3<double>> avec = {ucell.a1, ucell.a2, ucell.a3};
     std::vector<ModuleBase::Vector3<double>> bvec;
@@ -138,15 +138,15 @@ double cal_type_0(const UnitCell& ucell,
                        int index = static_cast<int>(vec.norm() * qdense_tpiba);
                        return index ? index - index % a_rate : a_rate;
                    });
-    const T_cal_fq_type func_cal_fq_type_0
-        = std::bind(&fq_type_0, ucell.tpiba, std::placeholders::_1, qdiv, avec, bvec);
+    const T_cal_fq_type func_cal_fq_carrier
+        = std::bind(&fq_carrier, ucell.tpiba, std::placeholders::_1, qdiv, avec, bvec);
 
-    double val = solve_chi(ucell.G, kvec_c, func_cal_fq_type_0, nq_arr, niter, eps, a_rate);
-    ModuleBase::timer::tick("Singular_Value", "cal_type_0");
+    double val = solve_chi(ucell.G, kvec_c, func_cal_fq_carrier, nq_arr, niter, eps, a_rate);
+    ModuleBase::timer::tick("Singular_Value", "cal_carrier");
     return val;
 }
 
-double fq_type_1(const double& tpiba,
+double fq_massidda(const double& tpiba,
                  Gaussian_Abfs& gaussian_abfs,
                  const int& qdiv,
                  const double& lambda,
@@ -164,15 +164,15 @@ double fq_type_1(const double& tpiba,
     return fq;
 }
 
-double cal_type_1(const UnitCell& ucell,
+double cal_massidda(const UnitCell& ucell,
                   const std::array<int, 3>& nmp,
                   const int& qdiv,
                   const double& start_lambda,
                   const int& niter,
                   const double& eps)
 {
-    ModuleBase::TITLE("Singular_Value", "cal_type_1");
-    ModuleBase::timer::tick("Singular_Value", "cal_type_1");
+    ModuleBase::TITLE("Singular_Value", "cal_massidda");
+    ModuleBase::timer::tick("Singular_Value", "cal_massidda");
 
     ModuleBase::Matrix3 bvec;
     bvec.e11 = ucell.G.e11 / nmp[0];
@@ -195,8 +195,8 @@ double cal_type_1(const UnitCell& ucell,
         Gaussian_Abfs gaussian_abfs;
         const double exponent = 1 / lambda;
         gaussian_abfs.init(ucell, lmax, qvec, bvec, exponent);
-        const T_cal_fq_type_no func_cal_fq_type_1
-            = std::bind(&fq_type_1, ucell.tpiba, gaussian_abfs, qdiv, lambda, lmax);
+        const T_cal_fq_type_no func_cal_fq_massidda
+            = std::bind(&fq_massidda, ucell.tpiba, gaussian_abfs, qdiv, lambda, lmax);
         double prefactor
             = ModuleBase::TWO_PI * std::pow(lambda, -1.0 / qdiv) * ucell.omega / std::pow(ModuleBase::TWO_PI, 3);
         double fq_int;
@@ -205,8 +205,8 @@ double cal_type_1(const UnitCell& ucell,
         else if (qdiv == 1)
             fq_int = prefactor;
         else
-            ModuleBase::WARNING_QUIT("Singular_Value::cal_type_1", "Type 1 fq only supports qdiv=1 or qdiv=2!");
-        return solve_chi(nks, func_cal_fq_type_1, fq_int);
+            ModuleBase::WARNING_QUIT("Singular_Value::cal_massidda", "Type 1 fq only supports qdiv=1 or qdiv=2!");
+        return solve_chi(nks, func_cal_fq_massidda, fq_int);
     };
 
     int tot_iter = 0;
@@ -229,9 +229,9 @@ double cal_type_1(const UnitCell& ucell,
     }
 
     if (tot_iter == niter)
-        ModuleBase::WARNING_QUIT("Singular_Value::cal_type_1", "not converged!");
+        ModuleBase::WARNING_QUIT("Singular_Value::cal_massidda", "not converged!");
 
-    ModuleBase::timer::tick("Singular_Value", "cal_type_1");
+    ModuleBase::timer::tick("Singular_Value", "cal_massidda");
     return val_extra;
 }
 

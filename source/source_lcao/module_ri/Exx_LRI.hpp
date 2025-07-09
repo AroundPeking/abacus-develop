@@ -61,6 +61,12 @@ void Exx_LRI<Tdata>::init(const MPI_Comm &mpi_comm_in,
 															this->lcaos, this->abfs, this->exx_objs[settings_list.first].abfs_ccp,
 															this->info.kmesh_times, this->MGT, init_MGT, settings_list.second.first );
 		init_MGT = false; // only init once
+		if (settings_list.first == Conv_Coulomb_Pot_K::Coulomb_Method::Ewald)
+		{
+			this->exx_objs[settings_list.first].evq.init(ucell, orb, 
+														this->mpi_comm, this->p_kv, this->lcaos, this->abfs, 
+														settings_list.second.second, this->MGT, this->info.ccp_rmesh_times, this->info.kmesh_times);
+		}
 	}
 
 	ModuleBase::timer::tick("Exx_LRI", "init");
@@ -106,6 +112,32 @@ void Exx_LRI<Tdata>::cal_exx_ions(const UnitCell& ucell,
 				list_As_Vs.first, list_As_Vs.second[0],
 				{{"writable_Vws",true}});
 		this->exx_objs[settings_list.first].cv.Vws = LRI_CV_Tools::get_CVws(ucell,Vs_temp);
+		if (settings_list.first == Conv_Coulomb_Pot_K::Coulomb_Method::Ewald)
+		{
+			this->exx_objs[settings_list.first].evq.init_ions(ucell, period_Vs);
+			const auto &coulomb_param = settings_list.second.second;
+			std::map<TA, std::map<TAC, RI::Tensor<Tdata>>> Vs_ewald;
+			for(const auto &param_list : coulomb_param)
+			{
+				std::map<TA, std::map<TAC, RI::Tensor<Tdata>>> Vs_ewald_temp;
+				switch(param_list.first)
+				{
+					case Conv_Coulomb_Pot_K::Coulomb_Type::Fock:
+					{
+						double chi = this->exx_objs[settings_list.first].evq.get_singular_chi(ucell, param_list.second, 2.0);
+						Vs_ewald_temp =  this->exx_objs[settings_list.first].evq.cal_Vs(ucell, chi, Vs_temp);
+						break;
+					}
+					default:
+					{
+						throw std::invalid_argument( std::string(__FILE__) + " line " + std::to_string(__LINE__) );
+					}
+				}
+				// Vs_temp cannot be covered here
+				Vs_ewald = Vs_ewald.empty() ? Vs_ewald_temp : LRI_CV_Tools::add(Vs_ewald, Vs_ewald_temp);
+			}
+			Vs_temp = Vs_ewald;
+		}
 		Vs = Vs.empty() ? Vs_temp : LRI_CV_Tools::add(Vs, Vs_temp);
 
 		if(PARAM.inp.cal_force || PARAM.inp.cal_stress)

@@ -11,7 +11,7 @@
 #include "source_base/element_basis_index.h"
 #include "source_cell/klist.h"
 #include "source_hamilt/module_xc/exx_info.h"
-#include "module_parameter/parameter.h"
+#include "source_io/module_parameter/parameter.h"
 
 #include <RI/global/Tensor.h>
 #include <array>
@@ -21,6 +21,9 @@
 template <typename Tdata>
 class Ewald_Vq
 {
+  public:
+    Ewald_Vq();
+	~Ewald_Vq();
     /**
      * @brief The Ewald summation decomposes the bare Coulomb interaction into two components: 
      *   the short-range contribution, evaluated in real space, and the long-range contribution, 
@@ -44,23 +47,20 @@ class Ewald_Vq
     using TAK = std::pair<TA, TK>;
 
   public:
-    Ewald_Vq(const Exx_Info::Exx_Info_RI& info_in)
-        : info(info_in)
-    {
-    }
-
     void init(const UnitCell& ucell,
               const LCAO_Orbitals& orb,
               const MPI_Comm& mpi_comm_in,
               const K_Vectors* kv_in,
               std::vector<std::vector<std::vector<Numerical_Orbital_Lm>>>& lcaos_in,
               std::vector<std::vector<std::vector<Numerical_Orbital_Lm>>>& abfs_in,
-              const std::map<std::string, double>& parameter,
-              ORB_gaunt_table& MGT_in);
+              const std::map<Conv_Coulomb_Pot_K::Coulomb_Type, std::vector<std::map<std::string,std::string>>> &coulomb_param,
+              ORB_gaunt_table& MGT_in,
+              const double &ccp_rmesh_times_in,
+              const double &kmesh_times_in);
 
     void init_ions(const UnitCell& ucell, const std::array<Tcell, Ndim>& period_Vs_NAO);
 
-    double get_singular_chi(const UnitCell& ucell, const Singular_Value::Fq_type& fq_type, const double& qdiv);
+    double get_singular_chi(const UnitCell& ucell, const std::vector<std::map<std::string,std::string>>& param_list, const double& qdiv);
 
     inline std::map<TA, std::map<TAK, RI::Tensor<std::complex<double>>>> cal_Vq(
         const UnitCell& ucell,
@@ -80,7 +80,7 @@ class Ewald_Vq
         std::map<TA, std::map<TAC, std::array<RI::Tensor<Tdata>, Ndim>>>& dVs_in);
 
   private:
-    const Exx_Info::Exx_Info_RI& info;
+    double ccp_rmesh_times;
     LRI_CV<Tdata> cv;
     Gaussian_Abfs gaussian_abfs;
     const K_Vectors* p_kv;
