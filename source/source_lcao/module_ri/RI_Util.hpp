@@ -134,13 +134,19 @@ namespace RI_Util
                 std::map<Conv_Coulomb_Pot_K::Coulomb_Type, 
                     std::vector<std::map<std::string,std::string>>>>> coulomb_settings;
 
-		if(!coulomb_param_center2.empty())
+		const bool cal_center = !coulomb_param_center2.empty();
+		const bool cal_ewald = !coulomb_param_ewald.empty();
+		if(cal_center)
 		{
-			coulomb_settings[Conv_Coulomb_Pot_K::Coulomb_Method::Center2] = std::make_pair(true, coulomb_param_center2);
+			coulomb_settings[Conv_Coulomb_Pot_K::Coulomb_Method::Center2] = std::make_pair(cal_center, coulomb_param_center2);
 		}
-		if (!coulomb_param_ewald.empty())
+		if(cal_ewald)
 		{
-			coulomb_settings[Conv_Coulomb_Pot_K::Coulomb_Method::Ewald] = std::make_pair(false, coulomb_param_ewald);
+			coulomb_settings[Conv_Coulomb_Pot_K::Coulomb_Method::Ewald] = std::make_pair(cal_ewald, coulomb_param_ewald);
+		}
+		if(cal_center && cal_ewald)
+		{
+			coulomb_settings[Conv_Coulomb_Pot_K::Coulomb_Method::Center2].first = false; // If both methods are available, only HF for C is needed.
 		}
 
 		return coulomb_settings;
