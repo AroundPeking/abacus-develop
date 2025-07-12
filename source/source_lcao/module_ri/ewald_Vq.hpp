@@ -37,7 +37,7 @@ void Ewald_Vq<Tdata>::init(const UnitCell& ucell,
                            const K_Vectors* kv_in,
                            std::vector<std::vector<std::vector<Numerical_Orbital_Lm>>>& lcaos_in,
                            std::vector<std::vector<std::vector<Numerical_Orbital_Lm>>>& abfs_in,
-                           const std::map<Conv_Coulomb_Pot_K::Coulomb_Type, std::vector<std::map<std::string,std::string>>> &coulomb_param,
+                           const std::map<Conv_Coulomb_Pot_K::Coulomb_Type, std::vector<std::map<std::string,std::string>>> &coulomb_param_in,
                            ORB_gaunt_table& MGT_in,
                            const double &ccp_rmesh_times_in,
                            const double &kmesh_times_in)
@@ -50,11 +50,12 @@ void Ewald_Vq<Tdata>::init(const UnitCell& ucell,
     this->nks0 = this->p_kv->get_nkstot_full() / this->nspin0;
     this->kvec_c.resize(this->nks0);
     this->ccp_rmesh_times = ccp_rmesh_times_in;
+    this->coulomb_param = coulomb_param_in;
 
     this->g_lcaos = this->init_gauss(lcaos_in);
     this->g_abfs = this->init_gauss(abfs_in);
     this->g_abfs_ccp = Conv_Coulomb_Pot_K::cal_orbs_ccp(this->g_abfs,
-                                                        coulomb_param,
+                                                        this->coulomb_param,
                                                         this->ccp_rmesh_times);
     this->multipole = Exx_Abfs::Construct_Orbs::get_multipole(abfs_in);
     this->lcaos_rcut = Exx_Abfs::Construct_Orbs::get_Rcut(lcaos_in);
@@ -409,29 +410,36 @@ auto Ewald_Vq<Tdata>::set_Vq_dVq_gauss(const UnitCell& ucell,
     ModuleBase::timer::tick("Ewald_Vq", "set_Vq_dVq_gauss");
 
     std::map<TA, std::map<TAK, Tresult>> Vq_dVq_gauss_out;
-
-#pragma omp parallel
-    for (size_t i0 = 0; i0 < list_A0_k.size(); ++i0)
-    {
-#pragma omp for schedule(dynamic) nowait
-        for (size_t i1 = 0; i1 < list_A1_k.size(); ++i1)
+    for(const auto &param_list : this->coulomb_param)
+	{
+        std::complex<double> alpha;
+        for(const auto &param : param_list.second)
         {
-            const TA iat0 = list_A0_k[i0];
-            const int it0 = ucell.iat2it[iat0];
-            const int ia0 = ucell.iat2ia[iat0];
-            const ModuleBase::Vector3<double> tau0 = ucell.atoms[it0].tau[ia0];
+            alpha = std::complex<double>(std::stod(param.at("alpha")), 0);
+        }
+#pragma omp parallel
+        for (size_t i0 = 0; i0 < list_A0_k.size(); ++i0)
+        {
+#pragma omp for schedule(dynamic) nowait
+            for (size_t i1 = 0; i1 < list_A1_k.size(); ++i1)
+            {
+                const TA iat0 = list_A0_k[i0];
+                const int it0 = ucell.iat2it[iat0];
+                const int ia0 = ucell.iat2ia[iat0];
+                const ModuleBase::Vector3<double> tau0 = ucell.atoms[it0].tau[ia0];
 
-            const TA iat1 = list_A1_k[i1].first;
-            const int it1 = ucell.iat2it[iat1];
-            const int ia1 = ucell.iat2ia[iat1];
-            const ModuleBase::Vector3<double> tau1 = ucell.atoms[it1].tau[ia1];
-            const size_t ik = list_A1_k[i1].second[0] + shift_for_mpi;
+                const TA iat1 = list_A1_k[i1].first;
+                const int it1 = ucell.iat2it[iat1];
+                const int ia1 = ucell.iat2ia[iat1];
+                const ModuleBase::Vector3<double> tau1 = ucell.atoms[it1].tau[ia1];
+                const size_t ik = list_A1_k[i1].second[0] + shift_for_mpi;
 
-            const ModuleBase::Vector3<double> tau = tau0 - tau1;
-            auto data = func_DPget_Vq_dVq(this->g_abfs_ccp[it0].size() - 1, this->g_abfs[it1].size() - 1, ik, tau);
+                const ModuleBase::Vector3<double> tau = tau0 - tau1;
+                auto data = func_DPget_Vq_dVq(this->g_abfs_ccp[it0].size() - 1, this->g_abfs[it1].size() - 1, ik, tau);
 
 #pragma omp critical(Ewald_Vq_set_Vq_dVq_gauss)
-            Vq_dVq_gauss_out[list_A0_k[i0]][list_A1_k[i1]] = data;
+                Vq_dVq_gauss_out[list_A0_k[i0]][list_A1_k[i1]] = LRI_CV_Tools::mul2(alpha, data);
+            }
         }
     }
 

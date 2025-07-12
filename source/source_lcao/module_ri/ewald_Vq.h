@@ -53,7 +53,7 @@ class Ewald_Vq
               const K_Vectors* kv_in,
               std::vector<std::vector<std::vector<Numerical_Orbital_Lm>>>& lcaos_in,
               std::vector<std::vector<std::vector<Numerical_Orbital_Lm>>>& abfs_in,
-              const std::map<Conv_Coulomb_Pot_K::Coulomb_Type, std::vector<std::map<std::string,std::string>>> &coulomb_param,
+              const std::map<Conv_Coulomb_Pot_K::Coulomb_Type, std::vector<std::map<std::string,std::string>>> &coulomb_param_in,
               ORB_gaunt_table& MGT_in,
               const double &ccp_rmesh_times_in,
               const double &kmesh_times_in);
@@ -98,6 +98,7 @@ class Ewald_Vq
     std::vector<double> g_lcaos_rcut;
     std::vector<double> g_abfs_ccp_rcut;
 
+    std::map<Conv_Coulomb_Pot_K::Coulomb_Type, std::vector<std::map<std::string,std::string>>> coulomb_param;
     const int nspin0 = std::map<int, int>{{1, 1}, {2, 2}, {4, 1}}.at(PARAM.inp.nspin);
     int nks0;
     std::vector<TA> atoms_vec;
