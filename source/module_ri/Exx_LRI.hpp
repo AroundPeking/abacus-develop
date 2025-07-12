@@ -195,7 +195,7 @@ void Exx_LRI<Tdata>::cal_exx_ions(const UnitCell& ucell, const bool write_cv)
     const std::array<Tcell, Ndim> period_Vs
         = LRI_CV_Tools::cal_latvec_range<Tcell>(1 + this->info.ccp_rmesh_times, ucell, orb_cutoff_);
     const std::pair<std::vector<TA>, std::vector<std::vector<std::pair<TA, std::array<Tcell, Ndim>>>>> list_As_Vs
-        = RI::Distribute_Equally::distribute_atoms_periods(this->mpi_comm, atoms, period_Vs, 2, false);
+        = RI::Distribute_Equally::distribute_atoms(this->mpi_comm, atoms, period_Vs, 2, false);
 
     std::map<TA, std::map<TAC, RI::Tensor<Tdata>>> Vs
         = this->cv.cal_Vs(ucell, list_As_Vs.first, list_As_Vs.second[0], {{"writable_Vws", true}});
@@ -257,7 +257,7 @@ void Exx_LRI<Tdata>::cal_exx_ions(const UnitCell& ucell, const bool write_cv)
 
     const std::array<Tcell, Ndim> period_Cs = LRI_CV_Tools::cal_latvec_range<Tcell>(2, ucell, orb_cutoff_);
     const std::pair<std::vector<TA>, std::vector<std::vector<std::pair<TA, std::array<Tcell, Ndim>>>>> list_As_Cs
-        = RI::Distribute_Equally::distribute_atoms_periods(this->mpi_comm, atoms, period_Cs, 2, false);
+        = RI::Distribute_Equally::distribute_atoms(this->mpi_comm, atoms, period_Cs, 2, false);
 
     std::pair<std::map<TA, std::map<TAC, RI::Tensor<Tdata>>>,
               std::map<TA, std::map<TAC, std::array<RI::Tensor<Tdata>, 3>>>>
@@ -320,7 +320,7 @@ void Exx_LRI<Tdata>::cal_exx_ions_rpa(std::map<TA, std::map<TAC, RI::Tensor<Tdat
     const std::array<Tcell, Ndim> period_Vs
         = LRI_CV_Tools::cal_latvec_range<Tcell>(1 + this->info.ccp_rmesh_times, ucell, orb_cutoff_);
     const std::pair<std::vector<TA>, std::vector<std::vector<std::pair<TA, std::array<Tcell, Ndim>>>>> list_As_Vs
-        = RI::Distribute_Equally::distribute_atoms_periods(this->mpi_comm, atoms, period_Vs, 2, false);
+        = RI::Distribute_Equally::distribute_atoms(this->mpi_comm, atoms, period_Vs, 2, false);
 
     Vs_cut = this->cv.cal_Vs(ucell, list_As_Vs.first, list_As_Vs.second[0], {{"writable_Vws", true}});
 
@@ -381,7 +381,7 @@ void Exx_LRI<Tdata>::cal_exx_ions_rpa(std::map<TA, std::map<TAC, RI::Tensor<Tdat
 
     const std::array<Tcell, Ndim> period_Cs = LRI_CV_Tools::cal_latvec_range<Tcell>(2, ucell, orb_cutoff_);
     const std::pair<std::vector<TA>, std::vector<std::vector<std::pair<TA, std::array<Tcell, Ndim>>>>> list_As_Cs
-        = RI::Distribute_Equally::distribute_atoms_periods(this->mpi_comm, atoms, period_Cs, 2, false);
+        = RI::Distribute_Equally::distribute_atoms(this->mpi_comm, atoms, period_Cs, 2, false);
 
     std::pair<std::map<TA, std::map<TAC, RI::Tensor<Tdata>>>,
               std::map<TA, std::map<TAC, std::array<RI::Tensor<Tdata>, 3>>>>
