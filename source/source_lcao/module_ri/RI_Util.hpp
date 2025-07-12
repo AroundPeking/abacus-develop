@@ -115,16 +115,32 @@ namespace RI_Util
 		std::map<Conv_Coulomb_Pot_K::Coulomb_Type, std::vector<std::map<std::string,std::string>>> coulomb_param_ewald;
 		for(auto &param_list : coulomb_param_updated)
 		{
-			for(auto &param : param_list.second)
+			switch(param_list.first)
 			{
-				if(param.at("singularity_correction") == "spencer" || param.at("singularity_correction") == "limits" 
-					|| param.at("singularity_correction") == "revised_spencer")
+				case Conv_Coulomb_Pot_K::Coulomb_Type::Fock:
 				{
-					coulomb_param_center2[param_list.first].push_back(param);
+					for(auto &param : param_list.second)
+					{
+						if(param.at("singularity_correction") == "spencer" || param.at("singularity_correction") == "limits" 
+							|| param.at("singularity_correction") == "revised_spencer")
+						{
+							coulomb_param_center2[param_list.first].push_back(param);
+						}
+						else if (param.at("singularity_correction") == "massidda" || param.at("singularity_correction") == "carrier" )
+						{
+							coulomb_param_ewald[param_list.first].push_back(param);
+						}
+					}
+					break;
 				}
-                else if (param.at("singularity_correction") == "massidda" || param.at("singularity_correction") == "carrier" )
+				case Conv_Coulomb_Pot_K::Coulomb_Type::Erfc:
 				{
-					coulomb_param_ewald[param_list.first].push_back(param);
+					coulomb_param_center2[param_list.first] = param_list.second; // Erfc is always calculated with Center2 method.
+					break;
+				}
+				default:
+				{
+					throw std::invalid_argument( std::string(__FILE__) + " line " + std::to_string(__LINE__) );
 				}
 			}
 		}
