@@ -67,7 +67,7 @@ void RPA_LRI<T, Tdata>::cal_large_Cs(const LCAO_Orbitals& orb, const K_Vectors& 
 
     const std::array<Tcell, Ndim> period_Cs = LRI_CV_Tools::cal_latvec_range<Tcell>(2, orb_cutoff_);
     const std::pair<std::vector<TA>, std::vector<std::vector<std::pair<TA, std::array<Tcell, Ndim>>>>> list_As_Cs
-        = RI::Distribute_Equally::distribute_atoms_periods(this->mpi_comm, atoms, period_Cs, 2, false);
+        = RI::Distribute_Equally::distribute_atoms(this->mpi_comm, atoms, period_Cs, 2, false);
     std::map<TA, TatomR> atoms_pos;
     for (int iat = 0; iat < ucell.nat; ++iat)
         atoms_pos[iat] = RI_Util::Vector3_to_array3(ucell.atoms[ucell.iat2it[iat]].tau[ucell.iat2ia[iat]]);
@@ -373,7 +373,7 @@ void RPA_LRI<T, Tdata>::cal_abfs_overlap(const LCAO_Orbitals& orb, const K_Vecto
     for (int iat = 0; iat < GlobalC::ucell.nat; ++iat)
         atoms[iat] = iat;
     const std::pair<std::vector<TA>, std::vector<std::vector<std::pair<TA, std::array<Tcell, Ndim>>>>> list_As_Vs
-        = RI::Distribute_Equally::distribute_atoms_periods(this->mpi_comm, atoms, period_Vs, 2, false);
+        = RI::Distribute_Equally::distribute_atoms(this->mpi_comm, atoms, period_Vs, 2, false);
 
 // Huanjing Gong debug
 // std::stringstream ss;
