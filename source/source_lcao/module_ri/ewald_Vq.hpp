@@ -83,28 +83,15 @@ void Ewald_Vq<Tdata>::init_ions(const UnitCell& ucell, const std::array<Tcell, N
     const std::array<Tcell, Ndim> period_Vs
         = LRI_CV_Tools::cal_latvec_range<Tcell>(1 + this->info.ccp_rmesh_times, ucell, this->g_lcaos_rcut);
 
-    const std::pair<
-        std::vector<TA>,
-        std::vector<std::vector<std::pair<TA, std::array<Tcell, Ndim>>>>>
-        list_As_Vs
-        = RI::Distribute_Equally::distribute_atoms_periods(this->mpi_comm,
-                                                           this->atoms_vec,
-                                                           period_Vs,
-                                                           2,
-                                                           false);
+    const std::pair<std::vector<TA>, std::vector<std::vector<std::pair<TA, std::array<Tcell, Ndim>>>>> list_As_Vs
+        = RI::Distribute_Equally::distribute_atoms(this->mpi_comm, this->atoms_vec, period_Vs, 2, false);
 
     this->list_A0 = list_As_Vs.first;
     this->list_A1 = list_As_Vs.second[0];
 
     const std::array<int, 1> Nks = {this->nks0};
-    const std::pair<std::vector<TA>,
-                    std::vector<std::vector<std::pair<TA, TK>>>>
-        list_As_Vq
-        = RI::Distribute_Equally::distribute_atoms_periods(this->mpi_comm,
-                                                           this->atoms_vec,
-                                                           Nks,
-                                                           2,
-                                                           false);
+    const std::pair<std::vector<TA>, std::vector<std::vector<std::pair<TA, TK>>>> list_As_Vq
+        = RI::Distribute_Equally::distribute_atoms(this->mpi_comm, this->atoms_vec, Nks, 2, false);
     this->list_A0_k = list_As_Vq.first;
     this->list_A1_k = list_As_Vq.second[0];
 
@@ -337,6 +324,7 @@ auto Ewald_Vq<Tdata>::set_Vs_dVs_minus_gauss(const UnitCell& ucell,
             }
         }
     }
+    GlobalV::ofs_running << "check size: " << Vs_dVs_in.size() << " " << pVs_dVs_gauss.size() << std::endl;
 
     std::map<TA, std::map<TAC, Tresult>> Vs_dVs_minus_gauss
         = LRI_CV_Tools::minus(Vs_dVs_in, pVs_dVs_gauss);
