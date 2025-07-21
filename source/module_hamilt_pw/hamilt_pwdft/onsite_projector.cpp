@@ -108,23 +108,25 @@ void projectors::OnsiteProjector<T, Device>::init(const std::string& orbital_dir
                                                   const ModuleBase::matrix& ekb)
 {
     this->device = base_device::get_device_type<Device>(this->ctx);
+    
+    this->ucell = ucell_in;
+    this->ntype = ucell_in->ntype;
+
+    this->pw_basis_ = &pw_basis;
+    this->sf_ = &sf;
+
+    std::vector<std::string> orb_files(ntype);
+    std::vector<int> nproj(ntype);
+    int sum_nproj = 0;
+    for(int it=0;it<ntype;++it)
+    {
+        orb_files[it] = ucell->orbital_fn[it];
+        nproj[it] = ucell->atoms[it].nwl;
+        sum_nproj += nproj[it];
+    }
+    // do orbital modulate only once
     if(!this->initialed)
     {
-        this->ucell = ucell_in;
-        this->ntype = ucell_in->ntype;
-
-        this->pw_basis_ = &pw_basis;
-        this->sf_ = &sf;
-
-        std::vector<std::string> orb_files(ntype);
-        std::vector<int> nproj(ntype);
-        int sum_nproj = 0;
-        for(int it=0;it<ntype;++it)
-        {
-            orb_files[it] = ucell->orbital_fn[it];
-            nproj[it] = ucell->atoms[it].nwl;
-            sum_nproj += nproj[it];
-        }
         this->lproj.resize(sum_nproj);
         int index = 0;
         for(int it=0;it<ntype;++it)
@@ -157,7 +159,7 @@ void projectors::OnsiteProjector<T, Device>::init(const std::string& orbital_dir
                         iproj, 
                         onsite_r);
 
-        ModuleBase::timer::tick("OnsiteProj", "cubspl_tabulate");
+        
         // STAGE 0 - making the interpolation table
         // CACHE 0 - if cache the irow2it, irow2iproj, irow2m, itiaiprojm2irow, <G+k|p> can be reused for 
         //           SCF, RELAX and CELL-RELAX calculation
@@ -166,24 +168,26 @@ void projectors::OnsiteProjector<T, Device>::init(const std::string& orbital_dir
         RadialProjection::RadialProjector::_build_forward_map(it2ia, it2iproj, lproj, itiaiprojm2irow_);
         //rp_._build_sbt_tab(rgrid, projs, lproj, nq, dq);
         rp_._build_sbt_tab(nproj, rgrid, projs, lproj, nq, dq, ucell_in->omega, psi.npol, tab, nhtol);
-        // For being compatible with present cal_force and cal_stress framework  
-        // uncomment the following code block if you want to use the FS_Nonlocal_tools
-        if(this->tab_atomic_ == nullptr)
-        {
-            this->tot_nproj = itiaiprojm2irow_.size();
-            this->npwx_ = this->pw_basis_->npwk_max;
-            this->size_vproj = this->tot_nproj * this->npwx_;
-            resmem_complex_op()(this->ctx, this->tab_atomic_, this->size_vproj, "OnsiteP::tab_atomic_");
-        }
-
-        delete this->fs_tools; // it is okay to delete nullptr
-        this->fs_tools = new hamilt::FS_Nonlocal_tools<T, Device>(
-            nproj, lproj, tab, nhtol, this->tab_atomic_, ucell_in, &psi, &kv, &pw_basis, &sf, wg, ekb);      
         
         ModuleBase::timer::tick("OnsiteProj", "cubspl_tabulate");
 
         this->initialed = true;
     }
+
+    // For being compatible with present cal_force and cal_stress framework  
+    // uncomment the following code block if you want to use the FS_Nonlocal_tools
+    ModuleBase::timer::tick("OnsiteProj", "cubspl_tabulate");
+    {
+        this->tot_nproj = itiaiprojm2irow_.size();
+        this->npwx_ = this->pw_basis_->npwk_max;
+        this->size_vproj = this->tot_nproj * this->npwx_;
+        resmem_complex_op()(this->ctx, this->tab_atomic_, this->size_vproj, "OnsiteP::tab_atomic_");
+    }
+
+    delete this->fs_tools; // it is okay to delete nullptr
+    this->fs_tools = new hamilt::FS_Nonlocal_tools<T, Device>(
+        nproj, lproj, tab, nhtol, this->tab_atomic_, ucell_in, &psi, &kv, &pw_basis, &sf, wg, ekb);      
+    ModuleBase::timer::tick("OnsiteProj", "cubspl_tabulate");
 }
 
 template<typename T, typename Device>

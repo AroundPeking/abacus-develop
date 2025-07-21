@@ -227,7 +227,7 @@ struct cal_stress_nl_op<FPTYPE, base_device::DEVICE_CPU>
                     FPTYPE* stress)
     {
         FPTYPE local_stress = 0;
-        int iat = 0, sum = 0;
+        int sum = 0;
         for (int it = 0; it < ntype; it++)
         {
             const int orbital_l = orbital_corr[it];
@@ -294,7 +294,6 @@ struct cal_stress_nl_op<FPTYPE, base_device::DEVICE_CPU>
                 vu += npol * npol * tlp1_2;// step for vu
             }// ia
             sum += atom_na[it] * nproj;
-            iat += atom_na[it];
         } // end it
         *stress += local_stress;
     };

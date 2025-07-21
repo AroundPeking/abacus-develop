@@ -393,6 +393,13 @@ void ESolver_KS_PW<T, Device>::before_scf(const int istep) {
     if (GlobalC::ucell.cell_parameter_updated) {
         this->init_after_vc(PARAM.inp, GlobalC::ucell);
     }
+    
+    // if uramping > 0, and someone want to test the pbe first in each relax step, use this line below:
+    //ModuleBase::GlobalFunc::ZEROS(GlobalC::dftu.U, GlobalC::ucell.ntype);
+
+    // if someone want to test relax from atomic charge but not extrapolated charge, use these two lines below rather than the if(){} block:
+    //this->CE.update_all_dis(GlobalC::ucell);
+    //this->sf.setup_structure_factor(&GlobalC::ucell, this->pelec->charge->rhopw);
     if (GlobalC::ucell.ionic_position_updated) {
         this->CE.update_all_dis(GlobalC::ucell);
         this->CE.extrapolate_charge(
@@ -601,10 +608,6 @@ void ESolver_KS_PW<T, Device>::iter_init(const int istep, const int iter) {
         this->p_chgmix->mixing_restart_count++;
         if (GlobalV::dft_plus_u)
         {
-            if (GlobalC::dftu.uramping > 0.01 && !GlobalC::dftu.u_converged())
-            {
-                this->p_chgmix->mixing_restart_step = GlobalV::SCF_NMAX + 1;
-            }
             if (GlobalC::dftu.uramping > 0.01)
             {
                 bool do_uramping = true;
@@ -626,6 +629,10 @@ void ESolver_KS_PW<T, Device>::iter_init(const int istep, const int iter) {
                     }
                     std::cout << " eV " << std::endl;
                 }
+            }
+            if (GlobalC::dftu.uramping > 0.01 && !GlobalC::dftu.u_converged())
+            {
+                this->p_chgmix->mixing_restart_step = GlobalV::SCF_NMAX + 1;
             }
         }
     }

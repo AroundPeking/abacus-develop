@@ -274,6 +274,7 @@ struct cal_force_nl_op<FPTYPE, base_device::DEVICE_CPU>
             const int nproj = atom_nh[it];
             if(orbital_l == -1)
             {
+                iat0 += atom_na[it];
                 sum0 += nproj * atom_na[it];
                 continue;
             }
