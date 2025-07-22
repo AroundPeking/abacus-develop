@@ -110,6 +110,11 @@ void DFTU::cal_occ_pw(const int iter, const void* psi_in, const ModuleBase::matr
         const int nbands = psi_p->get_nbands();
         for(int ik = 0; ik < psi_p->get_nk(); ik++)
         {
+            int is = 0;
+            if(GlobalV::NSPIN == 2 && ik >= psi_p->get_nk()/2)
+            {
+                is = 1; 
+            }
             psi_p->fix_k(ik);
             onsite_p->tabulate_atomic(ik);
 
@@ -133,29 +138,49 @@ void DFTU::cal_occ_pw(const int iter, const void* psi_in, const ModuleBase::matr
                 const int m_begin = target_l * target_l;
                 const int tlp1 = 2 * target_l + 1;
                 const int tlp1_2 = tlp1 * tlp1;
-                for(int ib = 0;ib<nbands;ib++)
+                if(GlobalV::NSPIN == 4)
                 {
-                    const double weight = wg_in(ik, ib);
-                    int ind_m1m2 = 0;
-                    for(int m1 = 0; m1 < tlp1; m1++)
+                    for(int ib = 0;ib<nbands;ib++)
                     {
-                        const int index_m1 = ib*2*nkb + begin_ih + m_begin + m1;
-                        for(int m2 = 0; m2 < tlp1; m2++)
+                        const double weight = wg_in(ik, ib);
+                        int ind_m1m2 = 0;
+                        for(int m1 = 0; m1 < tlp1; m1++)
                         {
-                            const int index_m2 = ib*2*nkb + begin_ih + m_begin + m2;
-                            std::complex<double> occ[4];
-                            occ[0] = weight * conj(becp[index_m1]) * becp[index_m2];
-                            occ[1] = weight * conj(becp[index_m1]) * becp[index_m2 + nkb];
-                            occ[2] = weight * conj(becp[index_m1 + nkb]) * becp[index_m2];
-                            occ[3] = weight * conj(becp[index_m1 + nkb]) * becp[index_m2 + nkb];
-                            this->locale[iat][target_l][0][0].c[ind_m1m2] += (occ[0] + occ[3]).real();
-                            this->locale[iat][target_l][0][0].c[ind_m1m2 + tlp1_2] += (occ[1] + occ[2]).real();
-                            this->locale[iat][target_l][0][0].c[ind_m1m2 + 2 * tlp1_2] += (occ[1] - occ[2]).imag();
-                            this->locale[iat][target_l][0][0].c[ind_m1m2 + 3 * tlp1_2] += (occ[0] - occ[3]).real();
-                            ind_m1m2++;
+                            const int index_m1 = ib*2*nkb + begin_ih + m_begin + m1;
+                            for(int m2 = 0; m2 < tlp1; m2++)
+                            {
+                                const int index_m2 = ib*2*nkb + begin_ih + m_begin + m2;
+                                std::complex<double> occ[4];
+                                occ[0] = weight * conj(becp[index_m1]) * becp[index_m2];
+                                occ[1] = weight * conj(becp[index_m1]) * becp[index_m2 + nkb];
+                                occ[2] = weight * conj(becp[index_m1 + nkb]) * becp[index_m2];
+                                occ[3] = weight * conj(becp[index_m1 + nkb]) * becp[index_m2 + nkb];
+                                this->locale[iat][target_l][0][0].c[ind_m1m2] += (occ[0] + occ[3]).real();
+                                this->locale[iat][target_l][0][0].c[ind_m1m2 + tlp1_2] += (occ[1] + occ[2]).real();
+                                this->locale[iat][target_l][0][0].c[ind_m1m2 + 2 * tlp1_2] += (occ[1] - occ[2]).imag();
+                                this->locale[iat][target_l][0][0].c[ind_m1m2 + 3 * tlp1_2] += (occ[0] - occ[3]).real();
+                                ind_m1m2++;
+                            }
                         }
-                    }
-                }// ib
+                    }// ib
+                }
+                else{
+                    for(int ib = 0;ib<nbands;ib++)
+                    {
+                        const double weight = wg_in(ik, ib);
+                        int ind_m1m2 = 0;
+                        for(int m1 = 0; m1 < tlp1; m1++)
+                        {
+                            const int index_m1 = ib*nkb + begin_ih + m_begin + m1;
+                            for(int m2 = 0; m2 < tlp1; m2++)
+                            {
+                                const int index_m2 = ib*nkb + begin_ih + m_begin + m2;
+                                this->locale[iat][target_l][0][is].c[ind_m1m2] += weight * (conj(becp[index_m1]) * becp[index_m2]).real();
+                                ind_m1m2++;
+                            }
+                        } // m1
+                    } // ib
+                }// if NSPIN
                 begin_ih += nh;
             }// iat
         }// ik
