@@ -429,7 +429,11 @@ __global__ void cal_force_onsite(int wg_nc,
     {
         iat += atom_na[ii];
         sum += atom_na[ii] * atom_nh[ii];
-        vu += 4 * tlp1_2 * atom_na[ii]; // step for vu
+        if(orbital_corr[ii] != -1)
+        {
+            int size_vu_ii = 4 * (orbital_corr[ii] * 2 + 1) * (orbital_corr[ii] * 2 + 1);
+            vu += size_vu_ii * atom_na[ii]; // step for vu
+        }
     }
 
     const FPTYPE fac = d_wg[ik * wg_nc + ib] * 2.0 * tpiba;
@@ -496,7 +500,11 @@ __global__ void cal_force_onsite_np1(int wg_nc,
     {
         iat += atom_na[ii];
         sum += atom_na[ii] * atom_nh[ii];
-        vu += tlp1_2 * atom_na[ii]; // step for vu
+        if(orbital_corr[ii] != -1)
+        {
+            int size_vu_ii = (orbital_corr[ii] * 2 + 1) * (orbital_corr[ii] * 2 + 1);
+            vu += size_vu_ii * atom_na[ii]; // step for vu
+        }
     }
 
     const FPTYPE fac = d_wg[ik * wg_nc + ib] * 2.0 * tpiba;

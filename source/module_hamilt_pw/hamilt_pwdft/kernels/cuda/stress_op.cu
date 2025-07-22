@@ -742,7 +742,11 @@ __global__ void cal_stress_onsite(
     for (int ii = 0; ii < it; ii++) {
         iat += atom_na[ii];
         sum += atom_na[ii] * atom_nh[ii];
-        vu += 4 * tlp1_2 * atom_na[ii];// step for vu
+        if(orbital_corr[ii] != -1)
+        {
+            int size_vu_ii = 4 * (orbital_corr[ii] * 2 + 1) * (orbital_corr[ii] * 2 + 1);
+            vu += size_vu_ii * atom_na[ii]; // step for vu
+        }
     }
 
     FPTYPE stress_var = 0;
@@ -804,7 +808,11 @@ __global__ void cal_stress_onsite_np1(
     for (int ii = 0; ii < it; ii++) {
         iat += atom_na[ii];
         sum += atom_na[ii] * atom_nh[ii];
-        vu += tlp1_2 * atom_na[ii];// step for vu
+        if(orbital_corr[ii] != -1)
+        {
+            int size_vu_ii = (orbital_corr[ii] * 2 + 1) * (orbital_corr[ii] * 2 + 1);
+            vu += size_vu_ii * atom_na[ii]; // step for vu
+        }
     }
 
     FPTYPE stress_var = 0;
