@@ -777,6 +777,63 @@ __global__ void cal_stress_onsite(
 }
 
 template <typename FPTYPE>
+__global__ void cal_stress_onsite_np1(
+        const int nkb,
+        const int ntype,
+        const int wg_nc,
+        const int ik,
+        const int *atom_nh,
+        const int *atom_na,
+        const FPTYPE *d_wg,
+        const thrust::complex<FPTYPE> *vu,
+        const int* orbital_corr,
+        const thrust::complex<FPTYPE> *becp,
+        const thrust::complex<FPTYPE> *dbecp,
+        FPTYPE *stress)
+{
+    const int ib = blockIdx.x / ntype; // index of loop-nbands
+    const int it = blockIdx.x % ntype; // index of loop-ntype
+    if(orbital_corr[it] == -1) return;
+    const int orbital_l = orbital_corr[it];
+    const int ip_begin = orbital_l * orbital_l;
+    const int tlp1 = 2 * orbital_l + 1;
+    const int tlp1_2 = tlp1 * tlp1;
+
+    int iat = 0; // calculate the begin of atomic index
+    int sum = 0; // calculate the begin of atomic-orbital index
+    for (int ii = 0; ii < it; ii++) {
+        iat += atom_na[ii];
+        sum += atom_na[ii] * atom_nh[ii];
+        vu += tlp1_2 * atom_na[ii];// step for vu
+    }
+
+    FPTYPE stress_var = 0;
+    const FPTYPE fac = d_wg[ik * wg_nc + ib];
+    const int nprojs = atom_nh[it];
+    for (int ia = 0; ia < atom_na[it]; ia++)
+    {
+        for (int mm = threadIdx.x; mm < tlp1_2; mm += blockDim.x) {
+            const int m1 = mm / tlp1;
+            const int m2 = mm % tlp1;
+            const int ip1 = ip_begin + m1;
+            const int ip2 = ip_begin + m2;
+            const int inkb1 = sum + ip1 + ib * nkb;
+            const int inkb2 = sum + ip2 + ib * nkb;
+            
+            stress_var -= fac * (vu[mm] * conj(dbecp[inkb1]) * becp[inkb2]).real();
+        }
+        ++iat;
+        sum+=nprojs;
+        vu += tlp1_2;
+    }//ia
+    __syncwarp();
+    warp_reduce(stress_var);
+    if (threadIdx.x % WARP_SIZE == 0) {
+        atomicAdd(stress, stress_var);
+    }
+}
+
+template <typename FPTYPE>
 __global__ void cal_stress_onsite(
         const int nkb,
         const int ntype,
@@ -829,6 +886,50 @@ __global__ void cal_stress_onsite(
     }
 }
 
+template <typename FPTYPE>
+__global__ void cal_stress_onsite_np1(
+        const int nkb,
+        const int ntype,
+        const int wg_nc,
+        const int ik,
+        const int *atom_nh,
+        const int *atom_na,
+        const FPTYPE *d_wg,
+        const double* lambda,
+        const thrust::complex<FPTYPE> *becp,
+        const thrust::complex<FPTYPE> *dbecp,
+        FPTYPE *stress)
+{
+    const int ib = blockIdx.x / ntype; // index of loop-nbands
+    const int it = blockIdx.x % ntype; // index of loop-ntype
+
+    int iat = 0; // calculate the begin of atomic index
+    int sum = 0; // calculate the begin of atomic-orbital index
+    for (int ii = 0; ii < it; ii++) {
+        iat += atom_na[ii];
+        sum += atom_na[ii] * atom_nh[ii];
+    }
+
+    FPTYPE stress_var = 0;
+    const FPTYPE fac = d_wg[ik * wg_nc + ib];
+    const int nprojs = atom_nh[it];
+    for (int ia = 0; ia < atom_na[it]; ia++)
+    {
+        const FPTYPE coefficients0(lambda[iat*3+2]);
+        for (int ip = threadIdx.x; ip < nprojs; ip += blockDim.x) {
+            const int inkb = sum + ip + ib * nkb;
+            stress_var -= fac * (coefficients0 * conj(dbecp[inkb]) * becp[inkb]).real();
+        }
+        ++iat;
+        sum+=nprojs;
+    }//ia
+    __syncwarp();
+    warp_reduce(stress_var);
+    if (threadIdx.x % WARP_SIZE == 0) {
+        atomicAdd(stress, stress_var);
+    }
+}
+
 //kernel for DFTU stress
 template <typename FPTYPE>
 void cal_stress_nl_op<FPTYPE, base_device::DEVICE_GPU>::operator()(const base_device::DEVICE_GPU* ctx,
@@ -847,7 +948,10 @@ void cal_stress_nl_op<FPTYPE, base_device::DEVICE_GPU>::operator()(const base_de
                     const std::complex<FPTYPE>* dbecp,
                     FPTYPE* stress)
 {
-    cal_stress_onsite<FPTYPE><<<nbands_occ * ntype, THREADS_PER_BLOCK>>>(
+    switch (npol)
+    {
+    case 1:
+        cal_stress_onsite_np1<FPTYPE><<<nbands_occ * ntype, THREADS_PER_BLOCK>>>(
              nkb,
              ntype,
              wg_nc,
@@ -860,6 +964,25 @@ void cal_stress_nl_op<FPTYPE, base_device::DEVICE_GPU>::operator()(const base_de
              reinterpret_cast<const thrust::complex<FPTYPE>*>(becp),
              reinterpret_cast<const thrust::complex<FPTYPE>*>(dbecp),
              stress);// array of data
+        break;
+    case 2:
+        cal_stress_onsite<FPTYPE><<<nbands_occ * ntype, THREADS_PER_BLOCK>>>(
+             nkb,
+             ntype,
+             wg_nc,
+             ik,
+             atom_nh,
+             atom_na,
+             d_wg,
+             reinterpret_cast<const thrust::complex<FPTYPE>*>(vu),
+             orbital_corr,
+             reinterpret_cast<const thrust::complex<FPTYPE>*>(becp),
+             reinterpret_cast<const thrust::complex<FPTYPE>*>(dbecp),
+             stress);// array of data
+        break;
+        default:
+        throw std::runtime_error("cal_stress_nl_op: unsupported npol value");
+    }
 
     cudaCheckOnDebug();
 }
@@ -880,7 +1003,10 @@ void cal_stress_nl_op<FPTYPE, base_device::DEVICE_GPU>::operator()(const base_de
                     const std::complex<FPTYPE>* dbecp,
                     FPTYPE* stress)
 {
-    cal_stress_onsite<FPTYPE><<<nbands_occ * ntype, THREADS_PER_BLOCK>>>(
+    switch (npol)
+    {
+    case 1:
+        cal_stress_onsite_np1<FPTYPE><<<nbands_occ * ntype, THREADS_PER_BLOCK>>>(
              nkb,
              ntype,
              wg_nc,
@@ -892,6 +1018,24 @@ void cal_stress_nl_op<FPTYPE, base_device::DEVICE_GPU>::operator()(const base_de
              reinterpret_cast<const thrust::complex<FPTYPE>*>(becp),
              reinterpret_cast<const thrust::complex<FPTYPE>*>(dbecp),
              stress);// array of data
+        break;
+    case 2:
+        cal_stress_onsite<FPTYPE><<<nbands_occ * ntype, THREADS_PER_BLOCK>>>(
+             nkb,
+             ntype,
+             wg_nc,
+             ik,
+             atom_nh,
+             atom_na,
+             d_wg,
+             lambda,
+             reinterpret_cast<const thrust::complex<FPTYPE>*>(becp),
+             reinterpret_cast<const thrust::complex<FPTYPE>*>(dbecp),
+             stress);// array of data
+        break;
+        default:
+        throw std::runtime_error("cal_stress_nl_op: unsupported npol value");
+    }
 
     cudaCheckOnDebug();
 }
