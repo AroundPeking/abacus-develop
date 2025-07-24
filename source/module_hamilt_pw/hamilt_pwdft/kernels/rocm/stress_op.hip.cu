@@ -272,7 +272,7 @@ __global__ void cal_stress_nl(
         sum += atom_na[ii] * atom_nh[ii];
     }
 
-    FPTYPE stress_var = 0, 
+    FPTYPE stress_var = 0;
     const FPTYPE fac = d_wg[ik * wg_nc + ib] * 1.0;
     const FPTYPE ekb_now = d_ekb[ik * wg_nc + ib];
     const int Nprojs = atom_nh[it];

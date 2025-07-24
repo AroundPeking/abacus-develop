@@ -198,7 +198,7 @@ void hamilt::onsite_ps_op<FPTYPE, base_device::DEVICE_GPU>::operator()(const bas
             reinterpret_cast<const thrust::complex<FPTYPE>*>(becp)); // array of data
         break;
     case 2:
-         hipLaunchKernelGGL(HIP_KERNEL_NAME(onsite_op<FPTYPE>,  dim3(tnp), dim3(THREADS_PER_BLOCK), 0, 0,  
+        hipLaunchKernelGGL(HIP_KERNEL_NAME(onsite_op<FPTYPE>),  dim3(tnp), dim3(THREADS_PER_BLOCK), 0, 0,
             npm,
             npol,
             orb_l_iat,
@@ -208,7 +208,7 @@ void hamilt::onsite_ps_op<FPTYPE, base_device::DEVICE_GPU>::operator()(const bas
             tnp,
             reinterpret_cast<const thrust::complex<FPTYPE>*>(vu),
             reinterpret_cast<thrust::complex<FPTYPE>*>(ps),          // array of data
-            reinterpret_cast<const thrust::complex<FPTYPE>*>(becp))); // array of data
+            reinterpret_cast<const thrust::complex<FPTYPE>*>(becp)); // array of data
         break;
     default:
         throw std::runtime_error("cal_stress_nl_op: unsupported npol value");
