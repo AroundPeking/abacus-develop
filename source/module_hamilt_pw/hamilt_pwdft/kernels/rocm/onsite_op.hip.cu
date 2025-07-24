@@ -163,7 +163,7 @@ void hamilt::onsite_ps_op<FPTYPE, base_device::DEVICE_GPU>::operator()(const bas
             reinterpret_cast<const thrust::complex<FPTYPE>*>(becp)); // array of data
         break;
     default:
-        ABACUS_ERROR("npol should be 1 or 2");
+        throw std::runtime_error("cal_stress_nl_op: unsupported npol value");
     }
     hipCheckOnDebug();
 }
@@ -211,7 +211,7 @@ void hamilt::onsite_ps_op<FPTYPE, base_device::DEVICE_GPU>::operator()(const bas
             reinterpret_cast<const thrust::complex<FPTYPE>*>(becp))); // array of data
         break;
     default:
-        ABACUS_ERROR("npol should be 1 or 2");
+        throw std::runtime_error("cal_stress_nl_op: unsupported npol value");
     }
 
     hipCheckOnDebug();

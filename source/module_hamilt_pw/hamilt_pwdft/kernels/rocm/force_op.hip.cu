@@ -718,7 +718,7 @@ void cal_force_nl_op<FPTYPE, base_device::DEVICE_GPU>::operator()(const base_dev
                        force); // array of data
             break;
         default:
-            ABACUS_ERROR("cal_force_nl_op: npol should be 1 or 2, but got " + std::to_string(npol));
+            throw std::runtime_error("cal_stress_nl_op: unsupported npol value");
     }
     hipCheckOnDebug();
 }
@@ -783,7 +783,7 @@ void cal_force_nl_op<FPTYPE, base_device::DEVICE_GPU>::operator()(const base_dev
                        force); // array of data
             break;
         default:
-            ABACUS_ERROR("cal_force_nl_op: npol should be 1 or 2, but got " + std::to_string(npol));
+            throw std::runtime_error("cal_stress_nl_op: unsupported npol value");
     }
     
 
