@@ -1,11 +1,13 @@
 #include "module_hamilt_pw/hamilt_pwdft/kernels/stress_op.h"
 #include "module_hamilt_pw/hamilt_pwdft/kernels/cuda/vnl_tools_cu.hpp"
+//
 
 #include <complex>
-
 #include <thrust/complex.h>
 #include <hip/hip_runtime.h>
 #include <base/macros/macros.h>
+
+//
 
 #define THREADS_PER_BLOCK 256
 #define FULL_MASK 0xffffffff
@@ -263,18 +265,22 @@ __global__ void cal_stress_nl(
     const int ib2  = ib * 2;
     int it = blockIdx.x % ntype;
 
-    int iat = 0, sum = 0;
+    int iat = 0;
+    int sum = 0;
     for (int ii = 0; ii < it; ii++) {
         iat += atom_na[ii];
         sum += atom_na[ii] * atom_nh[ii];
     }
 
-    FPTYPE stress_var = 0, fac = d_wg[ik * wg_nc + ib] * 1.0, ekb_now = d_ekb[ik * wg_nc + ib];
+    FPTYPE stress_var = 0, 
+    const FPTYPE fac = d_wg[ik * wg_nc + ib] * 1.0;
+    const FPTYPE ekb_now = d_ekb[ik * wg_nc + ib];
     const int Nprojs = atom_nh[it];
     for (int ia = 0; ia < atom_na[it]; ia++)
     {
         for (int ii = threadIdx.x; ii < Nprojs * Nprojs; ii += blockDim.x) {
-            int ip1 = ii / Nprojs, ip2 = ii % Nprojs;
+            int ip1 = ii / Nprojs;
+            int ip2 = ii % Nprojs;
             const thrust::complex<FPTYPE> ps_qq = - ekb_now * qq_nt[it * deeq_3 * deeq_4 + ip1 * deeq_4 + ip2];
             const thrust::complex<FPTYPE> ps0 = deeq_nc[((iat) * deeq_3 + ip1) * deeq_4 + ip2] + ps_qq;
             const thrust::complex<FPTYPE> ps1 = deeq_nc[((1 * deeq_2 + iat) * deeq_3 + ip1) * deeq_4 + ip2];
@@ -292,6 +298,7 @@ __global__ void cal_stress_nl(
         ++iat;
         sum+=Nprojs;
     }//ia
+    //
     warp_reduce(stress_var);
     if (threadIdx.x % WARP_SIZE == 0) {
         atomicAdd(stress + ipol * 3 + jpol, stress_var);
@@ -456,7 +463,6 @@ __global__ void cal_vq_deri(
         tab, it, ib, tab_2, tab_3, table_interval, gnorm[idx]);
 }
 
-
 template <typename FPTYPE>
 __global__ void cal_stress_drhoc_aux0(
         const FPTYPE* r, const FPTYPE* rhoc, 
@@ -565,8 +571,6 @@ __global__ void cal_stress_drhoc_aux2(
     drhocg [idx] = rhocg1;
 }
 
-
-
 template <typename FPTYPE>
 void cal_vkb_op<FPTYPE, base_device::DEVICE_GPU>::operator()(
         const base_device::DEVICE_GPU* ctx,
@@ -608,8 +612,7 @@ void cal_vkb_deri_op<FPTYPE, base_device::DEVICE_GPU>::operator()(
         const std::complex<FPTYPE>* sk_in,
         const std::complex<FPTYPE>* pref_in,
         const FPTYPE* gk_in,
-        std::complex<FPTYPE>* vkbs_out
-    )
+        std::complex<FPTYPE>* vkbs_out)
 {
     const int block = (npw + THREADS_PER_BLOCK - 1) / THREADS_PER_BLOCK;
     dim3 gridsize(block,nh);
@@ -654,6 +657,7 @@ void cal_vq_deri_op<FPTYPE, base_device::DEVICE_GPU>::operator()(
 {
     const int block = (npw + THREADS_PER_BLOCK - 1) / THREADS_PER_BLOCK;
     dim3 gridsize(block,nbeta);
+    // Launch the kernel
     hipLaunchKernelGGL(HIP_KERNEL_NAME(cal_vq_deri<FPTYPE>),gridsize,THREADS_PER_BLOCK,0,0,
         tab, it, gk, npw, tab_2, tab_3,
         table_interval, nbeta, vq
@@ -672,8 +676,6 @@ void cal_stress_drhoc_aux_op<FPTYPE, base_device::DEVICE_GPU>::operator()(
 {
     const int block = (ngg + THREADS_PER_BLOCK - 1) / THREADS_PER_BLOCK;
 
-
-
     if(type == 0) {
         hipLaunchKernelGGL(HIP_KERNEL_NAME(cal_stress_drhoc_aux0<FPTYPE>),block,THREADS_PER_BLOCK,0,0,
             r,rhoc,gx_arr,rab,drhocg,mesh,igl0,ngg,omega
@@ -687,31 +689,16 @@ void cal_stress_drhoc_aux_op<FPTYPE, base_device::DEVICE_GPU>::operator()(
             r,rhoc,gx_arr,rab,drhocg,mesh,igl0,ngg,omega
         );     
     }
-
     return ;
 }
 
-
-template struct cal_vq_op<double, base_device::DEVICE_GPU>;
-template struct cal_vq_op<float, base_device::DEVICE_GPU>;
-
-template struct cal_vq_deri_op<double, base_device::DEVICE_GPU>;
-template struct cal_vq_deri_op<float, base_device::DEVICE_GPU>;
-
-template struct cal_vkb_op<double, base_device::DEVICE_GPU>;
-template struct cal_vkb_op<float, base_device::DEVICE_GPU>;
-
-template struct cal_vkb_deri_op<double, base_device::DEVICE_GPU>;
-template struct cal_vkb_deri_op<float, base_device::DEVICE_GPU>;
-
-template struct cal_stress_drhoc_aux_op<double, base_device::DEVICE_GPU>;
-template struct cal_stress_drhoc_aux_op<float, base_device::DEVICE_GPU>;
 
 template <>
 void pointer_array_malloc<base_device::DEVICE_GPU>::operator()(
         void **ptr,
         const int n
-){
+)
+{
     hipErrcheck(hipMalloc(ptr, n * sizeof(void*)));
 }
 
@@ -755,7 +742,11 @@ __global__ void cal_stress_onsite(
     for (int ii = 0; ii < it; ii++) {
         iat += atom_na[ii];
         sum += atom_na[ii] * atom_nh[ii];
-        vu += 4 * tlp1_2 * atom_na[ii];// step for vu
+        if(orbital_corr[ii] != -1)
+        {
+            int size_vu_ii = 4 * (orbital_corr[ii] * 2 + 1) * (orbital_corr[ii] * 2 + 1);
+            vu += size_vu_ii * atom_na[ii]; // step for vu
+        }// step for vu
     }
 
     FPTYPE stress_var = 0;
@@ -782,6 +773,68 @@ __global__ void cal_stress_onsite(
         sum+=nprojs;
         vu += 4 * tlp1_2;
     }//ia
+    //
+    warp_reduce(stress_var);
+    if (threadIdx.x % WARP_SIZE == 0) {
+        atomicAdd(stress, stress_var);
+    }
+}
+
+template <typename FPTYPE>
+__global__ void cal_stress_onsite_np1(
+        const int nkb,
+        const int ntype,
+        const int wg_nc,
+        const int ik,
+        const int *atom_nh,
+        const int *atom_na,
+        const FPTYPE *d_wg,
+        const thrust::complex<FPTYPE> *vu,
+        const int* orbital_corr,
+        const thrust::complex<FPTYPE> *becp,
+        const thrust::complex<FPTYPE> *dbecp,
+        FPTYPE *stress)
+{
+    const int ib = blockIdx.x / ntype; // index of loop-nbands
+    const int it = blockIdx.x % ntype; // index of loop-ntype
+    if(orbital_corr[it] == -1) return;
+    const int orbital_l = orbital_corr[it];
+    const int ip_begin = orbital_l * orbital_l;
+    const int tlp1 = 2 * orbital_l + 1;
+    const int tlp1_2 = tlp1 * tlp1;
+
+    int iat = 0; // calculate the begin of atomic index
+    int sum = 0; // calculate the begin of atomic-orbital index
+    for (int ii = 0; ii < it; ii++) {
+        iat += atom_na[ii];
+        sum += atom_na[ii] * atom_nh[ii];
+        if(orbital_corr[ii] != -1)
+        {
+            int size_vu_ii = (orbital_corr[ii] * 2 + 1) * (orbital_corr[ii] * 2 + 1);
+            vu += size_vu_ii * atom_na[ii]; // step for vu
+        }// step for vu
+    }
+
+    FPTYPE stress_var = 0;
+    const FPTYPE fac = d_wg[ik * wg_nc + ib];
+    const int nprojs = atom_nh[it];
+    for (int ia = 0; ia < atom_na[it]; ia++)
+    {
+        for (int mm = threadIdx.x; mm < tlp1_2; mm += blockDim.x) {
+            const int m1 = mm / tlp1;
+            const int m2 = mm % tlp1;
+            const int ip1 = ip_begin + m1;
+            const int ip2 = ip_begin + m2;
+            const int inkb1 = sum + ip1 + ib * nkb;
+            const int inkb2 = sum + ip2 + ib * nkb;
+            
+            stress_var -= fac * (vu[mm] * conj(dbecp[inkb1]) * becp[inkb2]).real();
+        }
+        ++iat;
+        sum+=nprojs;
+        vu += tlp1_2;
+    }//ia
+    //
     warp_reduce(stress_var);
     if (threadIdx.x % WARP_SIZE == 0) {
         atomicAdd(stress, stress_var);
@@ -834,6 +887,51 @@ __global__ void cal_stress_onsite(
         ++iat;
         sum+=nprojs;
     }//ia
+    //
+    warp_reduce(stress_var);
+    if (threadIdx.x % WARP_SIZE == 0) {
+        atomicAdd(stress, stress_var);
+    }
+}
+
+template <typename FPTYPE>
+__global__ void cal_stress_onsite_np1(
+        const int nkb,
+        const int ntype,
+        const int wg_nc,
+        const int ik,
+        const int *atom_nh,
+        const int *atom_na,
+        const FPTYPE *d_wg,
+        const double* lambda,
+        const thrust::complex<FPTYPE> *becp,
+        const thrust::complex<FPTYPE> *dbecp,
+        FPTYPE *stress)
+{
+    const int ib = blockIdx.x / ntype; // index of loop-nbands
+    const int it = blockIdx.x % ntype; // index of loop-ntype
+
+    int iat = 0; // calculate the begin of atomic index
+    int sum = 0; // calculate the begin of atomic-orbital index
+    for (int ii = 0; ii < it; ii++) {
+        iat += atom_na[ii];
+        sum += atom_na[ii] * atom_nh[ii];
+    }
+
+    FPTYPE stress_var = 0;
+    const FPTYPE fac = d_wg[ik * wg_nc + ib];
+    const int nprojs = atom_nh[it];
+    for (int ia = 0; ia < atom_na[it]; ia++)
+    {
+        const FPTYPE coefficients0(lambda[iat*3+2]);
+        for (int ip = threadIdx.x; ip < nprojs; ip += blockDim.x) {
+            const int inkb = sum + ip + ib * nkb;
+            stress_var -= fac * (coefficients0 * conj(dbecp[inkb]) * becp[inkb]).real();
+        }
+        ++iat;
+        sum+=nprojs;
+    }//ia
+    //
     warp_reduce(stress_var);
     if (threadIdx.x % WARP_SIZE == 0) {
         atomicAdd(stress, stress_var);
@@ -848,6 +946,7 @@ void cal_stress_nl_op<FPTYPE, base_device::DEVICE_GPU>::operator()(const base_de
                     const int& ntype,
                     const int& wg_nc,
                     const int& ik,
+                    const int& npol,
                     const int* atom_nh,
                     const int* atom_na,
                     const FPTYPE* d_wg,
@@ -857,7 +956,10 @@ void cal_stress_nl_op<FPTYPE, base_device::DEVICE_GPU>::operator()(const base_de
                     const std::complex<FPTYPE>* dbecp,
                     FPTYPE* stress)
 {
-    hipLaunchKernelGGL(HIP_KERNEL_NAME(cal_stress_onsite<FPTYPE>), dim3(nbands_occ * ntype), dim3(THREADS_PER_BLOCK), 0, 0,
+    switch (npol)
+    {
+    case 1:
+        hipLaunchKernelGGL(HIP_KERNEL_NAME(cal_stress_onsite_np1<FPTYPE>), dim3(nbands_occ * ntype), dim3(THREADS_PER_BLOCK), 0, 0,
              nkb,
              ntype,
              wg_nc,
@@ -870,6 +972,25 @@ void cal_stress_nl_op<FPTYPE, base_device::DEVICE_GPU>::operator()(const base_de
              reinterpret_cast<const thrust::complex<FPTYPE>*>(becp),
              reinterpret_cast<const thrust::complex<FPTYPE>*>(dbecp),
              stress);// array of data
+        break;
+    case 2:
+        hipLaunchKernelGGL(HIP_KERNEL_NAME(cal_stress_onsite<FPTYPE>), dim3(nbands_occ * ntype), dim3(THREADS_PER_BLOCK), 0, 0,
+             nkb,
+             ntype,
+             wg_nc,
+             ik,
+             atom_nh,
+             atom_na,
+             d_wg,
+             reinterpret_cast<const thrust::complex<FPTYPE>*>(vu),
+             orbital_corr,
+             reinterpret_cast<const thrust::complex<FPTYPE>*>(becp),
+             reinterpret_cast<const thrust::complex<FPTYPE>*>(dbecp),
+             stress);// array of data
+        break;
+    default:
+        throw std::runtime_error("cal_stress_nl_op: unsupported npol value");
+    }//npol
 
     hipCheckOnDebug();
 }
@@ -890,7 +1011,10 @@ void cal_stress_nl_op<FPTYPE, base_device::DEVICE_GPU>::operator()(const base_de
                     const std::complex<FPTYPE>* dbecp,
                     FPTYPE* stress)
 {
-    hipLaunchKernelGGL(HIP_KERNEL_NAME(cal_stress_onsite<FPTYPE>), dim3(nbands_occ * ntype), dim3(THREADS_PER_BLOCK), 0, 0,
+    switch (npol)
+    {
+    case 1:
+         hipLaunchKernelGGL(HIP_KERNEL_NAME(cal_stress_onsite_np1<FPTYPE>), dim3(nbands_occ * ntype), dim3(THREADS_PER_BLOCK), 0, 0,
              nkb,
              ntype,
              wg_nc,
@@ -902,6 +1026,24 @@ void cal_stress_nl_op<FPTYPE, base_device::DEVICE_GPU>::operator()(const base_de
              reinterpret_cast<const thrust::complex<FPTYPE>*>(becp),
              reinterpret_cast<const thrust::complex<FPTYPE>*>(dbecp),
              stress);// array of data
+        break;
+    case 2:
+         hipLaunchKernelGGL(HIP_KERNEL_NAME(cal_stress_onsite<FPTYPE>), dim3(nbands_occ * ntype), dim3(THREADS_PER_BLOCK), 0, 0,
+             nkb,
+             ntype,
+             wg_nc,
+             ik,
+             atom_nh,
+             atom_na,
+             d_wg,
+             lambda,
+             reinterpret_cast<const thrust::complex<FPTYPE>*>(becp),
+             reinterpret_cast<const thrust::complex<FPTYPE>*>(dbecp),
+             stress);// array of data
+        break;
+        default:
+        throw std::runtime_error("cal_stress_nl_op: unsupported npol value");
+    }
 
     hipCheckOnDebug();
 }
@@ -917,4 +1059,19 @@ template struct cal_dbecp_noevc_nl_op<double, base_device::DEVICE_GPU>;
 template struct cal_stress_nl_op<float, base_device::DEVICE_GPU>;
 template struct cal_stress_nl_op<double, base_device::DEVICE_GPU>;
 
+
+template struct cal_vq_op<double, base_device::DEVICE_GPU>;
+template struct cal_vq_op<float, base_device::DEVICE_GPU>;
+
+template struct cal_vq_deri_op<double, base_device::DEVICE_GPU>;
+template struct cal_vq_deri_op<float, base_device::DEVICE_GPU>;
+
+template struct cal_vkb_op<double, base_device::DEVICE_GPU>;
+template struct cal_vkb_op<float, base_device::DEVICE_GPU>;
+
+template struct cal_vkb_deri_op<double, base_device::DEVICE_GPU>;
+template struct cal_vkb_deri_op<float, base_device::DEVICE_GPU>;
+
+template struct cal_stress_drhoc_aux_op<double, base_device::DEVICE_GPU>;
+template struct cal_stress_drhoc_aux_op<float, base_device::DEVICE_GPU>;
 }  // namespace hamilt
