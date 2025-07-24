@@ -484,6 +484,71 @@ __global__ void cal_force_onsite(int wg_nc,
 }
 
 template <typename FPTYPE>
+__global__ void cal_force_onsite_np1(int wg_nc,
+                                  int ntype,
+                                  int forcenl_nc,
+                                  int nbands,
+                                  int ik,
+                                  int nkb,
+                                  const int* atom_nh,
+                                  const int* atom_na,
+                                  int tpiba,
+                                  const FPTYPE* d_wg,
+                                  const thrust::complex<FPTYPE>* vu,
+                                  const int* orbital_corr,
+                                  const thrust::complex<FPTYPE>* becp,
+                                  const thrust::complex<FPTYPE>* dbecp,
+                                  FPTYPE* force)
+{
+    const int ib = blockIdx.x / ntype; // index of loop-nbands
+    const int it = blockIdx.x % ntype; // index of loop-ntype
+    if (orbital_corr[it] == -1)
+        return;
+    const int orbital_l = orbital_corr[it];
+    const int ip_begin = orbital_l * orbital_l;
+    const int tlp1 = 2 * orbital_l + 1;
+    const int tlp1_2 = tlp1 * tlp1;
+
+    int iat = 0; // calculate the begin of atomic index
+    int sum = 0; // calculate the begin of atomic-orbital index
+    for (int ii = 0; ii < it; ii++)
+    {
+        iat += atom_na[ii];
+        sum += atom_na[ii] * atom_nh[ii];
+        if(orbital_corr[ii] != -1)
+        {
+            int size_vu_ii = (orbital_corr[ii] * 2 + 1) * (orbital_corr[ii] * 2 + 1);
+            vu += size_vu_ii * atom_na[ii]; // step for vu
+        }
+    }
+
+    const FPTYPE fac = d_wg[ik * wg_nc + ib] * 2.0 * tpiba;
+    const int nprojs = atom_nh[it];
+    for (int ia = 0; ia < atom_na[it]; ia++)
+    {
+        for (int mm = threadIdx.x; mm < tlp1_2; mm += blockDim.x)
+        {
+            const int m1 = mm / tlp1;
+            const int m2 = mm % tlp1;
+            const int ip1 = ip_begin + m1;
+            const int ip2 = ip_begin + m2;
+            const int inkb1 = sum + ip1 + ib * nkb;
+            const int inkb2 = sum + ip2 + ib * nkb;
+            // out<<"\n ps = "<<ps;
+            for (int ipol = 0; ipol < 3; ipol++)
+            {
+                const int inkb0 = ipol * nbands * nkb + inkb1;
+                const FPTYPE tmp = - fac * (vu[mm] * conj(dbecp[inkb0]) * becp[inkb2]).real();
+                atomicAdd(force + iat * forcenl_nc + ipol, tmp);
+            }
+        }
+        ++iat;
+        sum += nprojs;
+        vu += tlp1_2;
+    } // ia
+}
+
+template <typename FPTYPE>
 __global__ void cal_force_onsite(int wg_nc,
                                  int ntype,
                                  int forcenl_nc,
@@ -509,14 +574,7 @@ __global__ void cal_force_onsite(int wg_nc,
     {
         iat += atom_na[ii];
         sum += atom_na[ii] * atom_nh[ii];
-        if(orbital_corr[ii] != -1)
-        {
-            int size_vu_ii = (orbital_corr[ii] * 2 + 1) * (orbital_corr[ii] * 2 + 1);
-            vu += size_vu_ii * atom_na[ii]; // step for vu
-        }
-
     }
-
     const FPTYPE fac = d_wg[ik * wg_nc + ib] * 2.0 * tpiba;
     const int nprojs = atom_nh[it];
     for (int ia = 0; ia < atom_na[it]; ia++)
@@ -548,6 +606,54 @@ __global__ void cal_force_onsite(int wg_nc,
     } // ia
 }
 
+template <typename FPTYPE>
+__global__ void cal_force_onsite_np1(int wg_nc,
+                                 int ntype,
+                                 int forcenl_nc,
+                                 int nbands,
+                                 int ik,
+                                 int nkb,
+                                 const int* atom_nh,
+                                 const int* atom_na,
+                                 int tpiba,
+                                 const FPTYPE* d_wg,
+                                 const FPTYPE* lambda,
+                                 const thrust::complex<FPTYPE>* becp,
+                                 const thrust::complex<FPTYPE>* dbecp,
+                                 FPTYPE* force)
+{
+    const int ib = blockIdx.x / ntype; // index of loop-nbands
+    const int it = blockIdx.x % ntype; // index of loop-ntype
+
+    int iat = 0; // calculate the begin of atomic index
+    int sum = 0; // calculate the begin of atomic-orbital index
+    for (int ii = 0; ii < it; ii++)
+    {
+        iat += atom_na[ii];
+        sum += atom_na[ii] * atom_nh[ii];
+    }
+
+    const FPTYPE fac = d_wg[ik * wg_nc + ib] * 2.0 * tpiba;
+    const int nprojs = atom_nh[it];
+    for (int ia = 0; ia < atom_na[it]; ia++)
+    {
+        for (int ip = threadIdx.x; ip < nprojs; ip += blockDim.x)
+        {
+            const int inkb = sum + ip + ib * nkb;
+            // out<<"\n ps = "<<ps;
+            for (int ipol = 0; ipol < 3; ipol++)
+            {
+                const int inkb0 = ipol * nbands * nkb + inkb;
+                const FPTYPE dbb0 = (conj(dbecp[inkb0]) * becp[inkb]).real();
+                const FPTYPE tmp = -fac * lambda[iat] * dbb0;
+                atomicAdd(force + iat * forcenl_nc + ipol, tmp);
+            }
+        }
+        ++iat;
+        sum += nprojs;
+    } // ia
+}
+
 // kernel for DFTU force
 template <typename FPTYPE>
 void cal_force_nl_op<FPTYPE, base_device::DEVICE_GPU>::operator()(const base_device::DEVICE_GPU* ctx,
@@ -569,7 +675,28 @@ void cal_force_nl_op<FPTYPE, base_device::DEVICE_GPU>::operator()(const base_dev
                                                                   const std::complex<FPTYPE>* dbecp,
                                                                   FPTYPE* force)
 {
-    hipLaunchKernelGGL(HIP_KERNEL_NAME(cal_force_onsite<FPTYPE>),
+    switch(npol)
+    {
+        case 1:
+            hipLaunchKernelGGL(HIP_KERNEL_NAME(cal_force_onsite_np1<FPTYPE>), dim3(nbands_occ * ntype), dim3(THREADS_PER_BLOCK), 0, 0,
+                               wg_nc,
+                               ntype,
+                               forcenl_nc,
+                               nbands,
+                               ik,
+                               nkb,
+                               atom_nh,
+                               atom_na,
+                               tpiba,
+                               d_wg,
+                               reinterpret_cast<const thrust::complex<FPTYPE>*>(vu),
+                               orbital_corr,
+                               reinterpret_cast<const thrust::complex<FPTYPE>*>(becp),
+                               reinterpret_cast<const thrust::complex<FPTYPE>*>(dbecp),
+                               force); // array of data
+            break;
+        case 2:
+        hipLaunchKernelGGL(HIP_KERNEL_NAME(cal_force_onsite<FPTYPE>),
                        dim3(nbands_occ * ntype),
                        dim3(THREADS_PER_BLOCK),
                        0,
@@ -589,7 +716,10 @@ void cal_force_nl_op<FPTYPE, base_device::DEVICE_GPU>::operator()(const base_dev
                        reinterpret_cast<const thrust::complex<FPTYPE>*>(becp),
                        reinterpret_cast<const thrust::complex<FPTYPE>*>(dbecp),
                        force); // array of data
-
+            break;
+        default:
+            ABACUS_ERROR("cal_force_nl_op: npol should be 1 or 2, but got " + std::to_string(npol));
+    }
     hipCheckOnDebug();
 }
 // kernel for DeltaSpin force
@@ -612,7 +742,27 @@ void cal_force_nl_op<FPTYPE, base_device::DEVICE_GPU>::operator()(const base_dev
                                                                   const std::complex<FPTYPE>* dbecp,
                                                                   FPTYPE* force)
 {
-    hipLaunchKernelGGL(HIP_KERNEL_NAME(cal_force_onsite<FPTYPE>),
+    switch(npol)
+    {
+        case 1:
+            hipLaunchKernelGGL(HIP_KERNEL_NAME(cal_force_onsite_np1<FPTYPE>), dim3(nbands_occ * ntype), dim3(THREADS_PER_BLOCK), 0, 0,
+                               wg_nc,
+                               ntype,
+                               forcenl_nc,
+                               nbands,
+                               ik,
+                               nkb,
+                               atom_nh,
+                               atom_na,
+                               tpiba,
+                               d_wg,
+                               lambda,
+                               reinterpret_cast<const thrust::complex<FPTYPE>*>(becp),
+                               reinterpret_cast<const thrust::complex<FPTYPE>*>(dbecp),
+                               force); // array of data
+            break;
+        case 2:
+            hipLaunchKernelGGL(HIP_KERNEL_NAME(cal_force_onsite<FPTYPE>),
                        dim3(nbands_occ * ntype),
                        dim3(THREADS_PER_BLOCK),
                        0,
@@ -631,6 +781,11 @@ void cal_force_nl_op<FPTYPE, base_device::DEVICE_GPU>::operator()(const base_dev
                        reinterpret_cast<const thrust::complex<FPTYPE>*>(becp),
                        reinterpret_cast<const thrust::complex<FPTYPE>*>(dbecp),
                        force); // array of data
+            break;
+        default:
+            ABACUS_ERROR("cal_force_nl_op: npol should be 1 or 2, but got " + std::to_string(npol));
+    }
+    
 
     hipCheckOnDebug();
 }
