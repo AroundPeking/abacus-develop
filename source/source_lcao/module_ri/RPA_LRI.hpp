@@ -235,7 +235,8 @@ void RPA_LRI<T, Tdata>::cal_postSCF_exx(const int istep,
     std::map<TA, std::map<TAC, RI::Tensor<Tdata>>> Cs;
     std::map<TA, std::map<TAC, RI::Tensor<Tdata>>> tmp;
     std::cout << "Use rpa_ccp_rmesh_times=" << this->info.ccp_rmesh_times << " to calculate cut Coulomb" << std::endl;
-    exx_lri_rpa->cal_exx_ions_rpa(Vs_cut, Cs, 0, PARAM.inp.out_ri_cv);
+    // Shrink_ABFS_ORBITAL cannot exceed this angular momentum of MGT
+    exx_lri_rpa->cal_exx_ions_rpa(Vs_cut, Cs, ucell, PARAM.inp.out_ri_cv);
     const std::array<Tcell, Ndim> period = {p_kv->nmp[0], p_kv->nmp[1], p_kv->nmp[2]};
     this->Vs_period = RI::RI_Tools::cal_period(Vs_cut, period);
     this->out_coulomb_k(this->Vs_period, "coulomb_cut_", exx_lri_rpa);
