@@ -83,6 +83,9 @@ class Diago_DavSubspace : public DiagH<T, Device>
     /// Eigenvectors on the reduced basis
     T* vcc = nullptr;
 
+    T* d_scc = nullptr;
+    Real* d_eigenvalue = nullptr;
+
     /// device type of psi
     Device* ctx = {};
     base_device::DEVICE_CPU* cpu_ctx = {};

@@ -218,7 +218,7 @@ struct dngvd_op<T, base_device::DEVICE_GPU>
                     T* V,
                     int* fail_info)
     {
-        assert(nstart == ldh);
+        // assert(nstart == ldh);
         // A to V
         cudaErrcheck(cudaMemcpy(V, A, sizeof(T) * ldh * nstart, cudaMemcpyDeviceToDevice));
         int info = xhegvd_wrapper(CUBLAS_FILL_MODE_UPPER, nstart, V, ldh,

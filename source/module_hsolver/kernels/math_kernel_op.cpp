@@ -2,6 +2,7 @@
 
 #include <iomanip>
 #include <iostream>
+#include <vector>
 
 namespace hsolver
 {
@@ -331,6 +332,95 @@ struct matrixSetToAnother<T, base_device::DEVICE_CPU>
     }
 };
 
+template <typename T>
+struct refreshHccSccVcc<T, base_device::DEVICE_CPU>
+{
+    using Real = typename GetTypeReal<T>::type;
+    void operator()(const base_device::DEVICE_CPU *d, const int &n,
+                  T *hcc,
+                  T *scc,
+                  T *vcc,
+                  const int &ldh,
+                  const Real *eigenvalue,
+                  const T &one)
+    {
+#ifdef _OPENMP
+#pragma omp parallel for collapse(1) schedule(static, 8192 / sizeof(T))
+#endif
+        for (int i = 0; i < n; i++)
+        {
+            hcc[i * ldh + i] = eigenvalue[i];
+            scc[i * ldh + i] = one;
+            vcc[i * ldh + i] = one;
+        }
+    }
+};
+
+template <typename T>
+struct matrixMutiplyVector<T, base_device::DEVICE_CPU> {
+    using Real = typename GetTypeReal<T>::type;
+    void operator()(const base_device::DEVICE_CPU *d, const int& m, const int &n,
+                  T *a,
+                  const int &lda,
+                  const Real *v,
+                  const Real alpha,
+                  T *c,
+                  const int &ldc){
+#ifdef _OPENMP
+#pragma omp parallel for collapse(2) schedule(static, 8192 / sizeof(T))
+#endif
+        for (int j = 0; j < n; j++){
+            for (int i = 0; i < m; i++){
+                c[j * lda + i] = a[j * lda + i] * v[j] * alpha;
+            }
+        }
+
+    }
+};
+
+template <typename T>
+struct updatePsiByPrecondition<T, base_device::DEVICE_CPU> {
+    using Real = typename GetTypeReal<T>::type;
+    void operator()(const base_device::DEVICE_CPU *d, const int &m, const int &n,
+                  T *psi,
+                  const int &lda,
+                  const Real *precondition,
+                  const Real *eigenvalue){
+#ifdef _OPENMP
+#pragma omp parallel for collapse(2) schedule(static, 8192 / sizeof(T))
+#endif
+        for (int j = 0; j < n; j++){
+            for (int i = 0; i< m; i++){
+                Real x = std::abs(precondition[i] - eigenvalue[j]);
+                Real pre = 0.5 * (1.0 + x + sqrt(1 + (x - 1.0) * (x - 1.0)));
+                psi[j * lda + i] = psi[j * lda + i] / pre;
+            }
+        }
+    }
+};
+
+template <typename T>
+struct normalizeMatrixColumn<T, base_device::DEVICE_CPU> {
+    using Real = typename GetTypeReal<T>::type;
+    void operator()(const base_device::DEVICE_CPU *d, const int &m, const int &n,
+                  T *matrix,
+                  const int &lda){
+
+        std::vector<Real> psi_norm(n, 0.0);
+        for (size_t i = 0; i < n; i++){
+            psi_norm[i] = dot_real_op<T, base_device::DEVICE_CPU>()(d, m, matrix + i * lda, matrix + i * lda, true);
+
+            psi_norm[i] = sqrt(psi_norm[i]);
+            vector_div_constant_op<T, base_device::DEVICE_CPU>()(d,
+                                                                 m,
+                                                                 matrix + i * lda,
+                                                                 matrix + i * lda,
+                                                                 psi_norm[i]);
+        }
+
+    }
+};
+
 // Explicitly instantiate functors for the types of functor registered.
 template struct scal_op<float, base_device::DEVICE_CPU>;
 template struct axpy_op<std::complex<float>, base_device::DEVICE_CPU>;
@@ -343,6 +433,10 @@ template struct vector_div_vector_op<std::complex<float>, base_device::DEVICE_CP
 template struct constantvector_addORsub_constantVector_op<std::complex<float>, base_device::DEVICE_CPU>;
 template struct matrixTranspose_op<std::complex<float>, base_device::DEVICE_CPU>;
 template struct matrixSetToAnother<std::complex<float>, base_device::DEVICE_CPU>;
+template struct refreshHccSccVcc<std::complex<float>, base_device::DEVICE_CPU>;
+template struct matrixMutiplyVector<std::complex<float>, base_device::DEVICE_CPU>;
+template struct updatePsiByPrecondition<std::complex<float>, base_device::DEVICE_CPU>;
+template struct normalizeMatrixColumn<std::complex<float>, base_device::DEVICE_CPU>;
 template struct calc_grad_with_block_op<std::complex<float>, base_device::DEVICE_CPU>;
 template struct line_minimize_with_block_op<std::complex<float>, base_device::DEVICE_CPU>;
 
@@ -357,6 +451,10 @@ template struct vector_div_vector_op<std::complex<double>, base_device::DEVICE_C
 template struct constantvector_addORsub_constantVector_op<std::complex<double>, base_device::DEVICE_CPU>;
 template struct matrixTranspose_op<std::complex<double>, base_device::DEVICE_CPU>;
 template struct matrixSetToAnother<std::complex<double>, base_device::DEVICE_CPU>;
+template struct refreshHccSccVcc<std::complex<double>, base_device::DEVICE_CPU>;
+template struct matrixMutiplyVector<std::complex<double>, base_device::DEVICE_CPU>;
+template struct updatePsiByPrecondition<std::complex<double>, base_device::DEVICE_CPU>;
+template struct normalizeMatrixColumn<std::complex<double>, base_device::DEVICE_CPU>;
 template struct calc_grad_with_block_op<std::complex<double>, base_device::DEVICE_CPU>;
 template struct line_minimize_with_block_op<std::complex<double>, base_device::DEVICE_CPU>;
 
@@ -370,6 +468,10 @@ template struct vector_div_constant_op<double, base_device::DEVICE_CPU>;
 template struct vector_div_vector_op<double, base_device::DEVICE_CPU>;
 template struct matrixTranspose_op<double, base_device::DEVICE_CPU>;
 template struct matrixSetToAnother<double, base_device::DEVICE_CPU>;
+template struct refreshHccSccVcc<double, base_device::DEVICE_CPU>;
+template struct matrixMutiplyVector<double, base_device::DEVICE_CPU>;
+template struct updatePsiByPrecondition<double, base_device::DEVICE_CPU>;
+template struct normalizeMatrixColumn<double, base_device::DEVICE_CPU>;
 template struct constantvector_addORsub_constantVector_op<double, base_device::DEVICE_CPU>;
 #endif
 } // namespace hsolver

@@ -108,7 +108,7 @@ void dngvd_op<std::complex<float>, base_device::DEVICE_GPU>::operator()(const ba
                                                                         int* fail_info)
 {
     // copied from ../cuda/dngvd_op.cu, "dngvd_op"
-    assert(nstart == ldh);
+    // assert(nstart == ldh);
 
     hipErrcheck(hipMemcpy(_vcc, _hcc, sizeof(std::complex<float>) * ldh * nstart, hipMemcpyDeviceToDevice));
     // now vcc contains hcc
@@ -178,7 +178,7 @@ void dngvd_op<std::complex<double>, base_device::DEVICE_GPU>::operator()(const b
                                                                          int* fail_info)
 {
     // copied from ../cuda/dngvd_op.cu, "dngvd_op"
-    assert(nstart == ldh);
+    // assert(nstart == ldh);
 
     // save a copy of scc in case the diagonalization fails
     std::vector<std::complex<double>> scc(nstart * nstart, {0, 0});
@@ -241,7 +241,7 @@ void dngvd_op<std::complex<double>, base_device::DEVICE_GPU>::operator()(const b
                                                               hcc.data(),
                                                               scc.data(),
                                                               eigenvalue.data(),
-                                                              vcc.data(), 
+                                                              vcc.data(),
                                                               fail_info);
     hipErrcheck(hipMemcpy(_vcc, vcc.data(), sizeof(std::complex<double>) * vcc.size(), hipMemcpyHostToDevice));
     hipErrcheck(hipMemcpy(_eigenvalue, eigenvalue.data(), sizeof(double) * eigenvalue.size(), hipMemcpyHostToDevice));*/

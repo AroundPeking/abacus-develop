@@ -60,6 +60,8 @@ Diago_DavSubspace<T, Device>::Diago_DavSubspace(const std::vector<Real>& precond
     {
         resmem_real_op()(this->ctx, this->d_precondition, nbasis_in);
         // syncmem_var_h2d_op()(this->ctx, this->cpu_ctx, this->d_precondition, this->precondition.data(), nbasis_in);
+        base_device::memory::resize_memory_op<T, Device>()(this->ctx, this->d_scc, this->nbase_x * this->nbase_x);
+        resmem_real_op()(this->ctx, this->d_eigenvalue, this->nbase_x);
     }
 #endif
 }
@@ -78,6 +80,8 @@ Diago_DavSubspace<T, Device>::~Diago_DavSubspace()
     if (this->device == base_device::GpuDevice)
     {
         delmem_real_op()(this->ctx, this->d_precondition);
+        delmem_complex_op()(this->ctx, this->d_scc);
+        delmem_real_op()(this->ctx, this->d_eigenvalue);
     }
 #endif
 }
@@ -289,29 +293,13 @@ bool Diago_DavSubspace<T, Device>::cal_grad(const HPsiFunc& hpsi_func,
                          psi_iter + (nbase) * this->dim,
                          this->dim);
 
-    std::vector<Real> e_temp_cpu(nbase, 0);
-    Real* e_temp_hd = e_temp_cpu.data();
-    if(this->device == base_device::GpuDevice)
-    {
-        e_temp_hd = nullptr;
-        resmem_real_op()(this->ctx, e_temp_hd, nbase);
-    }
-    for (int m = 0; m < notconv; m++)
-    {
-        e_temp_cpu.assign(nbase, (-1.0 * (*eigenvalue_iter)[m]));
-        if (this->device == base_device::GpuDevice)
-        {
-            syncmem_var_h2d_op()(this->ctx, this->cpu_ctx, e_temp_hd, e_temp_cpu.data(), nbase);
-        }
-        vector_mul_vector_op<T, Device>()(this->ctx,
-                                                nbase,
-                                                vcc + m * this->nbase_x,
-                                                vcc + m * this->nbase_x,
-                                                e_temp_hd);
-    }
-    if(this->device == base_device::GpuDevice)
-    {
-        delmem_real_op()(this->ctx, e_temp_hd);
+    if (this->device == base_device::GpuDevice){
+#if defined(__CUDA) || defined(__ROCM)
+        syncmem_var_h2d_op()(this->ctx, this->cpu_ctx, this->d_eigenvalue, eigenvalue_iter->data(), this->nbase_x);
+        hsolver::matrixMutiplyVector<T, Device>()(this->ctx, nbase, notconv, vcc, this->nbase_x, this->d_eigenvalue, -1.0, vcc, this->nbase_x);
+#endif
+    }else{
+        hsolver::matrixMutiplyVector<T, Device>()(this->ctx, nbase, notconv, vcc, this->nbase_x, eigenvalue_iter->data(), -1.0, vcc, this->nbase_x);
     }
 
     gemm_op<T, Device>()(this->ctx,
@@ -329,59 +317,20 @@ bool Diago_DavSubspace<T, Device>::cal_grad(const HPsiFunc& hpsi_func,
                          psi_iter + nbase * this->dim,
                          this->dim);
 
-    // "precondition!!!"
-    std::vector<Real> pre(this->dim, 0.0);
-    for (int m = 0; m < notconv; m++)
-    {
-        for (size_t i = 0; i < this->dim; i++)
-        {
-            // pre[i] = std::abs(this->precondition[i] - (*eigenvalue_iter)[m]);
-            double x = std::abs(this->precondition[i] - (*eigenvalue_iter)[m]);
-            pre[i] = 0.5 * (1.0 + x + sqrt(1 + (x - 1.0) * (x - 1.0)));
-        }
+    if (this->device == base_device::GpuDevice){
 #if defined(__CUDA) || defined(__ROCM)
-        if (this->device == base_device::GpuDevice)
-        {
-            syncmem_var_h2d_op()(this->ctx, this->cpu_ctx, this->d_precondition, pre.data(), this->dim);
-            vector_div_vector_op<T, Device>()(this->ctx,
-                                              this->dim,
-                                              psi_iter + (nbase + m) * this->dim,
-                                              psi_iter + (nbase + m) * this->dim,
-                                              this->d_precondition);
-        }
-        else
+        syncmem_var_h2d_op()(this->ctx, this->cpu_ctx, this->d_precondition,this->precondition.data(), this->dim);
+        hsolver::updatePsiByPrecondition<T, Device>()(this->ctx, this->dim, notconv, psi_iter + nbase * this->dim,
+            this->dim, this->d_precondition, this->d_eigenvalue);
 #endif
-        {
-            vector_div_vector_op<T, Device>()(this->ctx,
-                                              this->dim,
-                                              psi_iter + (nbase + m) * this->dim,
-                                              psi_iter + (nbase + m) * this->dim,
-                                              pre.data());
-        }
+    }else{
+        hsolver::updatePsiByPrecondition<T, Device>()(this->ctx, this->dim, notconv, psi_iter + nbase * this->dim,
+            this->dim, this->precondition.data(), eigenvalue_iter->data());
     }
 
     // "normalize!!!" in order to improve numerical stability of subspace diagonalization
-    std::vector<Real> psi_norm(notconv, 0.0);
-    for (size_t i = 0; i < notconv; i++)
-    {
-        psi_norm[i] = dot_real_op<T, Device>()(this->ctx,
-                                               this->dim,
-                                               psi_iter + (nbase + i) * this->dim,
-                                               psi_iter + (nbase + i) * this->dim,
-                                               true);
-        if(psi_norm[i] <= 0.0) 
-        { 
-            ModuleBase::timer::tick("Diago_DavSubspace", "cal_grad");
-            return false;
-        }
-        psi_norm[i] = sqrt(psi_norm[i]);
+    hsolver::normalizeMatrixColumn<T, Device>()(this->ctx, this->dim, notconv, psi_iter + nbase * this->dim, this->dim);
 
-        vector_div_constant_op<T, Device>()(this->ctx,
-                                            this->dim,
-                                            psi_iter + (nbase + i) * this->dim,
-                                            psi_iter + (nbase + i) * this->dim,
-                                            psi_norm[i]);
-    }
 
     hpsi_func(&hphi[nbase * this->dim], psi_iter, this->nbase_x, this->dim, nbase, nbase + notconv - 1);
 
@@ -518,34 +467,10 @@ bool Diago_DavSubspace<T, Device>::diag_zhegvx(const int& nbase,
         if (this->device == base_device::GpuDevice)
         {
 #if defined(__CUDA) || defined(__ROCM)
-            Real* eigenvalue_gpu = nullptr;
-            resmem_real_op()(this->ctx, eigenvalue_gpu, this->nbase_x);
+            base_device::memory::synchronize_memory_op<T, Device, Device>()(this->ctx, this->ctx, this->d_scc, scc, nbase * this->nbase_x);
 
-            syncmem_var_h2d_op()(this->ctx, this->cpu_ctx, eigenvalue_gpu, (*eigenvalue_iter).data(), this->nbase_x);
-
-            T* hcc_gpu = nullptr;
-            T* scc_gpu = nullptr;
-            T* vcc_gpu = nullptr;
-            base_device::memory::resize_memory_op<T, Device>()(this->ctx, hcc_gpu, nbase * nbase);
-            base_device::memory::resize_memory_op<T, Device>()(this->ctx, scc_gpu, nbase * nbase);
-            base_device::memory::resize_memory_op<T, Device>()(this->ctx, vcc_gpu, nbase * nbase);
-            for(int i=0;i<nbase;i++)
-            {
-                base_device::memory::synchronize_memory_op<T, Device, Device>()(this->ctx, this->ctx, hcc_gpu + i * nbase, hcc + i * nbase_x, nbase);
-                base_device::memory::synchronize_memory_op<T, Device, Device>()(this->ctx, this->ctx, scc_gpu + i * nbase, scc + i * nbase_x, nbase);
-            }
-            dngvd_op<T, Device>()(this->ctx, nbase, nbase, hcc_gpu, scc_gpu, eigenvalue_gpu, vcc_gpu, &fail_info);
-            for(int i=0;i<nbase;i++)
-            {
-                base_device::memory::synchronize_memory_op<T, Device, Device>()(this->ctx, this->ctx, vcc + i * nbase_x, vcc_gpu + i * nbase, nbase);
-            }
-            delmem_complex_op()(this->ctx, hcc_gpu);
-            delmem_complex_op()(this->ctx, scc_gpu);
-            delmem_complex_op()(this->ctx, vcc_gpu);
-
-            syncmem_var_d2h_op()(this->cpu_ctx, this->ctx, (*eigenvalue_iter).data(), eigenvalue_gpu, this->nbase_x);
-
-            delmem_real_op()(this->ctx, eigenvalue_gpu);
+            dngvd_op<T, Device>()(this->ctx, nbase, this->nbase_x, hcc, this->d_scc, this->d_eigenvalue, vcc, &fail_info);
+            syncmem_var_d2h_op()(this->cpu_ctx, this->ctx, (*eigenvalue_iter).data(), this->d_eigenvalue, this->nbase_x);
 #endif
         }
         else
@@ -656,40 +581,7 @@ void Diago_DavSubspace<T, Device>::refresh(const int& dim,
     if (this->device == base_device::GpuDevice)
     {
 #if defined(__CUDA) || defined(__ROCM)
-        T* hcc_cpu = nullptr;
-        T* scc_cpu = nullptr;
-        T* vcc_cpu = nullptr;
-        base_device::memory::resize_memory_op<T, base_device::DEVICE_CPU>()(this->cpu_ctx,
-                                                                            hcc_cpu,
-                                                                            this->nbase_x * this->nbase_x,
-                                                                            "DAV::hcc");
-        base_device::memory::resize_memory_op<T, base_device::DEVICE_CPU>()(this->cpu_ctx,
-                                                                            scc_cpu,
-                                                                            this->nbase_x * this->nbase_x,
-                                                                            "DAV::scc");
-        base_device::memory::resize_memory_op<T, base_device::DEVICE_CPU>()(this->cpu_ctx,
-                                                                            vcc_cpu,
-                                                                            this->nbase_x * this->nbase_x,
-                                                                            "DAV::vcc");
-
-        syncmem_d2h_op()(this->cpu_ctx, this->ctx, hcc_cpu, hcc, this->nbase_x * this->nbase_x);
-        syncmem_d2h_op()(this->cpu_ctx, this->ctx, scc_cpu, scc, this->nbase_x * this->nbase_x);
-        syncmem_d2h_op()(this->cpu_ctx, this->ctx, vcc_cpu, vcc, this->nbase_x * this->nbase_x);
-
-        for (int i = 0; i < nbase; i++)
-        {
-            hcc_cpu[i * this->nbase_x + i] = eigenvalue_in_hsolver[i];
-            scc_cpu[i * this->nbase_x + i] = this->one[0];
-            vcc_cpu[i * this->nbase_x + i] = this->one[0];
-        }
-
-        syncmem_h2d_op()(this->ctx, this->cpu_ctx, hcc, hcc_cpu, this->nbase_x * this->nbase_x);
-        syncmem_h2d_op()(this->ctx, this->cpu_ctx, scc, scc_cpu, this->nbase_x * this->nbase_x);
-        syncmem_h2d_op()(this->ctx, this->cpu_ctx, vcc, vcc_cpu, this->nbase_x * this->nbase_x);
-
-        base_device::memory::delete_memory_op<T, base_device::DEVICE_CPU>()(this->cpu_ctx, hcc_cpu);
-        base_device::memory::delete_memory_op<T, base_device::DEVICE_CPU>()(this->cpu_ctx, scc_cpu);
-        base_device::memory::delete_memory_op<T, base_device::DEVICE_CPU>()(this->cpu_ctx, vcc_cpu);
+        hsolver::refreshHccSccVcc<T, Device>()(this->ctx, nbase, hcc, scc, vcc, this->nbase_x, this->d_eigenvalue, this->one[0]);
 #endif
     }
     else
