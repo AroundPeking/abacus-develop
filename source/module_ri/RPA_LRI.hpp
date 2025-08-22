@@ -68,7 +68,7 @@ void RPA_LRI<T, Tdata>::cal_large_Cs(const UnitCell& ucell, const LCAO_Orbitals&
     const std::array<Tcell, Ndim> period_Cs = LRI_CV_Tools::cal_latvec_range<Tcell>(2, ucell, orb_cutoff_);
 
     const std::pair<std::vector<TA>, std::vector<std::vector<std::pair<TA, std::array<Tcell, Ndim>>>>> list_As_Cs
-        = RI::Distribute_Equally::distribute_atoms(this->mpi_comm, atoms, period_Cs, 2, false);
+        = RI::Distribute_Equally::distribute_atoms_periods(this->mpi_comm, atoms, period_Cs, 2, false);
     std::map<TA, TatomR> atoms_pos;
     for (int iat = 0; iat < ucell.nat; ++iat)
         atoms_pos[iat] = RI_Util::Vector3_to_array3(ucell.atoms[ucell.iat2it[iat]].tau[ucell.iat2ia[iat]]);
@@ -99,6 +99,7 @@ void RPA_LRI<T, Tdata>::cal_large_Cs(const UnitCell& ucell, const LCAO_Orbitals&
     std::map<TA, std::map<TAC, RI::Tensor<Tdata>>>& Cs = std::get<0>(Cs_dCs);
     std::map<TA, std::map<TAC, RI::Tensor<Tdata>>> tmp;
     this->Cs_period = RI::RI_Tools::cal_period(Cs, period);
+    this->Cs_period = exx_lri_rpa->exx_lri.post_2D.set_tensors_map2(this->Cs_period);
     this->out_Cs(ucell, this->Cs_period, "Cs_data_");
     Cs_period.clear();
     Cs_period.swap(tmp);
@@ -207,19 +208,44 @@ void RPA_LRI<T, Tdata>::cal_postSCF_exx(const elecstate::DensityMatrix<T, Tdata>
     }
     else
         exx_lri_rpa->init(mpi_comm_in, ucell, kv, orb);
-    std::map<TA, std::map<TAC, RI::Tensor<Tdata>>> Vs_cut;
+    std::map<TA, std::map<TAC, RI::Tensor<Tdata>>> Vs_cut_IJR;
     std::map<TA, std::map<TAC, RI::Tensor<Tdata>>> Cs;
     std::map<TA, std::map<TAC, RI::Tensor<Tdata>>> tmp;
     std::cout << "Use rpa_ccp_rmesh_times=" << this->info.ccp_rmesh_times << " to calculate cut Coulomb" << std::endl;
     // Shrink_ABFS_ORBITAL cannot exceed this angular momentum of MGT
-    exx_lri_rpa->cal_exx_ions_rpa(Vs_cut, Cs, ucell, PARAM.inp.out_ri_cv);
+    exx_lri_rpa->cal_exx_ions_rpa(Vs_cut_IJR, Cs, ucell, PARAM.inp.out_ri_cv);
+    // MPI: {ia0, {ia1, R}} to {ia0, ia1}
+    std::vector<TA> atoms(ucell.nat);
+    for (int iat = 0; iat < ucell.nat; ++iat)
+        atoms[iat] = iat;
+    const std::array<Tcell, Ndim> period_Vs
+        = LRI_CV_Tools::cal_latvec_range<Tcell>(1 + this->info.ccp_rmesh_times, ucell, orb.cutoffs());
+    const std::pair<std::vector<TA>, std::vector<std::vector<std::pair<TA, TC>>>> list_As_Vs_atoms
+        = RI::Distribute_Equally::distribute_atoms(mpi_comm_in, atoms, period_Vs, 2, false);
+    const auto list_A0_pair_R = list_As_Vs_atoms.first;
+    const auto list_A1_pair_R = list_As_Vs_atoms.second[0];
+    std::set<TA> atoms00;
+    std::set<TA> atoms01;
+    for (const auto& I: list_A0_pair_R)
+    {
+        atoms00.insert(I);
+    }
+    for (const auto& JR: list_A1_pair_R)
+    {
+        atoms01.insert(JR.first);
+    }
+    std::map<TA, std::map<TAC, RI::Tensor<Tdata>>> Vs_cut_IJ
+        = RI_2D_Comm::comm_map2_first(mpi_comm_in, Vs_cut_IJR, atoms00, atoms01);
+    Vs_cut_IJR.clear();
+
     const std::array<Tcell, Ndim> period = {p_kv->nmp[0], p_kv->nmp[1], p_kv->nmp[2]};
-    this->Vs_period = RI::RI_Tools::cal_period(Vs_cut, period);
+    this->Vs_period = RI::RI_Tools::cal_period(Vs_cut_IJ, period);
     this->out_coulomb_k(ucell, this->Vs_period, "coulomb_cut_", exx_lri_rpa);
     Vs_period.clear();
     Vs_period.swap(tmp);
 
     this->Cs_period = RI::RI_Tools::cal_period(Cs, period);
+    this->Cs_period = exx_lri_rpa->exx_lri.post_2D.set_tensors_map2(this->Cs_period);
 
     if (GlobalC::exx_info.info_ri.shrink_abfs_pca_thr >= 0.0)
         this->out_Cs(ucell, this->Cs_period, "Cs_shrinked_data_");
@@ -291,13 +317,37 @@ void RPA_LRI<T, Tdata>::out_for_RPA(const UnitCell& ucell,
             exx_full_coulomb->init(mpi_comm, ucell, kv, orb, this->abfs_s);
         else
             exx_full_coulomb->init(mpi_comm, ucell, kv, orb, this->abfs);
-        std::map<TA, std::map<TAC, RI::Tensor<Tdata>>> Vs_full;
+        std::map<TA, std::map<TAC, RI::Tensor<Tdata>>> Vs_full_IJR;
         std::map<TA, std::map<TAC, RI::Tensor<Tdata>>> Cs;
         std::map<TA, std::map<TAC, RI::Tensor<Tdata>>> tmp;
-        exx_full_coulomb->cal_exx_ions_rpa(Vs_full, Cs, ucell, PARAM.inp.out_ri_cv);
+        exx_full_coulomb->cal_exx_ions_rpa(Vs_full_IJR, Cs, ucell, PARAM.inp.out_ri_cv);
+        // MPI: {ia0, {ia1, R}} to {ia0, ia1}
+        std::vector<TA> atoms(ucell.nat);
+        for (int iat = 0; iat < ucell.nat; ++iat)
+            atoms[iat] = iat;
+        const std::array<Tcell, Ndim> period_Vs
+            = LRI_CV_Tools::cal_latvec_range<Tcell>(1 + this->exx_ccp_rmesh_times, ucell, orb.cutoffs());
+        const std::pair<std::vector<TA>, std::vector<std::vector<std::pair<TA, TC>>>> list_As_Vs_atoms
+            = RI::Distribute_Equally::distribute_atoms(mpi_comm, atoms, period_Vs, 2, false);
+        const auto list_A0_pair_R = list_As_Vs_atoms.first;
+        const auto list_A1_pair_R = list_As_Vs_atoms.second[0];
+        std::set<TA> atoms00;
+        std::set<TA> atoms01;
+        for (const auto& I: list_A0_pair_R)
+        {
+            atoms00.insert(I);
+        }
+        for (const auto& JR: list_A1_pair_R)
+        {
+            atoms01.insert(JR.first);
+        }
+        std::map<TA, std::map<TAC, RI::Tensor<Tdata>>> Vs_full_IJ
+            = RI_2D_Comm::comm_map2_first(mpi_comm, Vs_full_IJR, atoms00, atoms01);
+        Vs_full_IJR.clear();
+
         const std::array<Tcell, Ndim> period = {p_kv->nmp[0], p_kv->nmp[1], p_kv->nmp[2]};
-        this->Vs_period = RI::RI_Tools::cal_period(Vs_full, period);
-        this->out_coulomb_k(ucell, Vs_full, "coulomb_mat_", exx_full_coulomb);
+        this->Vs_period = RI::RI_Tools::cal_period(Vs_full_IJ, period);
+        this->out_coulomb_k(ucell, Vs_full_IJ, "coulomb_mat_", exx_full_coulomb);
         Vs_period.clear();
         Vs_period.swap(tmp);
         Cs.clear();
@@ -350,7 +400,7 @@ void RPA_LRI<T, Tdata>::cal_abfs_overlap(const UnitCell& ucell, const LCAO_Orbit
     for (int iat = 0; iat < ucell.nat; ++iat)
         atoms[iat] = iat;
     const std::pair<std::vector<TA>, std::vector<std::vector<std::pair<TA, std::array<Tcell, Ndim>>>>> list_As_Vs
-        = RI::Distribute_Equally::distribute_atoms(this->mpi_comm, atoms, period_Vs, 2, false);
+        = RI::Distribute_Equally::distribute_atoms_periods(this->mpi_comm, atoms, period_Vs, 2, false);
 
 // Huanjing Gong debug
 // std::stringstream ss;
@@ -442,8 +492,30 @@ void RPA_LRI<T, Tdata>::cal_abfs_overlap(const UnitCell& ucell, const LCAO_Orbit
             }
         }
     }
+    // MPI: {ia0, {ia1, R}} to {ia0, ia1}
+    const std::array<Tcell, Ndim> period_Vs_IJ = LRI_CV_Tools::cal_latvec_range<Tcell>(2, ucell, orb_cutoff_);
+    const std::pair<std::vector<TA>, std::vector<std::vector<std::pair<TA, TC>>>> list_As_Vs_atoms
+        = RI::Distribute_Equally::distribute_atoms(this->mpi_comm, atoms, period_Vs, 2, false);
+    const auto list_A0_pair_R = list_As_Vs_atoms.first;
+    const auto list_A1_pair_R = list_As_Vs_atoms.second[0];
+    std::set<TA> atoms00;
+    std::set<TA> atoms01;
+    for (const auto& I: list_A0_pair_R)
+    {
+        atoms00.insert(I);
+    }
+    for (const auto& JR: list_A1_pair_R)
+    {
+        atoms01.insert(JR.first);
+    }
+    std::map<TA, std::map<TAC, RI::Tensor<Tdata>>> overlap_abfs_abfs_IJ
+        = RI_2D_Comm::comm_map2_first(mpi_comm, overlap_abfs_abfs, atoms00, atoms01);
+    overlap_abfs_abfs.clear();
+    std::map<TA, std::map<TAC, RI::Tensor<Tdata>>> overlap_abfs_abf_IJ
+        = RI_2D_Comm::comm_map2_first(mpi_comm, overlap_abfs_abf, atoms00, atoms01);
+    overlap_abfs_abf.clear();
 
-    out_abfs_overlap(ucell, overlap_abfs_abfs, overlap_abfs_abf, "shrink_sinvS_", index_abfs_s, index_abfs);
+    out_abfs_overlap(ucell, overlap_abfs_abfs_IJ, overlap_abfs_abf_IJ, "shrink_sinvS_", index_abfs_s, index_abfs);
 }
 
 template <typename T, typename Tdata>
