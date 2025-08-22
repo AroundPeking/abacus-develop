@@ -112,15 +112,10 @@ int Diago_DavSubspace<T, Device>::diag_once(const HPsiFunc& hpsi_func,
 
     ModuleBase::timer::tick("Diago_DavSubspace", "first");
 
+    syncmem_complex_2d_op()(this->ctx, this->ctx, this->psi_in_iter, this->dim, psi_in, psi_in_dmax, this->dim, this->n_band);
     for (int m = 0; m < this->n_band; m++)
     {
         unconv[m] = m;
-
-        syncmem_complex_op()(this->ctx,
-                             this->ctx,
-                             this->psi_in_iter + m * this->dim,
-                             psi_in + m * psi_in_dmax,
-                             this->dim);
     }
 
     hpsi_func(this->hphi, this->psi_in_iter, this->notconv, this->dim, 0, this->notconv - 1);
@@ -226,14 +221,7 @@ int Diago_DavSubspace<T, Device>::diag_once(const HPsiFunc& hpsi_func,
                 // estimate of the eigenvectors and set the basis dimension to N;
 
                 // update this->psi_in_iter according to psi_in
-                for (size_t i = 0; i < this->n_band; i++)
-                {
-                    syncmem_complex_op()(this->ctx,
-                                         this->ctx,
-                                         this->psi_in_iter + i * this->dim,
-                                         psi_in + i * psi_in_dmax,
-                                         this->dim);
-                }
+                syncmem_complex_2d_op()(this->ctx, this->ctx, this->psi_in_iter, this->dim, psi_in, psi_in_dmax, this->dim, this->n_band);
 
                 this->refresh(this->dim,
                               this->n_band,
@@ -569,23 +557,25 @@ void Diago_DavSubspace<T, Device>::refresh(const int& dim,
     syncmem_complex_op()(this->ctx, this->ctx, hphi, psi_iter + nband * this->dim, this->dim * nband);
 
     nbase = nband;
-
-    // set hcc/scc/vcc to 0
-    for (size_t i = 0; i < nbase; i++)
-    {
-        setmem_complex_op()(this->ctx, &hcc[this->nbase_x * i], 0, nbase);
-        setmem_complex_op()(this->ctx, &scc[this->nbase_x * i], 0, nbase);
-        setmem_complex_op()(this->ctx, &vcc[this->nbase_x * i], 0, nbase);
-    }
-
     if (this->device == base_device::GpuDevice)
     {
+        // set hcc/scc/vcc to 0
+        setmem_complex_2d_op()(this->ctx, hcc, this->nbase_x, 0, nbase, nbase);
+        setmem_complex_2d_op()(this->ctx, scc, this->nbase_x, 0, nbase, nbase);
+        setmem_complex_2d_op()(this->ctx, vcc, this->nbase_x, 0, nbase, nbase);
 #if defined(__CUDA) || defined(__ROCM)
         hsolver::refreshHccSccVcc<T, Device>()(this->ctx, nbase, hcc, scc, vcc, this->nbase_x, this->d_eigenvalue, this->one[0]);
 #endif
     }
     else
     {
+        // set hcc/scc/vcc to 0
+        for (size_t i = 0; i < nbase; i++)
+        {
+            setmem_complex_op()(this->ctx, &hcc[this->nbase_x * i], 0, nbase);
+            setmem_complex_op()(this->ctx, &scc[this->nbase_x * i], 0, nbase);
+            setmem_complex_op()(this->ctx, &vcc[this->nbase_x * i], 0, nbase);
+        }
         for (int i = 0; i < nbase; i++)
         {
             hcc[i * this->nbase_x + i] = eigenvalue_in_hsolver[i];
