@@ -2,12 +2,11 @@
 // AUTHOR : Peize Lin
 // DATE :   2022-10-24
 //=======================
-
+#pragma once
 #ifndef LRI_CV_TOOLS_H
 #define LRI_CV_TOOLS_H
 
-#include "module_base/abfs-vector3_order.h"
-
+#include "Inverse_Matrix.h"
 #include "abfs.h"
 #include "module_base/abfs-vector3_order.h"
 #include "module_ri/abfs.h"
@@ -18,14 +17,14 @@
 #include <cstddef>
 #include <map>
 #include <vector>
-#include <map>
-
-#include "module_ri/abfs.h"
 
 namespace LRI_CV_Tools
 {
 template <typename Tdata>
-extern RI::Tensor<Tdata> cal_I(const RI::Tensor<Tdata>& m);
+extern RI::Tensor<Tdata> cal_I(const RI::Tensor<Tdata>& m,
+                               const typename Inverse_Matrix<Tdata>::Method method
+                               = Inverse_Matrix<Tdata>::Method::potrf,
+                               const double& threshold_condition_number = 0.);
 template <typename Tdata>
 extern std::vector<std::vector<RI::Tensor<Tdata>>> cal_I(const std::vector<std::vector<RI::Tensor<Tdata>>>& ms);
 
@@ -103,21 +102,21 @@ extern std::map<TkeyA, std::map<TkeyB, std::array<Tvalue, N>>> change_order(
     std::array<std::map<TkeyA, std::map<TkeyB, Tvalue>>, N>&& ds_in);
 
 template <typename Tcell>
-extern std::array<Tcell, 3> cal_latvec_range(const double& rcut_times, 
-												const UnitCell &ucell,
-												const std::vector<double>& orb_cutoff);
+extern std::array<Tcell, 3> cal_latvec_range(const double& rcut_times,
+                                             const UnitCell& ucell,
+                                             const std::vector<double>& orb_cutoff);
 
 template <typename TA, typename Tcell, typename Tdata>
 extern std::map<int, std::map<int, std::map<Abfs::Vector3_Order<double>, RI::Tensor<Tdata>>>> get_CVws(
-		const UnitCell &ucell,
+    const UnitCell& ucell,
     const std::map<TA, std::map<std::pair<TA, std::array<Tcell, 3>>, RI::Tensor<Tdata>>>& CVs);
 template <typename TA, typename Tcell, typename Tdata>
 extern std::map<int, std::map<int, std::map<Abfs::Vector3_Order<double>, std::array<RI::Tensor<Tdata>, 3>>>> get_dCVws(
-		const UnitCell &ucell,
+    const UnitCell& ucell,
     const std::map<TA, std::map<std::pair<TA, std::array<Tcell, 3>>, std::array<RI::Tensor<Tdata>, 3>>>& dCVs);
 template <typename TA, typename TC, typename Tdata>
 extern std::array<std::array<std::map<TA, std::map<std::pair<TA, TC>, RI::Tensor<Tdata>>>, 3>, 3> cal_dMRs(
-		const UnitCell &ucell,
+    const UnitCell& ucell,
     const std::array<std::map<TA, std::map<std::pair<TA, TC>, RI::Tensor<Tdata>>>, 3>& dMs);
 
 using TC = std::array<int, 3>;

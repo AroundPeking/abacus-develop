@@ -294,6 +294,13 @@ void ReadInput::item_exx()
         this->add_item(item);
     }
     {
+        Input_Item item("shrink_lu_inv_thr");
+        item.annotation
+            = "threshold to get inverse of overlap matrix by LU decomposition in auxiliary basis representation";
+        read_sync_double(input.shrink_LU_inv_thr);
+        this->add_item(item);
+    }
+    {
         Input_Item item("exx_rotate_abfs");
         item.annotation = "whether to rotate auxiliary basis for Coulomb calculation";
         read_sync_bool(input.exx_rotate_abfs);
