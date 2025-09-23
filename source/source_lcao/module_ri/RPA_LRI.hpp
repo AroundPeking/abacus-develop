@@ -645,7 +645,9 @@ void RPA_LRI<T, Tdata>::inverse_olp(std::map<TA, std::map<TAq, RI::Tensor<std::c
             }
         }
         // out_pure_ri_tensor("olp_all.dat", olp_all, 0.);
-        auto olp_inv = LRI_CV_Tools::cal_I(olp_all);
+        auto olp_inv = LRI_CV_Tools::cal_I(olp_all,
+                                           Inverse_Matrix<std::complex<double>>::Method::syev,
+                                           GlobalC::exx_info.info_ri.shrink_LU_inv_thr);
         for (int ir = 0; ir < all_mu_s; ir++)
         {
             for (int ic = ir; ic < all_mu_s; ic++)
