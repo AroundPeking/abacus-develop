@@ -581,8 +581,17 @@ void RPA_LRI<T, Tdata>::inverse_olp(const UnitCell& ucell,
             }
         }
         // out_pure_ri_tensor("olp_all.dat", olp_all, 0.);
+        if (GlobalC::exx_info.info_ri.shrink_LU_inv_thr > 0.0)
+        {
+            const double threshold = GlobalC::exx_info.info_ri.shrink_LU_inv_thr;
+            for (int ir = 0; ir < all_mu_s; ir++)
+                olp_all(ir, ir) += threshold;
+        }
+        // auto olp_inv = LRI_CV_Tools::cal_I(olp_all,
+        //                                    Inverse_Matrix<std::complex<double>>::Method::syev,
+        //                                    GlobalC::exx_info.info_ri.shrink_LU_inv_thr);
         auto olp_inv = LRI_CV_Tools::cal_I(olp_all,
-                                           Inverse_Matrix<std::complex<double>>::Method::syev,
+                                           Inverse_Matrix<std::complex<double>>::Method::potrf,
                                            GlobalC::exx_info.info_ri.shrink_LU_inv_thr);
         for (int ir = 0; ir < all_mu_s; ir++)
         {
