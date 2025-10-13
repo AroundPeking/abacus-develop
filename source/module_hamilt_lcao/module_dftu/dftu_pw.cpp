@@ -76,10 +76,6 @@ void DFTU::cal_occ_pw(const int iter, const void* psi_in, const ModuleBase::matr
                             this->locale[iat][target_l][0][0].c[ind_m1m2 + tlp1_2] += (occ[1] + occ[2]).real();
                             this->locale[iat][target_l][0][0].c[ind_m1m2 + 2 * tlp1_2] += (occ[1] - occ[2]).imag();
                             this->locale[iat][target_l][0][0].c[ind_m1m2 + 3 * tlp1_2] += (occ[0] - occ[3]).real();
-                            this->uom_array[eff_pot_pw_index[iat]+ind_m1m2] = this->locale[iat][target_l][0][0].c[ind_m1m2];
-                            this->uom_array[eff_pot_pw_index[iat]+ind_m1m2+tlp1_2] = this->locale[iat][target_l][0][0].c[ind_m1m2 + tlp1_2];
-                            this->uom_array[eff_pot_pw_index[iat]+ind_m1m2+2*tlp1_2] = this->locale[iat][target_l][0][0].c[ind_m1m2 + 2 * tlp1_2];  
-                            this->uom_array[eff_pot_pw_index[iat]+ind_m1m2+3*tlp1_2] = this->locale[iat][target_l][0][0].c[ind_m1m2 + 3 * tlp1_2];
                             ind_m1m2++;
                         }
                     }
@@ -192,6 +188,29 @@ void DFTU::cal_occ_pw(const int iter, const void* psi_in, const ModuleBase::matr
     }
 #endif
 
+    // reduce locale from all k-pools
+    for(int iat = 0; iat < cell.nat; iat++)
+    {
+        const int it = cell.iat2it[iat];
+        const int target_l = this->orbital_corr[it];
+        if(target_l == -1)
+        {
+            continue;
+        }
+        const int fold = GlobalV::NSPIN == 4 ? 4 : 1;
+        const int size = (2 * target_l + 1) * (2 * target_l + 1);
+        Parallel_Reduce::reduce_double_allpool(GlobalV::KPAR, GlobalV::NPROC_IN_POOL, this->locale[iat][target_l][0][0].c, size * fold);
+        //save locale matrix for this iat to uom_save
+        if(this->uom_save.size() != 0)
+        for(int mm=0;mm<size*fold;mm++)
+        {
+            this->uom_save[eff_pot_pw_index[iat]+mm] = this->locale[iat][target_l][0][0].c[mm];
+        }
+        if(GlobalV::NSPIN == 2)
+        {
+            Parallel_Reduce::reduce_double_allpool(GlobalV::KPAR, GlobalV::NPROC_IN_POOL, this->locale[iat][target_l][0][1].c, size);
+        }
+    }
     //to test omc method: save locale and reset occupation matrix to target values
     if(mixing_dftu && initialed_locale)
     {
@@ -209,13 +228,7 @@ void DFTU::cal_occ_pw(const int iter, const void* psi_in, const ModuleBase::matr
         {
             continue;
         }
-        const int fold = GlobalV::NSPIN == 4 ? 4 : 1;
         const int size = (2 * target_l + 1) * (2 * target_l + 1);
-        Parallel_Reduce::reduce_double_allpool(GlobalV::KPAR, GlobalV::NPROC_IN_POOL, this->locale[iat][target_l][0][0].c, size * fold);
-        if(GlobalV::NSPIN == 2)
-        {
-            Parallel_Reduce::reduce_double_allpool(GlobalV::KPAR, GlobalV::NPROC_IN_POOL, this->locale[iat][target_l][0][1].c, size);
-        }
         //update effective potential
         const double u_value = this->U[it];
         std::complex<double>* vu_iat = &(this->eff_pot_pw[this->eff_pot_pw_index[iat]]);
