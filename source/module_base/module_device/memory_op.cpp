@@ -257,7 +257,6 @@ struct synchronize_memory_2d_op<FPTYPE, base_device::DEVICE_GPU, base_device::DE
 {
     void operator()(const base_device::DEVICE_GPU* dev_out,
                     const base_device::DEVICE_GPU* dev_in,
-                    const Device_in* dev_in,
                     FPTYPE* arr_out,
                     const size_t dpitch,
                     const FPTYPE* arr_in,
@@ -273,7 +272,6 @@ struct synchronize_memory_2d_op<FPTYPE, base_device::DEVICE_GPU, base_device::DE
 {
     void operator()(const base_device::DEVICE_GPU* dev_out,
                     const base_device::DEVICE_CPU* dev_in,
-                    const Device_in* dev_in,
                     FPTYPE* arr_out,
                     const size_t dpitch,
                     const FPTYPE* arr_in,
@@ -289,7 +287,6 @@ struct synchronize_memory_2d_op<FPTYPE, base_device::DEVICE_CPU, base_device::DE
 {
     void operator()(const base_device::DEVICE_CPU* dev_out,
                     const base_device::DEVICE_GPU* dev_in,
-                    const Device_in* dev_in,
                     FPTYPE* arr_out,
                     const size_t dpitch,
                     const FPTYPE* arr_in,
