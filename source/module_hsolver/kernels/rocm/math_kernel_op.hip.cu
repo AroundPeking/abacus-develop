@@ -327,6 +327,120 @@ __global__ void matrix_setTo_another_kernel(
     }
 }
 
+template <typename T, typename Real>
+__global__ void refresh_Hcc_Scc_Vcc_kernel(
+        const int n,
+        T *hcc,
+        T *scc,
+        T *vcc,
+        const int ldh,
+        const Real *eigenvalue,
+        const T one)
+{
+    int i = blockIdx.x * blockDim.x + threadIdx.x;
+    if (i < n)
+    {
+        hcc[i * ldh + i] = eigenvalue[i];
+        scc[i * ldh + i] = one;
+        vcc[i * ldh + i] = one;
+    }
+}
+
+template <typename T, typename Real>
+__global__ void matrix_multiply_vector_kernel(const int m, const int n, T *a, const int lda, const Real *v, const Real alpha, T *c, const int ldc){
+    int row = blockIdx.x * blockDim.x + threadIdx.x;
+    int col = blockIdx.y * blockDim.y + threadIdx.y;
+    if (col >= n || row >= m) return;
+    c[col * ldc + row] = a[col * lda + row] * v[col] * alpha;
+}
+
+template <typename T, typename Real>
+__global__ void upate_psi_by_precondition_kernel(const int m, const int n, T *psi, const int lda, const Real *precondition, const Real *eigenvalue){
+    int i = blockIdx.x * blockDim.x + threadIdx.x;
+    int j = blockIdx.y;
+    if (i >= m || j >= n) return;
+
+    Real x = std::abs(precondition[i] - eigenvalue[j]);
+    Real pre = 0.5 * (1.0 + x + sqrt(1 + (x - 1.0) * (x - 1.0)));
+    psi[j * lda + i] = psi[j * lda + i] / pre;
+}
+
+__device__ double complexAbsSquared(cuDoubleComplex z) {
+    return z.x * z.x + z.y * z.y;
+}
+
+template <typename Real>
+__device__ Real warpReduceSum(Real val) {
+    for (int offset = 32; offset > 0; offset /= 2)
+        val += __shfl_down_sync(0xffffffffffffffff, val, offset);
+    return val;
+}
+
+template <typename Real>
+__device__ Real blockReduceSum(Real val, volatile Real* shared) {
+    int lane = threadIdx.x % 64;
+    int wid  = threadIdx.x / 64;
+
+    val = warpReduceSum(val);
+
+    if (lane == 0)
+        shared[wid] = val;
+
+    __syncthreads();
+
+    Real sum = 0.0;
+    if (wid == 0) {
+        sum = (threadIdx.x < blockDim.x / 64) ? shared[lane] : 0.0;
+        sum = warpReduceSum(sum);
+        if (lane == 0) shared[0] = sum;
+    }
+
+    __syncthreads();
+    return shared[0];
+}
+
+__device__ double norm_square(thrust::complex<double> val) {
+    double real = val.real();
+    double imag = val.imag();
+    return real * real + imag * imag;
+}
+
+__device__ float norm_square(thrust::complex<float> val) {
+    float real = val.real();
+    float imag = val.imag();
+    return real * real + imag * imag;
+}
+
+__device__ double norm_square(double val){
+    return val * val;
+}
+
+template <typename T, typename Real>
+__launch_bounds__(1024)
+__global__ void normalize_matrix_column_kernel(int rows, int cols, T* matrix, int lda) {
+    int col = blockIdx.x;
+    if (col >= cols) return;
+
+    int tid = threadIdx.x;
+    int stride = blockDim.x;
+
+    extern __shared__ char s_char[];
+    Real* shared = reinterpret_cast<Real*>(s_char);
+
+    Real local_sum = 0.0;
+    for (int i = tid; i < rows; i += stride) {
+        T val = matrix[col * lda + i];
+        local_sum += norm_square(val);
+    }
+
+    Real l2_sq = blockReduceSum(local_sum, shared);
+    Real norm = sqrt(l2_sq + 1e-20);
+
+    for (int i = tid; i < rows; i += stride) {
+        matrix[col * lda + i] /= norm;
+    }
+}
+
 template <typename T>
 void line_minimize_with_block_op<T, base_device::DEVICE_GPU>::operator()(T* grad_out,
                                                                          T* hgrad_out,
@@ -655,7 +769,7 @@ hipblasOperation_t judge_trans_op(bool is_complex, const char& trans, const char
     {
         return HIPBLAS_OP_C;
     }
-    else 
+    else
     {
         ModuleBase::WARNING_QUIT(name, std::string("Unknown trans type ") + trans + std::string(" !"));
     }
@@ -942,7 +1056,172 @@ void matrixSetToAnother<std::complex<double>, base_device::DEVICE_GPU>::operator
     hipLaunchKernelGGL(HIP_KERNEL_NAME(matrix_setTo_another_kernel<thrust::complex<double>>), dim3(block), dim3(thread), 0, 0, n, LDA, LDB, reinterpret_cast<const thrust::complex<double>*>(A), reinterpret_cast<thrust::complex<double>*>(B));
     hipCheckOnDebug();
 }
+template <>
+void refreshHccSccVcc<double, base_device::DEVICE_GPU>::operator()(const base_device::DEVICE_GPU *d, const int &n,
+                  double *hcc,
+                  double *scc,
+                  double *vcc,
+                  const int &ldh,
+                  const double *eigenvalue,
+                  const double& one)
+{
+    int thread = 512;
+    int block = (n + thread - 1) / thread;
+    hipLaunchKernelGGL(HIP_KERNEL_NAME(refresh_Hcc_Scc_Vcc_kernel<double, double>), dim3(block), dim3(thread), 0, 0, n, hcc, scc, vcc, ldh, eigenvalue, one);
 
+    hipCheckOnDebug();
+}
+
+template <>
+void refreshHccSccVcc<std::complex<float>, base_device::DEVICE_GPU>::operator()(const base_device::DEVICE_GPU *d, const int &n,
+                  std::complex<float> *hcc,
+                  std::complex<float> *scc,
+                  std::complex<float> *vcc,
+                  const int &ldh,
+                  const float *eigenvalue,
+                  const std::complex<float>& one)
+{
+    int thread = 512;
+    int block = (n + thread - 1) / thread;
+    hipLaunchKernelGGL(HIP_KERNEL_NAME(refresh_Hcc_Scc_Vcc_kernel<thrust::complex<float>, float>), dim3(block), dim3(thread), 0, 0, n, reinterpret_cast<thrust::complex<float>*>(hcc),
+                    reinterpret_cast<thrust::complex<float>*>(scc), reinterpret_cast<thrust::complex<float>*>(vcc), ldh, eigenvalue,
+                    thrust::complex<float>(one));
+
+    hipCheckOnDebug();
+}
+
+template <>
+void refreshHccSccVcc<std::complex<double>, base_device::DEVICE_GPU>::operator()(const base_device::DEVICE_GPU *d, const int &n,
+                  std::complex<double> *hcc,
+                  std::complex<double> *scc,
+                  std::complex<double> *vcc,
+                  const int &ldh,
+                  const double *eigenvalue,
+                  const std::complex<double>& one)
+{
+    int thread = 512;
+    int block = (n + thread - 1) / thread;
+    hipLaunchKernelGGL(HIP_KERNEL_NAME(refresh_Hcc_Scc_Vcc_kernel<thrust::complex<double>, double>), dim3(block), dim3(thread), 0, 0, n, reinterpret_cast<thrust::complex<double>*>(hcc),
+                    reinterpret_cast<thrust::complex<double>*>(scc), reinterpret_cast<thrust::complex<double>*>(vcc), ldh, eigenvalue,
+                    thrust::complex<double>(one));
+
+    hipCheckOnDebug();
+}
+
+template <>
+void matrixMutiplyVector<double, base_device::DEVICE_GPU>::operator()(const base_device::DEVICE_GPU *d, const int &m, const int &n,
+                  double *a, const int &lda, const double *v, const double alpha, double *c, const int &ldc){
+    dim3 thread(16, 16, 1);
+    dim3 block((m + thread.x - 1) / thread.x, (n + thread.y - 1) / thread.y, 1);
+    hipLaunchKernelGGL(HIP_KERNEL_NAME(matrix_multiply_vector_kernel<double, double>), block, thread, 0, 0, m, n, a, lda,
+    v, alpha, c, ldc);
+    hipCheckOnDebug();
+}
+
+template <>
+void matrixMutiplyVector<std::complex<float>, base_device::DEVICE_GPU>::operator()(const base_device::DEVICE_GPU *d, const int &m, const int &n,
+                  std::complex<float> *a, const int &lda, const float *v, const float alpha, std::complex<float> *c, const int &ldc){
+    dim3 thread(16, 16, 1);
+    dim3 block((m + thread.x - 1) / thread.x, (n + thread.y - 1) / thread.y, 1);
+    hipLaunchKernelGGL(HIP_KERNEL_NAME(matrix_multiply_vector_kernel<thrust::complex<float>, float>), block, thread, 0, 0, m, n, reinterpret_cast<thrust::complex<float>*>(a), lda,
+    v, alpha, reinterpret_cast<thrust::complex<float>*>(c), ldc);
+    hipCheckOnDebug();
+}
+
+template <>
+void matrixMutiplyVector<std::complex<double>, base_device::DEVICE_GPU>::operator()(const base_device::DEVICE_GPU *d, const int &m, const int &n,
+                  std::complex<double> *a, const int &lda, const double *v, const double alpha, std::complex<double> *c, const int &ldc)
+{
+    dim3 thread(16, 16, 1);
+    dim3 block((m + thread.x - 1) / thread.x, (n + thread.y - 1) / thread.y, 1);
+    hipLaunchKernelGGL(HIP_KERNEL_NAME(matrix_multiply_vector_kernel<thrust::complex<double>, double>), block, thread, 0, 0, m, n, reinterpret_cast<thrust::complex<double>*>(a), lda,
+    v, alpha, reinterpret_cast<thrust::complex<double>*>(c), ldc);
+    hipCheckOnDebug();
+}
+
+template <>
+void updatePsiByPrecondition<double, base_device::DEVICE_GPU>::operator()(const base_device::DEVICE_GPU *d, const int &m, const int &n,
+                  double *psi,
+                  const int &lda,
+                  const double *precondition,
+                  const double *eigenvalue)
+{
+    dim3 thread(256);
+    dim3 block((m + thread.x - 1) / thread.x, n, 1);
+    hipLaunchKernelGGL(HIP_KERNEL_NAME(upate_psi_by_precondition_kernel<double, double>), block, thread, 0, 0, m, n, psi, lda,
+    precondition, eigenvalue);
+    hipCheckOnDebug();
+}
+
+template <>
+void updatePsiByPrecondition<std::complex<float>, base_device::DEVICE_GPU>::operator()(const base_device::DEVICE_GPU *d, const int &m, const int &n,
+                  std::complex<float> *psi,
+                  const int &lda,
+                  const float *precondition,
+                  const float *eigenvalue)
+{
+    dim3 thread(256);
+    dim3 block((m + thread.x - 1) / thread.x, n, 1);
+    hipLaunchKernelGGL(HIP_KERNEL_NAME(upate_psi_by_precondition_kernel<thrust::complex<float>, float>), block, thread, 0, 0, m, n, reinterpret_cast<thrust::complex<float>*>(psi), lda,
+    precondition, eigenvalue);
+    hipCheckOnDebug();
+}
+
+template <>
+void updatePsiByPrecondition<std::complex<double>, base_device::DEVICE_GPU>::operator()(const base_device::DEVICE_GPU *d, const int &m, const int &n,
+                  std::complex<double> *psi,
+                  const int &lda,
+                  const double *precondition,
+                  const double *eigenvalue)
+{
+    dim3 thread(256);
+    dim3 block((m + thread.x - 1) / thread.x, n, 1);
+    hipLaunchKernelGGL(HIP_KERNEL_NAME(upate_psi_by_precondition_kernel<thrust::complex<double>, double>), block, thread, 0, 0, m, n, reinterpret_cast<thrust::complex<double>*>(psi), lda,
+    precondition, eigenvalue);
+    hipCheckOnDebug();
+}
+
+template <>
+void normalizeMatrixColumn<double, base_device::DEVICE_GPU>::operator()(const base_device::DEVICE_GPU *d, const int &m, const int &n,
+                  double *matrix,
+                  const int &lda)
+{
+    int threadsPerBlock = 256;
+    int blocksPerGrid = n;
+
+    int sharedMemSize = (threadsPerBlock / 64) * sizeof(double);
+
+    hipLaunchKernelGGL(HIP_KERNEL_NAME(normalize_matrix_column_kernel<double, double>), dim3(blocksPerGrid), dim3(threadsPerBlock), sharedMemSize, 0, m, n, matrix, lda);
+    hipCheckOnDebug();
+}
+
+template <>
+void normalizeMatrixColumn<std::complex<float>, base_device::DEVICE_GPU>::operator()(const base_device::DEVICE_GPU *d, const int &m, const int &n,
+                  std::complex<float> *matrix,
+                  const int &lda)
+{
+    int threadsPerBlock = 256;
+    int blocksPerGrid = n;
+
+    int sharedMemSize = (threadsPerBlock / 64) * sizeof(float);
+
+    hipLaunchKernelGGL(HIP_KERNEL_NAME(normalize_matrix_column_kernel<thrust::complex<float>, float>), dim3(blocksPerGrid), dim3(threadsPerBlock), sharedMemSize, 0, m, n, reinterpret_cast<thrust::complex<float>*>(matrix), lda);
+    hipCheckOnDebug();
+
+}
+template <>
+void normalizeMatrixColumn<std::complex<double>, base_device::DEVICE_GPU>::operator()(const base_device::DEVICE_GPU *d, const int &m, const int &n,
+                  std::complex<double> *matrix,
+                  const int &lda)
+{
+    int threadsPerBlock = 256;
+    int blocksPerGrid = n;
+
+    int sharedMemSize = (threadsPerBlock / 64) * sizeof(double);
+
+    hipLaunchKernelGGL(HIP_KERNEL_NAME(normalize_matrix_column_kernel<thrust::complex<double>, double>), dim3(blocksPerGrid), dim3(threadsPerBlock), sharedMemSize, 0, m, n, reinterpret_cast<thrust::complex<double>*>(matrix), lda);
+    hipCheckOnDebug();
+}
 
 
 // Explicitly instantiate functors for the types of functor registered.
@@ -954,6 +1233,10 @@ template struct vector_mul_vector_op<std::complex<float>, base_device::DEVICE_GP
 template struct vector_div_vector_op<std::complex<float>, base_device::DEVICE_GPU>;
 template struct constantvector_addORsub_constantVector_op<std::complex<float>, base_device::DEVICE_GPU>;
 template struct matrixSetToAnother<std::complex<float>, base_device::DEVICE_GPU>;
+template struct refreshHccSccVcc<std::complex<float>, base_device::DEVICE_GPU>;
+template struct matrixMutiplyVector<std::complex<float>, base_device::DEVICE_GPU>;
+template struct updatePsiByPrecondition<std::complex<float>, base_device::DEVICE_GPU>;
+template struct normalizeMatrixColumn<std::complex<float>, base_device::DEVICE_GPU>;
 
 template struct dot_real_op<std::complex<double>, base_device::DEVICE_GPU>;
 template struct calc_grad_with_block_op<std::complex<double>, base_device::DEVICE_GPU>;
@@ -963,6 +1246,10 @@ template struct vector_mul_vector_op<std::complex<double>, base_device::DEVICE_G
 template struct vector_div_vector_op<std::complex<double>, base_device::DEVICE_GPU>;
 template struct constantvector_addORsub_constantVector_op<std::complex<double>, base_device::DEVICE_GPU>;
 template struct matrixSetToAnother<std::complex<double>, base_device::DEVICE_GPU>;
+template struct refreshHccSccVcc<std::complex<double>, base_device::DEVICE_GPU>;
+template struct matrixMutiplyVector<std::complex<double>, base_device::DEVICE_GPU>;
+template struct updatePsiByPrecondition<std::complex<double>, base_device::DEVICE_GPU>;
+template struct normalizeMatrixColumn<std::complex<double>, base_device::DEVICE_GPU>;
 
 #ifdef __LCAO
 template struct dot_real_op<double, base_device::DEVICE_GPU>;
@@ -970,6 +1257,10 @@ template struct vector_div_constant_op<double, base_device::DEVICE_GPU>;
 template struct vector_mul_vector_op<double, base_device::DEVICE_GPU>;
 template struct vector_div_vector_op<double, base_device::DEVICE_GPU>;
 template struct matrixSetToAnother<double, base_device::DEVICE_GPU>;
+template struct refreshHccSccVcc<double, base_device::DEVICE_GPU>;
+template struct matrixMutiplyVector<double, base_device::DEVICE_GPU>;
+template struct updatePsiByPrecondition<double, base_device::DEVICE_GPU>;
+template struct normalizeMatrixColumn<double, base_device::DEVICE_GPU>;
 template struct constantvector_addORsub_constantVector_op<double, base_device::DEVICE_GPU>;
 #endif
 }  // namespace hsolver

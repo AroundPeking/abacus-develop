@@ -42,6 +42,23 @@ struct set_memory_op
     void operator()(const Device* dev, FPTYPE* arr, const int var, const size_t size);
 };
 
+template <typename FPTYPE, typename Device>
+struct set_memory_2d_op
+{
+    /// @brief memset2D for multi-device
+    ///
+    /// Input Parameters
+    /// \param dev : the type of computing device
+    /// \param var : the specified constant value
+    /// \param pitch : Pitch in elements  of 2D device memory
+    /// \param width : Width of matrix set (columns in elements)
+    /// \param height : Height of matrix set (rows)
+    ///
+    /// Output Parameters
+    /// \param arr : output array initialized by the input value
+    void operator()(const Device* dev, FPTYPE* arr, const size_t pitch, const int var, const size_t width, const size_t height);
+};
+
 template <typename FPTYPE, typename Device_out, typename Device_in>
 struct synchronize_memory_op
 {
@@ -60,6 +77,32 @@ struct synchronize_memory_op
                     FPTYPE* arr_out,
                     const FPTYPE* arr_in,
                     const size_t size);
+};
+
+template <typename FPTYPE, typename Device_out, typename Device_in>
+struct synchronize_memory_2d_op
+{
+    /// @brief memcpy2D for multi-device
+    ///
+    /// Input Parameters
+    /// \param dev_out : the type of computing device of arr_out
+    /// \param dev_in : the type of computing device of arr_in
+    /// \param arr_in : input array
+    /// \param dpitch : Pitch in elements of destination memory
+    /// \param spitch : Pitch in elements  of source memory
+    /// \param width : Width of matrix transfer (columns in elements)
+    /// \param height : Height of matrix transfer (rows)
+    ///
+    /// Output Parameters
+    /// \param arr_out : output array initialized by the input array
+    void operator()(const Device_out* dev_out,
+                    const Device_in* dev_in,
+                    FPTYPE* arr_out,
+                    const size_t dpitch,
+                    const FPTYPE* arr_in,
+                    const size_t spitch,
+                    const size_t width,
+                    const size_t height);
 };
 
 template <typename FPTYPE_out, typename FPTYPE_in, typename Device_out, typename Device_in>
@@ -112,6 +155,12 @@ struct set_memory_op<FPTYPE, base_device::DEVICE_GPU>
 };
 
 template <typename FPTYPE>
+struct set_memory_2d_op<FPTYPE, base_device::DEVICE_GPU>
+{
+    void operator()(const base_device::DEVICE_GPU* dev, FPTYPE* arr, const size_t pitch, const int var, const size_t width, const size_t height);
+};
+
+template <typename FPTYPE>
 struct synchronize_memory_op<FPTYPE, base_device::DEVICE_CPU, base_device::DEVICE_GPU>
 {
     void operator()(const base_device::DEVICE_CPU* dev_out,
@@ -137,6 +186,43 @@ struct synchronize_memory_op<FPTYPE, base_device::DEVICE_GPU, base_device::DEVIC
                     FPTYPE* arr_out,
                     const FPTYPE* arr_in,
                     const size_t size);
+};
+
+template <typename FPTYPE>
+struct synchronize_memory_2d_op<FPTYPE, base_device::DEVICE_CPU, base_device::DEVICE_GPU>
+{
+    void operator()(const base_device::DEVICE_CPU* dev_out,
+                    const base_device::DEVICE_GPU* dev_in,
+                    FPTYPE* arr_out,
+                    const size_t dpitch,
+                    const FPTYPE* arr_in,
+                    const size_t spitch,
+                    const size_t width,
+                    const size_t height);
+};
+template <typename FPTYPE>
+struct synchronize_memory_2d_op<FPTYPE, base_device::DEVICE_GPU, base_device::DEVICE_CPU>
+{
+    void operator()(const base_device::DEVICE_GPU* dev_out,
+                    const base_device::DEVICE_CPU* dev_in,
+                    FPTYPE* arr_out,
+                    const size_t dpitch,
+                    const FPTYPE* arr_in,
+                    const size_t spitch,
+                    const size_t width,
+                    const size_t height);
+};
+template <typename FPTYPE>
+struct synchronize_memory_2d_op<FPTYPE, base_device::DEVICE_GPU, base_device::DEVICE_GPU>
+{
+    void operator()(const base_device::DEVICE_GPU* dev_out,
+                    const base_device::DEVICE_GPU* dev_in,
+                    FPTYPE* arr_out,
+                    const size_t dpitch,
+                    const FPTYPE* arr_in,
+                    const size_t spitch,
+                    const size_t width,
+                    const size_t height);
 };
 
 template <typename FPTYPE>
@@ -169,6 +255,16 @@ using setmem_dd_op = base_device::memory::set_memory_op<double, base_device::DEV
 using setmem_cd_op = base_device::memory::set_memory_op<std::complex<float>, base_device::DEVICE_GPU>;
 using setmem_zd_op = base_device::memory::set_memory_op<std::complex<double>, base_device::DEVICE_GPU>;
 
+using setmem_sh_2d_op = base_device::memory::set_memory_2d_op<float, base_device::DEVICE_CPU>;
+using setmem_dh_2d_op = base_device::memory::set_memory_2d_op<double, base_device::DEVICE_CPU>;
+using setmem_ch_2d_op = base_device::memory::set_memory_2d_op<std::complex<float>, base_device::DEVICE_CPU>;
+using setmem_zh_2d_op = base_device::memory::set_memory_2d_op<std::complex<double>, base_device::DEVICE_CPU>;
+
+using setmem_sd_2d_op = base_device::memory::set_memory_2d_op<float, base_device::DEVICE_GPU>;
+using setmem_dd_2d_op = base_device::memory::set_memory_2d_op<double, base_device::DEVICE_GPU>;
+using setmem_cd_2d_op = base_device::memory::set_memory_2d_op<std::complex<float>, base_device::DEVICE_GPU>;
+using setmem_zd_2d_op = base_device::memory::set_memory_2d_op<std::complex<double>, base_device::DEVICE_GPU>;
+
 using delmem_sh_op = base_device::memory::delete_memory_op<float, base_device::DEVICE_CPU>;
 using delmem_dh_op = base_device::memory::delete_memory_op<double, base_device::DEVICE_CPU>;
 using delmem_ch_op = base_device::memory::delete_memory_op<std::complex<float>, base_device::DEVICE_CPU>;
@@ -192,6 +288,19 @@ using syncmem_d2d_h2d_op
 using syncmem_d2d_d2h_op
     = base_device::memory::synchronize_memory_op<double, base_device::DEVICE_CPU, base_device::DEVICE_GPU>;
 
+using syncmem_s2s_h2h_2d_op
+    = base_device::memory::synchronize_memory_2d_op<float, base_device::DEVICE_CPU, base_device::DEVICE_CPU>;
+using syncmem_s2s_h2d_2d_op
+    = base_device::memory::synchronize_memory_2d_op<float, base_device::DEVICE_GPU, base_device::DEVICE_CPU>;
+using syncmem_s2s_d2h_2d_op
+    = base_device::memory::synchronize_memory_2d_op<float, base_device::DEVICE_CPU, base_device::DEVICE_GPU>;
+using syncmem_d2d_h2h_2d_op
+    = base_device::memory::synchronize_memory_2d_op<double, base_device::DEVICE_CPU, base_device::DEVICE_CPU>;
+using syncmem_d2d_h2d_2d_op
+    = base_device::memory::synchronize_memory_2d_op<double, base_device::DEVICE_GPU, base_device::DEVICE_CPU>;
+using syncmem_d2d_d2h_2d_op
+    = base_device::memory::synchronize_memory_2d_op<double, base_device::DEVICE_CPU, base_device::DEVICE_GPU>;
+
 using syncmem_c2c_h2h_op
     = base_device::memory::synchronize_memory_op<std::complex<float>, base_device::DEVICE_CPU, base_device::DEVICE_CPU>;
 using syncmem_c2c_h2d_op
@@ -204,6 +313,19 @@ using syncmem_z2z_h2d_op
     = base_device::memory::synchronize_memory_op<std::complex<double>, base_device::DEVICE_GPU, base_device::DEVICE_CPU>;
 using syncmem_z2z_d2h_op
     = base_device::memory::synchronize_memory_op<std::complex<double>, base_device::DEVICE_CPU, base_device::DEVICE_GPU>;
+
+using syncmem_c2c_h2h_2d_op
+    = base_device::memory::synchronize_memory_2d_op<std::complex<float>, base_device::DEVICE_CPU, base_device::DEVICE_CPU>;
+using syncmem_c2c_h2d_2d_op
+    = base_device::memory::synchronize_memory_2d_op<std::complex<float>, base_device::DEVICE_GPU, base_device::DEVICE_CPU>;
+using syncmem_c2c_d2h_2d_op
+    = base_device::memory::synchronize_memory_2d_op<std::complex<float>, base_device::DEVICE_CPU, base_device::DEVICE_GPU>;
+using syncmem_z2z_h2h_2d_op
+    = base_device::memory::synchronize_memory_2d_op<std::complex<double>, base_device::DEVICE_CPU, base_device::DEVICE_CPU>;
+using syncmem_z2z_h2d_2d_op
+    = base_device::memory::synchronize_memory_2d_op<std::complex<double>, base_device::DEVICE_GPU, base_device::DEVICE_CPU>;
+using syncmem_z2z_d2h_2d_op
+    = base_device::memory::synchronize_memory_2d_op<std::complex<double>, base_device::DEVICE_CPU, base_device::DEVICE_GPU>;
 
 using castmem_s2d_h2h_op
     = base_device::memory::cast_memory_op<double, float, base_device::DEVICE_CPU, base_device::DEVICE_CPU>;

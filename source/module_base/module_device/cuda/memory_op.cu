@@ -61,6 +61,17 @@ void set_memory_op<FPTYPE, base_device::DEVICE_GPU>::operator()(const base_devic
 }
 
 template <typename FPTYPE>
+void set_memory_2d_op<FPTYPE, base_device::DEVICE_GPU>::operator()(const base_device::DEVICE_GPU* dev,
+                                                                   FPTYPE* arr,
+                                                                   const size_t pitch,
+                                                                   const int var,
+                                                                   const size_t width,
+                                                                   const size_t height)
+{
+    cudaErrcheck(cudaMemset2D(arr, sizeof(FPTYPE) * pitch , var, sizeof(FPTYPE) * width, height));
+}
+
+template <typename FPTYPE>
 void synchronize_memory_op<FPTYPE, base_device::DEVICE_CPU, base_device::DEVICE_GPU>::operator()(
     const base_device::DEVICE_CPU* dev_out,
     const base_device::DEVICE_GPU* dev_in,
@@ -91,6 +102,48 @@ void synchronize_memory_op<FPTYPE, base_device::DEVICE_GPU, base_device::DEVICE_
     const size_t size)
 {
     cudaErrcheck(cudaMemcpy(arr_out, arr_in, sizeof(FPTYPE) * size, cudaMemcpyDeviceToDevice));
+}
+
+template <typename FPTYPE>
+void synchronize_memory_2d_op<FPTYPE, base_device::DEVICE_CPU, base_device::DEVICE_GPU>::operator()(
+    const base_device::DEVICE_CPU* dev_out,
+    const base_device::DEVICE_GPU* dev_in,
+    FPTYPE* arr_out,
+    const size_t dpitch,
+    const FPTYPE* arr_in,
+    const size_t spitch,
+    const size_t width,
+    const size_t height)
+{
+    cudaErrcheck(cudaMemcpy2D(arr_out, dpitch * sizeof(FPTYPE), arr_in, spitch * sizeof(FPTYPE), width * sizeof(FPTYPE), height, cudaMemcpyDeviceToHost));
+}
+
+template <typename FPTYPE>
+void synchronize_memory_2d_op<FPTYPE, base_device::DEVICE_GPU, base_device::DEVICE_CPU>::operator()(
+    const base_device::DEVICE_GPU* dev_out,
+    const base_device::DEVICE_CPU* dev_in,
+    FPTYPE* arr_out,
+    const size_t dpitch,
+    const FPTYPE* arr_in,
+    const size_t spitch,
+    const size_t width,
+    const size_t height)
+{
+    cudaErrcheck(cudaMemcpy2D(arr_out, dpitch * sizeof(FPTYPE), arr_in, spitch * sizeof(FPTYPE), width * sizeof(FPTYPE), height, cudaMemcpyHostToDevice));
+}
+
+template <typename FPTYPE>
+void synchronize_memory_2d_op<FPTYPE, base_device::DEVICE_GPU, base_device::DEVICE_GPU>::operator()(
+    const base_device::DEVICE_GPU* dev_out,
+    const base_device::DEVICE_GPU* dev_in,
+    FPTYPE* arr_out,
+    const size_t dpitch,
+    const FPTYPE* arr_in,
+    const size_t spitch,
+    const size_t width,
+    const size_t height)
+{
+    cudaErrcheck(cudaMemcpy2D(arr_out, dpitch * sizeof(FPTYPE), arr_in, spitch * sizeof(FPTYPE), width * sizeof(FPTYPE), height, cudaMemcpyDeviceToDevice));
 }
 
 template <typename FPTYPE_out, typename FPTYPE_in>
@@ -180,12 +233,19 @@ template struct resize_memory_op<float, base_device::DEVICE_GPU>;
 template struct resize_memory_op<double, base_device::DEVICE_GPU>;
 template struct resize_memory_op<std::complex<float>, base_device::DEVICE_GPU>;
 template struct resize_memory_op<std::complex<double>, base_device::DEVICE_GPU>;
+template struct resize_memory_op<char, base_device::DEVICE_GPU>;
 
 template struct set_memory_op<int, base_device::DEVICE_GPU>;
 template struct set_memory_op<float, base_device::DEVICE_GPU>;
 template struct set_memory_op<double, base_device::DEVICE_GPU>;
 template struct set_memory_op<std::complex<float>, base_device::DEVICE_GPU>;
 template struct set_memory_op<std::complex<double>, base_device::DEVICE_GPU>;
+
+template struct set_memory_2d_op<int, base_device::DEVICE_GPU>;
+template struct set_memory_2d_op<float, base_device::DEVICE_GPU>;
+template struct set_memory_2d_op<double, base_device::DEVICE_GPU>;
+template struct set_memory_2d_op<std::complex<float>, base_device::DEVICE_GPU>;
+template struct set_memory_2d_op<std::complex<double>, base_device::DEVICE_GPU>;
 
 template struct synchronize_memory_op<int, base_device::DEVICE_CPU, base_device::DEVICE_GPU>;
 template struct synchronize_memory_op<int, base_device::DEVICE_GPU, base_device::DEVICE_CPU>;
@@ -202,6 +262,22 @@ template struct synchronize_memory_op<std::complex<float>, base_device::DEVICE_G
 template struct synchronize_memory_op<std::complex<double>, base_device::DEVICE_CPU, base_device::DEVICE_GPU>;
 template struct synchronize_memory_op<std::complex<double>, base_device::DEVICE_GPU, base_device::DEVICE_CPU>;
 template struct synchronize_memory_op<std::complex<double>, base_device::DEVICE_GPU, base_device::DEVICE_GPU>;
+
+template struct synchronize_memory_2d_op<int, base_device::DEVICE_CPU, base_device::DEVICE_GPU>;
+template struct synchronize_memory_2d_op<int, base_device::DEVICE_GPU, base_device::DEVICE_CPU>;
+template struct synchronize_memory_2d_op<int, base_device::DEVICE_GPU, base_device::DEVICE_GPU>;
+template struct synchronize_memory_2d_op<float, base_device::DEVICE_CPU, base_device::DEVICE_GPU>;
+template struct synchronize_memory_2d_op<float, base_device::DEVICE_GPU, base_device::DEVICE_CPU>;
+template struct synchronize_memory_2d_op<float, base_device::DEVICE_GPU, base_device::DEVICE_GPU>;
+template struct synchronize_memory_2d_op<double, base_device::DEVICE_CPU, base_device::DEVICE_GPU>;
+template struct synchronize_memory_2d_op<double, base_device::DEVICE_GPU, base_device::DEVICE_CPU>;
+template struct synchronize_memory_2d_op<double, base_device::DEVICE_GPU, base_device::DEVICE_GPU>;
+template struct synchronize_memory_2d_op<std::complex<float>, base_device::DEVICE_CPU, base_device::DEVICE_GPU>;
+template struct synchronize_memory_2d_op<std::complex<float>, base_device::DEVICE_GPU, base_device::DEVICE_CPU>;
+template struct synchronize_memory_2d_op<std::complex<float>, base_device::DEVICE_GPU, base_device::DEVICE_GPU>;
+template struct synchronize_memory_2d_op<std::complex<double>, base_device::DEVICE_CPU, base_device::DEVICE_GPU>;
+template struct synchronize_memory_2d_op<std::complex<double>, base_device::DEVICE_GPU, base_device::DEVICE_CPU>;
+template struct synchronize_memory_2d_op<std::complex<double>, base_device::DEVICE_GPU, base_device::DEVICE_GPU>;
 
 template struct cast_memory_op<float, float, base_device::DEVICE_GPU, base_device::DEVICE_GPU>;
 template struct cast_memory_op<double, double, base_device::DEVICE_GPU, base_device::DEVICE_GPU>;
@@ -269,6 +345,7 @@ template struct delete_memory_op<float, base_device::DEVICE_GPU>;
 template struct delete_memory_op<double, base_device::DEVICE_GPU>;
 template struct delete_memory_op<std::complex<float>, base_device::DEVICE_GPU>;
 template struct delete_memory_op<std::complex<double>, base_device::DEVICE_GPU>;
+template struct delete_memory_op<char, base_device::DEVICE_GPU>;
 template struct delete_memory_op<float*, base_device::DEVICE_GPU>;
 template struct delete_memory_op<double*, base_device::DEVICE_GPU>;
 template struct delete_memory_op<std::complex<float>*, base_device::DEVICE_GPU>;

@@ -295,6 +295,95 @@ template <typename T, typename Device> struct matrixSetToAnother {
                   T *B, const int &LDB);
 };
 
+template <typename T, typename Device> struct refreshHccSccVcc {
+    using Real = typename GetTypeReal<T>::type;
+  /// @brief refresh hcc scc vcc
+  ///
+  /// Input Parameters
+  /// \param d : the type of computing device
+  /// \param n : first dimension of matrix
+  /// \param ldh : leading dimension of hcc, scc, vcc
+  /// \param nbase : matrix size
+  /// \param eigenvalue : input eigenvalue
+  /// \param one : constant one
+  ///
+  /// Output Parameters
+  /// \param hcc : output matrix hcc
+  /// \param scc : output matrix scc
+  /// \param vcc : output matrix vcc
+  void operator()(const Device *d, const int &n,
+                  T *hcc,
+                  T *scc,
+                  T *vcc,
+                  const int &ldh,
+                  const Real *eigenvalue,
+                  const T& one);
+};
+
+template <typename T, typename Device> struct matrixMutiplyVector {
+    using Real = typename GetTypeReal<T>::type;
+  /// @brief A * v * beta by each column
+  ///
+  /// Input Parameters
+  /// \param d : the type of computing device
+  /// \param m : row number
+  /// \param n : column number
+  /// \param a : input matrix
+  /// \param lda : leading dimension of matrix a
+  /// \param v : input vector
+  /// \param alpha : factor
+  /// \param ldc : leading dimension of matrix a
+  ///
+  /// Output Parameters
+  /// \param c : output matrix
+  void operator()(const Device *d, const int &m, const int &n,
+                  T *a,
+                  const int &lda,
+                  const Real *v,
+                  const Real alpha,
+                  T *c,
+                  const int &ldc);
+};
+
+template <typename T, typename Device> struct updatePsiByPrecondition {
+    using Real = typename GetTypeReal<T>::type;
+  /// @brief
+  ///
+  /// Input Parameters
+  /// \param d : the type of computing device
+  /// \param m : row number
+  /// \param n : column number
+  /// \param psi : input matrix
+  /// \param lda : leading dimension of matrix psi
+  /// \param precondition : input vector
+  /// \param eigenvalue : input vector
+  ///
+  /// Output Parameters
+  /// \param psi : output matrix
+  void operator()(const Device *d, const int &m, const int &n,
+                  T *psi,
+                  const int &lda,
+                  const Real *precondition,
+                  const Real *eigenvalue);
+};
+
+template <typename T, typename Device> struct normalizeMatrixColumn {
+  /// @brief normalize matrix each column
+  ///
+  /// Input Parameters
+  /// \param d : the type of computing device
+  /// \param m : row number
+  /// \param n : column number
+  /// \param matrix : input matrix
+  /// \param lda : leading dimension of matrix matrix
+  ///
+  /// Output Parameters
+  /// \param matrix : output matrix
+  void operator()(const Device *d, const int &m, const int &n,
+                  T *matrix,
+                  const int &lda);
+};
+
 #if __CUDA || __UT_USE_CUDA || __ROCM || __UT_USE_ROCM
 
 template <typename T>
@@ -358,6 +447,43 @@ template <typename T> struct matrixSetToAnother<T, base_device::DEVICE_GPU> {
                   const int &LDA,
                   T *B, // output
                   const int &LDB);
+};
+
+template <typename T> struct refreshHccSccVcc<T, base_device::DEVICE_GPU> {
+  using Real = typename GetTypeReal<T>::type;
+  void operator()(const base_device::DEVICE_GPU *d, const int &n,
+                  T *hcc,
+                  T *scc,
+                  T *vcc,
+                  const int &ldh,
+                  const Real *eigenvalue,
+                  const T &one);
+};
+
+template <typename T> struct matrixMutiplyVector<T, base_device::DEVICE_GPU> {
+  using Real = typename GetTypeReal<T>::type;
+  void operator()(const base_device::DEVICE_GPU *d, const int &m, const int &n,
+                  T *a,
+                  const int &lda,
+                  const Real *v,
+                  const Real alpha,
+                  T *c,
+                  const int &ldc);
+};
+
+template <typename T> struct updatePsiByPrecondition<T, base_device::DEVICE_GPU> {
+  using Real = typename GetTypeReal<T>::type;
+  void operator()(const base_device::DEVICE_GPU *d, const int &m, const int &n,
+                  T *psi,
+                  const int &lda,
+                  const Real *precondition,
+                  const Real *eigenvalue);
+};
+
+template <typename T> struct normalizeMatrixColumn<T, base_device::DEVICE_GPU> {
+  void operator()(const base_device::DEVICE_GPU *d, const int &m, const int &n,
+                  T *matrix,
+                  const int &lda);
 };
 
 void createGpuBlasHandle();
