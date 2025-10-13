@@ -3,6 +3,7 @@
 #include "module_base/parallel_reduce.h"
 #include "module_parameter/parameter.h"
 #include "module_base/timer.h"
+#include "module_elecstate/module_charge/charge_mixing.h"
 
 
 namespace ModuleDFTU
@@ -12,7 +13,7 @@ DFTU* DFTU::get_instance()
     return &GlobalC::dftu;
 }
 /// calculate occupation matrix for DFT+U
-void DFTU::cal_occ_pw(const int iter, const void* psi_in, const ModuleBase::matrix& wg_in, const UnitCell& cell, const double& mixing_beta)
+void DFTU::cal_occ_pw(const int iter, const void* psi_in, const ModuleBase::matrix& wg_in, const UnitCell& cell, Charge_Mixing* p_chgmix)
 {
     ModuleBase::timer::tick("DFTU", "cal_occ_pw");
     this->copy_locale();
@@ -75,6 +76,10 @@ void DFTU::cal_occ_pw(const int iter, const void* psi_in, const ModuleBase::matr
                             this->locale[iat][target_l][0][0].c[ind_m1m2 + tlp1_2] += (occ[1] + occ[2]).real();
                             this->locale[iat][target_l][0][0].c[ind_m1m2 + 2 * tlp1_2] += (occ[1] - occ[2]).imag();
                             this->locale[iat][target_l][0][0].c[ind_m1m2 + 3 * tlp1_2] += (occ[0] - occ[3]).real();
+                            this->uom_array[eff_pot_pw_index[iat]+ind_m1m2] = this->locale[iat][target_l][0][0].c[ind_m1m2];
+                            this->uom_array[eff_pot_pw_index[iat]+ind_m1m2+tlp1_2] = this->locale[iat][target_l][0][0].c[ind_m1m2 + tlp1_2];
+                            this->uom_array[eff_pot_pw_index[iat]+ind_m1m2+2*tlp1_2] = this->locale[iat][target_l][0][0].c[ind_m1m2 + 2 * tlp1_2];  
+                            this->uom_array[eff_pot_pw_index[iat]+ind_m1m2+3*tlp1_2] = this->locale[iat][target_l][0][0].c[ind_m1m2 + 3 * tlp1_2];
                             ind_m1m2++;
                         }
                     }
@@ -187,6 +192,13 @@ void DFTU::cal_occ_pw(const int iter, const void* psi_in, const ModuleBase::matr
     }
 #endif
 
+    //to test omc method: save locale and reset occupation matrix to target values
+    if(mixing_dftu && initialed_locale)
+    {
+        p_chgmix->mix_uom(this->uom_array, this->uom_save); //mix U0 to get U
+        this->set_locale();
+    }
+
     this->EU = 0.0;
     // reduce mag from all k-pools
     for(int iat = 0; iat < cell.nat; iat++)
@@ -281,11 +293,10 @@ void DFTU::cal_occ_pw(const int iter, const void* psi_in, const ModuleBase::matr
         }
         }
     }
+    //print calculated locale to check
+    //this->mix_locale(0);
+    initialed_locale = true;
 
-    if(mixing_dftu && initialed_locale)
-    {
-        this->mix_locale(mixing_beta);
-    }
     // update effective potential
     ModuleBase::timer::tick("DFTU", "cal_occ_pw");
 }

@@ -148,6 +148,8 @@ void DFTU::init(UnitCell& cell, // unitcell class
     // allocate memory for eff_pot_pw
     if(GlobalV::NSPIN == 2) pot_index *= 2; // for spin polarized case, we need to double the size
     this->eff_pot_pw.resize(pot_index, 0.0);
+    this->uom_array.resize(pot_index, 0.0);
+    this->uom_save.resize(pot_index, 0.0);
 
     if (Yukawa)
     {
@@ -180,7 +182,7 @@ void DFTU::init(UnitCell& cell, // unitcell class
         }
     }
 
-    if (omc != 0)
+    if (0 )//omc != 0)
     {
         std::stringstream sst;
         sst << "initial_onsite.dm";

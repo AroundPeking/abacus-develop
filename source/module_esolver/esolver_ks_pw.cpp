@@ -599,6 +599,11 @@ template <typename T, typename Device>
 void ESolver_KS_PW<T, Device>::iter_init(const int istep, const int iter) {
     if (iter == 1) {
         this->p_chgmix->init_mixing();
+        if(PARAM.inp.dft_plus_u && PARAM.inp.mixing_dftu)
+        {
+            // allocate memory for uom_mdata
+            this->p_chgmix->allocate_mixing_uom(GlobalC::dftu.get_size_eff_pot_pw());
+        }
         this->p_chgmix->mixing_restart_step = GlobalV::SCF_NMAX + 1;
     }
     // for mixing_restart
@@ -630,6 +635,7 @@ void ESolver_KS_PW<T, Device>::iter_init(const int istep, const int iter) {
                     std::cout << " eV " << std::endl;
                 }
             }
+            //GlobalC::dftu.omc = 0;
             if (GlobalC::dftu.uramping > 0.01 && !GlobalC::dftu.u_converged())
             {
                 this->p_chgmix->mixing_restart_step = GlobalV::SCF_NMAX + 1;
@@ -648,17 +654,17 @@ void ESolver_KS_PW<T, Device>::iter_init(const int istep, const int iter) {
 
     // update local occupations for DFT+U
     // should before lambda loop in DeltaSpin
-    if (GlobalV::dft_plus_u)
+    /* (GlobalV::dft_plus_u)
     {
         auto* dftu = ModuleDFTU::DFTU::get_instance();
         // only old DFT+U method should calculated energy correction in esolver,
         // new DFT+U method will calculate energy in calculating Hamiltonian
-        if (dftu->omc != 2)
+        if (dftu->omc != 2 && !(istep == 0 && iter == 1))
         {
-            dftu->cal_occ_pw(iter, this->kspw_psi, this->pelec->wg, GlobalC::ucell, PARAM.inp.mixing_beta);
+            dftu->cal_occ_pw(iter, this->kspw_psi, this->pelec->wg, GlobalC::ucell, this->p_chgmix);
         }
         dftu->output();
-    }
+    }*/
 }
 
 // Temporary, it should be replaced by hsolver later.
@@ -667,6 +673,13 @@ void ESolver_KS_PW<T, Device>::hamilt2density(const int istep,
                                               const int iter,
                                               const double ethr) {
     ModuleBase::timer::tick("ESolver_KS_PW", "hamilt2density");
+
+    if(this->drho>0 && PARAM.inp.dft_plus_u)
+    {
+        auto* dftu = ModuleDFTU::DFTU::get_instance();
+        dftu->cal_occ_pw(iter, this->kspw_psi, this->pelec->wg, GlobalC::ucell, this->p_chgmix);
+        dftu->output();
+    }
 
     if (this->phsol != nullptr) {
         // reset energy

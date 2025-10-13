@@ -36,6 +36,7 @@ class Charge_Mixing
      * @param mixing_gg0_min_in minimum kerker coefficient
      * @param mixing_angle_in mixing angle for nspin=4
      * @param mixing_dmr_in whether to mixing real space density matrix
+     * @param mixing_uom_in whether to mixing onsite matrix elements only for DFT+U method
      */
     void set_mixing(const std::string& mixing_mode_in,
                     const double& mixing_beta_in,
@@ -46,7 +47,8 @@ class Charge_Mixing
                     const double& mixing_gg0_mag_in,
                     const double& mixing_gg0_min_in,
                     const double& mixing_angle_in,
-                    const bool& mixing_dmr_in);
+                    const bool& mixing_dmr_in,
+                    const bool& mixing_uom_in = false);
 
     /**
      * @brief initialize mixing, including constructing mixing and allocating memory for mixing data
@@ -61,6 +63,12 @@ class Charge_Mixing
     void allocate_mixing_dmr(int nnr);
 
     /**
+     * @brief allocate memory of uom_mdata
+     * @param nnr size of onsite-matrix of DFT+U
+     */
+    void allocate_mixing_uom(int size_uom);
+
+    /**
      * @brief charge mixing
      * @param chr pointer of Charge object
      */
@@ -72,6 +80,13 @@ class Charge_Mixing
      */
     void mix_dmr(elecstate::DensityMatrix<double, double>* DM);
     void mix_dmr(elecstate::DensityMatrix<std::complex<double>, double>* DM);
+
+    /**
+     * @brief density matrix mixing for onsite matrix elements only for DFT+U
+     * @param uom_in onsite matrix elements of DFT+U
+     * @param uom_save_in saved onsite matrix elements of DFT+U
+     */
+    void mix_uom(std::vector<double>& uom_in, std::vector<double>& uom_save_in);
     
     /**
      * @brief Get the drho between rho and rho_save, similar for get_dkin
@@ -116,6 +131,7 @@ class Charge_Mixing
     Base_Mixing::Mixing_Data tau_mdata;    ///< Mixing data for kinetic energy density
     Base_Mixing::Mixing_Data nhat_mdata;   ///< Mixing data for compensation density
     Base_Mixing::Mixing_Data dmr_mdata;    ///< Mixing data for real space density matrix
+    Base_Mixing::Mixing_Data uom_mdata;    ///< Mixing data for onsite matrix elements of DFT+U
     Base_Mixing::Plain_Mixing* mixing_highf = nullptr; ///< The high_frequency part is mixed by plain mixing method.
 
     //======================================
@@ -131,6 +147,7 @@ class Charge_Mixing
     double mixing_gg0_min = 0.1;         ///< minimum kerker coefficient
     double mixing_angle = 0.0;           ///< mixing angle for nspin=4
     bool mixing_dmr = false;             ///< whether to mixing real space density matrix
+    bool mixing_uom = false;             ///< whether to mixing onsite matrix elements only for DFT+U method
 
     std::vector<double> _drho_history; ///< history of drho used to determine the oscillation, size is scf_nmax
     

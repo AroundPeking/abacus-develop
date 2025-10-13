@@ -7,6 +7,16 @@
 #include "basic_funcs.h"
 #include "module_parameter/parameter.h"
 
+//template <>
+//void SpinConstrain<std::complex<double>>::run_lambda_loop(int outer_step)
+//{
+    // init parameters
+    // do onsite-matrix loop to get converged matrix from current rho
+    // inherit algorithm to next converged matrix to get minimum scored matrix
+    
+    
+//}
+
 // lambda = initial_lambda + delta_lambda/(spin2 - spin1) * (target_spin - spin1)
 /*inline void next_lambda(std::vector<ModuleBase::Vector3<double>>& initial_lambda,
                         std::vector<ModuleBase::Vector3<double>>& delta_lambda,

@@ -37,29 +37,25 @@ void DFTU::copy_locale()
 
     for (int T = 0; T < GlobalC::ucell.ntype; T++)
     {
-        if (orbital_corr[T] == -1)
+        int target_l = orbital_corr[T];
+        if (target_l == -1)
             continue;
 
         for (int I = 0; I < GlobalC::ucell.atoms[T].na; I++)
         {
             const int iat = GlobalC::ucell.itia2iat(T, I);
 
-            for (int l = 0; l < GlobalC::ucell.atoms[T].nwl + 1; l++)
+            if (GlobalV::NSPIN == 4)
             {
-                const int N = GlobalC::ucell.atoms[T].l_nchi[l];
-
-                for (int n = 0; n < N; n++)
-                {
-                    if (GlobalV::NSPIN == 4)
-                    {
-                        locale_save[iat][l][n][0] = locale[iat][l][n][0];
-                    }
-                    else if (GlobalV::NSPIN == 1 || GlobalV::NSPIN == 2)
-                    {
-                        locale_save[iat][l][n][0] = locale[iat][l][n][0];
-                        locale_save[iat][l][n][1] = locale[iat][l][n][1];
-                    }
-                }
+                locale_save[iat][target_l][0][0] = locale[iat][target_l][0][0];
+                if(this->uom_save.size() != 0)
+                for(int mm=0;mm<locale[iat][target_l][0][0].nr*locale[iat][target_l][0][0].nc;mm++)
+                    this->uom_save[eff_pot_pw_index[iat]+mm] = locale[iat][target_l][0][0].c[mm];
+            }
+            else if (GlobalV::NSPIN == 1 || GlobalV::NSPIN == 2)
+            {
+                locale_save[iat][target_l][0][0] = locale[iat][target_l][0][0];
+                locale_save[iat][target_l][0][1] = locale[iat][target_l][0][1];
             }
         }
     }
@@ -98,7 +94,41 @@ void DFTU::zero_locale()
             }
         }
     }
+    this->uom_array.assign(this->uom_array.size(), 0.0);
     ModuleBase::timer::tick("DFTU", "zero_locale");
+}
+
+void DFTU::set_locale()
+{
+    ModuleBase::TITLE("DFTU", "set_locale");
+    ModuleBase::timer::tick("DFTU", "set_locale");
+
+    for (int T = 0; T < GlobalC::ucell.ntype; T++)
+    {
+        if (orbital_corr[T] == -1) continue;
+
+        const int l = orbital_corr[T];
+
+        for (int I = 0; I < GlobalC::ucell.atoms[T].na; I++)
+        {
+            const int iat = GlobalC::ucell.itia2iat(T, I);
+            if (GlobalV::NSPIN == 4)
+            {
+                for(int mm=0;mm<locale[iat][l][0][0].nr*locale[iat][l][0][0].nc;mm++)
+                    locale[iat][l][0][0].c[mm] = this->uom_array[eff_pot_pw_index[iat]+mm];
+            }
+            else if (GlobalV::NSPIN == 1 || GlobalV::NSPIN == 2)
+            {
+                for(int mm=0;mm<locale[iat][l][0][0].nr*locale[iat][l][0][0].nc;mm++)
+                {
+                    locale[iat][l][0][0].c[mm] = this->uom_array[eff_pot_pw_index[iat]+mm];
+                    locale[iat][l][0][1].c[mm] = this->uom_array[eff_pot_pw_index[iat]+mm+locale[iat][l][0][0].nr*locale[iat][l][0][0].nc];
+                }
+            }
+        }
+    }
+
+    ModuleBase::timer::tick("DFTU", "set_locale");
 }
 
 void DFTU::mix_locale(const double& mixing_beta)

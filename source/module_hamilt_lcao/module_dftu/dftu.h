@@ -84,7 +84,7 @@ class DFTU
   public:
     /// interface for PW base
     /// calculate the local occupation number matrix for PW based wave functions
-    void cal_occ_pw(const int iter, const void* psi_in, const ModuleBase::matrix& wg_in, const UnitCell& cell, const double& mixing_beta);
+    void cal_occ_pw(const int iter, const void* psi_in, const ModuleBase::matrix& wg_in, const UnitCell& cell, Charge_Mixing* p_chgmix);
     /// calculate the local DFT+U effective potential matrix for PW base.
     void cal_VU_pot_pw(const int spin);
     /// get effective potential matrix for PW base
@@ -102,10 +102,13 @@ class DFTU
   private:
     void copy_locale();
     void zero_locale();
+    void set_locale();
     void mix_locale(const double& mixing_beta);
 
     std::vector<std::complex<double>> eff_pot_pw;
     std::vector<int> eff_pot_pw_index;
+    std::vector<double> uom_array;
+    std::vector<double> uom_save;
 
 public:
     // local occupancy matrix of the correlated subspace
