@@ -8,8 +8,8 @@
 #include "module_cell/klist.h"
 #include "module_cell/unitcell.h"
 #include "module_basis/module_ao/parallel_orbitals.h"
-#ifdef __LCAO
 #include "module_elecstate/module_charge/charge_mixing.h"
+#ifdef __LCAO
 #include "module_hamilt_general/hamilt.h"
 #include "module_elecstate/elecstate.h"
 #include "module_hamilt_lcao/module_hcontainer/hcontainer.h"
