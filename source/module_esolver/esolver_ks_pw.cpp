@@ -677,7 +677,6 @@ void ESolver_KS_PW<T, Device>::hamilt2density(const int istep,
     if(PARAM.inp.dft_plus_u)
     {
         auto* dftu = ModuleDFTU::DFTU::get_instance();
-        std::cout<<__FILE__<<":"<<__LINE__<<" "<<this->drho<<" "<<istep<<" "<<iter<<" "<<this->p_chgmix->mixing_restart_step<<std::endl;
         if(this->drho>0 && iter != this->p_chgmix->mixing_restart_step) // if drho==0, skip mixing occupation, or mixing_restart step
         {
             dftu->cal_occ_pw(iter, this->kspw_psi, this->pelec->wg, GlobalC::ucell, this->p_chgmix);
