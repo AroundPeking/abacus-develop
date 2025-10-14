@@ -674,10 +674,18 @@ void ESolver_KS_PW<T, Device>::hamilt2density(const int istep,
                                               const double ethr) {
     ModuleBase::timer::tick("ESolver_KS_PW", "hamilt2density");
 
-    if(this->drho>0 && PARAM.inp.dft_plus_u)
+    if(PARAM.inp.dft_plus_u)
     {
         auto* dftu = ModuleDFTU::DFTU::get_instance();
-        dftu->cal_occ_pw(iter, this->kspw_psi, this->pelec->wg, GlobalC::ucell, this->p_chgmix);
+        std::cout<<__FILE__<<":"<<__LINE__<<" "<<this->drho<<" "<<istep<<" "<<iter<<" "<<this->p_chgmix->mixing_restart_step<<std::endl;
+        if(this->drho>0 && iter != this->p_chgmix->mixing_restart_step) // if drho==0, skip mixing occupation, or mixing_restart step
+        {
+            dftu->cal_occ_pw(iter, this->kspw_psi, this->pelec->wg, GlobalC::ucell, this->p_chgmix);
+        }
+        else
+        {
+            dftu->cal_occ_pw(iter, this->kspw_psi, this->pelec->wg, GlobalC::ucell, nullptr);
+        }
         dftu->output();
     }
 
@@ -836,7 +844,7 @@ void ESolver_KS_PW<T, Device>::iter_finish(const int iter, const bool conv_elec)
         {
             sc.higher_mag_prec = 
                 this->p_chgmix->if_scf_oscillate(iter, this->drho, PARAM.inp.sc_os_ndim, PARAM.inp.scf_os_thr);
-            if(sc.higher_mag_prec && !PARAM.inp.dft_plus_u)
+            if(sc.higher_mag_prec)
             { // if oscillate, increase the precision of magnetization and do mixing_restart in next iteration
                 this->p_chgmix->mixing_restart_step = iter + 1;
             }

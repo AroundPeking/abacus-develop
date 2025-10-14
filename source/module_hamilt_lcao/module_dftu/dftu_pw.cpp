@@ -212,7 +212,7 @@ void DFTU::cal_occ_pw(const int iter, const void* psi_in, const ModuleBase::matr
         }
     }
     //to test omc method: save locale and reset occupation matrix to target values
-    if(mixing_dftu && initialed_locale)
+    if(mixing_dftu && p_chgmix != nullptr)
     {
         p_chgmix->mix_uom(this->uom_array, this->uom_save); //mix U0 to get U
         this->set_locale();
