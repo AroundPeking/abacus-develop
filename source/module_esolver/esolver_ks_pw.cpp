@@ -846,6 +846,13 @@ void ESolver_KS_PW<T, Device>::iter_finish(const int iter, const bool conv_elec)
             if(sc.higher_mag_prec)
             { // if oscillate, increase the precision of magnetization and do mixing_restart in next iteration
                 this->p_chgmix->mixing_restart_step = iter + 1;
+                if(PARAM.inp.dft_plus_u && !GlobalC::dftu.mixing_dftu)
+                {
+                    // set mixing_dftu true to mix occupation in next iteration
+                    // allocate memory for uom_mdata
+                    this->p_chgmix->allocate_mixing_uom(GlobalC::dftu.get_size_eff_pot_pw());
+                    GlobalC::dftu.mixing_dftu = true;
+                }
             }
         }
     }
