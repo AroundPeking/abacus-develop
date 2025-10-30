@@ -288,6 +288,12 @@ void ReadInput::item_exx()
         this->add_item(item);
     }
     {
+        Input_Item item("cs_inv_thr");
+        item.annotation = "threshold to inverse Vq in abfs for generating Cs";
+        read_sync_double(input.Cs_inv_thr);
+        this->add_item(item);
+    }
+    {
         Input_Item item("shrink_abfs_pca_thr");
         item.annotation = "threshold to shrink auxiliary basis for GW/RPA";
         read_sync_double(input.shrink_abfs_pca_thr);

@@ -27,11 +27,13 @@ RI::Tensor<Tdata> LRI_CV_Tools::cal_I(const RI::Tensor<Tdata>& m,
 }
 
 template <typename Tdata>
-std::vector<std::vector<RI::Tensor<Tdata>>> LRI_CV_Tools::cal_I(const std::vector<std::vector<RI::Tensor<Tdata>>>& ms)
+std::vector<std::vector<RI::Tensor<Tdata>>> LRI_CV_Tools::cal_I(const std::vector<std::vector<RI::Tensor<Tdata>>>& ms,
+                                                                const typename Inverse_Matrix<Tdata>::Method method,
+                                                                const double& threshold_condition_number)
 {
     Inverse_Matrix<Tdata> I;
     I.input(ms);
-    I.cal_inverse(Inverse_Matrix<Tdata>::Method::potrf);
+    I.cal_inverse(method, threshold_condition_number);
     return I.output({ms[0][0].shape[0], ms[1][0].shape[0]}, {ms[0][0].shape[1], ms[0][1].shape[1]});
 }
 

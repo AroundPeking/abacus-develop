@@ -375,7 +375,11 @@ std::pair<RI::Tensor<Tdata>, std::array<RI::Tensor<Tdata>, 3>> LRI_CV<Tdata>::DP
                                                                              this->index_lcaos,
                                                                              Matrix_Orbs21::Matrix_Order::A1A2B);
             const RI::Tensor<Tdata> V = this->DPcal_V(it0, it0, {0, 0, 0}, {{"writable_Vws", true}});
-            const RI::Tensor<Tdata> L = LRI_CV_Tools::cal_I(V);
+            RI::Tensor<Tdata> L;
+            if (GlobalC::exx_info.info_ri.Cs_inv_thr > 0)
+                L = LRI_CV_Tools::cal_I(V, Inverse_Matrix<Tdata>::Method::syev, GlobalC::exx_info.info_ri.Cs_inv_thr);
+            else
+                L = LRI_CV_Tools::cal_I(V);
 
             const RI::Tensor<Tdata> C
                 = RI::Global_Func::convert<Tdata>(0.5) * LRI_CV_Tools::mul1(L, A); // Attention 0.5!
@@ -430,7 +434,11 @@ std::pair<RI::Tensor<Tdata>, std::array<RI::Tensor<Tdata>, 3>> LRI_CV<Tdata>::DP
                 = {{DPcal_V(it0, it0, {0, 0, 0}, {{"writable_Vws", true}}), DPcal_V(it0, it1, R, flags)},
                    {DPcal_V(it1, it0, Rm, flags), DPcal_V(it1, it1, {0, 0, 0}, {{"writable_Vws", true}})}};
 
-            const std::vector<std::vector<RI::Tensor<Tdata>>> L = LRI_CV_Tools::cal_I(V);
+            std::vector<std::vector<RI::Tensor<Tdata>>> L;
+            if (GlobalC::exx_info.info_ri.Cs_inv_thr > 0)
+                L = LRI_CV_Tools::cal_I(V, Inverse_Matrix<Tdata>::Method::syev, GlobalC::exx_info.info_ri.Cs_inv_thr);
+            else
+                L = LRI_CV_Tools::cal_I(V);
 
             const std::vector<RI::Tensor<Tdata>> C = LRI_CV_Tools::mul2(L, A);
             if (flags.at("writable_Cws"))
