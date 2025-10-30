@@ -26,7 +26,10 @@ extern RI::Tensor<Tdata> cal_I(const RI::Tensor<Tdata>& m,
                                = Inverse_Matrix<Tdata>::Method::potrf,
                                const double& threshold_condition_number = 0.);
 template <typename Tdata>
-extern std::vector<std::vector<RI::Tensor<Tdata>>> cal_I(const std::vector<std::vector<RI::Tensor<Tdata>>>& ms);
+extern std::vector<std::vector<RI::Tensor<Tdata>>> cal_I(const std::vector<std::vector<RI::Tensor<Tdata>>>& ms,
+                                                         const typename Inverse_Matrix<Tdata>::Method method
+                                                         = Inverse_Matrix<Tdata>::Method::potrf,
+                                                         const double& threshold_condition_number = 0.);
 
 template <typename Tdata>
 inline RI::Tensor<Tdata> transform_Rm(const RI::Tensor<Tdata>& V);
