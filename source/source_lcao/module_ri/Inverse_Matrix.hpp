@@ -8,7 +8,8 @@
 #define INVERSE_MATRIX_HPP
 
 #include "Inverse_Matrix.h"
-#include "source_base/lapack_connector.h"
+#include "module_base/lapack_connector.h"
+#include "module_hamilt_general/module_xc/exx_info.h"
 
 #include <cassert>
 
@@ -54,7 +55,7 @@ inline void Inverse_Matrix<std::complex<double>>::using_syev(const double& thres
     for (const double& ie: eigen_value)
         eigen_value_max = std::max(ie, eigen_value_max);
     const double threshold = eigen_value_max * threshold_condition_number;
-    std::cout << "overlap inverse threshold: " << threshold << std::endl;
+    std::cout << "Overlap inverse threshold: " << threshold << std::endl;
 
     ModuleBase::ComplexMatrix eA(A.shape[0], A.shape[1]);
     int ie = 0;
@@ -77,6 +78,31 @@ inline void Inverse_Matrix<std::complex<double>>::using_syev(const double& thres
 template <>
 inline void Inverse_Matrix<double>::using_syev(const double& threshold_condition_number)
 {
+    int info;
+    std::vector<double> eigen_value(A.shape[0]);
+    ABFs_Construct::PCA::tensor_dsyev('V', 'U', A, eigen_value.data(), info);
+
+    double eigen_value_max = 0;
+    for (const double& ie: eigen_value)
+        eigen_value_max = std::max(ie, eigen_value_max);
+    const double threshold = eigen_value_max * threshold_condition_number;
+    std::cout << "Vq inverse threshold: " << threshold << std::endl;
+
+    ModuleBase::matrix eA(A.shape[0], A.shape[1]);
+    int ie = 0;
+    for (int i = 0; i != A.shape[0]; ++i)
+        if (eigen_value[i] > threshold)
+        {
+            BlasConnector::axpy(A.shape[1],
+                                sqrt(1.0 / eigen_value[i]),
+                                A.ptr() + i * A.shape[1],
+                                1,
+                                eA.c + ie * eA.nc,
+                                1);
+            ++ie;
+        }
+    std::cout << "No. of singularity: " << A.shape[0] - ie << std::endl;
+    BlasConnector::gemm('T', 'N', eA.nc, eA.nc, ie, 1, eA.c, eA.nc, eA.c, eA.nc, 0, A.ptr(), A.shape[1]);
 }
 
 template <typename Tdata>
