@@ -17,11 +17,13 @@
 #include "module_ri/conv_coulomb_pot_k.h"
 #include "module_ri/exx_abfs-construct_orbs.h"
 #include "module_ri/exx_abfs-io.h"
+#include "module_ri/exx_rotate_abfs.h"
 #include "module_ri/serialization_cereal.h"
 
 #include <RI/distribute/Distribute_Equally.h>
 #include <RI/global/Map_Operator-3.h>
 #include <fstream>
+#include <malloc.h>
 #include <string>
 
 template <typename Tdata>
@@ -58,8 +60,23 @@ void Exx_LRI<Tdata>::init(const MPI_Comm& mpi_comm_in,
     const int nspin0 = (PARAM.inp.nspin == 2) ? 2 : 1;
     const std::map<std::string, double> ccp_parameter
         = RI_Util::get_ccp_parameter(this->info, ucell, this->p_kv, nspin0);
-    this->abfs_ccp
-        = Conv_Coulomb_Pot_K::cal_orbs_ccp(this->abfs, this->info.ccp_type, ccp_parameter, this->info.ccp_rmesh_times);
+    if (this->info.rotate_abfs == true)
+    {
+        // ccp_rmesh_times = 1 to calculate VR in the range of Rcut
+        // by the methods of k-space
+        // the left part of VR is calculated by the methods of r-space
+        this->abfs_ccp = Conv_Coulomb_Pot_K::cal_orbs_ccp(this->abfs,
+                                                          this->info.ccp_type,
+                                                          ccp_parameter,
+                                                          this->info.ccp_rmesh_times);
+    }
+    else
+    {
+        this->abfs_ccp = Conv_Coulomb_Pot_K::cal_orbs_ccp(this->abfs,
+                                                          this->info.ccp_type,
+                                                          ccp_parameter,
+                                                          this->info.ccp_rmesh_times);
+    }
 
     for (size_t T = 0; T != this->abfs.size(); ++T)
     {
@@ -122,8 +139,23 @@ void Exx_LRI<Tdata>::init(const MPI_Comm& mpi_comm_in,
     const int nspin0 = (PARAM.inp.nspin == 2) ? 2 : 1;
     const std::map<std::string, double> ccp_parameter
         = RI_Util::get_ccp_parameter(this->info, ucell, this->p_kv, nspin0);
-    this->abfs_ccp
-        = Conv_Coulomb_Pot_K::cal_orbs_ccp(this->abfs, this->info.ccp_type, ccp_parameter, this->info.ccp_rmesh_times);
+    if (this->info.rotate_abfs == true)
+    {
+        // ccp_rmesh_times = 1 to calculate VR in the range of Rcut
+        // by the methods of k-space
+        // the left part of VR is calculated by the methods of r-space
+        this->abfs_ccp = Conv_Coulomb_Pot_K::cal_orbs_ccp(this->abfs,
+                                                          this->info.ccp_type,
+                                                          ccp_parameter,
+                                                          this->info.ccp_rmesh_times);
+    }
+    else
+    {
+        this->abfs_ccp = Conv_Coulomb_Pot_K::cal_orbs_ccp(this->abfs,
+                                                          this->info.ccp_type,
+                                                          ccp_parameter,
+                                                          this->info.ccp_rmesh_times);
+    }
 
     for (size_t T = 0; T != this->abfs.size(); ++T)
     {
@@ -319,10 +351,49 @@ void Exx_LRI<Tdata>::cal_exx_ions_rpa(std::map<TA, std::map<TAC, RI::Tensor<Tdat
     // std::max(3) for gamma_only, list_A2 should contain cell {-1,0,1}. In the future distribute will be neighbour.
     const std::array<Tcell, Ndim> period_Vs
         = LRI_CV_Tools::cal_latvec_range<Tcell>(1 + this->info.ccp_rmesh_times, ucell, orb_cutoff_);
-    const std::pair<std::vector<TA>, std::vector<std::vector<std::pair<TA, std::array<Tcell, Ndim>>>>> list_As_Vs
+    std::pair<std::vector<TA>, std::vector<std::vector<std::pair<TA, std::array<Tcell, Ndim>>>>> list_As_Vs
         = RI::Distribute_Equally::distribute_atoms_periods(this->mpi_comm, atoms, period_Vs, 2, false);
 
+    Moment_abfs<Tdata>* moment_abfs = nullptr;
+    if (this->info.rotate_abfs == true)
+    {
+        moment_abfs = new Moment_abfs<Tdata>(GlobalC::exx_info.info_ri);
+        std::pair<std::vector<TA>, std::vector<std::vector<std::pair<TA, std::array<Tcell, Ndim>>>>> list_k, list_r;
+        moment_abfs->diverge_list(list_As_Vs, list_k, list_r, ucell, orb_cutoff_);
+        list_As_Vs.first = list_k.first;
+        list_As_Vs.second[0] = list_k.second[0];
+        int flag_As_Vs = 0;
+        for (const auto& I: list_As_Vs.first)
+        {
+            for (const auto& JR: list_As_Vs.second[0])
+                flag_As_Vs += 1;
+        }
+        std::cout << "No.list_As_Vs=" << flag_As_Vs << std::endl;
+        moment_abfs->cal_VR(ucell, this->abfs, this->MGT, list_r);
+    }
+
     Vs_cut = this->cv.cal_Vs(ucell, list_As_Vs.first, list_As_Vs.second[0], {{"writable_Vws", true}});
+    int flag = 0;
+    for (const auto& IJRc: Vs_cut)
+    {
+        const TA& I = IJRc.first;
+        const auto& JRc = IJRc.second;
+        for (const auto& JRc_tensor: JRc)
+        {
+            const TAC& JR = JRc_tensor.first;
+            const RI::Tensor<Tdata>& tensor = JRc_tensor.second;
+            flag += 1;
+        }
+    }
+    std::cout << "No.Vs_cut=" << flag << std::endl;
+    if (this->info.rotate_abfs == true)
+    {
+        // merge moment_abfs.VR into Vs_cut
+        moment_abfs->merge_list(Vs_cut);
+        delete moment_abfs;
+        moment_abfs = nullptr;
+        malloc_trim(0);
+    }
 
     this->cv.Vws = LRI_CV_Tools::get_CVws(ucell, Vs_cut);
     if (this->info.use_ewald && this->info.ccp_type == Conv_Coulomb_Pot_K::Ccp_Type::Ccp)
@@ -382,7 +453,7 @@ void Exx_LRI<Tdata>::cal_exx_ions_rpa(std::map<TA, std::map<TAC, RI::Tensor<Tdat
     const std::array<Tcell, Ndim> period_Cs = LRI_CV_Tools::cal_latvec_range<Tcell>(2, ucell, orb_cutoff_);
     const std::pair<std::vector<TA>, std::vector<std::vector<std::pair<TA, std::array<Tcell, Ndim>>>>> list_As_Cs
         = RI::Distribute_Equally::distribute_atoms_periods(this->mpi_comm, atoms, period_Cs, 2, false);
-
+    std::cout << "123" << std::endl;
     std::pair<std::map<TA, std::map<TAC, RI::Tensor<Tdata>>>,
               std::map<TA, std::map<TAC, std::array<RI::Tensor<Tdata>, 3>>>>
         Cs_dCs = this->cv.cal_Cs_dCs(ucell,
@@ -393,6 +464,7 @@ void Exx_LRI<Tdata>::cal_exx_ions_rpa(std::map<TA, std::map<TAC, RI::Tensor<Tdat
                                       {"writable_dCws", true},
                                       {"writable_Vws", false},
                                       {"writable_dVws", false}});
+    std::cout << "234" << std::endl;
     Cs = std::get<0>(Cs_dCs);
     this->cv.Cws = LRI_CV_Tools::get_CVws(ucell, Cs);
     if (write_cv && GlobalV::MY_RANK == 0)
