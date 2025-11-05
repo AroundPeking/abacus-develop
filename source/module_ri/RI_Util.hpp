@@ -72,7 +72,7 @@ inline std::map<std::string, double> get_ccp_parameter(const Exx_Info::Exx_Info_
     {
     case 0: {
         // 4/3 * pi * Rcut^3 = V_{supercell} = V_{unitcell} * Nk
-        hf_Rcut = std::pow(0.75 * p_kv->get_nkstot_full() / nspin0 * ucell.omega / (ModuleBase::PI), 1.0 / 3.0);
+        hf_Rcut = std::pow(0.75 * this->p_kv->get_nkstot_full() * omega / (ModuleBase::PI), 1.0 / 3.0);
         break;
     }
     case 1: {
@@ -94,10 +94,10 @@ inline std::map<std::string, double> get_ccp_parameter(const Exx_Info::Exx_Info_
     case Conv_Coulomb_Pot_K::Ccp_Type::Ccp:
         return {{"hybrid_alpha", info.hybrid_alpha}};
     case Conv_Coulomb_Pot_K::Ccp_Type::Hf: {
-        return {{"Rcut_type", info.Rcut_type}, {"hf_Rcut", hf_Rcut},{"hybrid_alpha", info.hybrid_alpha}};
+        return {{"Rcut_type", info.Rcut_type}, {"hf_Rcut", hf_Rcut}, {"hybrid_alpha", info.hybrid_alpha}};
     }
     case Conv_Coulomb_Pot_K::Ccp_Type::Erfc:
-        return {{"hse_omega", info.hse_omega},{"hybrid_beta", info.hybrid_beta}};
+        return {{"hse_omega", info.hse_omega}, {"hybrid_beta", info.hybrid_beta}};
     case Conv_Coulomb_Pot_K::Ccp_Type::Cam: { // Rcut_type = 1 is not supported (jiyy)
         return {{"hse_omega", info.hse_omega},
                 {"hybrid_alpha", info.hybrid_alpha},
