@@ -72,7 +72,7 @@ inline std::map<std::string, double> get_ccp_parameter(const Exx_Info::Exx_Info_
     {
     case 0: {
         // 4/3 * pi * Rcut^3 = V_{supercell} = V_{unitcell} * Nk
-        hf_Rcut = std::pow(0.75 * this->p_kv->get_nkstot_full() * omega / (ModuleBase::PI), 1.0 / 3.0);
+        hf_Rcut = std::pow(0.75 * p_kv->get_nkstot_full() * ucell.omega / (ModuleBase::PI), 1.0 / 3.0);
         break;
     }
     case 1: {
