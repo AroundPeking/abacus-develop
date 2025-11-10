@@ -39,7 +39,7 @@ void Ewald_Vq<Tdata>::init(const UnitCell& ucell,
 
     this->mpi_comm = mpi_comm_in;
     this->p_kv = kv_in;
-    this->nks0 = this->p_kv->get_nkstot_full() / this->nspin0;
+    this->nks0 = this->p_kv->get_nkstot_full();
     this->kvec_c.resize(this->nks0);
 
     this->g_lcaos = this->init_gauss(lcaos_in);
