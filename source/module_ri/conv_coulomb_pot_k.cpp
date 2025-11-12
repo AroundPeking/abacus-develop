@@ -49,6 +49,13 @@ std::vector<double> cal_psi_hf(const std::vector<double>& psif,
         if (Rcut_type == 0)
         {
             psik2_ccp[ik] = hybrid_alpha * ModuleBase::FOUR_PI * psif[ik] * (1 - std::cos(k_radial[ik] * Rc));
+            // 2d Coulomb
+            // if (k_radial[ik] == 0)
+            //     psik2_ccp[ik] = -ModuleBase::PI * psif[ik] * k_radial[ik] * k_radial[ik] * (150 * 1.8897162)
+            //                     * (150 * 1.8897162) / 2;
+            // else
+            //     psik2_ccp[ik]
+            //         = hybrid_alpha * ModuleBase::FOUR_PI * psif[ik] * (1 - std::exp(-k_radial[ik] * 75 * 1.8897162));
         }
         else if (Rcut_type == 1)
         {
