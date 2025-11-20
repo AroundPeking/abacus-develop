@@ -200,11 +200,11 @@ void DFTU::cal_occ_pw(const int iter, const void* psi_in, const ModuleBase::matr
         const int fold = GlobalV::NSPIN == 4 ? 4 : 1;
         const int size = (2 * target_l + 1) * (2 * target_l + 1);
         Parallel_Reduce::reduce_double_allpool(GlobalV::KPAR, GlobalV::NPROC_IN_POOL, this->locale[iat][target_l][0][0].c, size * fold);
-        //save locale matrix for this iat to uom_save
-        if(this->uom_save.size() != 0)
+        //save locale matrix for this iat to uom_array
+        if(this->uom_array.size() != 0)
         for(int mm=0;mm<size*fold;mm++)
         {
-            this->uom_save[eff_pot_pw_index[iat]+mm] = this->locale[iat][target_l][0][0].c[mm];
+            this->uom_array[eff_pot_pw_index[iat]+mm] = this->locale[iat][target_l][0][0].c[mm];
         }
         if(GlobalV::NSPIN == 2)
         {
