@@ -340,6 +340,7 @@ void ctrl_output_lcao(UnitCell& ucell,
                                        orb);
         rpa_lri_double.init(MPI_COMM_WORLD, kv, orb.cutoffs());
         rpa_lri_double.out_for_RPA(ucell, pv, *psi, pelec, kv, orb);
+        rpa_lri_double.out_velocity(ucell, gd, two_center_bundle, pv, *psi, pelec);
     }
 #endif
 
