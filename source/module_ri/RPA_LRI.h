@@ -69,6 +69,12 @@ class RPA_LRI
     void out_pure_ri_tensor(const std::string fn, RI::Tensor<std::complex<double>>& olp, const double threshold);
     void out_pure_ri_tensor(const std::string fn, RI::Tensor<double>& olp, const double threshold);
     void out_bands(const elecstate::ElecState* pelec);
+    void out_velocity(const UnitCell& ucell,
+                      const Grid_Driver& gd,
+                      const TwoCenterBundle& two_center_bundle,
+                      const Parallel_Orbitals& parav, /*nbasis×nbasis*/
+                      const psi::Psi<T>& psi,
+                      const elecstate::ElecState* pelec);
 
     void out_Cs(const UnitCell& ucell,
                 std::map<TA, std::map<TAC, RI::Tensor<Tdata>>>& Cs_in,
