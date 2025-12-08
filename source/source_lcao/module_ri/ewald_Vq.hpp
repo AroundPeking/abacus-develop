@@ -752,6 +752,17 @@ auto Ewald_Vq<Tdata>::set_Vq_dVq(const UnitCell& ucell,
             const int ik = list_A1_pair_k[i1].second[0] + shift_for_mpi;
             const TAK re_index = std::make_pair(iat1, std::array<int, 1>{ik});
 
+            // check the Fourier transformed V(q)
+            // whether ccp_rmesh_times * Rcut >= rIJ
+            // skip some IJ pairs
+            auto it_outer = Vq_dVq_minus_gauss.find(list_A0_pair_k[i0]);
+            if (it_outer == Vq_dVq_minus_gauss.end())
+                continue;
+
+            auto it_inner = it_outer->second.find(re_index);
+            if (it_inner == it_outer->second.end())
+                continue;
+
             const size_t size0 = this->index_abfs[it0].count_size;
             const size_t size1 = this->index_abfs[it1].count_size;
             Tout data;
@@ -877,6 +888,18 @@ auto Ewald_Vq<Tdata>::set_Vs_dVs(const UnitCell& ucell,
                           * cfrac;
 
                     const TAK index = std::make_pair(iat1, std::array<int, 1>{static_cast<int>(ik)});
+
+                    // check the Fourier transformed V(q)
+                    // whether ccp_rmesh_times * Rcut >= rIJ
+                    // skip some IJ pairs
+                    auto it_outer = Vq.find(iat0);
+                    if (it_outer == Vq.end())
+                        continue;
+
+                    auto it_inner = it_outer->second.find(index);
+                    if (it_inner == it_outer->second.end())
+                        continue;
+
                     if (LRI_CV_Tools::exist(Vq.at(iat0).at(index)))
                     {
                         Tout Vq_tmp
