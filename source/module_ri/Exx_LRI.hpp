@@ -360,8 +360,9 @@ void Exx_LRI<Tdata>::cal_exx_ions_rpa(std::map<TA, std::map<TAC, RI::Tensor<Tdat
         moment_abfs = new Moment_abfs<Tdata>(GlobalC::exx_info.info_ri);
         std::pair<std::vector<TA>, std::vector<std::vector<std::pair<TA, std::array<Tcell, Ndim>>>>> list_k, list_r;
         moment_abfs->diverge_list(list_As_Vs, list_k, list_r, ucell, orb_cutoff_);
-        list_As_Vs.first = list_k.first;
-        list_As_Vs.second[0] = list_k.second[0];
+        // To cal Cs, we still cal all Vs(R) in r space
+        // list_As_Vs.first = list_k.first;
+        // list_As_Vs.second[0] = list_k.second[0];
         int flag_As_Vs = 0;
         for (const auto& I: list_As_Vs.first)
         {

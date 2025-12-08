@@ -287,6 +287,7 @@ void Moment_abfs<Tdata>::merge_list(std::map<TA, std::map<TAC, RI::Tensor<Tdata>
             // otherwise, warning
             else
             {
+                target_inner[JR] = tensor;
                 const auto J = JR.first;
                 const auto R = JR.second;
                 std::cout << "J=" << J << ", R= " << R[0] << ", " << R[1] << ", " << R[2] << std::endl;
