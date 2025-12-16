@@ -15,41 +15,123 @@ namespace ABFs_Construct
 {
 namespace PCA
 {
-void tensor_dsyev(const char jobz, const char uplo, RI::Tensor<double>& a, double* const w, int& info)
+template <>
+void tensor_syev<double>(char jobz, char uplo, RI::Tensor<double>& a, double* w, int& info)
 {
-    // reference: dsyev in lapack_connector.h (for ModuleBase::matrix)
     assert(a.shape.size() == 2);
     assert(a.shape[0] == a.shape[1]);
-    const int nr = a.shape[0];
-    const int nc = a.shape[1];
 
-    double work_tmp = 0.0;
+    const int n = a.shape[0];
+    const int lda = a.shape[1];
+
+    double work_query = 0.0;
     constexpr int minus_one = -1;
-    dsyev_(&jobz, &uplo, &nr, a.ptr(), &nc, w, &work_tmp, &minus_one, &info); // get best lwork
 
-    const int lwork = work_tmp;
+    dsyev_(&jobz, &uplo, &n, a.ptr(), &lda, w, &work_query, &minus_one, &info);
+
+    const int lwork = static_cast<int>(work_query);
     std::vector<double> work(std::max(1, lwork));
-    dsyev_(&jobz, &uplo, &nr, a.ptr(), &nc, w, work.data(), &lwork, &info);
+
+    dsyev_(&jobz, &uplo, &n, a.ptr(), &lda, w, work.data(), &lwork, &info);
 }
 
-void tensor_zheevx(const char jobz, const char uplo, RI::Tensor<std::complex<double>>& a, double* const w, int& info)
+template <>
+void tensor_syev<float>(char jobz, char uplo, RI::Tensor<float>& a, float* w, int& info)
 {
     assert(a.shape.size() == 2);
     assert(a.shape[0] == a.shape[1]);
+
     const int n = a.shape[0];
-    const int lda = n;
+    const int lda = a.shape[1];
 
-    std::complex<double> work_tmp(0.0, 0.0);
+    float work_query = 0.0f;
     constexpr int minus_one = -1;
-    double rwork_tmp;
-    zheev_(&jobz, &uplo, &n, a.ptr(), &lda, w, &work_tmp, &minus_one, &rwork_tmp, &info);
 
-    const int lwork = static_cast<int>(work_tmp.real());
+    ssyev_(&jobz, &uplo, &n, a.ptr(), &lda, w, &work_query, &minus_one, &info);
+
+    const int lwork = static_cast<int>(work_query);
+    std::vector<float> work(std::max(1, lwork));
+
+    ssyev_(&jobz, &uplo, &n, a.ptr(), &lda, w, work.data(), &lwork, &info);
+}
+
+template <>
+void tensor_syev<std::complex<double>>(char jobz, char uplo, RI::Tensor<std::complex<double>>& a, double* w, int& info)
+{
+    assert(a.shape.size() == 2);
+    assert(a.shape[0] == a.shape[1]);
+
+    const int n = a.shape[0];
+    const int lda = a.shape[1];
+
+    std::complex<double> work_query;
+    constexpr int minus_one = -1;
+
+    zheev_(&jobz, &uplo, &n, a.ptr(), &lda, w, &work_query, &minus_one, nullptr, &info);
+
+    const int lwork = static_cast<int>(work_query.real());
     std::vector<std::complex<double>> work(std::max(1, lwork));
     std::vector<double> rwork(std::max(1, 3 * n - 2));
 
     zheev_(&jobz, &uplo, &n, a.ptr(), &lda, w, work.data(), &lwork, rwork.data(), &info);
 }
+
+template <>
+void tensor_syev<std::complex<float>>(char jobz, char uplo, RI::Tensor<std::complex<float>>& a, float* w, int& info)
+{
+    assert(a.shape.size() == 2);
+    assert(a.shape[0] == a.shape[1]);
+
+    const int n = a.shape[0];
+    const int lda = a.shape[1];
+
+    std::complex<float> work_query;
+    constexpr int minus_one = -1;
+
+    cheev_(&jobz, &uplo, &n, a.ptr(), &lda, w, &work_query, &minus_one, nullptr, &info);
+
+    const int lwork = static_cast<int>(work_query.real());
+    std::vector<std::complex<float>> work(std::max(1, lwork));
+    std::vector<float> rwork(std::max(1, 3 * n - 2));
+
+    cheev_(&jobz, &uplo, &n, a.ptr(), &lda, w, work.data(), &lwork, rwork.data(), &info);
+}
+
+// void tensor_dsyev(const char jobz, const char uplo, RI::Tensor<double>& a, double* const w, int& info)
+// {
+//     // reference: dsyev in lapack_connector.h (for ModuleBase::matrix)
+//     assert(a.shape.size() == 2);
+//     assert(a.shape[0] == a.shape[1]);
+//     const int nr = a.shape[0];
+//     const int nc = a.shape[1];
+
+//     double work_tmp = 0.0;
+//     constexpr int minus_one = -1;
+//     dsyev_(&jobz, &uplo, &nr, a.ptr(), &nc, w, &work_tmp, &minus_one, &info); // get best lwork
+
+//     const int lwork = work_tmp;
+//     std::vector<double> work(std::max(1, lwork));
+//     dsyev_(&jobz, &uplo, &nr, a.ptr(), &nc, w, work.data(), &lwork, &info);
+// }
+
+// void tensor_zheevx(const char jobz, const char uplo, RI::Tensor<std::complex<double>>& a, double* const w, int& info)
+// {
+//     assert(a.shape.size() == 2);
+//     assert(a.shape[0] == a.shape[1]);
+//     const int n = a.shape[0];
+//     const int lda = n;
+
+//     std::complex<double> work_tmp(0.0, 0.0);
+//     constexpr int minus_one = -1;
+//     double rwork_tmp;
+//     zheev_(&jobz, &uplo, &n, a.ptr(), &lda, w, &work_tmp, &minus_one, &rwork_tmp, &info);
+
+//     const int lwork = static_cast<int>(work_tmp.real());
+//     std::vector<std::complex<double>> work(std::max(1, lwork));
+//     std::vector<double> rwork(std::max(1, 3 * n - 2));
+
+//     zheev_(&jobz, &uplo, &n, a.ptr(), &lda, w, work.data(), &lwork, rwork.data(), &info);
+// }
 
 RI::Tensor<double> get_sub_matrix(const RI::Tensor<double>& m, // size: (lcaos, lcaos, abfs)
                                   const std::size_t& T,
@@ -157,7 +239,8 @@ std::vector<std::vector<std::pair<std::vector<double>, RI::Tensor<double>>>> cal
 
             int info = 1;
 
-            tensor_dsyev('V', 'L', mm, eig_value.data(), info);
+            // tensor_dsyev('V', 'L', mm, eig_value.data(), info);
+            tensor_syev<double>('V', 'L', mm, eig_value.data(), info);
 
             if (info)
             {

@@ -44,25 +44,88 @@ void Inverse_Matrix<Tdata>::using_potrf()
     copy_down_triangle();
 }
 
+template <typename T>
+struct InverseMatrixTraits;
+
+// double
 template <>
-inline void Inverse_Matrix<std::complex<double>>::using_syev(const double& threshold_condition_number)
+struct InverseMatrixTraits<double>
 {
+    using matrix_type = ModuleBase::matrix;
+    using value_type = double;
+    static void syev(RI::Tensor<double>& A, value_type* w, int& info)
+    {
+        ABFs_Construct::PCA::tensor_syev('V', 'U', A, w, info);
+    }
+    static constexpr char gemm_trans = 'T';
+};
+
+// complex<double>
+template <>
+struct InverseMatrixTraits<std::complex<double>>
+{
+    using matrix_type = ModuleBase::ComplexMatrix;
+    using value_type = double; // eigenvalues are always real
+    static void syev(RI::Tensor<std::complex<double>>& A, value_type* w, int& info)
+    {
+        ABFs_Construct::PCA::tensor_syev('V', 'U', A, w, info);
+    }
+    static constexpr char gemm_trans = 'C';
+};
+
+// float
+template <>
+struct InverseMatrixTraits<float>
+{
+    using matrix_type = ModuleBase::matrix;
+    using value_type = float;
+    static void syev(RI::Tensor<float>& A, value_type* w, int& info)
+    {
+        ABFs_Construct::PCA::tensor_syev('V', 'U', A, w, info);
+    }
+    static constexpr char gemm_trans = 'T';
+};
+
+// complex<float>
+template <>
+struct InverseMatrixTraits<std::complex<float>>
+{
+    using matrix_type = ModuleBase::ComplexMatrix;
+    using value_type = float;
+    static void syev(RI::Tensor<std::complex<float>>& A, value_type* w, int& info)
+    {
+        ABFs_Construct::PCA::tensor_syev('V', 'U', A, w, info);
+    }
+    static constexpr char gemm_trans = 'C';
+};
+
+template <typename T>
+inline void Inverse_Matrix<T>::using_syev(const double& threshold_condition_number)
+{
+    using traits = InverseMatrixTraits<T>;
+    using val_t = typename traits::value_type;
+
     int info;
-    std::vector<double> eigen_value(A.shape[0]);
-    ABFs_Construct::PCA::tensor_zheevx('V', 'U', A, eigen_value.data(), info);
+    std::vector<val_t> eigen_value(A.shape[0]);
 
-    double eigen_value_max = 0;
-    for (const double& ie: eigen_value)
-        eigen_value_max = std::max(ie, eigen_value_max);
+    traits::syev(A, eigen_value.data(), info);
+    if (info)
+        throw std::range_error("info=" + std::to_string(info) + "\n" + std::string(__FILE__) + " line "
+                               + std::to_string(__LINE__));
+
+    val_t eigen_value_max = 0;
+    for (const val_t& val: eigen_value)
+        eigen_value_max = std::max(val, eigen_value_max);
+
     const double threshold = eigen_value_max * threshold_condition_number;
-    std::cout << "Overlap inverse threshold: " << threshold << std::endl;
 
-    ModuleBase::ComplexMatrix eA(A.shape[0], A.shape[1]);
+    typename traits::matrix_type eA(A.shape[0], A.shape[1]);
+
     int ie = 0;
     for (int i = 0; i != A.shape[0]; ++i)
+    {
         if (eigen_value[i] > threshold)
         {
-            // std::cout << "eig[i]: " << i << "," << std::scientific << eigen_value[i] << std::endl;
             BlasConnector::axpy(A.shape[1],
                                 sqrt(1.0 / eigen_value[i]),
                                 A.ptr() + i * A.shape[1],
@@ -71,39 +134,72 @@ inline void Inverse_Matrix<std::complex<double>>::using_syev(const double& thres
                                 1);
             ++ie;
         }
+    }
     std::cout << "No. of singularity: " << A.shape[0] - ie << std::endl;
-    BlasConnector::gemm('C', 'N', eA.nc, eA.nc, ie, 1, eA.c, eA.nc, eA.c, eA.nc, 0, A.ptr(), A.shape[1]);
+
+    BlasConnector::gemm(traits::gemm_trans, 'N', eA.nc, eA.nc, ie, 1, eA.c, eA.nc, eA.c, eA.nc, 0, A.ptr(), A.shape[1]);
 }
 
-template <>
-inline void Inverse_Matrix<double>::using_syev(const double& threshold_condition_number)
-{
-    int info;
-    std::vector<double> eigen_value(A.shape[0]);
-    ABFs_Construct::PCA::tensor_dsyev('V', 'U', A, eigen_value.data(), info);
+// template <>
+// inline void Inverse_Matrix<std::complex<double>>::using_syev(const double& threshold_condition_number)
+// {
+//     int info;
+//     std::vector<double> eigen_value(A.shape[0]);
+//     ABFs_Construct::PCA::tensor_zheevx('V', 'U', A, eigen_value.data(), info);
 
-    double eigen_value_max = 0;
-    for (const double& ie: eigen_value)
-        eigen_value_max = std::max(ie, eigen_value_max);
-    const double threshold = eigen_value_max * threshold_condition_number;
-    std::cout << "Vq inverse threshold: " << threshold << std::endl;
+//     double eigen_value_max = 0;
+//     for (const double& ie: eigen_value)
+//         eigen_value_max = std::max(ie, eigen_value_max);
+//     const double threshold = eigen_value_max * threshold_condition_number;
+//     std::cout << "Overlap inverse threshold: " << threshold << std::endl;
 
-    ModuleBase::matrix eA(A.shape[0], A.shape[1]);
-    int ie = 0;
-    for (int i = 0; i != A.shape[0]; ++i)
-        if (eigen_value[i] > threshold)
-        {
-            BlasConnector::axpy(A.shape[1],
-                                sqrt(1.0 / eigen_value[i]),
-                                A.ptr() + i * A.shape[1],
-                                1,
-                                eA.c + ie * eA.nc,
-                                1);
-            ++ie;
-        }
-    std::cout << "No. of singularity: " << A.shape[0] - ie << std::endl;
-    BlasConnector::gemm('T', 'N', eA.nc, eA.nc, ie, 1, eA.c, eA.nc, eA.c, eA.nc, 0, A.ptr(), A.shape[1]);
-}
+//     ModuleBase::ComplexMatrix eA(A.shape[0], A.shape[1]);
+//     int ie = 0;
+//     for (int i = 0; i != A.shape[0]; ++i)
+//         if (eigen_value[i] > threshold)
+//         {
+//             // std::cout << "eig[i]: " << i << "," << std::scientific << eigen_value[i] << std::endl;
+//             BlasConnector::axpy(A.shape[1],
+//                                 sqrt(1.0 / eigen_value[i]),
+//                                 A.ptr() + i * A.shape[1],
+//                                 1,
+//                                 eA.c + ie * eA.nc,
+//                                 1);
+//             ++ie;
+//         }
+//     std::cout << "No. of singularity: " << A.shape[0] - ie << std::endl;
+//     BlasConnector::gemm('C', 'N', eA.nc, eA.nc, ie, 1, eA.c, eA.nc, eA.c, eA.nc, 0, A.ptr(), A.shape[1]);
+// }
+
+// template <>
+// inline void Inverse_Matrix<double>::using_syev(const double& threshold_condition_number)
+// {
+//     int info;
+//     std::vector<double> eigen_value(A.shape[0]);
+//     ABFs_Construct::PCA::tensor_dsyev('V', 'U', A, eigen_value.data(), info);
+
+//     double eigen_value_max = 0;
+//     for (const double& ie: eigen_value)
+//         eigen_value_max = std::max(ie, eigen_value_max);
+//     const double threshold = eigen_value_max * threshold_condition_number;
+//     std::cout << "Vq inverse threshold: " << threshold << std::endl;
+
+//     ModuleBase::matrix eA(A.shape[0], A.shape[1]);
+//     int ie = 0;
+//     for (int i = 0; i != A.shape[0]; ++i)
+//         if (eigen_value[i] > threshold)
+//         {
+//             BlasConnector::axpy(A.shape[1],
+//                                 sqrt(1.0 / eigen_value[i]),
+//                                 A.ptr() + i * A.shape[1],
+//                                 1,
+//                                 eA.c + ie * eA.nc,
+//                                 1);
+//             ++ie;
+//         }
+//     std::cout << "No. of singularity: " << A.shape[0] - ie << std::endl;
+//     BlasConnector::gemm('T', 'N', eA.nc, eA.nc, ie, 1, eA.c, eA.nc, eA.c, eA.nc, 0, A.ptr(), A.shape[1]);
+// }
 
 template <typename Tdata>
 void Inverse_Matrix<Tdata>::input(const RI::Tensor<Tdata>& m)
@@ -198,7 +294,7 @@ void Inverse_Matrix<Tdata>::copy_down_triangle()
             A(i0, i1) = A(i1, i0);
 }
 
-template class Inverse_Matrix<std::complex<double>>;
-template class Inverse_Matrix<double>;
+// template class Inverse_Matrix<std::complex<double>>;
+// template class Inverse_Matrix<double>;
 
 #endif
