@@ -283,6 +283,15 @@ extern "C"
                 double* work,
                 const int* lwork,
                 int* info);
+    void ssyev_(const char* jobz,
+                const char* uplo,
+                const int* n,
+                float* a,
+                const int* lda,
+                float* w,
+                float* work,
+                const int* lwork,
+                int* info);
 
     // solve the eigenproblem Ax=ex, where A is a general matrix
     void dgeev_(const char* jobvl,

@@ -29,7 +29,7 @@ class Inverse_Matrix
 
   private:
     void using_potrf();
-    inline void using_syev(const double& threshold_condition_number);
+    void using_syev(const double& threshold_condition_number);
     void copy_down_triangle();
     RI::Tensor<Tdata> A;
 };
