@@ -20,6 +20,7 @@
 #include "module_base/element_basis_index.h"
 #include "module_base/timer.h"
 #include "module_base/tool_title.h"
+#include "module_ri/exx_rotate_abfs.h"
 #include "singular_value.h"
 
 #include <cmath>
@@ -43,6 +44,8 @@ void Ewald_Vq<Tdata>::init(const UnitCell& ucell,
     this->kvec_c.resize(this->nks0);
 
     this->g_lcaos = this->init_gauss(lcaos_in);
+    this->orb_cutoff = orb.cutoffs();
+    this->abfs_in = abfs_in;
     this->g_abfs = this->init_gauss(abfs_in);
     this->g_abfs_ccp = Conv_Coulomb_Pot_K::cal_orbs_ccp(this->g_abfs,
                                                         this->info.ccp_type,
@@ -175,6 +178,19 @@ auto Ewald_Vq<Tdata>::cal_Vs_gauss(const UnitCell& ucell, const std::vector<TA>&
     std::map<std::string, bool> flags = {{"writable_Vws", true}};
     std::map<TA, std::map<TAC, RI::Tensor<Tdata>>> Vs_gauss = this->cv.cal_Vs(ucell, list_A0, list_A1, flags);
     this->cv.Vws = LRI_CV_Tools::get_CVws(ucell, Vs_gauss);
+    if (this->info.rotate_abfs == true)
+    {
+        Moment_abfs<Tdata>* moment_abfs = nullptr;
+        moment_abfs = new Moment_abfs<Tdata>(GlobalC::exx_info.info_ri);
+        std::pair<std::vector<TA>, std::vector<std::vector<std::pair<TA, std::array<Tcell, Ndim>>>>> list_As_Vs;
+        list_As_Vs.first = list_A0;
+        list_As_Vs.second.resize(1);
+        list_As_Vs.second[0] = list_A1;
+        // To cal Cs, we still cal all Vs(R) in r space
+        moment_abfs->cal_VR(ucell, this->abfs_in, list_As_Vs, orb_cutoff, this->cv.Vws);
+        delete moment_abfs;
+        moment_abfs = nullptr;
+    }
 
     ModuleBase::timer::tick("Ewald_Vq", "cal_Vs_gauss");
     return Vs_gauss;
