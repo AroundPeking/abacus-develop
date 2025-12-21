@@ -104,6 +104,8 @@ class Ewald_Vq
     std::vector<std::vector<std::vector<Numerical_Orbital_Lm>>> g_lcaos;
     std::vector<std::vector<std::vector<Numerical_Orbital_Lm>>> g_abfs;
     std::vector<std::vector<std::vector<Numerical_Orbital_Lm>>> g_abfs_ccp;
+    std::vector<std::vector<std::vector<Numerical_Orbital_Lm>>> abfs_in;
+    std::vector<double> orb_cutoff;
 
     /*
   MPI distribute

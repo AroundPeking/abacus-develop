@@ -33,24 +33,18 @@ class Moment_abfs
     void cal_VR(
         const UnitCell& ucell,
         const std::vector<std::vector<std::vector<Numerical_Orbital_Lm>>>& orb_in,
-        const ORB_gaunt_table& MGT,
-        const std::pair<std::vector<TA>, std::vector<std::vector<std::pair<TA, std::array<Tcell, Ndim>>>>>& list_r);
+        const std::pair<std::vector<TA>, std::vector<std::vector<std::pair<TA, std::array<Tcell, Ndim>>>>>& list_r,
+        const std::vector<double>& orb_cutoff,
+        std::map<int, std::map<int, std::map<Abfs::Vector3_Order<double>, RI::Tensor<Tdata>>>>& Vws);
     std::vector<std::vector<std::vector<double>>> cal_multipole(
         const std::vector<std::vector<std::vector<Numerical_Orbital_Lm>>>& orb_in);
     double cal_clmlm(int l2, int m2, int l, int m, const ORB_gaunt_table& MGT) const;
     /// double factorial
     int dfact(const int& l) const;
     int factorial(const int& n) const;
-    void diverge_list(
-        const std::pair<std::vector<TA>, std::vector<std::vector<std::pair<TA, std::array<Tcell, Ndim>>>>>& list_As_Vs,
-        std::pair<std::vector<TA>, std::vector<std::vector<std::pair<TA, std::array<Tcell, Ndim>>>>>& list_k,
-        std::pair<std::vector<TA>, std::vector<std::vector<std::pair<TA, std::array<Tcell, Ndim>>>>>& list_r,
-        const UnitCell& ucell,
-        const std::vector<double>& orb_cutoff);
-    void merge_list(std::map<TA, std::map<TAC, RI::Tensor<Tdata>>>& Vs_cut);
 
   private:
-    std::map<TA, std::map<TAC, RI::Tensor<Tdata>>> VR;
+    // std::map<TA, std::map<TAC, RI::Tensor<Tdata>>> VR;
     Exx_Info::Exx_Info_RI& info;
 };
 #include "exx_rotate_abfs.hpp"

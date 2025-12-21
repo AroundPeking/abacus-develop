@@ -92,8 +92,9 @@ template <typename Tdata>
 void Moment_abfs<Tdata>::cal_VR(
     const UnitCell& ucell,
     const std::vector<std::vector<std::vector<Numerical_Orbital_Lm>>>& orb_in,
-    const ORB_gaunt_table& MGT,
-    const std::pair<std::vector<TA>, std::vector<std::vector<std::pair<TA, std::array<Tcell, Ndim>>>>>& list_r)
+    const std::pair<std::vector<TA>, std::vector<std::vector<std::pair<TA, std::array<Tcell, Ndim>>>>>& list_r,
+    const std::vector<double>& orb_cutoff,
+    std::map<int, std::map<int, std::map<Abfs::Vector3_Order<double>, RI::Tensor<Tdata>>>>& Vws)
 {
     ModuleBase::TITLE("Rotate_abfs", "cal_VR");
     ModuleBase::timer::tick("Rotate_abfs", "cal_VR");
@@ -112,10 +113,12 @@ void Moment_abfs<Tdata>::cal_VR(
     {
         Lmax = std::max(Lmax, static_cast<int>(orb_in[T].size()) - 1);
     }
-    GlobalV::ofs_running << "2*Lmax=" << 2 * Lmax << std::endl;
+    double Rcut_max = 0;
+    for (int T = 0; T < ucell.ntype; ++T)
+        Rcut_max = std::max(Rcut_max, orb_cutoff[T]);
     ModuleBase::TITLE("cal_Gaunt_before");
-    MGT0.init_Gaunt_CH(2 * Lmax);
-    MGT0.init_Gaunt(2 * Lmax);
+    MGT0.init_Gaunt_CH(Lmax);
+    MGT0.init_Gaunt(Lmax);
     ModuleBase::TITLE("cal_Gaunt_after");
 
     const auto list_A0 = list_r.first;
@@ -139,8 +142,10 @@ void Moment_abfs<Tdata>::cal_VR(
             const auto delta_R = tauB - tauA + (RI_Util::array3_to_Vector3(R) * ucell.latvec);
             const double distance_true = (delta_R * ucell.lat0).norm();
             const double distance = (distance_true >= tiny1) ? distance_true : distance_true + tiny1;
+            if (distance < Rcut_max)
+                continue;
             const auto JR = std::make_pair(iat1, R);
-            this->VR[iat0][JR] = RI::Tensor<Tdata>({sizeA, sizeB});
+            auto tmp_tensor = RI::Tensor<Tdata>({sizeA, sizeB});
             for (size_t L1 = 0; L1 != orb_in[T1].size(); ++L1)
             {
                 for (size_t L2 = 0; L2 != orb_in[T2].size(); ++L2)
@@ -169,133 +174,134 @@ void Moment_abfs<Tdata>::cal_VR(
 
                                     const double value = prefactor * mom1 * mom2 * clmlm * ylm_real;
 
-                                    this->VR[iat0][JR](iA, iB) = value;
+                                    tmp_tensor(iA, iB) = value;
                                 }
                             }
                         }
                     }
                 }
             }
+            Vws[T1][T2][delta_R] = tmp_tensor;
         }
     }
     ModuleBase::timer::tick("Rotate_abfs", "cal_VR");
 }
 
-template <typename Tdata>
-void Moment_abfs<Tdata>::diverge_list(
-    const std::pair<std::vector<TA>, std::vector<std::vector<std::pair<TA, std::array<Tcell, Ndim>>>>>& list_As_Vs,
-    std::pair<std::vector<TA>, std::vector<std::vector<std::pair<TA, std::array<Tcell, Ndim>>>>>& list_k,
-    std::pair<std::vector<TA>, std::vector<std::vector<std::pair<TA, std::array<Tcell, Ndim>>>>>& list_r,
-    const UnitCell& ucell,
-    const std::vector<double>& orb_cutoff)
-{
-    ModuleBase::TITLE("Rotate_abfs", "diverge_list");
-    ModuleBase::timer::tick("Rotate_abfs", "diverge_list");
+// template <typename Tdata>
+// void Moment_abfs<Tdata>::diverge_list(
+//     const std::pair<std::vector<TA>, std::vector<std::vector<std::pair<TA, std::array<Tcell, Ndim>>>>>& list_As_Vs,
+//     std::pair<std::vector<TA>, std::vector<std::vector<std::pair<TA, std::array<Tcell, Ndim>>>>>& list_k,
+//     std::pair<std::vector<TA>, std::vector<std::vector<std::pair<TA, std::array<Tcell, Ndim>>>>>& list_r,
+//     const UnitCell& ucell,
+//     const std::vector<double>& orb_cutoff)
+// {
+//     ModuleBase::TITLE("Rotate_abfs", "diverge_list");
+//     ModuleBase::timer::tick("Rotate_abfs", "diverge_list");
 
-    double Rcut_max = 0;
-    for (int T = 0; T < ucell.ntype; ++T)
-        Rcut_max = std::max(Rcut_max, orb_cutoff[T]);
+//     double Rcut_max = 0;
+//     for (int T = 0; T < ucell.ntype; ++T)
+//         Rcut_max = std::max(Rcut_max, orb_cutoff[T]);
 
-    list_k.first.clear();
-    list_k.second.clear();
-    list_r.first.clear();
-    list_r.second.clear();
-    list_k.second.resize(1);
-    list_r.second.resize(1);
-    int flag_k = 0;
-    int flag_r = 0;
-    for (size_t iA = 0; iA < list_As_Vs.first.size(); ++iA)
-    {
-        const auto& A = list_As_Vs.first[iA];
-        const size_t TA = ucell.iat2it[A];
-        const size_t IA = ucell.iat2ia[A];
-        const auto& tauA = ucell.atoms[TA].tau[IA];
-        for (const auto& BR: list_As_Vs.second[0])
-        {
-            const auto& B = BR.first;
-            const size_t TB = ucell.iat2it[B];
-            const size_t IB = ucell.iat2ia[B];
-            const auto& tauB = ucell.atoms[TB].tau[IB];
-            const auto& R = BR.second;
+//     list_k.first.clear();
+//     list_k.second.clear();
+//     list_r.first.clear();
+//     list_r.second.clear();
+//     list_k.second.resize(1);
+//     list_r.second.resize(1);
+//     int flag_k = 0;
+//     int flag_r = 0;
+//     for (size_t iA = 0; iA < list_As_Vs.first.size(); ++iA)
+//     {
+//         const auto& A = list_As_Vs.first[iA];
+//         const size_t TA = ucell.iat2it[A];
+//         const size_t IA = ucell.iat2ia[A];
+//         const auto& tauA = ucell.atoms[TA].tau[IA];
+//         for (const auto& BR: list_As_Vs.second[0])
+//         {
+//             const auto& B = BR.first;
+//             const size_t TB = ucell.iat2it[B];
+//             const size_t IB = ucell.iat2ia[B];
+//             const auto& tauB = ucell.atoms[TB].tau[IB];
+//             const auto& R = BR.second;
 
-            const ModuleBase::Vector3<double> tauB_shift = tauB + (RI_Util::array3_to_Vector3(R) * ucell.latvec);
-            const ModuleBase::Vector3<double> tau_delta = (tauB_shift - tauA) * ucell.lat0;
-            const double distance = tau_delta.norm();
-            if (distance <= Rcut_max)
-            {
-                if (std::find(list_k.first.begin(), list_k.first.end(), A) == list_k.first.end())
-                {
-                    list_k.first.emplace_back(A);
-                }
-                if (std::find(list_k.second[0].begin(), list_k.second[0].end(), BR) == list_k.second[0].end())
-                {
-                    list_k.second[0].emplace_back(BR);
-                }
-            }
-            else
-            {
-                if (std::find(list_r.first.begin(), list_r.first.end(), A) == list_r.first.end())
-                {
-                    list_r.first.emplace_back(A);
-                }
-                if (std::find(list_r.second[0].begin(), list_r.second[0].end(), BR) == list_r.second[0].end())
-                {
-                    list_r.second[0].emplace_back(BR);
-                }
-            }
-        }
-    }
-    for (const auto& I: list_r.first)
-    {
-        for (const auto& JR: list_r.second[0])
-            flag_r += 1;
-    }
-    for (const auto& I: list_k.first)
-    {
-        for (const auto& JR: list_k.second[0])
-            flag_k += 1;
-    }
-    std::cout << "All No.(atom pairs)=" << flag_k + flag_r << ", " << flag_k << " inside Rcut, " << flag_r
-              << " outside Rcut" << std::endl;
-    ModuleBase::timer::tick("Rotate_abfs", "diverge_list");
-}
+//             const ModuleBase::Vector3<double> tauB_shift = tauB + (RI_Util::array3_to_Vector3(R) * ucell.latvec);
+//             const ModuleBase::Vector3<double> tau_delta = (tauB_shift - tauA) * ucell.lat0;
+//             const double distance = tau_delta.norm();
+//             if (distance <= Rcut_max)
+//             {
+//                 if (std::find(list_k.first.begin(), list_k.first.end(), A) == list_k.first.end())
+//                 {
+//                     list_k.first.emplace_back(A);
+//                 }
+//                 if (std::find(list_k.second[0].begin(), list_k.second[0].end(), BR) == list_k.second[0].end())
+//                 {
+//                     list_k.second[0].emplace_back(BR);
+//                 }
+//             }
+//             else
+//             {
+//                 if (std::find(list_r.first.begin(), list_r.first.end(), A) == list_r.first.end())
+//                 {
+//                     list_r.first.emplace_back(A);
+//                 }
+//                 if (std::find(list_r.second[0].begin(), list_r.second[0].end(), BR) == list_r.second[0].end())
+//                 {
+//                     list_r.second[0].emplace_back(BR);
+//                 }
+//             }
+//         }
+//     }
+//     for (const auto& I: list_r.first)
+//     {
+//         for (const auto& JR: list_r.second[0])
+//             flag_r += 1;
+//     }
+//     for (const auto& I: list_k.first)
+//     {
+//         for (const auto& JR: list_k.second[0])
+//             flag_k += 1;
+//     }
+//     std::cout << "All No.(atom pairs)=" << flag_k + flag_r << ", " << flag_k << " inside Rcut, " << flag_r
+//               << " outside Rcut" << std::endl;
+//     ModuleBase::timer::tick("Rotate_abfs", "diverge_list");
+// }
 
-template <typename Tdata>
-void Moment_abfs<Tdata>::merge_list(std::map<TA, std::map<TAC, RI::Tensor<Tdata>>>& Vs_cut)
-{
-    ModuleBase::TITLE("Rotate_abfs", "merge_list");
-    ModuleBase::timer::tick("Rotate_abfs", "merge_list");
+// template <typename Tdata>
+// void Moment_abfs<Tdata>::merge_list(std::map<TA, std::map<TAC, RI::Tensor<Tdata>>>& Vs_cut)
+// {
+//     ModuleBase::TITLE("Rotate_abfs", "merge_list");
+//     ModuleBase::timer::tick("Rotate_abfs", "merge_list");
 
-    for (const auto& IJRc: this->VR)
-    {
-        const TA& I = IJRc.first;
-        const auto& JRc = IJRc.second;
+//     for (const auto& IJRc: this->VR)
+//     {
+//         const TA& I = IJRc.first;
+//         const auto& JRc = IJRc.second;
 
-        // if Vs_cut[I] does not exist, then create an empty inner map
-        auto& target_inner = Vs_cut[I];
+//         // if Vs_cut[I] does not exist, then create an empty inner map
+//         auto& target_inner = Vs_cut[I];
 
-        for (const auto& JRc_tensor: JRc)
-        {
-            const TAC& JR = JRc_tensor.first;
-            const RI::Tensor<Tdata>& tensor = JRc_tensor.second;
+//         for (const auto& JRc_tensor: JRc)
+//         {
+//             const TAC& JR = JRc_tensor.first;
+//             const RI::Tensor<Tdata>& tensor = JRc_tensor.second;
 
-            // if JR does not exist in Vs_cut[I], then insert it
-            if (target_inner.find(JR) == target_inner.end())
-            {
-                target_inner.emplace(JR, tensor);
-            }
-            // otherwise, warning
-            else
-            {
-                target_inner[JR] = tensor;
-                const auto J = JR.first;
-                const auto R = JR.second;
-                std::cout << "J=" << J << ", R= " << R[0] << ", " << R[1] << ", " << R[2] << std::endl;
-                // ModuleBase::WARNING_QUIT("merge_VR", "JR already exists in Vs_cut[I], which is unexpected.");
-            }
-        }
-    }
-    ModuleBase::timer::tick("Rotate_abfs", "merge_list");
-}
+//             // if JR does not exist in Vs_cut[I], then insert it
+//             if (target_inner.find(JR) == target_inner.end())
+//             {
+//                 target_inner.emplace(JR, tensor);
+//             }
+//             // otherwise, warning
+//             else
+//             {
+//                 target_inner[JR] = tensor;
+//                 const auto J = JR.first;
+//                 const auto R = JR.second;
+//                 std::cout << "J=" << J << ", R= " << R[0] << ", " << R[1] << ", " << R[2] << std::endl;
+//                 // ModuleBase::WARNING_QUIT("merge_VR", "JR already exists in Vs_cut[I], which is unexpected.");
+//             }
+//         }
+//     }
+//     ModuleBase::timer::tick("Rotate_abfs", "merge_list");
+// }
 
 #endif

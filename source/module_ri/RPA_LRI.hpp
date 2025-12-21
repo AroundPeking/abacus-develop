@@ -6,9 +6,9 @@
 #ifndef RPA_LRI_HPP
 #define RPA_LRI_HPP
 #include "RPA_LRI.h"
+#include "module_lr/utils/spectrum_mo.hpp"
 #include "module_parameter/parameter.h"
 #include "module_ri/module_exx_symmetry/symmetry_rotation.h"
-#include "module_lr/utils/spectrum_mo.hpp"
 
 #include <cstring>
 #include <fstream>
@@ -214,9 +214,7 @@ void RPA_LRI<T, Tdata>::cal_postSCF_exx(const elecstate::DensityMatrix<T, Tdata>
     std::map<TA, std::map<TAC, RI::Tensor<Tdata>>> tmp;
     std::cout << "Use rpa_ccp_rmesh_times=" << this->info.ccp_rmesh_times << " to calculate cut Coulomb" << std::endl;
     // Shrink_ABFS_ORBITAL cannot exceed this angular momentum of MGT
-    std::cout << "-2-2-2" << std::endl;
     exx_lri_rpa->cal_exx_ions_rpa(Vs_cut_IJR, Cs, ucell, PARAM.inp.out_ri_cv);
-    std::cout << "-1-1-1" << std::endl;
     // MPI: {ia0, {ia1, R}} to {ia0, ia1}
     std::vector<TA> atoms(ucell.nat);
     for (int iat = 0; iat < ucell.nat; ++iat)
@@ -237,14 +235,11 @@ void RPA_LRI<T, Tdata>::cal_postSCF_exx(const elecstate::DensityMatrix<T, Tdata>
     {
         atoms01.insert(JR.first);
     }
-    std::cout << "000" << std::endl;
     std::map<TA, std::map<TAC, RI::Tensor<Tdata>>> Vs_cut_IJ
         = RI_2D_Comm::comm_map2_first(mpi_comm_in, Vs_cut_IJR, atoms00, atoms01);
     Vs_cut_IJR.clear();
-    std::cout << "111" << std::endl;
     const std::array<Tcell, Ndim> period = {p_kv->nmp[0], p_kv->nmp[1], p_kv->nmp[2]};
     this->Vs_period = RI::RI_Tools::cal_period(Vs_cut_IJ, period);
-    std::cout << "222" << std::endl;
     this->out_coulomb_k(ucell, this->Vs_period, "coulomb_cut_", exx_lri_rpa);
     Vs_period.clear();
     Vs_period.swap(tmp);
@@ -1158,22 +1153,26 @@ void RPA_LRI<T, Tdata>::out_coulomb_k(const UnitCell& ucell,
 }
 
 template <typename T, typename Tdata>
-void RPA_LRI<T, Tdata>::out_velocity(const UnitCell &ucell,
-                                    const Grid_Driver &gd,
-                                    const TwoCenterBundle &two_center_bundle,
-                                    const Parallel_Orbitals &parav,/*nbasis×nbasis*/
-                                    const psi::Psi<T> &psi,
-                                    const elecstate::ElecState* pelec)
+void RPA_LRI<T, Tdata>::out_velocity(const UnitCell& ucell,
+                                     const Grid_Driver& gd,
+                                     const TwoCenterBundle& two_center_bundle,
+                                     const Parallel_Orbitals& parav, /*nbasis×nbasis*/
+                                     const psi::Psi<T>& psi,
+                                     const elecstate::ElecState* pelec)
 {
     ModuleBase::TITLE("DFT_RPA_interface", "out_velocity");
     ModuleBase::timer::tick("RPA_LRI", "out_velocity");
 
-    Parallel_2D parac;/*nbasis×nbands*/
-    LR_Util::setup_2d_division(parac, parav.get_block_size(), PARAM.globalv.nlocal, PARAM.inp.nbands
-        #ifdef __MPI
-            , parav.blacs_ctxt
-        #endif
-            );
+    Parallel_2D parac; /*nbasis×nbands*/
+    LR_Util::setup_2d_division(parac,
+                               parav.get_block_size(),
+                               PARAM.globalv.nlocal,
+                               PARAM.inp.nbands
+#ifdef __MPI
+                               ,
+                               parav.blacs_ctxt
+#endif
+    );
 
     const int nk = PARAM.inp.nspin == 2 ? p_kv->get_nks() / 2 : p_kv->get_nks();
     const int nspin_tmp = PARAM.inp.nspin == 2 ? 2 : 1;
@@ -1182,15 +1181,35 @@ void RPA_LRI<T, Tdata>::out_velocity(const UnitCell &ucell,
     std::vector<int> nocc(2, PARAM.inp.nbands);
     std::vector<int> nvirt(2, 0);
 
-    std::vector<std::complex<double>> velocity_mo = LR_Util::cal_velocity_mo(ucell, gd, two_center_bundle,
-        parav, parac, *this->p_kv, psi, nk, nspin_tmp, PARAM.globalv.nlocal, nocc, nvirt);
-    if (GlobalV::MY_RANK == 0){
+    std::vector<std::complex<double>> velocity_mo = LR_Util::cal_velocity_mo(ucell,
+                                                                             gd,
+                                                                             two_center_bundle,
+                                                                             parav,
+                                                                             parac,
+                                                                             *this->p_kv,
+                                                                             psi,
+                                                                             nk,
+                                                                             nspin_tmp,
+                                                                             PARAM.globalv.nlocal,
+                                                                             nocc,
+                                                                             nvirt);
+    if (GlobalV::MY_RANK == 0)
+    {
         // for librpa readable
-        LR_Util::output_spectrum_mo_librpa(velocity_mo, "velocity_matrix",
-            nk, nspin_tmp, PARAM.inp.nbands, *this->p_kv);
+        LR_Util::output_spectrum_mo_librpa(velocity_mo,
+                                           "velocity_matrix",
+                                           nk,
+                                           nspin_tmp,
+                                           PARAM.inp.nbands,
+                                           *this->p_kv);
         // for human readable
-        LR_Util::output_spectrum_mo(velocity_mo, "velocity_matrix_rpa", pelec->ekb.c,
-            nk, nspin_tmp, PARAM.inp.nbands, *this->p_kv);
+        LR_Util::output_spectrum_mo(velocity_mo,
+                                    "velocity_matrix_rpa",
+                                    pelec->ekb.c,
+                                    nk,
+                                    nspin_tmp,
+                                    PARAM.inp.nbands,
+                                    *this->p_kv);
     }
     ModuleBase::timer::tick("RPA_LRI", "out_velocity");
 }

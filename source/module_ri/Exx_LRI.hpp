@@ -354,49 +354,54 @@ void Exx_LRI<Tdata>::cal_exx_ions_rpa(std::map<TA, std::map<TAC, RI::Tensor<Tdat
     std::pair<std::vector<TA>, std::vector<std::vector<std::pair<TA, std::array<Tcell, Ndim>>>>> list_As_Vs
         = RI::Distribute_Equally::distribute_atoms_periods(this->mpi_comm, atoms, period_Vs, 2, false);
 
-    Moment_abfs<Tdata>* moment_abfs = nullptr;
-    if (this->info.rotate_abfs == true)
-    {
-        moment_abfs = new Moment_abfs<Tdata>(GlobalC::exx_info.info_ri);
-        std::pair<std::vector<TA>, std::vector<std::vector<std::pair<TA, std::array<Tcell, Ndim>>>>> list_k, list_r;
-        moment_abfs->diverge_list(list_As_Vs, list_k, list_r, ucell, orb_cutoff_);
-        // To cal Cs, we still cal all Vs(R) in r space
-        // list_As_Vs.first = list_k.first;
-        // list_As_Vs.second[0] = list_k.second[0];
-        int flag_As_Vs = 0;
-        for (const auto& I: list_As_Vs.first)
-        {
-            for (const auto& JR: list_As_Vs.second[0])
-                flag_As_Vs += 1;
-        }
-        std::cout << "No.list_As_Vs=" << flag_As_Vs << std::endl;
-        moment_abfs->cal_VR(ucell, this->abfs, this->MGT, list_r);
-    }
-
     Vs_cut = this->cv.cal_Vs(ucell, list_As_Vs.first, list_As_Vs.second[0], {{"writable_Vws", true}});
+
+    this->cv.Vws = LRI_CV_Tools::get_CVws(ucell, Vs_cut);
     int flag = 0;
-    for (const auto& IJRc: Vs_cut)
+    for (const auto& IJRc: this->cv.Vws)
     {
         const TA& I = IJRc.first;
         const auto& JRc = IJRc.second;
         for (const auto& JRc_tensor: JRc)
         {
-            const TAC& JR = JRc_tensor.first;
-            const RI::Tensor<Tdata>& tensor = JRc_tensor.second;
-            flag += 1;
+            const TA& J = JRc_tensor.first;
+            const auto Rc = JRc_tensor.second;
+            for (const auto& Rc_tensor: Rc)
+            {
+                const auto& R = Rc_tensor.first;
+                flag += 1;
+            }
         }
     }
-    std::cout << "No.Vs_cut=" << flag << std::endl;
+    std::cout << "Inside IJR =" << flag << std::endl;
     if (this->info.rotate_abfs == true)
     {
-        // merge moment_abfs.VR into Vs_cut
-        moment_abfs->merge_list(Vs_cut);
+        Moment_abfs<Tdata>* moment_abfs = nullptr;
+        moment_abfs = new Moment_abfs<Tdata>(GlobalC::exx_info.info_ri);
+        // To cal Cs, we still cal all Vs(R) in r space
+        moment_abfs->cal_VR(ucell, this->abfs, list_As_Vs, orb_cutoff_, this->cv.Vws);
         delete moment_abfs;
         moment_abfs = nullptr;
         malloc_trim(0);
     }
+    flag = 0;
+    for (const auto& IJRc: this->cv.Vws)
+    {
+        const TA& I = IJRc.first;
+        const auto& JRc = IJRc.second;
+        for (const auto& JRc_tensor: JRc)
+        {
+            const TA& J = JRc_tensor.first;
+            const auto Rc = JRc_tensor.second;
+            for (const auto& Rc_tensor: Rc)
+            {
+                const auto& R = Rc_tensor.first;
+                flag += 1;
+            }
+        }
+    }
+    std::cout << "Outside IJR =" << flag << std::endl;
 
-    this->cv.Vws = LRI_CV_Tools::get_CVws(ucell, Vs_cut);
     if (this->info.use_ewald && this->info.ccp_type == Conv_Coulomb_Pot_K::Ccp_Type::Ccp)
     {
         std::map<TA, std::map<TAC, RI::Tensor<Tdata>>> Vs_sr;
@@ -404,6 +409,16 @@ void Exx_LRI<Tdata>::cal_exx_ions_rpa(std::map<TA, std::map<TAC, RI::Tensor<Tdat
         {
             Vs_sr = this->sr_cv.cal_Vs(ucell, list_As_Vs.first, list_As_Vs.second[0], {{"writable_Vws", true}});
             this->sr_cv.Vws = LRI_CV_Tools::get_CVws(ucell, Vs_sr);
+            if (this->info.rotate_abfs == true)
+            {
+                Moment_abfs<Tdata>* moment_abfs = nullptr;
+                moment_abfs = new Moment_abfs<Tdata>(GlobalC::exx_info.info_ri);
+                // To cal Cs, we still cal all Vs(R) in r space
+                moment_abfs->cal_VR(ucell, this->abfs, list_As_Vs, orb_cutoff_, this->sr_cv.Vws);
+                delete moment_abfs;
+                moment_abfs = nullptr;
+                malloc_trim(0);
+            }
         }
         this->evq.init_ions(ucell, period_Vs);
 
@@ -454,7 +469,6 @@ void Exx_LRI<Tdata>::cal_exx_ions_rpa(std::map<TA, std::map<TAC, RI::Tensor<Tdat
     const std::array<Tcell, Ndim> period_Cs = LRI_CV_Tools::cal_latvec_range<Tcell>(2, ucell, orb_cutoff_);
     const std::pair<std::vector<TA>, std::vector<std::vector<std::pair<TA, std::array<Tcell, Ndim>>>>> list_As_Cs
         = RI::Distribute_Equally::distribute_atoms_periods(this->mpi_comm, atoms, period_Cs, 2, false);
-    std::cout << "123" << std::endl;
     std::pair<std::map<TA, std::map<TAC, RI::Tensor<Tdata>>>,
               std::map<TA, std::map<TAC, std::array<RI::Tensor<Tdata>, 3>>>>
         Cs_dCs = this->cv.cal_Cs_dCs(ucell,
@@ -465,7 +479,6 @@ void Exx_LRI<Tdata>::cal_exx_ions_rpa(std::map<TA, std::map<TAC, RI::Tensor<Tdat
                                       {"writable_dCws", true},
                                       {"writable_Vws", false},
                                       {"writable_dVws", false}});
-    std::cout << "234" << std::endl;
     Cs = std::get<0>(Cs_dCs);
     this->cv.Cws = LRI_CV_Tools::get_CVws(ucell, Cs);
     if (write_cv && GlobalV::MY_RANK == 0)
