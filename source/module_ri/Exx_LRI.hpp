@@ -379,7 +379,7 @@ void Exx_LRI<Tdata>::cal_exx_ions_rpa(std::map<TA, std::map<TAC, RI::Tensor<Tdat
         Moment_abfs<Tdata>* moment_abfs = nullptr;
         moment_abfs = new Moment_abfs<Tdata>(GlobalC::exx_info.info_ri);
         // To cal Cs, we still cal all Vs(R) in r space
-        moment_abfs->cal_VR(ucell, this->abfs, list_As_Vs, orb_cutoff_, this->cv.Vws);
+        moment_abfs->cal_VR(ucell, this->abfs, list_As_Vs, orb_cutoff_, this->cv.Vws, Vs_cut);
         delete moment_abfs;
         moment_abfs = nullptr;
         malloc_trim(0);
@@ -414,7 +414,7 @@ void Exx_LRI<Tdata>::cal_exx_ions_rpa(std::map<TA, std::map<TAC, RI::Tensor<Tdat
                 Moment_abfs<Tdata>* moment_abfs = nullptr;
                 moment_abfs = new Moment_abfs<Tdata>(GlobalC::exx_info.info_ri);
                 // To cal Cs, we still cal all Vs(R) in r space
-                moment_abfs->cal_VR(ucell, this->abfs, list_As_Vs, orb_cutoff_, this->sr_cv.Vws);
+                moment_abfs->cal_VR(ucell, this->abfs, list_As_Vs, orb_cutoff_, this->sr_cv.Vws, Vs_sr);
                 delete moment_abfs;
                 moment_abfs = nullptr;
                 malloc_trim(0);

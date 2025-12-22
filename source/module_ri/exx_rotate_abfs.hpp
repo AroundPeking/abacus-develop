@@ -94,7 +94,8 @@ void Moment_abfs<Tdata>::cal_VR(
     const std::vector<std::vector<std::vector<Numerical_Orbital_Lm>>>& orb_in,
     const std::pair<std::vector<TA>, std::vector<std::vector<std::pair<TA, std::array<Tcell, Ndim>>>>>& list_r,
     const std::vector<double>& orb_cutoff,
-    std::map<int, std::map<int, std::map<Abfs::Vector3_Order<double>, RI::Tensor<Tdata>>>>& Vws)
+    std::map<int, std::map<int, std::map<Abfs::Vector3_Order<double>, RI::Tensor<Tdata>>>>& Vws,
+    std::map<TA, std::map<TAC, RI::Tensor<Tdata>>>& Vs_cut)
 {
     ModuleBase::TITLE("Rotate_abfs", "cal_VR");
     ModuleBase::timer::tick("Rotate_abfs", "cal_VR");
@@ -140,7 +141,7 @@ void Moment_abfs<Tdata>::cal_VR(
             const size_t sizeB = index[T2].count_size;
             const auto R = list_A1[i1].second;
             const auto delta_R = tauB - tauA + (RI_Util::array3_to_Vector3(R) * ucell.latvec);
-            const double distance_true = (delta_R * ucell.lat0).norm();
+            const double distance_true = (delta_R).norm() * ucell.lat0;
             const double distance = (distance_true >= tiny1) ? distance_true : distance_true + tiny1;
             if (distance < Rcut_max)
                 continue;
@@ -182,6 +183,21 @@ void Moment_abfs<Tdata>::cal_VR(
                 }
             }
             Vws[T1][T2][delta_R] = tmp_tensor;
+            // I must contain all atoms in unit cell
+            auto& target_inner = Vs_cut.at(iat0);
+            if (target_inner.find(JR) == target_inner.end())
+            {
+                target_inner.emplace(JR, tmp_tensor);
+            }
+            // otherwise, warning
+            else
+            {
+                target_inner[JR] = tmp_tensor;
+                const auto J = JR.first;
+                const auto R = JR.second;
+                std::cout << "J=" << J << ", R= " << R[0] << ", " << R[1] << ", " << R[2] << std::endl;
+                // ModuleBase::WARNING_QUIT("merge_VR", "JR already exists in Vs_cut[I], which is unexpected.");
+            }
         }
     }
     ModuleBase::timer::tick("Rotate_abfs", "cal_VR");
