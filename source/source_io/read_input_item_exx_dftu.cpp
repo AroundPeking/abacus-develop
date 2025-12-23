@@ -336,6 +336,12 @@ void ReadInput::item_exx()
         this->add_item(item);
     }
     {
+        Input_Item item("out_unshrinked_v");
+        item.annotation = "whether to output the large Vq matrix in unshrinked auxiliary basis";
+        read_sync_bool(input.out_unshrinked_v);
+        this->add_item(item);
+    }
+    {
         Input_Item item("exx_rotate_abfs");
         item.annotation = "whether to rotate auxiliary basis for Coulomb calculation";
         read_sync_bool(input.exx_rotate_abfs);
