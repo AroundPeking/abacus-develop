@@ -187,7 +187,7 @@ auto Ewald_Vq<Tdata>::cal_Vs_gauss(const UnitCell& ucell, const std::vector<TA>&
         list_As_Vs.second.resize(1);
         list_As_Vs.second[0] = list_A1;
         // To cal Cs, we still cal all Vs(R) in r space
-        moment_abfs->cal_VR(ucell, this->g_abfs, list_As_Vs, g_lcaos_rcut, this->cv.Vws, Vs_gauss);
+        moment_abfs->cal_VR(ucell, this->g_abfs, list_As_Vs, g_lcaos_rcut, this->cv, Vs_gauss);
         delete moment_abfs;
         moment_abfs = nullptr;
     }
