@@ -6,19 +6,18 @@
 #ifndef LRI_CV_H
 #define LRI_CV_H
 
-#include <RI/global/Global_Func-2.h>
-#include <RI/global/Tensor.h>
-#include <pthread.h>
-
-#include <functional>
-#include <map>
-#include <vector>
-
 #include "Matrix_Orbs11.h"
 #include "Matrix_Orbs21.h"
 #include "module_base/abfs-vector3_order.h"
 #include "module_base/element_basis_index.h"
 #include "module_basis/module_ao/ORB_atomic_lm.h"
+
+#include <RI/global/Global_Func-2.h>
+#include <RI/global/Tensor.h>
+#include <functional>
+#include <map>
+#include <pthread.h>
+#include <vector>
 
 template <typename Tdata>
 class LRI_CV
@@ -33,7 +32,9 @@ class LRI_CV
     LRI_CV();
     ~LRI_CV();
 
-    void set_orbitals(const UnitCell &ucell,
+    inline double cal_V_Rcut(const int it0, const int it1);
+
+    void set_orbitals(const UnitCell& ucell,
                       const LCAO_Orbitals& orb,
                       const std::vector<std::vector<std::vector<Numerical_Orbital_Lm>>>& lcaos_in,
                       const std::vector<std::vector<std::vector<Numerical_Orbital_Lm>>>& abfs_in,
@@ -44,18 +45,18 @@ class LRI_CV
                       const bool& init_C);
 
     inline std::map<TA, std::map<TAC, RI::Tensor<Tdata>>> cal_Vs(
-        const UnitCell &ucell,
+        const UnitCell& ucell,
         const std::vector<TA>& list_A0,
         const std::vector<TAC>& list_A1,
         const std::map<std::string, bool>& flags); // "writable_Vws"
     inline std::map<TA, std::map<TAC, std::array<RI::Tensor<Tdata>, 3>>> cal_dVs(
-        const UnitCell &ucell,
+        const UnitCell& ucell,
         const std::vector<TA>& list_A0,
         const std::vector<TAC>& list_A1,
         const std::map<std::string, bool>& flags); // "writable_dVws"
     std::pair<std::map<TA, std::map<TAC, RI::Tensor<Tdata>>>,
               std::map<TA, std::map<TAC, std::array<RI::Tensor<Tdata>, 3>>>>
-        cal_Cs_dCs(const UnitCell &ucell,
+        cal_Cs_dCs(const UnitCell& ucell,
                    const std::vector<TA>& list_A0,
                    const std::vector<TAC>& list_A1,
                    const std::map<std::string, bool>&
@@ -97,14 +98,13 @@ class LRI_CV
                                                     const std::map<std::string, bool>& flags)>;
     using T_func_cal_Rcut = std::function<double(const int it0, const int it1)>;
     template <typename Tresult>
-    std::map<TA, std::map<TAC, Tresult>> cal_datas(const UnitCell &ucell,
+    std::map<TA, std::map<TAC, Tresult>> cal_datas(const UnitCell& ucell,
                                                    const std::vector<TA>& list_A0,
                                                    const std::vector<TAC>& list_A1,
                                                    const std::map<std::string, bool>& flags,
                                                    const T_func_cal_Rcut& func_cal_Rcut,
                                                    const T_func_DPcal_data<Tresult>& func_DPcal_data);
 
-    inline double cal_V_Rcut(const int it0, const int it1);
     inline double cal_C_Rcut(const int it0, const int it1);
 
     inline RI::Tensor<Tdata> DPcal_V(const int it0,

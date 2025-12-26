@@ -94,7 +94,7 @@ void Moment_abfs<Tdata>::cal_VR(
     const std::vector<std::vector<std::vector<Numerical_Orbital_Lm>>>& orb_in,
     const std::pair<std::vector<TA>, std::vector<std::vector<std::pair<TA, std::array<Tcell, Ndim>>>>>& list_r,
     const std::vector<double>& orb_cutoff,
-    std::map<int, std::map<int, std::map<Abfs::Vector3_Order<double>, RI::Tensor<Tdata>>>>& Vws,
+    LRI_CV<Tdata>& cv,
     std::map<TA, std::map<TAC, RI::Tensor<Tdata>>>& Vs_cut)
 {
     ModuleBase::TITLE("Rotate_abfs", "cal_VR");
@@ -125,6 +125,7 @@ void Moment_abfs<Tdata>::cal_VR(
     const auto list_A0 = list_r.first;
     const auto list_A1 = list_r.second[0];
 
+    auto& Vws = cv.Vws;
     for (size_t i0 = 0; i0 < list_A0.size(); ++i0)
     {
         const TA iat0 = list_A0[i0];
@@ -143,7 +144,8 @@ void Moment_abfs<Tdata>::cal_VR(
             const auto delta_R = tauB - tauA + (RI_Util::array3_to_Vector3(R) * ucell.latvec);
             const double distance_true = (delta_R).norm() * ucell.lat0;
             const double distance = (distance_true >= tiny1) ? distance_true : distance_true + tiny1;
-            if (distance < Rcut_max)
+            double Rcut_coul = std::min(cv.cal_V_Rcut(T1, T2), cv.cal_V_Rcut(T2, T2));
+            if (distance < Rcut_max || distance >= Rcut_coul)
                 continue;
             const auto JR = std::make_pair(iat1, R);
             auto tmp_tensor = RI::Tensor<Tdata>({sizeA, sizeB});
