@@ -25,6 +25,7 @@ std::vector<std::vector<std::vector<double>>> Moment_abfs<Tdata>::cal_multipole(
             {
                 const Numerical_Orbital_Lm& orb_lm = orb_in[T][L][N];
                 const int nr = orb_lm.getNr();
+                std::cout << "nr: " << nr << std::endl;
                 double* integrated_func = new double[nr];
                 for (size_t ir = 0; ir != nr; ++ir)
                     integrated_func[ir] = orb_lm.getPsi(ir) * std::pow(orb_lm.getRadial(ir), 2 + L);
@@ -94,6 +95,7 @@ void Moment_abfs<Tdata>::cal_VR(
     const std::vector<std::vector<std::vector<Numerical_Orbital_Lm>>>& orb_in,
     const std::pair<std::vector<TA>, std::vector<std::vector<std::pair<TA, std::array<Tcell, Ndim>>>>>& list_r,
     const std::vector<double>& orb_cutoff,
+    const double Rc,
     LRI_CV<Tdata>& cv,
     std::map<TA, std::map<TAC, RI::Tensor<Tdata>>>& Vs_cut)
 {
@@ -178,6 +180,18 @@ void Moment_abfs<Tdata>::cal_VR(
                                     const double value = prefactor * mom1 * mom2 * clmlm * ylm_real;
 
                                     tmp_tensor(iA, iB) = value;
+                                    // Rc: bohr
+                                    if ((delta_R).norm() >= Rc)
+                                        tmp_tensor(iA, iB) = 0.0;
+                                    if (iA == 0 && iB == 0 && delta_R[0] < 8 && delta_R[0] > 0 && delta_R[1] > 0
+                                        && delta_R[1] < 8 && delta_R[2] < 8 && delta_R[2] > 0)
+                                    {
+                                        std::cout << "T1: " << T1 << ", T2: " << T2 << ", delta_R: " << delta_R[0]
+                                                  << ", " << delta_R[1] << ", " << delta_R[2]
+                                                  << ", outside V= " << value << ", prefactor:" << prefactor
+                                                  << ",mom1: " << mom1 << ", mom2: " << mom2 << ", clmlm: " << clmlm
+                                                  << ", ylm_real: " << ylm_real << std::endl;
+                                    }
                                 }
                             }
                         }

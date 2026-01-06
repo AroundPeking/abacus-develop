@@ -378,8 +378,11 @@ void Exx_LRI<Tdata>::cal_exx_ions_rpa(std::map<TA, std::map<TAC, RI::Tensor<Tdat
     {
         Moment_abfs<Tdata>* moment_abfs = nullptr;
         moment_abfs = new Moment_abfs<Tdata>(GlobalC::exx_info.info_ri);
+        const int nspin0 = (PARAM.inp.nspin == 2) ? 2 : 1;
+        const std::map<std::string, double> ccp_parameter
+            = RI_Util::get_ccp_parameter(this->info, ucell, this->p_kv, nspin0);
         // To cal Cs, we still cal all Vs(R) in r space
-        moment_abfs->cal_VR(ucell, this->abfs, list_As_Vs, orb_cutoff_, this->cv, Vs_cut);
+        moment_abfs->cal_VR(ucell, this->abfs, list_As_Vs, orb_cutoff_, ccp_parameter.at("hf_Rcut"), this->cv, Vs_cut);
         delete moment_abfs;
         moment_abfs = nullptr;
         malloc_trim(0);
@@ -397,15 +400,11 @@ void Exx_LRI<Tdata>::cal_exx_ions_rpa(std::map<TA, std::map<TAC, RI::Tensor<Tdat
             {
                 const auto& R = Rc_tensor.first;
                 flag += 1;
-                if (I == 0 && J == 1 && R[0] == 0.904 && R[1] == 0.904 && R[2] == 0.904)
+                if (R[0] < 8 && R[0] > 0 && R[1] > 0 && R[1] < 8 && R[2] < 8 && R[2] > 0)
                 {
                     auto c = Rc_tensor.second;
-                    std::cout << "inside V=" << c(0, 0) << std::endl;
-                }
-                if (I == 0 && J == 1 && R[0] > 22 && R[1] < -4.5 && R[2] < -4.5)
-                {
-                    auto c = Rc_tensor.second;
-                    std::cout << "outside V=" << c(0, 0) << std::endl;
+                    std::cout << "T1: " << I << ", T2: " << J << ", delta_R: " << R[0] << ", " << R[1] << ", " << R[2]
+                              << ", V= " << c(0, 0) << std::endl;
                 }
             }
         }
@@ -423,8 +422,17 @@ void Exx_LRI<Tdata>::cal_exx_ions_rpa(std::map<TA, std::map<TAC, RI::Tensor<Tdat
             {
                 Moment_abfs<Tdata>* moment_abfs = nullptr;
                 moment_abfs = new Moment_abfs<Tdata>(GlobalC::exx_info.info_ri);
+                const int nspin0 = (PARAM.inp.nspin == 2) ? 2 : 1;
+                const std::map<std::string, double> ccp_parameter
+                    = RI_Util::get_ccp_parameter(this->info, ucell, this->p_kv, nspin0);
                 // To cal Cs, we still cal all Vs(R) in r space
-                moment_abfs->cal_VR(ucell, this->abfs, list_As_Vs, orb_cutoff_, this->sr_cv, Vs_sr);
+                moment_abfs->cal_VR(ucell,
+                                    this->abfs,
+                                    list_As_Vs,
+                                    orb_cutoff_,
+                                    ccp_parameter.at("hf_Rcut"),
+                                    this->sr_cv,
+                                    Vs_sr);
                 delete moment_abfs;
                 moment_abfs = nullptr;
                 malloc_trim(0);
