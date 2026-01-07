@@ -118,6 +118,7 @@ auto LRI_CV<Tdata>::cal_datas(const UnitCell& ucell,
 
     std::map<TA, std::map<TAC, Tresult>> Datas;
     double Rcut_max = 0;
+    // Rcut_max: bohr
     for (int T = 0; T < ucell.ntype; ++T)
         Rcut_max = std::max(Rcut_max, lcaos_rcut.at(T));
 #pragma omp parallel
@@ -141,10 +142,11 @@ auto LRI_CV<Tdata>::cal_datas(const UnitCell& ucell,
             // GlobalC::ORB.Phi[it1].getRcut()
             // * rmesh_times + GlobalC::ORB.Phi[it0].getRcut());
             double Rcut = std::min(func_cal_Rcut(it0, it1), func_cal_Rcut(it1, it0));
+            // Angstrom
             const Abfs::Vector3_Order<double> R_delta
                 = -tau0 + tau1 + (RI_Util::array3_to_Vector3(cell1) * ucell.latvec);
             if (GlobalC::exx_info.info_ri.rotate_abfs && flags.at("writable_Vws"))
-                Rcut = Rcut_max;
+                Rcut = 2 * Rcut_max;
             if (R_delta.norm() * ucell.lat0 < Rcut)
             {
                 const Tresult Data = func_DPcal_data(it0, it1, R_delta, flags);

@@ -116,6 +116,7 @@ void Moment_abfs<Tdata>::cal_VR(
         Lmax = std::max(Lmax, static_cast<int>(orb_in[T].size()) - 1);
     }
     double Rcut_max = 0;
+    // Rcut_max: bohr, ucell.lat0 = 1.8897 transform angstrom to bohr
     for (int T = 0; T < ucell.ntype; ++T)
         Rcut_max = std::max(Rcut_max, orb_cutoff[T]);
     ModuleBase::TITLE("cal_Gaunt_before");
@@ -142,11 +143,15 @@ void Moment_abfs<Tdata>::cal_VR(
             const auto& tauB = ucell.atoms[T2].tau[I2];
             const size_t sizeB = index[T2].count_size;
             const auto R = list_A1[i1].second;
+            // delta_R: Angstrom
             const auto delta_R = tauB - tauA + (RI_Util::array3_to_Vector3(R) * ucell.latvec);
+            // bohr
             const double distance_true = (delta_R).norm() * ucell.lat0;
+            // bohr
             const double distance = (distance_true >= tiny1) ? distance_true : distance_true + tiny1;
+            // Rcut_coul: bohr
             double Rcut_coul = std::min(cv.cal_V_Rcut(T1, T2), cv.cal_V_Rcut(T2, T2));
-            if (distance < Rcut_max || distance >= Rcut_coul)
+            if (distance < 2 * Rcut_max || distance >= Rcut_coul)
                 continue;
             const auto JR = std::make_pair(iat1, R);
             auto tmp_tensor = RI::Tensor<Tdata>({sizeA, sizeB});
@@ -180,15 +185,16 @@ void Moment_abfs<Tdata>::cal_VR(
 
                                     tmp_tensor(iA, iB) = value;
                                     // Rc: bohr
-                                    if ((delta_R).norm() >= Rc)
+                                    if (distance >= Rc)
                                         tmp_tensor(iA, iB) = 0.0;
                                     if (iA == 0 && iB == 0 && delta_R[0] < 8 && delta_R[0] > 0 && delta_R[1] > 0
                                         && delta_R[1] < 8 && delta_R[2] < 8 && delta_R[2] > 0)
                                     {
                                         std::cout << "T1: " << T1 << ", T2: " << T2 << ", delta_R: " << delta_R[0]
                                                   << ", " << delta_R[1] << ", " << delta_R[2]
-                                                  << ", outside V= " << value << ", prefactor:" << prefactor
-                                                  << ",mom1: " << mom1 << ", mom2: " << mom2 << ", clmlm: " << clmlm
+                                                  << ", distance: " << distance << ", outside V= " << value
+                                                  << ", prefactor:" << prefactor << ",mom1: " << mom1
+                                                  << ", mom2: " << mom2 << ", clmlm: " << clmlm
                                                   << ", ylm_real: " << ylm_real << std::endl;
                                     }
                                 }
