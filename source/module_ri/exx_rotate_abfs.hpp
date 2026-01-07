@@ -73,18 +73,17 @@ double Moment_abfs<Tdata>::cal_clmlm(int l2, int m2, int l, int m, const ORB_gau
 {
     double result = 0.0;
     // real m and index_m mix due to MGT.get_lm_index
-    // result
-    //     = std::pow(-1, m2) * std::pow(ModuleBase::FOUR_PI, 2) * dfact(2 * (l2 + l) - 1) / dfact(2 * l2 + 1)
-    //       / dfact(2 * l + 1)
-    //       * MGT.Gaunt_Coefficients(MGT.get_lm_index(l2, m2), MGT.get_lm_index(l, m), MGT.get_lm_index(l2 + l, m -
-    //       m2));
+    result
+        = std::pow(-1, m2) * std::pow(ModuleBase::FOUR_PI, 2) * dfact(2 * (l2 + l) - 1) / dfact(2 * l2 + 1)
+          / dfact(2 * l + 1)
+          * MGT.Gaunt_Coefficients(MGT.get_lm_index(l2, m2), MGT.get_lm_index(l, m), MGT.get_lm_index(l2 + l, m - m2));
 
     // only real m
-    result = std::pow(ModuleBase::FOUR_PI, 1.5)
-             * std::sqrt((this->factorial(l2 + l + m - m2) * this->factorial(l2 + l - m + m2))
-                         / (this->factorial(l2 + m2) * this->factorial(l2 - m2) * this->factorial(l + m)
-                            * this->factorial(l - m)))
-             / std::sqrt((2 * l2 + 1) * (2 * l + 1) * (2 * l2 + 2 * l + 1));
+    // result = std::pow(ModuleBase::FOUR_PI, 1.5)
+    //          * std::sqrt((this->factorial(l2 + l + m - m2) * this->factorial(l2 + l - m + m2))
+    //                      / (this->factorial(l2 + m2) * this->factorial(l2 - m2) * this->factorial(l + m)
+    //                         * this->factorial(l - m)))
+    //          / std::sqrt((2 * l2 + 1) * (2 * l + 1) * (2 * l2 + 2 * l + 1));
 
     return result;
 }
