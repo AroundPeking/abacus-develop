@@ -57,6 +57,19 @@ void Exx_LRI<Tdata>::init(const MPI_Comm& mpi_comm_in,
     }
     Exx_Abfs::Construct_Orbs::print_orbs_size(ucell, this->abfs, GlobalV::ofs_running);
 
+    if (this->info.rotate_abfs == true)
+    {
+        if (!moment_abfs)
+            moment_abfs = new Moment_abfs<Tdata>(GlobalC::exx_info.info_ri);
+        ModuleBase::TITLE("cal_multipole_start");
+        moment_abfs->cal_multipole(this->abfs);
+        ModuleBase::TITLE("cal_multipole_end");
+
+        ModuleBase::TITLE("rotate_abfs_start");
+        moment_abfs->rotate_abfs(this->abfs);
+        ModuleBase::TITLE("rotate_abfs_end");
+    }
+
     const int nspin0 = (PARAM.inp.nspin == 2) ? 2 : 1;
     const std::map<std::string, double> ccp_parameter
         = RI_Util::get_ccp_parameter(this->info, ucell, this->p_kv, nspin0);
@@ -147,6 +160,19 @@ void Exx_LRI<Tdata>::init(const MPI_Comm& mpi_comm_in,
 
     this->lcaos = Exx_Abfs::Construct_Orbs::change_orbs(orb, this->info.kmesh_times);
     this->abfs = abfs_s;
+
+    if (this->info.rotate_abfs == true)
+    {
+        if (!moment_abfs)
+            moment_abfs = new Moment_abfs<Tdata>(GlobalC::exx_info.info_ri);
+        ModuleBase::TITLE("cal_multipole_start");
+        moment_abfs->cal_multipole(this->abfs);
+        ModuleBase::TITLE("cal_multipole_end");
+
+        ModuleBase::TITLE("rotate_abfs_start");
+        moment_abfs->rotate_abfs(this->abfs);
+        ModuleBase::TITLE("rotate_abfs_end");
+    }
 
     const int nspin0 = (PARAM.inp.nspin == 2) ? 2 : 1;
     const std::map<std::string, double> ccp_parameter
@@ -400,8 +426,6 @@ void Exx_LRI<Tdata>::cal_exx_ions_rpa(std::map<TA, std::map<TAC, RI::Tensor<Tdat
     std::cout << "Inside No. VIJR =" << flag << std::endl;
     if (this->info.rotate_abfs == true && this->info.ccp_type == Conv_Coulomb_Pot_K::Ccp_Type::Hf)
     {
-        Moment_abfs<Tdata>* moment_abfs = nullptr;
-        moment_abfs = new Moment_abfs<Tdata>(GlobalC::exx_info.info_ri);
         double hf_Rcut = std::pow(0.75 * this->p_kv->get_nkstot_full() * ucell.omega / (ModuleBase::PI), 1.0 / 3.0);
         // To cal Cs, we still cal all Vs(R) in r space
         moment_abfs->cal_VR(ucell, this->abfs, list_As_Vs, orb_cutoff_, hf_Rcut, this->cv, Vs_cut);

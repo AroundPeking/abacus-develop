@@ -102,6 +102,7 @@ class Exx_LRI
     LRI_CV<Tdata> sr_cv;
     RI::Exx<TA, Tcell, Ndim, Tdata> exx_lri;
     Ewald_Vq<Tdata> evq;
+    Moment_abfs<Tdata>* moment_abfs = nullptr;
 
     void post_process_Hexx(std::map<TA, std::map<TAC, RI::Tensor<Tdata>>>& Hexxs_io) const;
     double post_process_Eexx(const double& Eexx_in) const;

@@ -7,20 +7,18 @@
 #include <vector>
 
 template <typename Tdata>
-std::vector<std::vector<std::vector<double>>> Moment_abfs<Tdata>::cal_multipole(
-    const std::vector<std::vector<std::vector<Numerical_Orbital_Lm>>>& orb_in)
+void Moment_abfs<Tdata>::cal_multipole(const std::vector<std::vector<std::vector<Numerical_Orbital_Lm>>>& orb_in)
 {
     ModuleBase::TITLE("Rotate_abfs", "cal_multipole");
     ModuleBase::timer::tick("Rotate_abfs", "cal_multipole");
 
-    std::vector<std::vector<std::vector<double>>> multipole;
-    multipole.resize(orb_in.size());
+    this->multipole.resize(orb_in.size());
     for (size_t T = 0; T != orb_in.size(); ++T)
     {
-        multipole[T].resize(orb_in[T].size());
+        this->multipole[T].resize(orb_in[T].size());
         for (size_t L = 0; L != orb_in[T].size(); ++L)
         {
-            multipole[T][L].resize(orb_in[T][L].size());
+            this->multipole[T][L].resize(orb_in[T][L].size());
             for (size_t N = 0; N != orb_in[T][L].size(); ++N)
             {
                 const Numerical_Orbital_Lm& orb_lm = orb_in[T][L][N];
@@ -29,13 +27,72 @@ std::vector<std::vector<std::vector<double>>> Moment_abfs<Tdata>::cal_multipole(
                 for (size_t ir = 0; ir != nr; ++ir)
                     integrated_func[ir] = orb_lm.getPsi(ir) * std::pow(orb_lm.getRadial(ir), 2 + L);
 
-                ModuleBase::Integral::Simpson_Integral(nr, integrated_func, orb_lm.getRab(), multipole[T][L][N]);
+                ModuleBase::Integral::Simpson_Integral(nr, integrated_func, orb_lm.getRab(), this->multipole[T][L][N]);
             }
         }
     }
 
     ModuleBase::timer::tick("Rotate_abfs", "cal_multipole");
-    return multipole;
+}
+
+template <typename Tdata>
+void Moment_abfs<Tdata>::rotate_abfs(std::vector<std::vector<std::vector<Numerical_Orbital_Lm>>>& orb_in)
+{
+    ModuleBase::TITLE("Rotate_abfs", "rotate_abfs");
+    ModuleBase::timer::tick("Rotate_abfs", "rotate_abfs");
+
+    // construct tranformation matrix A
+    for (size_t T = 0; T != orb_in.size(); ++T)
+    {
+        for (size_t L = 0; L != orb_in[T].size(); ++L)
+        {
+            for (int N = 0; N != orb_in[T][L].size(); ++N)
+            {
+                Numerical_Orbital_Lm& orb_lm_old = orb_in[T][L][N];
+                Numerical_Orbital_Lm orb_lm_mod = orb_lm_old * 0.0;
+                double square = 0.0;
+                for (int N2 = 0; N2 != orb_in[T][L].size(); ++N2)
+                {
+                    square += this->multipole[T][L][N2] * this->multipole[T][L][N2];
+                }
+                double norm = std::sqrt(square);
+                // change abfs
+                if (N == 0)
+                {
+                    for (int N2 = 0; N2 != orb_in[T][L].size(); ++N2)
+                        orb_lm_mod += orb_in[T][L][N2] * this->multipole[T][L][N2] / norm;
+                }
+                else
+                {
+                    for (int N2 = 0; N2 != orb_in[T][L].size(); ++N2)
+                    {
+                        if (N2 == N)
+                        {
+                            orb_lm_mod += (1.0 - this->multipole[T][L][N] * this->multipole[T][L][N2] / square)
+                                          * orb_in[T][L][N2];
+                        }
+                        else
+                        {
+                            orb_lm_mod
+                                += (-this->multipole[T][L][N] * this->multipole[T][L][N2] / square) * orb_in[T][L][N2];
+                        }
+                    }
+                }
+                orb_lm_old = orb_lm_mod;
+                // change moment
+                if (N == 0)
+                {
+                    this->multipole[T][L][N] = norm;
+                }
+                else
+                {
+                    this->multipole[T][L][N] = 0.0;
+                }
+            }
+        }
+    }
+
+    ModuleBase::timer::tick("Rotate_abfs", "rotate_abfs");
 }
 
 template <typename Tdata>
@@ -105,9 +162,7 @@ void Moment_abfs<Tdata>::cal_VR(
     const ModuleBase::Element_Basis_Index::Range range = Exx_Abfs::Abfs_Index::construct_range(orb_in);
     // index: T: type, L: angular momentum, N: radial index, M: magnetic moment
     const ModuleBase::Element_Basis_Index::IndexLNM index = ModuleBase::Element_Basis_Index::construct_index(range);
-    ModuleBase::TITLE("cal_mul_before");
-    const auto multipole = this->cal_multipole(orb_in);
-    ModuleBase::TITLE("cal_mul_after");
+
     ORB_gaunt_table MGT0;
     int Lmax = 0;
     for (size_t T = 0; T != orb_in.size(); ++T)
@@ -174,8 +229,8 @@ void Moment_abfs<Tdata>::cal_VR(
                             {
                                 for (size_t N2 = 0; N2 != orb_in[T2][L2].size(); ++N2)
                                 {
-                                    const double mom1 = multipole[T1][L1][N1];
-                                    const double mom2 = multipole[T2][L2][N2];
+                                    const double mom1 = this->multipole[T1][L1][N1];
+                                    const double mom2 = this->multipole[T2][L2][N2];
                                     const size_t iA = index[T1][L1][N1][index_M1];
                                     const size_t iB = index[T2][L2][N2][index_M2];
 
@@ -189,7 +244,8 @@ void Moment_abfs<Tdata>::cal_VR(
                                     // if (iA == 0 && iB == 0 && delta_R[0] < 8 && delta_R[0] > 0 && delta_R[1] > 0
                                     //     && delta_R[1] < 8 && delta_R[2] < 8 && delta_R[2] > 0)
                                     // {
-                                    //     std::cout << "T1: " << T1 << ", T2: " << T2 << ", delta_R: " << delta_R[0]
+                                    //     std::cout << "T1: " << T1 << ", T2: " << T2 << ", delta_R: " <<
+                                    //     delta_R[0]
                                     //               << ", " << delta_R[1] << ", " << delta_R[2]
                                     //               << ", distance: " << distance << ", outside V= " << value
                                     //               << ", prefactor:" << prefactor << ",mom1: " << mom1
@@ -225,9 +281,9 @@ void Moment_abfs<Tdata>::cal_VR(
 
 // template <typename Tdata>
 // void Moment_abfs<Tdata>::diverge_list(
-//     const std::pair<std::vector<TA>, std::vector<std::vector<std::pair<TA, std::array<Tcell, Ndim>>>>>& list_As_Vs,
-//     std::pair<std::vector<TA>, std::vector<std::vector<std::pair<TA, std::array<Tcell, Ndim>>>>>& list_k,
-//     std::pair<std::vector<TA>, std::vector<std::vector<std::pair<TA, std::array<Tcell, Ndim>>>>>& list_r,
+//     const std::pair<std::vector<TA>, std::vector<std::vector<std::pair<TA, std::array<Tcell, Ndim>>>>>&
+//     list_As_Vs, std::pair<std::vector<TA>, std::vector<std::vector<std::pair<TA, std::array<Tcell, Ndim>>>>>&
+//     list_k, std::pair<std::vector<TA>, std::vector<std::vector<std::pair<TA, std::array<Tcell, Ndim>>>>>& list_r,
 //     const UnitCell& ucell,
 //     const std::vector<double>& orb_cutoff)
 // {
