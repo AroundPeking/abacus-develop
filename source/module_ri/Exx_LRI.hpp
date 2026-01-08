@@ -373,8 +373,8 @@ void Exx_LRI<Tdata>::cal_exx_ions_rpa(std::map<TA, std::map<TAC, RI::Tensor<Tdat
             }
         }
     }
-    std::cout << "Inside IJR =" << flag << std::endl;
-    if (this->info.rotate_abfs == true)
+    std::cout << "Inside No. VIJR =" << flag << std::endl;
+    if (this->info.rotate_abfs == true && this->info.ccp_type == Conv_Coulomb_Pot_K::Ccp_Type::Hf)
     {
         Moment_abfs<Tdata>* moment_abfs = nullptr;
         moment_abfs = new Moment_abfs<Tdata>(GlobalC::exx_info.info_ri);
@@ -408,7 +408,7 @@ void Exx_LRI<Tdata>::cal_exx_ions_rpa(std::map<TA, std::map<TAC, RI::Tensor<Tdat
             }
         }
     }
-    std::cout << "Outside IJR =" << flag << std::endl;
+    std::cout << "All No. VIJR =" << flag << std::endl;
 
     if (this->info.use_ewald && this->info.ccp_type == Conv_Coulomb_Pot_K::Ccp_Type::Ccp)
     {
@@ -417,19 +417,21 @@ void Exx_LRI<Tdata>::cal_exx_ions_rpa(std::map<TA, std::map<TAC, RI::Tensor<Tdat
         {
             Vs_sr = this->sr_cv.cal_Vs(ucell, list_As_Vs.first, list_As_Vs.second[0], {{"writable_Vws", true}});
             this->sr_cv.Vws = LRI_CV_Tools::get_CVws(ucell, Vs_sr);
-            if (this->info.rotate_abfs == true)
-            {
-                Moment_abfs<Tdata>* moment_abfs = nullptr;
-                moment_abfs = new Moment_abfs<Tdata>(GlobalC::exx_info.info_ri);
-                // 4/3 * pi * Rcut^3 = V_{supercell} = V_{unitcell} * Nk
-                double hf_Rcut
-                    = std::pow(0.75 * this->p_kv->get_nkstot_full() * ucell.omega / (ModuleBase::PI), 1.0 / 3.0);
-                // To cal Cs, we still cal all Vs(R) in r space
-                moment_abfs->cal_VR(ucell, this->abfs, list_As_Vs, orb_cutoff_, hf_Rcut, this->sr_cv, Vs_sr);
-                delete moment_abfs;
-                moment_abfs = nullptr;
-                malloc_trim(0);
-            }
+            // full Coulomb (sr) has different Coulomb form, cannot use moment
+            // and should plus the reciprocal part, no sparse in k-space
+            // if (this->info.rotate_abfs == true)
+            // {
+            //     Moment_abfs<Tdata>* moment_abfs = nullptr;
+            //     moment_abfs = new Moment_abfs<Tdata>(GlobalC::exx_info.info_ri);
+            //     // 4/3 * pi * Rcut^3 = V_{supercell} = V_{unitcell} * Nk
+            //     double hf_Rcut
+            //         = std::pow(0.75 * this->p_kv->get_nkstot_full() * ucell.omega / (ModuleBase::PI), 1.0 / 3.0);
+            //     // To cal Cs, we still cal all Vs(R) in r space
+            //     moment_abfs->cal_VR(ucell, this->abfs, list_As_Vs, orb_cutoff_, hf_Rcut, this->sr_cv, Vs_sr);
+            //     delete moment_abfs;
+            //     moment_abfs = nullptr;
+            //     malloc_trim(0);
+            // }
         }
         this->evq.init_ions(ucell, period_Vs);
 

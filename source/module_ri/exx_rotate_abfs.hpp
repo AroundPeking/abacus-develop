@@ -25,7 +25,6 @@ std::vector<std::vector<std::vector<double>>> Moment_abfs<Tdata>::cal_multipole(
             {
                 const Numerical_Orbital_Lm& orb_lm = orb_in[T][L][N];
                 const int nr = orb_lm.getNr();
-                std::cout << "nr: " << nr << std::endl;
                 double* integrated_func = new double[nr];
                 for (size_t ir = 0; ir != nr; ++ir)
                     integrated_func[ir] = orb_lm.getPsi(ir) * std::pow(orb_lm.getRadial(ir), 2 + L);
@@ -115,10 +114,7 @@ void Moment_abfs<Tdata>::cal_VR(
     {
         Lmax = std::max(Lmax, static_cast<int>(orb_in[T].size()) - 1);
     }
-    double Rcut_max = 0;
-    // Rcut_max: bohr, ucell.lat0 = 1.8897 transform angstrom to bohr
-    for (int T = 0; T < ucell.ntype; ++T)
-        Rcut_max = std::max(Rcut_max, orb_cutoff[T]);
+
     ModuleBase::TITLE("cal_Gaunt_before");
     MGT0.init_Gaunt_CH(Lmax);
     MGT0.init_Gaunt(Lmax);
@@ -149,9 +145,11 @@ void Moment_abfs<Tdata>::cal_VR(
             const double distance_true = (delta_R).norm() * ucell.lat0;
             // bohr
             const double distance = (distance_true >= tiny1) ? distance_true : distance_true + tiny1;
+            // Rcut_lcao: bohr, ucell.lat0 = 1.8897 transform angstrom to bohr
+            double Rcut_lcao = orb_cutoff[T1] + orb_cutoff[T2];
             // Rcut_coul: bohr
             double Rcut_coul = std::min(cv.cal_V_Rcut(T1, T2), cv.cal_V_Rcut(T2, T2));
-            if (distance < 2 * Rcut_max || distance >= Rcut_coul)
+            if (distance < Rcut_lcao || distance >= Rcut_coul)
                 continue;
             const auto JR = std::make_pair(iat1, R);
             auto tmp_tensor = RI::Tensor<Tdata>({sizeA, sizeB});
@@ -187,16 +185,17 @@ void Moment_abfs<Tdata>::cal_VR(
                                     // Rc: bohr
                                     if (distance >= Rc)
                                         tmp_tensor(iA, iB) = 0.0;
-                                    if (iA == 0 && iB == 0 && delta_R[0] < 8 && delta_R[0] > 0 && delta_R[1] > 0
-                                        && delta_R[1] < 8 && delta_R[2] < 8 && delta_R[2] > 0)
-                                    {
-                                        std::cout << "T1: " << T1 << ", T2: " << T2 << ", delta_R: " << delta_R[0]
-                                                  << ", " << delta_R[1] << ", " << delta_R[2]
-                                                  << ", distance: " << distance << ", outside V= " << value
-                                                  << ", prefactor:" << prefactor << ",mom1: " << mom1
-                                                  << ", mom2: " << mom2 << ", clmlm: " << clmlm
-                                                  << ", ylm_real: " << ylm_real << std::endl;
-                                    }
+                                    // debug
+                                    // if (iA == 0 && iB == 0 && delta_R[0] < 8 && delta_R[0] > 0 && delta_R[1] > 0
+                                    //     && delta_R[1] < 8 && delta_R[2] < 8 && delta_R[2] > 0)
+                                    // {
+                                    //     std::cout << "T1: " << T1 << ", T2: " << T2 << ", delta_R: " << delta_R[0]
+                                    //               << ", " << delta_R[1] << ", " << delta_R[2]
+                                    //               << ", distance: " << distance << ", outside V= " << value
+                                    //               << ", prefactor:" << prefactor << ",mom1: " << mom1
+                                    //               << ", mom2: " << mom2 << ", clmlm: " << clmlm
+                                    //               << ", ylm_real: " << ylm_real << std::endl;
+                                    // }
                                 }
                             }
                         }
@@ -216,8 +215,8 @@ void Moment_abfs<Tdata>::cal_VR(
                 target_inner[JR] = tmp_tensor;
                 const auto J = JR.first;
                 const auto R = JR.second;
-                std::cout << "J=" << J << ", R= " << R[0] << ", " << R[1] << ", " << R[2] << std::endl;
-                // ModuleBase::WARNING_QUIT("merge_VR", "JR already exists in Vs_cut[I], which is unexpected.");
+                // std::cout << "J=" << J << ", R= " << R[0] << ", " << R[1] << ", " << R[2] << std::endl;
+                ModuleBase::WARNING_QUIT("merge_VR", "JR already exists in Vs_cut[I], which is unexpected.");
             }
         }
     }

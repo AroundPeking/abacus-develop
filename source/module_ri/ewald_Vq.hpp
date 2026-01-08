@@ -164,7 +164,7 @@ auto Ewald_Vq<Tdata>::cal_Vs_gauss(const UnitCell& ucell,
     std::map<std::string, bool> flags = {{"writable_Vws", true}};
     std::map<TA, std::map<TAC, RI::Tensor<Tdata>>> Vs_gauss = this->cv.cal_Vs(ucell, list_A0, list_A1, flags);
     this->cv.Vws = LRI_CV_Tools::get_CVws(ucell, Vs_gauss);
-    if (this->info.rotate_abfs == true)
+    if (this->info.rotate_abfs == true && this->info.ccp_type == Conv_Coulomb_Pot_K::Ccp_Type::Hf)
     {
         Moment_abfs<Tdata>* moment_abfs = nullptr;
         moment_abfs = new Moment_abfs<Tdata>(GlobalC::exx_info.info_ri);
