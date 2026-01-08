@@ -62,8 +62,20 @@ void Exx_LRI<Tdata>::init(const MPI_Comm& mpi_comm_in,
         = RI_Util::get_ccp_parameter(this->info, ucell, this->p_kv, nspin0);
     if (this->info.rotate_abfs == true)
     {
-        // ccp_rmesh_times = 1 to calculate VR in the range of Rcut
-        // by the methods of k-space
+        // ccp_rcut = abfs_rcut + rcut_max to calculate VR in the range of Rcut
+        // rcut calculated in k-space
+        // To keep safe for different abfs_rcut, use rcut_max*2 / rcut_min
+        // For Cs = (ij|v)(v|u)^{-1}, 2*rcut_max is enough due to ij must has overlap.
+        double rcut_max = 0.0;
+        double rcut_min = 0.0;
+        for (const double& rc: this->orb_cutoff_)
+        {
+            rcut_max = std::max(rcut_max, rc);
+            rcut_min = (rcut_min == 0.0) ? rc : std::min(rcut_min, rc);
+        }
+        const double rmesh_times_mod = (rcut_max * 2.0) / rcut_min;
+        std::cout << "ccp_rmesh_times is modified to " << rmesh_times_mod << " due to rotate abfs." << std::endl;
+
         // the left part of VR is calculated by the methods of r-space
         this->abfs_ccp = Conv_Coulomb_Pot_K::cal_orbs_ccp(this->abfs,
                                                           this->info.ccp_type,
@@ -141,8 +153,20 @@ void Exx_LRI<Tdata>::init(const MPI_Comm& mpi_comm_in,
         = RI_Util::get_ccp_parameter(this->info, ucell, this->p_kv, nspin0);
     if (this->info.rotate_abfs == true)
     {
-        // ccp_rmesh_times = 1 to calculate VR in the range of Rcut
-        // by the methods of k-space
+        // ccp_rcut = abfs_rcut + rcut_max to calculate VR in the range of Rcut
+        // rcut calculated in k-space
+        // To keep safe for different abfs_rcut, use rcut_max*2 / rcut_min
+        // For Cs = (ij|v)(v|u)^{-1}, 2*rcut_max is enough due to ij must has overlap.
+        double rcut_max = 0.0;
+        double rcut_min = 0.0;
+        for (const double& rc: this->orb_cutoff_)
+        {
+            rcut_max = std::max(rcut_max, rc);
+            rcut_min = (rcut_min == 0.0) ? rc : std::min(rcut_min, rc);
+        }
+        const double rmesh_times_mod = (rcut_max * 2.0) / rcut_min;
+        std::cout << "ccp_rmesh_times is modified to " << rmesh_times_mod << " due to rotate abfs." << std::endl;
+
         // the left part of VR is calculated by the methods of r-space
         this->abfs_ccp = Conv_Coulomb_Pot_K::cal_orbs_ccp(this->abfs,
                                                           this->info.ccp_type,
