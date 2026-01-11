@@ -83,6 +83,8 @@ void Moment_abfs<Tdata>::rotate_abfs(std::vector<std::vector<std::vector<Numeric
                 if (N == 0)
                 {
                     this->multipole[T][L][N] = norm;
+                    std::cout << "Atom type " << T << ", L " << L << ", N " << N
+                              << ", multipole after rotation: " << this->multipole[T][L][N] << std::endl;
                 }
                 else
                 {
@@ -210,8 +212,12 @@ void Moment_abfs<Tdata>::cal_VR(
             auto tmp_tensor = RI::Tensor<Tdata>({sizeA, sizeB});
             for (size_t L1 = 0; L1 != orb_in[T1].size(); ++L1)
             {
+                if (L1 != 0)
+                    std::cout << "0 L1: " << L1 << std::endl;
                 for (size_t L2 = 0; L2 != orb_in[T2].size(); ++L2)
                 {
+                    if (L2 != 0)
+                        std::cout << "0 L2: " << L2 << std::endl;
                     std::vector<double> rly;
                     ModuleBase::Ylm::rl_sph_harm(L1 + L2, delta_R.x, delta_R.y, delta_R.z, rly);
                     const double prefactor1 = std::pow(distance, L1 + L2 + 1);
@@ -225,35 +231,24 @@ void Moment_abfs<Tdata>::cal_VR(
                             const double clmlm = this->cal_clmlm(L2, M2, L1, M1, MGT0);
                             const double ylm_solid = rly[MGT0.get_lm_index(L1 + L2, index_M1 - index_M2)];
                             const double ylm_real = (distance > tiny2) ? ylm_solid / pow(distance, L1 + L2) : ylm_solid;
-                            for (size_t N1 = 0; N1 != orb_in[T1][L1].size(); ++N1)
-                            {
-                                for (size_t N2 = 0; N2 != orb_in[T2][L2].size(); ++N2)
-                                {
-                                    const double mom1 = this->multipole[T1][L1][N1];
-                                    const double mom2 = this->multipole[T2][L2][N2];
-                                    const size_t iA = index[T1][L1][N1][index_M1];
-                                    const size_t iB = index[T2][L2][N2][index_M2];
+                            const double mom1 = this->multipole[T1][L1][0];
+                            const double mom2 = this->multipole[T2][L2][0];
+                            // every L has only one moment!=0 after rotation (N=0)
+                            const size_t iA = index[T1][L1][0][index_M1];
+                            const size_t iB = index[T2][L2][0][index_M2];
 
-                                    const double value = prefactor * mom1 * mom2 * clmlm * ylm_real;
+                            const double value = prefactor * mom1 * mom2 * clmlm * ylm_real;
 
-                                    tmp_tensor(iA, iB) = value;
-                                    // Rc: bohr
-                                    if (distance >= Rc)
-                                        tmp_tensor(iA, iB) = 0.0;
-                                    // debug
-                                    // if (iA == 0 && iB == 0 && delta_R[0] < 8 && delta_R[0] > 0 && delta_R[1] > 0
-                                    //     && delta_R[1] < 8 && delta_R[2] < 8 && delta_R[2] > 0)
-                                    // {
-                                    //     std::cout << "T1: " << T1 << ", T2: " << T2 << ", delta_R: " <<
-                                    //     delta_R[0]
-                                    //               << ", " << delta_R[1] << ", " << delta_R[2]
-                                    //               << ", distance: " << distance << ", outside V= " << value
-                                    //               << ", prefactor:" << prefactor << ",mom1: " << mom1
-                                    //               << ", mom2: " << mom2 << ", clmlm: " << clmlm
-                                    //               << ", ylm_real: " << ylm_real << std::endl;
-                                    // }
-                                }
-                            }
+                            tmp_tensor(iA, iB) = value;
+                            // Rc: bohr
+                            if (distance >= Rc)
+                                tmp_tensor(iA, iB) = 0.0;
+                            // debug
+                            std::cout << "T1: " << T1 << ", L1: " << L1 << ", T2: " << T2 << ", L2: " << L2
+                                      << ", delta_R: " << delta_R[0] << ", " << delta_R[1] << ", " << delta_R[2]
+                                      << ", distance: " << distance << ", outside V= " << value
+                                      << ", prefactor:" << prefactor << ",mom1: " << mom1 << ", mom2: " << mom2
+                                      << ", clmlm: " << clmlm << ", ylm_real: " << ylm_real << std::endl;
                         }
                     }
                 }

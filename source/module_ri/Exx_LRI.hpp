@@ -302,7 +302,10 @@ void Exx_LRI<Tdata>::cal_exx_ions(const UnitCell& ucell, const bool write_cv)
 
     if (write_cv && GlobalV::MY_RANK == 0)
     {
-        LRI_CV_Tools::write_Vs_abf(Vs, PARAM.globalv.global_out_dir + "Vs");
+        if (this->info.use_ewald && this->info.ccp_type == Conv_Coulomb_Pot_K::Ccp_Type::Ccp)
+            LRI_CV_Tools::write_Vs_abf(Vs, PARAM.globalv.global_out_dir + "Vs_full");
+        else
+            LRI_CV_Tools::write_Vs_abf(Vs, PARAM.globalv.global_out_dir + "Vs_cut");
     }
     this->exx_lri.set_Vs(Vs, this->info.V_threshold);
 
@@ -492,7 +495,10 @@ void Exx_LRI<Tdata>::cal_exx_ions_rpa(std::map<TA, std::map<TAC, RI::Tensor<Tdat
 
     if (write_cv && GlobalV::MY_RANK == 0)
     {
-        LRI_CV_Tools::write_Vs_abf(Vs_cut, PARAM.globalv.global_out_dir + "Vs_cut");
+        if (this->info.use_ewald && this->info.ccp_type == Conv_Coulomb_Pot_K::Ccp_Type::Ccp)
+            LRI_CV_Tools::write_Vs_abf(Vs_cut, PARAM.globalv.global_out_dir + "Vs_full");
+        else
+            LRI_CV_Tools::write_Vs_abf(Vs_cut, PARAM.globalv.global_out_dir + "Vs_cut");
     }
     this->exx_lri.set_Vs(Vs_cut, this->info.V_threshold);
 
