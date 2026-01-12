@@ -42,9 +42,9 @@ void Moment_abfs<Tdata>::rotate_abfs(std::vector<std::vector<std::vector<Numeric
     ModuleBase::timer::tick("Rotate_abfs", "rotate_abfs");
 
     // construct tranformation matrix A
-    for (size_t T = 0; T != orb_in.size(); ++T)
+    for (int T = 0; T != orb_in.size(); ++T)
     {
-        for (size_t L = 0; L != orb_in[T].size(); ++L)
+        for (int L = 0; L != orb_in[T].size(); ++L)
         {
             for (int N = 0; N != orb_in[T][L].size(); ++N)
             {
@@ -131,17 +131,18 @@ double Moment_abfs<Tdata>::cal_clmlm(int l2, int m2, int l, int m, const ORB_gau
 {
     double result = 0.0;
     // real m and index_m mix due to MGT.get_lm_index
-    result
-        = std::pow(-1, m2) * std::pow(ModuleBase::FOUR_PI, 2) * dfact(2 * (l2 + l) - 1) / dfact(2 * l2 + 1)
-          / dfact(2 * l + 1)
-          * MGT.Gaunt_Coefficients(MGT.get_lm_index(l2, m2), MGT.get_lm_index(l, m), MGT.get_lm_index(l2 + l, m - m2));
+    // result
+    //     = std::pow(-1, m2) * std::pow(ModuleBase::FOUR_PI, 2) * dfact(2 * (l2 + l) - 1) / dfact(2 * l2 + 1)
+    //       / dfact(2 * l + 1)
+    //       * MGT.Gaunt_Coefficients(MGT.get_lm_index(l2, m2), MGT.get_lm_index(l, m), MGT.get_lm_index(l2 + l, m -
+    //       m2));
 
     // only real m
-    // result = std::pow(ModuleBase::FOUR_PI, 1.5)
-    //          * std::sqrt((this->factorial(l2 + l + m - m2) * this->factorial(l2 + l - m + m2))
-    //                      / (this->factorial(l2 + m2) * this->factorial(l2 - m2) * this->factorial(l + m)
-    //                         * this->factorial(l - m)))
-    //          / std::sqrt((2 * l2 + 1) * (2 * l + 1) * (2 * l2 + 2 * l + 1));
+    result = std::pow(ModuleBase::FOUR_PI, 1.5)
+             * std::sqrt((this->factorial(l2 + l + m - m2) * this->factorial(l2 + l - m + m2))
+                         / (this->factorial(l2 + m2) * this->factorial(l2 - m2) * this->factorial(l + m)
+                            * this->factorial(l - m)))
+             / std::sqrt((2 * l2 + 1) * (2 * l + 1) * (2 * l2 + 2 * l + 1));
 
     return result;
 }
@@ -210,26 +211,29 @@ void Moment_abfs<Tdata>::cal_VR(
                 continue;
             const auto JR = std::make_pair(iat1, R);
             auto tmp_tensor = RI::Tensor<Tdata>({sizeA, sizeB});
-            for (size_t L1 = 0; L1 != orb_in[T1].size(); ++L1)
+            for (int L1 = 0; L1 != orb_in[T1].size(); ++L1)
             {
-                if (L1 != 0)
-                    std::cout << "0 L1: " << L1 << std::endl;
-                for (size_t L2 = 0; L2 != orb_in[T2].size(); ++L2)
+                for (int L2 = 0; L2 != orb_in[T2].size(); ++L2)
                 {
-                    if (L2 != 0)
-                        std::cout << "0 L2: " << L2 << std::endl;
                     std::vector<double> rly;
-                    ModuleBase::Ylm::rl_sph_harm(L1 + L2, delta_R.x, delta_R.y, delta_R.z, rly);
+                    // keep bohr
+                    ModuleBase::Ylm::rl_sph_harm(L1 + L2,
+                                                 (delta_R * ucell.lat0).x,
+                                                 (delta_R * ucell.lat0).y,
+                                                 (delta_R * ucell.lat0).z,
+                                                 rly);
                     const double prefactor1 = std::pow(distance, L1 + L2 + 1);
-                    for (size_t M1 = -L1; M1 <= L1; ++M1)
+                    for (int M1 = -L1; M1 <= L1; ++M1)
                     {
                         const int index_M1 = M1 + L1;
-                        for (size_t M2 = -L2; M2 <= L2; ++M2)
+                        for (int M2 = -L2; M2 <= L2; ++M2)
                         {
                             const int index_M2 = M2 + L2;
                             const double prefactor = std::pow(-1, L2 + M2) / prefactor1;
                             const double clmlm = this->cal_clmlm(L2, M2, L1, M1, MGT0);
-                            const double ylm_solid = rly[MGT0.get_lm_index(L1 + L2, index_M1 - index_M2)];
+                            // index_M1 - index_M2
+                            // (M1 - M2 + L1 + L2)
+                            const double ylm_solid = rly.at(MGT0.get_lm_index(L1 + L2, (M1 - M2 + L1 + L2)));
                             const double ylm_real = (distance > tiny2) ? ylm_solid / pow(distance, L1 + L2) : ylm_solid;
                             const double mom1 = this->multipole[T1][L1][0];
                             const double mom2 = this->multipole[T2][L2][0];
@@ -240,15 +244,27 @@ void Moment_abfs<Tdata>::cal_VR(
                             const double value = prefactor * mom1 * mom2 * clmlm * ylm_real;
 
                             tmp_tensor(iA, iB) = value;
+
+                            if (iA == 0 && R[0] == 2 && R[1] == 2 && R[2] == 2 && iat0 == 0 && iat1 == 0)
+                            {
+                                std::cout << "iB: " << iB << ", L2: " << L2 << ", M2: " << M2 << ", V= " << value
+                                          << ", prefactor:" << prefactor << ",mom1: " << mom1 << ", mom2: " << mom2
+                                          << ", clmlm: " << clmlm << ", ylm_real: " << ylm_real << std::endl;
+                            }
+
+                            if (R[0] == 2 && R[1] == 2 && R[2] == 2 && iat0 == 0 && iat1 == 0)
+                            {
+                                out_pure_ri_tensor("Vs_tensor.txt", tmp_tensor, 0.0);
+                            }
                             // Rc: bohr
-                            if (distance >= Rc)
-                                tmp_tensor(iA, iB) = 0.0;
+                            // if (distance >= Rc)
+                            //    tmp_tensor(iA, iB) = 0.0;
                             // debug
-                            std::cout << "T1: " << T1 << ", L1: " << L1 << ", T2: " << T2 << ", L2: " << L2
-                                      << ", delta_R: " << delta_R[0] << ", " << delta_R[1] << ", " << delta_R[2]
-                                      << ", distance: " << distance << ", outside V= " << value
-                                      << ", prefactor:" << prefactor << ",mom1: " << mom1 << ", mom2: " << mom2
-                                      << ", clmlm: " << clmlm << ", ylm_real: " << ylm_real << std::endl;
+                            // std::cout << "T1: " << T1 << ", L1: " << L1 << ", T2: " << T2 << ", L2: " << L2
+                            //           << ", delta_R: " << delta_R[0] << ", " << delta_R[1] << ", " << delta_R[2]
+                            //           << ", distance: " << distance << ", outside V= " << value
+                            //           << ", prefactor:" << prefactor << ",mom1: " << mom1 << ", mom2: " << mom2
+                            //           << ", clmlm: " << clmlm << ", ylm_real: " << ylm_real << std::endl;
                         }
                     }
                 }
@@ -274,6 +290,64 @@ void Moment_abfs<Tdata>::cal_VR(
     ModuleBase::timer::tick("Rotate_abfs", "cal_VR");
 }
 
+template <typename Tdata>
+void Moment_abfs<Tdata>::out_pure_ri_tensor(const std::string fn, RI::Tensor<double>& olp, const double threshold)
+{
+    std::ofstream fs;
+    auto format = std::scientific;
+    int prec = 15;
+    fs.open(fn);
+    int nr = olp.shape[0];
+    int nc = olp.shape[1];
+    size_t nnz = nr * nc;
+    fs << "%%MatrixMarket matrix coordinate complex general" << std::endl;
+    fs << "%" << std::endl;
+
+    fs << nr << " " << nc << " " << nnz << std::endl;
+
+    for (int i = 0; i < nr; i++)
+    {
+        for (int j = 0; j < nc; j++)
+        {
+            auto v = olp(i, j);
+            if (fabs(v) > threshold)
+                fs << i + 1 << " " << j + 1 << " " << std::showpoint << format << std::setprecision(prec) << v << "\n";
+        }
+    }
+
+    fs.close();
+}
+
+template <typename Tdata>
+void Moment_abfs<Tdata>::out_pure_ri_tensor(const std::string fn,
+                                            RI::Tensor<std::complex<double>>& olp,
+                                            const double threshold)
+{
+    std::ofstream fs;
+    auto format = std::scientific;
+    int prec = 15;
+    fs.open(fn);
+    int nr = olp.shape[0];
+    int nc = olp.shape[1];
+    size_t nnz = nr * nc;
+    fs << "%%MatrixMarket matrix coordinate complex general" << std::endl;
+    fs << "%" << std::endl;
+
+    fs << nr << " " << nc << " " << nnz << std::endl;
+
+    for (int j = 0; j < nc; j++)
+    {
+        for (int i = 0; i < nr; i++)
+        {
+            auto v = olp(i, j);
+            if (fabs(v.real()) > threshold || fabs(v.imag()) > threshold)
+                fs << i + 1 << " " << j + 1 << " " << std::showpoint << format << std::setprecision(prec) << v.real()
+                   << " " << std::showpoint << format << std::setprecision(prec) << v.imag() << "\n";
+        }
+    }
+
+    fs.close();
+}
 // template <typename Tdata>
 // void Moment_abfs<Tdata>::diverge_list(
 //     const std::pair<std::vector<TA>, std::vector<std::vector<std::pair<TA, std::array<Tcell, Ndim>>>>>&

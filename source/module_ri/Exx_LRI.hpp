@@ -66,7 +66,7 @@ void Exx_LRI<Tdata>::init(const MPI_Comm& mpi_comm_in,
         ModuleBase::TITLE("cal_multipole_end");
 
         ModuleBase::TITLE("rotate_abfs_start");
-        moment_abfs->rotate_abfs(this->abfs);
+        // moment_abfs->rotate_abfs(this->abfs);
         ModuleBase::TITLE("rotate_abfs_end");
     }
 

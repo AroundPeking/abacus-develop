@@ -45,6 +45,9 @@ class Moment_abfs
     int dfact(const int& l) const;
     int factorial(const int& n) const;
 
+    void out_pure_ri_tensor(const std::string fn, RI::Tensor<std::complex<double>>& olp, const double threshold);
+    void out_pure_ri_tensor(const std::string fn, RI::Tensor<double>& olp, const double threshold);
+
     std::vector<std::vector<std::vector<double>>> multipole;
 
   private:
