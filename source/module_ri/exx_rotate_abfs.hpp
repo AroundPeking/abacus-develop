@@ -131,18 +131,23 @@ double Moment_abfs<Tdata>::cal_clmlm(int l2, int m2, int l, int m, const ORB_gau
 {
     double result = 0.0;
     // real m and index_m mix due to MGT.get_lm_index
-    // result
-    //     = std::pow(-1, m2) * std::pow(ModuleBase::FOUR_PI, 2) * dfact(2 * (l2 + l) - 1) / dfact(2 * l2 + 1)
-    //       / dfact(2 * l + 1)
-    //       * MGT.Gaunt_Coefficients(MGT.get_lm_index(l2, m2), MGT.get_lm_index(l, m), MGT.get_lm_index(l2 + l, m -
-    //       m2));
+    result = std::pow(-1, m2) * std::pow(ModuleBase::FOUR_PI, 2) * dfact(2 * (l2 + l) - 1) / dfact(2 * l2 + 1)
+             / dfact(2 * l + 1)
+             * MGT.Gaunt_Coefficients(MGT.get_lm_index(l2, m2 + l2),
+                                      MGT.get_lm_index(l, m + l),
+                                      MGT.get_lm_index(l2 + l, m - m2 + l2 + l));
 
     // only real m
-    result = std::pow(ModuleBase::FOUR_PI, 1.5)
-             * std::sqrt((this->factorial(l2 + l + m - m2) * this->factorial(l2 + l - m + m2))
-                         / (this->factorial(l2 + m2) * this->factorial(l2 - m2) * this->factorial(l + m)
-                            * this->factorial(l - m)))
-             / std::sqrt((2 * l2 + 1) * (2 * l + 1) * (2 * l2 + 2 * l + 1));
+    // result = std::pow(ModuleBase::FOUR_PI, 1.5)
+    //          * std::sqrt((this->factorial(l2 + l + m - m2) * this->factorial(l2 + l - m + m2))
+    //                      / (this->factorial(l2 + m2) * this->factorial(l2 - m2) * this->factorial(l + m)
+    //                         * this->factorial(l - m)))
+    //          / std::sqrt((2 * l2 + 1) * (2 * l + 1) * (2 * l2 + 2 * l + 1));
+    // result = std::pow(ModuleBase::FOUR_PI, 1.5)
+    //          * std::sqrt((this->factorial(l2 + l + m + m2) * this->factorial(l2 + l - m - m2))
+    //                      / (this->factorial(l2 + m2) * this->factorial(l2 - m2) * this->factorial(l + m)
+    //                         * this->factorial(l - m)))
+    //          / std::sqrt((2 * l2 + 1) * (2 * l + 1) * (2 * l2 + 2 * l + 1));
 
     return result;
 }
@@ -229,11 +234,15 @@ void Moment_abfs<Tdata>::cal_VR(
                         for (int M2 = -L2; M2 <= L2; ++M2)
                         {
                             const int index_M2 = M2 + L2;
-                            const double prefactor = std::pow(-1, L2 + M2) / prefactor1;
+                            // (M1 - M2 + L1 + L2) changes to
+                            // (M2 - M1 + L1 + L2) (-)^{M1-M2} (-)^{L2+M2}
+                            // = (-)^{L2+M1}
+                            const double prefactor = std::pow(-1, L2 + M1) / prefactor1;
                             const double clmlm = this->cal_clmlm(L2, M2, L1, M1, MGT0);
-                            // index_M1 - index_M2
-                            // (M1 - M2 + L1 + L2)
-                            const double ylm_solid = rly.at(MGT0.get_lm_index(L1 + L2, (M1 - M2 + L1 + L2)));
+                            // (M1 - M2 + L1 + L2) changes to
+                            // (M2 - M1 + L1 + L2) (-)^{M1-M2} (-)^{L2+M2}
+                            // = (-)^{L2+M1}
+                            const double ylm_solid = rly.at(MGT0.get_lm_index(L1 + L2, (M2 - M1 + L1 + L2)));
                             const double ylm_real = (distance > tiny2) ? ylm_solid / pow(distance, L1 + L2) : ylm_solid;
                             const double mom1 = this->multipole[T1][L1][0];
                             const double mom2 = this->multipole[T2][L2][0];
@@ -245,14 +254,15 @@ void Moment_abfs<Tdata>::cal_VR(
 
                             tmp_tensor(iA, iB) = value;
 
-                            if (iA == 0 && R[0] == 2 && R[1] == 2 && R[2] == 2 && iat0 == 0 && iat1 == 0)
+                            if (iat0 == 0 && iat0 == 0 && R[0] == 2 && R[1] == 2 && R[2] == 1 && iat0 == 0 && iat1 == 0)
                             {
-                                std::cout << "iB: " << iB << ", L2: " << L2 << ", M2: " << M2 << ", V= " << value
-                                          << ", prefactor:" << prefactor << ",mom1: " << mom1 << ", mom2: " << mom2
-                                          << ", clmlm: " << clmlm << ", ylm_real: " << ylm_real << std::endl;
+                                std::cout << "iA: " << iA << ", iB: " << iB << ", L2: " << L2 << ", M2: " << M2
+                                          << ", V= " << value << ", prefactor:" << prefactor << ",mom1: " << mom1
+                                          << ", mom2: " << mom2 << ", clmlm: " << clmlm << ", ylm_real: " << ylm_real
+                                          << std::endl;
                             }
 
-                            if (R[0] == 2 && R[1] == 2 && R[2] == 2 && iat0 == 0 && iat1 == 0)
+                            if (R[0] == 2 && R[1] == 2 && R[2] == 1 && iat0 == 0 && iat1 == 0)
                             {
                                 out_pure_ri_tensor("Vs_tensor.txt", tmp_tensor, 0.0);
                             }
