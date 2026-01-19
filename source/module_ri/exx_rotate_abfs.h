@@ -40,10 +40,11 @@ class Moment_abfs
         std::map<TA, std::map<TAC, RI::Tensor<Tdata>>>& Vs_cut);
     void cal_multipole(const std::vector<std::vector<std::vector<Numerical_Orbital_Lm>>>& orb_in);
     void rotate_abfs(std::vector<std::vector<std::vector<Numerical_Orbital_Lm>>>& orb_in);
-    double cal_clmlm(int l2, int m2, int l, int m, const ORB_gaunt_table& MGT) const;
+    double cal_clmlm(int l2, int m2, int l, int m, ORB_gaunt_table& MGT) const;
     /// double factorial
     int dfact(const int& l) const;
     int factorial(const int& n) const;
+    double ln_factorial(int n) const;
 
     void out_pure_ri_tensor(const std::string fn, RI::Tensor<std::complex<double>>& olp, const double threshold);
     void out_pure_ri_tensor(const std::string fn, RI::Tensor<double>& olp, const double threshold);

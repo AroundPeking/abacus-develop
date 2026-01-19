@@ -127,17 +127,29 @@ int Moment_abfs<Tdata>::factorial(const int& n) const
 }
 
 template <typename Tdata>
-double Moment_abfs<Tdata>::cal_clmlm(int l2, int m2, int l, int m, const ORB_gaunt_table& MGT) const
+double Moment_abfs<Tdata>::ln_factorial(int n) const
+{
+    double res = 0.0;
+    for (int i = 2; i <= n; ++i)
+        res += std::log(i);
+    return res;
+}
+
+template <typename Tdata>
+double Moment_abfs<Tdata>::cal_clmlm(int l2, int m2, int l, int m, ORB_gaunt_table& MGT) const
 {
     double result = 0.0;
     // real m and index_m mix due to MGT.get_lm_index
-    result = std::pow(-1, m2) * std::pow(ModuleBase::FOUR_PI, 2) * dfact(2 * (l2 + l) - 1) / dfact(2 * l2 + 1)
-             / dfact(2 * l + 1)
-             * MGT.Gaunt_Coefficients(MGT.get_lm_index(l2, m2 + l2),
-                                      MGT.get_lm_index(l, m + l),
-                                      MGT.get_lm_index(l2 + l, m - m2 + l2 + l));
+    // result = std::pow(-1, m2) * std::pow(ModuleBase::FOUR_PI, 2) * dfact(2 * (l2 + l) - 1) / dfact(2 * l2 + 1)
+    //          / dfact(2 * l + 1) * MGT.Get_Gaunt_CH(l2, m2, l, m, l2 + l, m - m2);
 
     // only real m
+    // int overflow
+    double ln_num = ln_factorial(l2 + l + m - m2) + ln_factorial(l2 + l - m + m2);
+    double ln_den = ln_factorial(l2 + m2) + ln_factorial(l2 - m2) + ln_factorial(l + m) + ln_factorial(l - m);
+    double ratio = std::exp(ln_num - ln_den);
+    result = std::pow(ModuleBase::FOUR_PI, 1.5) * std::sqrt(ratio)
+             / std::sqrt((2 * l2 + 1) * (2 * l + 1) * (2 * l2 + 2 * l + 1));
     // result = std::pow(ModuleBase::FOUR_PI, 1.5)
     //          * std::sqrt((this->factorial(l2 + l + m - m2) * this->factorial(l2 + l - m + m2))
     //                      / (this->factorial(l2 + m2) * this->factorial(l2 - m2) * this->factorial(l + m)
@@ -239,10 +251,23 @@ void Moment_abfs<Tdata>::cal_VR(
                             // = (-)^{L2+M1}
                             const double prefactor = std::pow(-1, L2 + M1) / prefactor1;
                             const double clmlm = this->cal_clmlm(L2, M2, L1, M1, MGT0);
-                            // (M1 - M2 + L1 + L2) changes to
-                            // (M2 - M1 + L1 + L2) (-)^{M1-M2} (-)^{L2+M2}
-                            // = (-)^{L2+M1}
-                            const double ylm_solid = rly.at(MGT0.get_lm_index(L1 + L2, (M2 - M1 + L1 + L2)));
+                            // Convert complex m to real spherical harmonic index
+                            // For real spherical harmonics, m order is: 0, 1, -1, 2, -2, 3, -3, ...
+                            const int m_complex = M2 - M1;
+                            int m_real_index;
+                            if (m_complex == 0)
+                            {
+                                m_real_index = 0;
+                            }
+                            else if (m_complex > 0)
+                            {
+                                m_real_index = 2 * m_complex - 1;
+                            }
+                            else
+                            {
+                                m_real_index = -2 * m_complex;
+                            }
+                            const double ylm_solid = rly.at(MGT0.get_lm_index(L1 + L2, m_real_index));
                             const double ylm_real = (distance > tiny2) ? ylm_solid / pow(distance, L1 + L2) : ylm_solid;
                             const double mom1 = this->multipole[T1][L1][0];
                             const double mom2 = this->multipole[T2][L2][0];
