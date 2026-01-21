@@ -252,7 +252,7 @@ void Moment_abfs<Tdata>::cal_VR(
                             const double prefactor = std::pow(-1, L2 + M1) / prefactor1;
                             const double clmlm = this->cal_clmlm(L2, M2, L1, M1, MGT0);
                             // Convert complex m to real spherical harmonic index
-                            // For real spherical harmonics, m order is: 0, 1, -1, 2, -2, 3, -3, ...
+                            // For real spherical harmonics, m order is: 0, 0, 1, -1, 0, 1, -1, 2, -2, ...
                             const int m_complex = M2 - M1;
                             int m_real_index;
                             if (m_complex == 0)
@@ -284,7 +284,10 @@ void Moment_abfs<Tdata>::cal_VR(
                                 std::cout << "iA: " << iA << ", iB: " << iB << ", L2: " << L2 << ", M2: " << M2
                                           << ", V= " << value << ", prefactor:" << prefactor << ",mom1: " << mom1
                                           << ", mom2: " << mom2 << ", clmlm: " << clmlm << ", ylm_real: " << ylm_real
-                                          << std::endl;
+                                          << ", ylm_solid: " << ylm_solid << ", m_complex: " << m_complex
+                                          << ", m_real_index: " << m_real_index
+                                          << ",MGT0.get_lm_index(L1 + L2, m_real_index): "
+                                          << MGT0.get_lm_index(L1 + L2, m_real_index) << std::endl;
                             }
 
                             if (R[0] == 2 && R[1] == 2 && R[2] == 1 && iat0 == 0 && iat1 == 0)
