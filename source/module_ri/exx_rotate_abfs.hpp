@@ -165,6 +165,72 @@ double Moment_abfs<Tdata>::cal_clmlm(int l2, int m2, int l, int m, ORB_gaunt_tab
 }
 
 template <typename Tdata>
+void Moment_abfs<Tdata>::sum_triple_Y_YLM_real(int l1,
+                                               int l2,
+                                               int L,
+                                               const std::vector<double>& rly, // real Y_LM(R)
+                                               int max_l1,
+                                               int max_l2,
+                                               const ORB_gaunt_table& MGT,
+                                               std::vector<double>& cyl)
+{
+    const int dim1 = 2 * max_l1 + 1;
+    const int dim2 = 2 * max_l2 + 1;
+
+    // safety
+    assert((int)cyl.size() == dim1 * dim2);
+
+    // initialize
+    std::fill(cyl.begin(), cyl.end(), 0.0);
+
+    // cyl(m1,m2) = sum_M C(l1,l2,L,m1,m2,M) Y_LM(R)
+    for (int m1 = -l1; m1 <= l1; ++m1)
+    {
+        const int idx1 = MGT.get_lm_index(l1, m1);
+
+        for (int m2 = -l2; m2 <= l2; ++m2)
+        {
+            const int idx2 = MGT.get_lm_index(l2, m2);
+
+            double sum = 0.0;
+
+            for (int M = -L; M <= L; ++M)
+            {
+                const int idxL = MGT.get_lm_index(L, M);
+
+                const double C = MGT.Gaunt_Coefficients(idx1, idx2, idxL);
+
+                if (std::abs(C) > 1e-14)
+                {
+                    sum += C * rly[idxL];
+                }
+            }
+
+            cyl[(m1 + max_l1) * dim2 + (m2 + max_l2)] = sum;
+        }
+    }
+}
+
+template <typename Tdata>
+double Moment_abfs<Tdata>::multipole_prefac(int L1, int L2)
+{
+    const int L = L1 + L2;
+
+    double num = 1.0;
+    for (int k = 2 * L + 1; k > 1; k -= 2)
+        num *= k;
+
+    double den = 1.0;
+    for (int k = 2 * L1 + 1; k > 1; k -= 2)
+        den *= k;
+    for (int k = 2 * L2 + 1; k > 1; k -= 2)
+        den *= k;
+
+    return ModuleBase::FOUR_PI * sqrt(1.0 / ModuleBase::PI_HALF) * (2.0 * L1 + 1) * (2.0 * L2 + 1) * num
+           / ((2.0 * L + 1) * den);
+}
+
+template <typename Tdata>
 void Moment_abfs<Tdata>::cal_VR(
     const UnitCell& ucell,
     const std::vector<std::vector<std::vector<Numerical_Orbital_Lm>>>& orb_in,
