@@ -25,7 +25,7 @@ void Moment_abfs<Tdata>::cal_multipole(const std::vector<std::vector<std::vector
                 const int nr = orb_lm.getNr();
                 double* integrated_func = new double[nr];
                 for (size_t ir = 0; ir != nr; ++ir)
-                    integrated_func[ir] = orb_lm.getPsi(ir) * std::pow(orb_lm.getRadial(ir), 2 + L);
+                    integrated_func[ir] = orb_lm.getPsi(ir) * std::pow(orb_lm.getRadial(ir), 2 + L) / (2 * L + 1);
 
                 ModuleBase::Integral::Simpson_Integral(nr, integrated_func, orb_lm.getRab(), this->multipole[T][L][N]);
             }
@@ -98,9 +98,9 @@ void Moment_abfs<Tdata>::rotate_abfs(std::vector<std::vector<std::vector<Numeric
 }
 
 template <typename Tdata>
-int Moment_abfs<Tdata>::dfact(const int& l) const
+double Moment_abfs<Tdata>::dfact(const int& l) const
 {
-    int result = 1;
+    double result = 1;
     for (int i = l; i > 1; i -= 2)
     {
         result *= i;
@@ -136,98 +136,46 @@ double Moment_abfs<Tdata>::ln_factorial(int n) const
 }
 
 template <typename Tdata>
-double Moment_abfs<Tdata>::cal_clmlm(int l2, int m2, int l, int m, ORB_gaunt_table& MGT) const
+double Moment_abfs<Tdata>::cal_cl1l2(int l1, int l2) const
 {
     double result = 0.0;
-    // real m and index_m mix due to MGT.get_lm_index
-    // result = std::pow(-1, m2) * std::pow(ModuleBase::FOUR_PI, 2) * dfact(2 * (l2 + l) - 1) / dfact(2 * l2 + 1)
-    //          / dfact(2 * l + 1) * MGT.Get_Gaunt_CH(l2, m2, l, m, l2 + l, m - m2);
-
-    // only real m
     // int overflow
-    double ln_num = ln_factorial(l2 + l + m - m2) + ln_factorial(l2 + l - m + m2);
-    double ln_den = ln_factorial(l2 + m2) + ln_factorial(l2 - m2) + ln_factorial(l + m) + ln_factorial(l - m);
-    double ratio = std::exp(ln_num - ln_den);
-    result = std::pow(ModuleBase::FOUR_PI, 1.5) * std::sqrt(ratio)
-             / std::sqrt((2 * l2 + 1) * (2 * l + 1) * (2 * l2 + 2 * l + 1));
-    // result = std::pow(ModuleBase::FOUR_PI, 1.5)
-    //          * std::sqrt((this->factorial(l2 + l + m - m2) * this->factorial(l2 + l - m + m2))
-    //                      / (this->factorial(l2 + m2) * this->factorial(l2 - m2) * this->factorial(l + m)
-    //                         * this->factorial(l - m)))
-    //          / std::sqrt((2 * l2 + 1) * (2 * l + 1) * (2 * l2 + 2 * l + 1));
-    // result = std::pow(ModuleBase::FOUR_PI, 1.5)
-    //          * std::sqrt((this->factorial(l2 + l + m + m2) * this->factorial(l2 + l - m - m2))
-    //                      / (this->factorial(l2 + m2) * this->factorial(l2 - m2) * this->factorial(l + m)
-    //                         * this->factorial(l - m)))
-    //          / std::sqrt((2 * l2 + 1) * (2 * l + 1) * (2 * l2 + 2 * l + 1));
+    result = ModuleBase::FOUR_PI * std::sqrt(1.0 / ModuleBase::PI_HALF) * dfact(2 * l1 + 2 * l2 - 1) / dfact(2 * l1 - 1)
+             / dfact(2 * l2 - 1);
 
     return result;
 }
 
 template <typename Tdata>
-void Moment_abfs<Tdata>::sum_triple_Y_YLM_real(int l1,
-                                               int l2,
-                                               int L,
-                                               const std::vector<double>& rly, // real Y_LM(R)
-                                               int max_l1,
-                                               int max_l2,
-                                               const ORB_gaunt_table& MGT,
-                                               std::vector<double>& cyl)
+double Moment_abfs<Tdata>::sum_triple_Y_YLM_real(int l1,
+                                                 int m1, // real m1, not index
+                                                 int l2,
+                                                 int m2,                         // real m2, not index
+                                                 const std::vector<double>& rly, // real Y_LM(R)
+                                                 const ORB_gaunt_table& MGT,
+                                                 const double distance)
 {
-    const int dim1 = 2 * max_l1 + 1;
-    const int dim2 = 2 * max_l2 + 1;
-
-    // safety
-    assert((int)cyl.size() == dim1 * dim2);
-
-    // initialize
-    std::fill(cyl.begin(), cyl.end(), 0.0);
+    double sum = 0.0;
+    const double tiny2 = 1e-10;
+    const int L = l1 + l2;
+    const int idx1 = MGT.get_lm_index(l1, m1 + l1);
+    const int idx2 = MGT.get_lm_index(l2, m2 + l2);
 
     // cyl(m1,m2) = sum_M C(l1,l2,L,m1,m2,M) Y_LM(R)
-    for (int m1 = -l1; m1 <= l1; ++m1)
+    for (int M = -L; M <= L; ++M)
     {
-        const int idx1 = MGT.get_lm_index(l1, m1);
+        const int idxL = MGT.get_lm_index(L, M + L);
+        const double C = MGT.Gaunt_Coefficients(idx1, idx2, idxL);
+        const double ylm_solid = rly.at(idxL);
+        const double ylm_real = (distance > tiny2) ? ylm_solid / pow(distance, l1 + l2) : ylm_solid;
 
-        for (int m2 = -l2; m2 <= l2; ++m2)
+        if (std::abs(C) > 1e-14)
         {
-            const int idx2 = MGT.get_lm_index(l2, m2);
-
-            double sum = 0.0;
-
-            for (int M = -L; M <= L; ++M)
-            {
-                const int idxL = MGT.get_lm_index(L, M);
-
-                const double C = MGT.Gaunt_Coefficients(idx1, idx2, idxL);
-
-                if (std::abs(C) > 1e-14)
-                {
-                    sum += C * rly[idxL];
-                }
-            }
-
-            cyl[(m1 + max_l1) * dim2 + (m2 + max_l2)] = sum;
+            sum += C * ylm_real;
         }
     }
-}
 
-template <typename Tdata>
-double Moment_abfs<Tdata>::multipole_prefac(int L1, int L2)
-{
-    const int L = L1 + L2;
-
-    double num = 1.0;
-    for (int k = 2 * L + 1; k > 1; k -= 2)
-        num *= k;
-
-    double den = 1.0;
-    for (int k = 2 * L1 + 1; k > 1; k -= 2)
-        den *= k;
-    for (int k = 2 * L2 + 1; k > 1; k -= 2)
-        den *= k;
-
-    return ModuleBase::FOUR_PI * sqrt(1.0 / ModuleBase::PI_HALF) * (2.0 * L1 + 1) * (2.0 * L2 + 1) * num
-           / ((2.0 * L + 1) * den);
+    return sum;
 }
 
 template <typename Tdata>
@@ -244,7 +192,6 @@ void Moment_abfs<Tdata>::cal_VR(
     ModuleBase::timer::tick("Rotate_abfs", "cal_VR");
     // copy in source\module_hamilt_lcao\hamilt_lcaodft\center2_orb-orb11.cpp
     const double tiny1 = 1e-12;
-    const double tiny2 = 1e-10;
     const ModuleBase::Element_Basis_Index::Range range = Exx_Abfs::Abfs_Index::construct_range(orb_in);
     // index: T: type, L: angular momentum, N: radial index, M: magnetic moment
     const ModuleBase::Element_Basis_Index::IndexLNM index = ModuleBase::Element_Basis_Index::construct_index(range);
@@ -312,57 +259,35 @@ void Moment_abfs<Tdata>::cal_VR(
                         for (int M2 = -L2; M2 <= L2; ++M2)
                         {
                             const int index_M2 = M2 + L2;
-                            // (M1 - M2 + L1 + L2) changes to
-                            // (M2 - M1 + L1 + L2) (-)^{M1-M2} (-)^{L2+M2}
-                            // = (-)^{L2+M1}
-                            const double prefactor = std::pow(-1, L2 + M1) / prefactor1;
-                            const double clmlm = this->cal_clmlm(L2, M2, L1, M1, MGT0);
-                            // Convert complex m to real spherical harmonic index
+                            const double prefactor = std::pow(-1, L2) * std::pow(ModuleBase::TWO_PI, 1.5) / prefactor1;
+                            const double clmlm = this->cal_cl1l2(L1, L2);
                             // For real spherical harmonics, m order is: 0, 0, 1, -1, 0, 1, -1, 2, -2, ...
-                            const int m_complex = M2 - M1;
-                            int m_real_index;
-                            if (m_complex == 0)
-                            {
-                                m_real_index = 0;
-                            }
-                            else if (m_complex > 0)
-                            {
-                                m_real_index = 2 * m_complex - 1;
-                            }
-                            else
-                            {
-                                m_real_index = -2 * m_complex;
-                            }
-                            const double ylm_solid = rly.at(MGT0.get_lm_index(L1 + L2, m_real_index));
-                            const double ylm_real = (distance > tiny2) ? ylm_solid / pow(distance, L1 + L2) : ylm_solid;
-                            const double mom1 = this->multipole[T1][L1][0];
+                            const double ylm = sum_triple_Y_YLM_real(L1, M1, L2, M2, rly, MGT0, distance);
+                            double mom1 = this->multipole[T1][L1][0];
                             const double mom2 = this->multipole[T2][L2][0];
                             // every L has only one moment!=0 after rotation (N=0)
                             const size_t iA = index[T1][L1][0][index_M1];
                             const size_t iB = index[T2][L2][0][index_M2];
 
-                            const double value = prefactor * mom1 * mom2 * clmlm * ylm_real;
+                            const double value = prefactor * mom1 * mom2 * clmlm * ylm;
 
                             tmp_tensor(iA, iB) = value;
-
-                            if (iat0 == 0 && iat0 == 0 && R[0] == 2 && R[1] == 2 && R[2] == 1 && iat0 == 0 && iat1 == 0)
-                            {
-                                std::cout << "iA: " << iA << ", iB: " << iB << ", L2: " << L2 << ", M2: " << M2
-                                          << ", V= " << value << ", prefactor:" << prefactor << ",mom1: " << mom1
-                                          << ", mom2: " << mom2 << ", clmlm: " << clmlm << ", ylm_real: " << ylm_real
-                                          << ", ylm_solid: " << ylm_solid << ", m_complex: " << m_complex
-                                          << ", m_real_index: " << m_real_index
-                                          << ",MGT0.get_lm_index(L1 + L2, m_real_index): "
-                                          << MGT0.get_lm_index(L1 + L2, m_real_index) << std::endl;
-                            }
-
-                            if (R[0] == 2 && R[1] == 2 && R[2] == 1 && iat0 == 0 && iat1 == 0)
-                            {
-                                out_pure_ri_tensor("Vs_tensor.txt", tmp_tensor, 0.0);
-                            }
                             // Rc: bohr
-                            // if (distance >= Rc)
-                            //    tmp_tensor(iA, iB) = 0.0;
+                            if (distance >= Rc)
+                                tmp_tensor(iA, iB) = 0.0;
+                            // if (iat0 == 0 && iat0 == 0 && R[0] == 2 && R[1] == 2 && R[2] == 1 && iat0 == 0 &&
+                            // iat1 == 0)
+                            // {
+                            //     std::cout << "iA: " << iA << ", iB: " << iB << ", L2: " << L2 << ", M2: " << M2
+                            //               << ", V= " << value << ", prefactor:" << prefactor << ",mom1: " << mom1
+                            //               << ", mom2: " << mom2 << ", clmlm: " << clmlm << ", ylm: " << ylm
+                            //               << std::endl;
+                            // }
+
+                            // if (R[0] == 2 && R[1] == 2 && R[2] == 1 && iat0 == 0 && iat1 == 0)
+                            // {
+                            //     out_pure_ri_tensor("Vs_tensor.txt", tmp_tensor, 0.0);
+                            // }
                             // debug
                             // std::cout << "T1: " << T1 << ", L1: " << L1 << ", T2: " << T2 << ", L2: " << L2
                             //           << ", delta_R: " << delta_R[0] << ", " << delta_R[1] << ", " << delta_R[2]

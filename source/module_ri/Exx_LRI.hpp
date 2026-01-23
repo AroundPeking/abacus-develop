@@ -66,7 +66,7 @@ void Exx_LRI<Tdata>::init(const MPI_Comm& mpi_comm_in,
         ModuleBase::TITLE("cal_multipole_end");
 
         ModuleBase::TITLE("rotate_abfs_start");
-        // moment_abfs->rotate_abfs(this->abfs);
+        moment_abfs->rotate_abfs(this->abfs);
         ModuleBase::TITLE("rotate_abfs_end");
     }
 
@@ -439,23 +439,25 @@ void Exx_LRI<Tdata>::cal_exx_ions_rpa(std::map<TA, std::map<TAC, RI::Tensor<Tdat
     flag = 0;
     for (const auto& IJRc: this->cv.Vws)
     {
-        const TA& I = IJRc.first;
-        const auto& JRc = IJRc.second;
+        // const TA& I = IJRc.first;
+        // const auto& JRc = IJRc.second;
         for (const auto& JRc_tensor: JRc)
         {
-            const TA& J = JRc_tensor.first;
-            const auto Rc = JRc_tensor.second;
+            // const TA& J = JRc_tensor.first;
+            // const auto Rc = JRc_tensor.second;
             for (const auto& Rc_tensor: Rc)
             {
-                const auto& R = Rc_tensor.first;
-                const double distance = R.norm() * ucell.lat0;
+                // const auto& R = Rc_tensor.first;
+                // const double distance = R.norm() * ucell.lat0;
                 flag += 1;
-                if (R[0] < 8 && R[0] > 0 && R[1] > 0 && R[1] < 8 && R[2] < 8 && R[2] > 0)
-                {
-                    auto c = Rc_tensor.second;
-                    std::cout << "T1: " << I << ", T2: " << J << ", delta_R: " << R[0] << ", " << R[1] << ", " << R[2]
-                              << ", distance: " << distance << ", V= " << c(0, 0) << std::endl;
-                }
+                // debug
+                // if (R[0] < 8 && R[0] > 0 && R[1] > 0 && R[1] < 8 && R[2] < 8 && R[2] > 0)
+                // {
+                //     auto c = Rc_tensor.second;
+                //     std::cout << "T1: " << I << ", T2: " << J << ", delta_R: " << R[0] << ", " << R[1] << ", " <<
+                //     R[2]
+                //               << ", distance: " << distance << ", V= " << c(0, 0) << std::endl;
+                // }
             }
         }
     }
