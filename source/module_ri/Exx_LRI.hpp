@@ -440,11 +440,11 @@ void Exx_LRI<Tdata>::cal_exx_ions_rpa(std::map<TA, std::map<TAC, RI::Tensor<Tdat
     for (const auto& IJRc: this->cv.Vws)
     {
         // const TA& I = IJRc.first;
-        // const auto& JRc = IJRc.second;
+        const auto& JRc = IJRc.second;
         for (const auto& JRc_tensor: JRc)
         {
             // const TA& J = JRc_tensor.first;
-            // const auto Rc = JRc_tensor.second;
+            const auto Rc = JRc_tensor.second;
             for (const auto& Rc_tensor: Rc)
             {
                 // const auto& R = Rc_tensor.first;
