@@ -161,24 +161,11 @@ auto Ewald_Vq<Tdata>::cal_Vs_gauss(const UnitCell& ucell,
     ModuleBase::TITLE("Ewald_Vq", "cal_Vs_gauss");
     ModuleBase::timer::tick("Ewald_Vq", "cal_Vs_gauss");
 
-    std::map<std::string, bool> flags = {{"writable_Vws", true}};
+    // Add skip_special_Rcut flag to avoid the special Rcut modification in cal_datas
+    // while keeping writable_Vws=true to ensure Vws cache is populated
+    std::map<std::string, bool> flags = {{"writable_Vws", true}, {"use_moment", false}};
     std::map<TA, std::map<TAC, RI::Tensor<Tdata>>> Vs_gauss = this->cv.cal_Vs(ucell, list_A0, list_A1, flags);
     this->cv.Vws = LRI_CV_Tools::get_CVws(ucell, Vs_gauss);
-    if (this->info.rotate_abfs == true && this->info.ccp_type == Conv_Coulomb_Pot_K::Ccp_Type::Hf)
-    {
-        Moment_abfs<Tdata>* moment_abfs = nullptr;
-        moment_abfs = new Moment_abfs<Tdata>(GlobalC::exx_info.info_ri);
-        std::pair<std::vector<TA>, std::vector<std::vector<std::pair<TA, std::array<Tcell, Ndim>>>>> list_As_Vs;
-        list_As_Vs.first = list_A0;
-        list_As_Vs.second.resize(1);
-        list_As_Vs.second[0] = list_A1;
-        double hf_Rcut = std::pow(0.75 * this->p_kv->get_nkstot_full() * ucell.omega / (ModuleBase::PI), 1.0 / 3.0);
-
-        // To cal Cs, we still cal all Vs(R) in r space
-        moment_abfs->cal_VR(ucell, this->g_abfs, list_As_Vs, g_lcaos_rcut, hf_Rcut, this->cv, Vs_gauss);
-        delete moment_abfs;
-        moment_abfs = nullptr;
-    }
 
     ModuleBase::timer::tick("Ewald_Vq", "cal_Vs_gauss");
     return Vs_gauss;

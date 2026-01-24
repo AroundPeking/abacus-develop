@@ -407,7 +407,10 @@ void Exx_LRI<Tdata>::cal_exx_ions_rpa(std::map<TA, std::map<TAC, RI::Tensor<Tdat
     std::pair<std::vector<TA>, std::vector<std::vector<std::pair<TA, std::array<Tcell, Ndim>>>>> list_As_Vs
         = RI::Distribute_Equally::distribute_atoms_periods(this->mpi_comm, atoms, period_Vs, 2, false);
 
-    Vs_cut = this->cv.cal_Vs(ucell, list_As_Vs.first, list_As_Vs.second[0], {{"writable_Vws", true}});
+    Vs_cut = this->cv.cal_Vs(ucell,
+                             list_As_Vs.first,
+                             list_As_Vs.second[0],
+                             {{"writable_Vws", true}, {"use_moment", true}});
 
     this->cv.Vws = LRI_CV_Tools::get_CVws(ucell, Vs_cut);
     int flag = 0;
