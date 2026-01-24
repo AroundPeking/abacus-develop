@@ -57,6 +57,17 @@ class Ewald_Vq
               const std::map<std::string, double>& parameter,
               ORB_gaunt_table& MGT_in);
 
+    // Overload: accept pre-fitted and rotated Gaussian abfs
+    void init(const UnitCell& ucell,
+              const LCAO_Orbitals& orb,
+              const MPI_Comm& mpi_comm_in,
+              const K_Vectors* kv_in,
+              std::vector<std::vector<std::vector<Numerical_Orbital_Lm>>>& lcaos_in,
+              std::vector<std::vector<std::vector<Numerical_Orbital_Lm>>>& abfs_in,
+              std::vector<std::vector<std::vector<Numerical_Orbital_Lm>>>& g_abfs_in,
+              const std::map<std::string, double>& parameter,
+              ORB_gaunt_table& MGT_in);
+
     void init_ions(const UnitCell& ucell, const std::array<Tcell, Ndim>& period_Vs_NAO);
 
     double get_singular_chi(const UnitCell& ucell, const Singular_Value::Fq_type& fq_type, const double& qdiv);
@@ -77,6 +88,10 @@ class Ewald_Vq
         const UnitCell& ucell,
         const double& chi,
         std::map<TA, std::map<TAC, std::array<RI::Tensor<Tdata>, Ndim>>>& dVs_in);
+
+    // Public interface for Gaussian fitting
+    std::vector<std::vector<std::vector<Numerical_Orbital_Lm>>> init_gauss(
+        std::vector<std::vector<std::vector<Numerical_Orbital_Lm>>>& orb_in);
 
   private:
     const Exx_Info::Exx_Info_RI& info;
@@ -218,9 +233,6 @@ class Ewald_Vq
                                                  const std::vector<TA>& list_A0_pair_R,
                                                  const std::vector<TAC>& list_A1_pair_R,
                                                  std::map<TA, std::map<TAK, Tin>>& Vq);
-
-    std::vector<std::vector<std::vector<Numerical_Orbital_Lm>>> init_gauss(
-        std::vector<std::vector<std::vector<Numerical_Orbital_Lm>>>& orb_in);
 
     inline double cal_V_Rcut(const int it0, const int it1);
     inline double get_Rcut_max(const int it0, const int it1);

@@ -57,10 +57,14 @@ void Exx_LRI<Tdata>::init(const MPI_Comm& mpi_comm_in,
     }
     Exx_Abfs::Construct_Orbs::print_orbs_size(ucell, this->abfs, GlobalV::ofs_running);
 
+    // Save original abfs before rotation for later Gaussian fitting
+    std::vector<std::vector<std::vector<Numerical_Orbital_Lm>>> abfs_original = this->abfs;
+
     if (this->info.rotate_abfs == true)
     {
         if (!moment_abfs)
             moment_abfs = new Moment_abfs<Tdata>(GlobalC::exx_info.info_ri);
+
         ModuleBase::TITLE("cal_multipole_start");
         moment_abfs->cal_multipole(this->abfs);
         ModuleBase::TITLE("cal_multipole_end");
@@ -138,7 +142,26 @@ void Exx_LRI<Tdata>::init(const MPI_Comm& mpi_comm_in,
                                      false,
                                      false);
         }
-        this->evq.init(ucell, orb, this->mpi_comm, this->p_kv, this->lcaos, this->abfs, ccp_parameter, this->MGT);
+
+        if (this->info.rotate_abfs == true)
+        {
+            // Fit Gaussian to original abfs and rotate with same coefficients
+            ModuleBase::TITLE("fit_gaussian_before_rotate_start");
+            std::vector<std::vector<std::vector<Numerical_Orbital_Lm>>> g_abfs;
+            g_abfs = this->evq.init_gauss(abfs_original);
+            ModuleBase::TITLE("fit_gaussian_before_rotate_end");
+
+            ModuleBase::TITLE("rotate_gaussian_start");
+            moment_abfs->rotate_abfs(g_abfs);
+            ModuleBase::TITLE("rotate_gaussian_end");
+
+            // Pass both abfs (rotated non-Gaussian) and g_abfs (Gaussian-fitted and rotated)
+            this->evq.init(ucell, orb, this->mpi_comm, this->p_kv, this->lcaos, this->abfs, g_abfs, ccp_parameter, this->MGT);
+        }
+        else
+        {
+            this->evq.init(ucell, orb, this->mpi_comm, this->p_kv, this->lcaos, this->abfs, ccp_parameter, this->MGT);
+        }
     }
 
     ModuleBase::timer::tick("Exx_LRI", "init");
@@ -160,11 +183,14 @@ void Exx_LRI<Tdata>::init(const MPI_Comm& mpi_comm_in,
 
     this->lcaos = Exx_Abfs::Construct_Orbs::change_orbs(orb, this->info.kmesh_times);
     this->abfs = abfs_s;
+    // Save original abfs before rotation for later Gaussian fitting
+    std::vector<std::vector<std::vector<Numerical_Orbital_Lm>>> abfs_original = this->abfs;
 
     if (this->info.rotate_abfs == true)
     {
         if (!moment_abfs)
             moment_abfs = new Moment_abfs<Tdata>(GlobalC::exx_info.info_ri);
+
         ModuleBase::TITLE("cal_multipole_start");
         moment_abfs->cal_multipole(this->abfs);
         ModuleBase::TITLE("cal_multipole_end");
@@ -242,7 +268,26 @@ void Exx_LRI<Tdata>::init(const MPI_Comm& mpi_comm_in,
                                      false,
                                      false);
         }
-        this->evq.init(ucell, orb, this->mpi_comm, this->p_kv, this->lcaos, this->abfs, ccp_parameter, this->MGT);
+
+        if (this->info.rotate_abfs == true)
+        {
+            // Fit Gaussian to original abfs and rotate with same coefficients
+            ModuleBase::TITLE("fit_gaussian_before_rotate_start");
+            std::vector<std::vector<std::vector<Numerical_Orbital_Lm>>> g_abfs;
+            g_abfs = this->evq.init_gauss(abfs_original);
+            ModuleBase::TITLE("fit_gaussian_before_rotate_end");
+
+            ModuleBase::TITLE("rotate_gaussian_start");
+            moment_abfs->rotate_abfs(g_abfs);
+            ModuleBase::TITLE("rotate_gaussian_end");
+
+            // Pass both abfs (rotated non-Gaussian) and g_abfs (Gaussian-fitted and rotated)
+            this->evq.init(ucell, orb, this->mpi_comm, this->p_kv, this->lcaos, this->abfs, g_abfs, ccp_parameter, this->MGT);
+        }
+        else
+        {
+            this->evq.init(ucell, orb, this->mpi_comm, this->p_kv, this->lcaos, this->abfs, ccp_parameter, this->MGT);
+        }
     }
 
     ModuleBase::timer::tick("Exx_LRI", "init");
