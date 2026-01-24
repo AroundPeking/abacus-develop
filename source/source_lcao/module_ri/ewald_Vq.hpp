@@ -76,6 +76,61 @@ void Ewald_Vq<Tdata>::init(const UnitCell& ucell,
     ModuleBase::timer::tick("Ewald_Vq", "init");
 }
 
+// Overload: accept pre-fitted and rotated Gaussian abfs
+template <typename Tdata>
+void Ewald_Vq<Tdata>::init(const UnitCell& ucell,
+                          const LCAO_Orbitals& orb,
+                          const MPI_Comm& mpi_comm_in,
+                          const K_Vectors* kv_in,
+                          std::vector<std::vector<std::vector<Numerical_Orbital_Lm>>>& lcaos_in,
+                          std::vector<std::vector<std::vector<Numerical_Orbital_Lm>>>& abfs_in,
+                          std::vector<std::vector<std::vector<Numerical_Orbital_Lm>>>& g_abfs_in,
+                          const std::map<std::string, double>& parameter,
+                          ORB_gaunt_table& MGT_in)
+{
+    ModuleBase::TITLE("Ewald_Vq", "init [with pre-fitted Gaussian]");
+    ModuleBase::timer::tick("Ewald_Vq", "init");
+
+    this->mpi_comm = mpi_comm_in;
+    this->p_kv = kv_in;
+    this->nks0 = this->p_kv->get_nkstot_full();
+    this->kvec_c.resize(this->nks0);
+
+    this->g_lcaos = this->init_gauss(lcaos_in);
+    this->orb_cutoff = orb.cutoffs();
+    this->abfs_in = abfs_in;  // Save original (non-Gaussian) abfs_in
+    this->g_abfs = g_abfs_in;   // Use the provided Gaussian-fitted and rotated abfs
+    this->g_abfs_ccp
+        = Conv_Coulomb_Pot_K::cal_orbs_ccp(this->g_abfs, this->info.ccp_type, parameter, this->info.ccp_rmesh_times);
+    this->multipole = Exx_Abfs::Construct_Orbs::get_multipole(abfs_in);  // Get multipole from original abfs_in
+    this->lcaos_rcut = Exx_Abfs::Construct_Orbs::get_Rcut(lcaos_in);
+    this->g_lcaos_rcut = Exx_Abfs::Construct_Orbs::get_Rcut(this->g_lcaos);
+    this->g_abfs_ccp_rcut = Exx_Abfs::Construct_Orbs::get_Rcut(this->g_abfs_ccp);
+
+    const ModuleBase::Element_Basis_Index::Range range_abfs = Exx_Abfs::Abfs_Index::construct_range(abfs_in);
+    this->index_abfs = ModuleBase::Element_Basis_Index::construct_index(range_abfs);
+
+    this->cv.set_orbitals(ucell,
+                          orb,
+                          this->g_lcaos,
+                          this->g_abfs,
+                          this->g_abfs_ccp,
+                          this->info.kmesh_times,
+                          MGT_in,
+                          false,
+                          false);
+    this->gaunt.create(MGT_in.Gaunt_Coefficients.getBound1(),
+                       MGT_in.Gaunt_Coefficients.getBound2(),
+                       MGT_in.Gaunt_Coefficients.getBound3());
+    this->gaunt = MGT_in.Gaunt_Coefficients;
+
+    this->atoms_vec.resize(ucell.nat);
+    std::iota(this->atoms_vec.begin(), this->atoms_vec.end(), 0);
+    this->nmp = {this->p_kv->nmp[0], this->p_kv->nmp[1], this->p_kv->nmp[2]};
+
+    ModuleBase::timer::tick("Ewald_Vq", "init");
+}
+
 template <typename Tdata>
 void Ewald_Vq<Tdata>::init_ions(const UnitCell& ucell, const std::array<Tcell, Ndim>& period_Vs_NAO)
 {
