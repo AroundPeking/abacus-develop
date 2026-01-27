@@ -70,7 +70,7 @@ void Exx_LRI<Tdata>::init(const MPI_Comm& mpi_comm_in,
         ModuleBase::TITLE("cal_multipole_end");
 
         ModuleBase::TITLE("rotate_abfs_start");
-        moment_abfs->rotate_abfs(this->abfs);
+        // moment_abfs->rotate_abfs(this->abfs);
         ModuleBase::TITLE("rotate_abfs_end");
     }
 
@@ -152,11 +152,19 @@ void Exx_LRI<Tdata>::init(const MPI_Comm& mpi_comm_in,
             ModuleBase::TITLE("fit_gaussian_before_rotate_end");
 
             ModuleBase::TITLE("rotate_gaussian_start");
-            moment_abfs->rotate_abfs(g_abfs);
+            // moment_abfs->rotate_abfs(g_abfs);
             ModuleBase::TITLE("rotate_gaussian_end");
 
             // Pass both abfs (rotated non-Gaussian) and g_abfs (Gaussian-fitted and rotated)
-            this->evq.init(ucell, orb, this->mpi_comm, this->p_kv, this->lcaos, this->abfs, g_abfs, ccp_parameter, this->MGT);
+            this->evq.init(ucell,
+                           orb,
+                           this->mpi_comm,
+                           this->p_kv,
+                           this->lcaos,
+                           this->abfs,
+                           g_abfs,
+                           ccp_parameter,
+                           this->MGT);
         }
         else
         {
@@ -196,7 +204,7 @@ void Exx_LRI<Tdata>::init(const MPI_Comm& mpi_comm_in,
         ModuleBase::TITLE("cal_multipole_end");
 
         ModuleBase::TITLE("rotate_abfs_start");
-        moment_abfs->rotate_abfs(this->abfs);
+        // moment_abfs->rotate_abfs(this->abfs);
         ModuleBase::TITLE("rotate_abfs_end");
     }
 
@@ -278,11 +286,19 @@ void Exx_LRI<Tdata>::init(const MPI_Comm& mpi_comm_in,
             ModuleBase::TITLE("fit_gaussian_before_rotate_end");
 
             ModuleBase::TITLE("rotate_gaussian_start");
-            moment_abfs->rotate_abfs(g_abfs);
+            // moment_abfs->rotate_abfs(g_abfs);
             ModuleBase::TITLE("rotate_gaussian_end");
 
             // Pass both abfs (rotated non-Gaussian) and g_abfs (Gaussian-fitted and rotated)
-            this->evq.init(ucell, orb, this->mpi_comm, this->p_kv, this->lcaos, this->abfs, g_abfs, ccp_parameter, this->MGT);
+            this->evq.init(ucell,
+                           orb,
+                           this->mpi_comm,
+                           this->p_kv,
+                           this->lcaos,
+                           this->abfs,
+                           g_abfs,
+                           ccp_parameter,
+                           this->MGT);
         }
         else
         {
