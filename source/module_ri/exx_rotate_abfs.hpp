@@ -305,7 +305,7 @@ void Moment_abfs<Tdata>::cal_VR(
                                     // width = 1.03: r = Rc*1.1 gives ~0.5% contribution
                                     // width = 1.02: r = Rc*1.05 gives ~0.08% contribution (nearly hard)
                                     // width = 1.01: essentially hard cutoff at Rc
-                                    const double width = 1.02; // Width factor - tune this for high states!
+                                    const double width = 0.9; // Width factor - tune this for high states!
 
                                     double cutoff_factor = 1.0;
                                     // Uncomment to test hard cutoff (for debugging)

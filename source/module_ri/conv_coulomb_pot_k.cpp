@@ -48,6 +48,8 @@ std::vector<double> cal_psi_hf(const std::vector<double>& psif,
     {
         if (Rcut_type == 0)
         {
+            // Spencer truncation: 1 - cos(kRc)
+            // This pairs with log-space erfc truncation in moment method
             psik2_ccp[ik] = hybrid_alpha * ModuleBase::FOUR_PI * psif[ik] * (1 - std::cos(k_radial[ik] * Rc));
             // 2d Coulomb
             // if (k_radial[ik] == 0)
