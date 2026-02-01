@@ -49,6 +49,7 @@ struct Exx_Info
         int Rcut_type = 1;
         Singular_Value::Fq_type fq_type;
         bool use_ewald = false;
+        bool coul_moment = false;
         bool rotate_abfs = false;
 
         double pca_threshold = 0;

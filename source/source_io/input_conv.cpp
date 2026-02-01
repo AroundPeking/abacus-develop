@@ -479,6 +479,7 @@ void Input_Conv::Convert()
         GlobalC::exx_info.info_ri.Cs_inv_thr = PARAM.inp.Cs_inv_thr;
         GlobalC::exx_info.info_ri.shrink_abfs_pca_thr = PARAM.inp.shrink_abfs_pca_thr;
         GlobalC::exx_info.info_ri.shrink_LU_inv_thr = PARAM.inp.shrink_LU_inv_thr;
+        GlobalC::exx_info.info_ri.coul_moment = PARAM.inp.exx_coul_moment;
         GlobalC::exx_info.info_ri.rotate_abfs = PARAM.inp.exx_rotate_abfs;
         GlobalC::exx_info.info_ri.multip_moments_threshold = PARAM.inp.exx_multip_moments_threshold;
         if (PARAM.inp.exx_use_ewald)
