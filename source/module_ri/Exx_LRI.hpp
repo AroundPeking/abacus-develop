@@ -60,7 +60,7 @@ void Exx_LRI<Tdata>::init(const MPI_Comm& mpi_comm_in,
     // Save original abfs before rotation for later Gaussian fitting
     std::vector<std::vector<std::vector<Numerical_Orbital_Lm>>> abfs_original = this->abfs;
 
-    if (this->info.rotate_abfs == true)
+    if (this->info.coul_moment == true)
     {
         if (!moment_abfs)
             moment_abfs = new Moment_abfs<Tdata>(GlobalC::exx_info.info_ri);
@@ -69,15 +69,18 @@ void Exx_LRI<Tdata>::init(const MPI_Comm& mpi_comm_in,
         moment_abfs->cal_multipole(this->abfs);
         ModuleBase::TITLE("cal_multipole_end");
 
-        ModuleBase::TITLE("rotate_abfs_start");
-        // moment_abfs->rotate_abfs(this->abfs);
-        ModuleBase::TITLE("rotate_abfs_end");
+        if (this->info.rotate_abfs == true)
+        {
+            ModuleBase::TITLE("rotate_abfs_start");
+            moment_abfs->rotate_abfs(this->abfs);
+            ModuleBase::TITLE("rotate_abfs_end");
+        }
     }
 
     const int nspin0 = (PARAM.inp.nspin == 2) ? 2 : 1;
     const std::map<std::string, double> ccp_parameter
         = RI_Util::get_ccp_parameter(this->info, ucell, this->p_kv, nspin0);
-    if (this->info.rotate_abfs == true)
+    if (this->info.coul_moment == true)
     {
         // ccp_rcut = abfs_rcut + rcut_max to calculate VR in the range of Rcut
         // rcut calculated in k-space
@@ -91,7 +94,7 @@ void Exx_LRI<Tdata>::init(const MPI_Comm& mpi_comm_in,
             rcut_min = (rcut_min == 0.0) ? rc : std::min(rcut_min, rc);
         }
         const double rmesh_times_mod = (rcut_max * 2.0) / rcut_min;
-        std::cout << "ccp_rmesh_times is modified to " << rmesh_times_mod << " due to rotate abfs." << std::endl;
+        std::cout << "ccp_rmesh_times is modified to " << rmesh_times_mod << " due to moment method." << std::endl;
 
         // the left part of VR is calculated by the methods of r-space
         this->abfs_ccp = Conv_Coulomb_Pot_K::cal_orbs_ccp(this->abfs,
@@ -194,7 +197,7 @@ void Exx_LRI<Tdata>::init(const MPI_Comm& mpi_comm_in,
     // Save original abfs before rotation for later Gaussian fitting
     std::vector<std::vector<std::vector<Numerical_Orbital_Lm>>> abfs_original = this->abfs;
 
-    if (this->info.rotate_abfs == true)
+    if (this->info.coul_moment == true)
     {
         if (!moment_abfs)
             moment_abfs = new Moment_abfs<Tdata>(GlobalC::exx_info.info_ri);
@@ -203,15 +206,18 @@ void Exx_LRI<Tdata>::init(const MPI_Comm& mpi_comm_in,
         moment_abfs->cal_multipole(this->abfs);
         ModuleBase::TITLE("cal_multipole_end");
 
-        ModuleBase::TITLE("rotate_abfs_start");
-        // moment_abfs->rotate_abfs(this->abfs);
-        ModuleBase::TITLE("rotate_abfs_end");
+        if (this->info.rotate_abfs == true)
+        {
+            ModuleBase::TITLE("rotate_abfs_start");
+            moment_abfs->rotate_abfs(this->abfs);
+            ModuleBase::TITLE("rotate_abfs_end");
+        }
     }
 
     const int nspin0 = (PARAM.inp.nspin == 2) ? 2 : 1;
     const std::map<std::string, double> ccp_parameter
         = RI_Util::get_ccp_parameter(this->info, ucell, this->p_kv, nspin0);
-    if (this->info.rotate_abfs == true)
+    if (this->info.coul_moment == true)
     {
         // ccp_rcut = abfs_rcut + rcut_max to calculate VR in the range of Rcut
         // rcut calculated in k-space
@@ -225,7 +231,7 @@ void Exx_LRI<Tdata>::init(const MPI_Comm& mpi_comm_in,
             rcut_min = (rcut_min == 0.0) ? rc : std::min(rcut_min, rc);
         }
         const double rmesh_times_mod = (rcut_max * 2.0) / rcut_min;
-        std::cout << "ccp_rmesh_times is modified to " << rmesh_times_mod << " due to rotate abfs." << std::endl;
+        std::cout << "ccp_rmesh_times is modified to " << rmesh_times_mod << " due to moment method." << std::endl;
 
         // the left part of VR is calculated by the methods of r-space
         this->abfs_ccp = Conv_Coulomb_Pot_K::cal_orbs_ccp(this->abfs,
@@ -491,7 +497,7 @@ void Exx_LRI<Tdata>::cal_exx_ions_rpa(std::map<TA, std::map<TAC, RI::Tensor<Tdat
         }
     }
     std::cout << "Inside No. VIJR =" << flag << std::endl;
-    if (this->info.rotate_abfs == true && this->info.ccp_type == Conv_Coulomb_Pot_K::Ccp_Type::Hf)
+    if (this->info.coul_moment == true && this->info.ccp_type == Conv_Coulomb_Pot_K::Ccp_Type::Hf)
     {
         double hf_Rcut = std::pow(0.75 * this->p_kv->get_nkstot_full() * ucell.omega / (ModuleBase::PI), 1.0 / 3.0);
         // To cal Cs, we still cal all Vs(R) in r space

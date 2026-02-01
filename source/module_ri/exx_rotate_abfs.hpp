@@ -264,9 +264,16 @@ void Moment_abfs<Tdata>::cal_VR(
                             const double clmlm = this->cal_cl1l2(L1, L2);
                             // For real spherical harmonics, m order is: 0, 0, 1, -1, 0, 1, -1, 2, -2, ...
                             const double ylm = sum_triple_Y_YLM_real(L1, M1, L2, M2, rly, MGT0, distance);
-                            for (int N1 = 0; N1 != orb_in[T1][L1].size(); ++N1)
+
+                            // Determine N1 and N2 loop ranges based on rotate_abfs
+                            // When rotate_abfs=true: only N=0 has non-zero moment, calculate only N1=0 and N2=0
+                            // When rotate_abfs=false: all moments are non-zero, calculate all N1, N2
+                            const int N1_max = GlobalC::exx_info.info_ri.rotate_abfs ? 1 : orb_in[T1][L1].size();
+                            const int N2_max = GlobalC::exx_info.info_ri.rotate_abfs ? 1 : orb_in[T2][L2].size();
+
+                            for (int N1 = 0; N1 != N1_max; ++N1)
                             {
-                                for (int N2 = 0; N2 != orb_in[T2][L2].size(); ++N2)
+                                for (int N2 = 0; N2 != N2_max; ++N2)
                                 {
                                     double mom1 = this->multipole[T1][L1][N1];
                                     const double mom2 = this->multipole[T2][L2][N2];

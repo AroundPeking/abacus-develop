@@ -141,8 +141,8 @@ auto LRI_CV<Tdata>::cal_datas(const UnitCell& ucell,
             // Angstrom
             const Abfs::Vector3_Order<double> R_delta
                 = -tau0 + tau1 + (RI_Util::array3_to_Vector3(cell1) * ucell.latvec);
-            // Special Rcut modification for rotate_abfs + Hf, but can be skipped with "skip_special_Rcut" flag
-            if (GlobalC::exx_info.info_ri.rotate_abfs && flags.at("writable_Vws")
+            // Special Rcut modification for coul_moment + Hf, but can be skipped with "skip_special_Rcut" flag
+            if (GlobalC::exx_info.info_ri.coul_moment && flags.at("writable_Vws")
                 && GlobalC::exx_info.info_global.ccp_type == Conv_Coulomb_Pot_K::Ccp_Type::Hf
                 && (flags.count("use_moment") ? flags.at("use_moment") : false))
                 Rcut = lcaos_rcut[it0] + lcaos_rcut[it1];
