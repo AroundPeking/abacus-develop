@@ -68,7 +68,7 @@ struct Exx_Info
         double shrink_abfs_pca_thr = -1;
         double shrink_LU_inv_thr = 1e-6;
         double multip_moments_threshold = 1e-10;
-        double Cs_inv_thr = -1;
+        double exx_cs_inv_thr = -1;
 
         int abfs_Lmax = 0; // tmp
 

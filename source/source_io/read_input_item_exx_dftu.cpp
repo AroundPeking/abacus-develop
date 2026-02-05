@@ -317,9 +317,9 @@ void ReadInput::item_exx()
         this->add_item(item);
     }
     {
-        Input_Item item("cs_inv_thr");
+        Input_Item item("exx_cs_inv_thr");
         item.annotation = "threshold to inverse Vq in abfs for generating Cs";
-        read_sync_double(input.Cs_inv_thr);
+        read_sync_double(input.exx_cs_inv_thr);
         this->add_item(item);
     }
     {
