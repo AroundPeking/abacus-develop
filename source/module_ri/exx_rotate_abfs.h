@@ -38,6 +38,14 @@ class Moment_abfs
         const double Rc,
         LRI_CV<Tdata>& cv,
         std::map<TA, std::map<TAC, RI::Tensor<Tdata>>>& Vs_cut);
+    void discard0_VR(
+        const UnitCell& ucell,
+        const std::vector<std::vector<std::vector<Numerical_Orbital_Lm>>>& orb_in,
+        const std::pair<std::vector<TA>, std::vector<std::vector<std::pair<TA, std::array<Tcell, Ndim>>>>>& list_r,
+        const std::vector<double>& orb_cutoff,
+        const double Rc,
+        LRI_CV<Tdata>& cv,
+        std::map<TA, std::map<TAC, RI::Tensor<Tdata>>>& Vs_cut);
     void cal_multipole(const std::vector<std::vector<std::vector<Numerical_Orbital_Lm>>>& orb_in);
     void rotate_abfs(std::vector<std::vector<std::vector<Numerical_Orbital_Lm>>>& orb_in);
     double sum_triple_Y_YLM_real(int l1,

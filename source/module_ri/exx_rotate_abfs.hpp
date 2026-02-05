@@ -344,6 +344,10 @@ void Moment_abfs<Tdata>::cal_VR(
                                     {
                                         // width <= 1.0: no smooth truncation, use hard cutoff
                                         cutoff_factor = (distance < Rc) ? 1.0 : 0.0;
+                                        // const double gamma = 5.0 / Rc;
+                                        // double x = gamma * distance;                           
+                                        // cutoff_factor = std::erfc(x);                                       
+                                        // cutoff_factor = (cutoff_factor > 0) ? cutoff_factor : 0.0;
                                     }
 
                                     tmp_tensor(iA, iB) = value * cutoff_factor;
@@ -391,6 +395,176 @@ void Moment_abfs<Tdata>::cal_VR(
         }
     }
     ModuleBase::timer::tick("Rotate_abfs", "cal_VR");
+}
+
+template <typename Tdata>
+void Moment_abfs<Tdata>::discard0_VR(
+    const UnitCell& ucell,
+    const std::vector<std::vector<std::vector<Numerical_Orbital_Lm>>>& orb_in,
+    const std::pair<std::vector<TA>, std::vector<std::vector<std::pair<TA, std::array<Tcell, Ndim>>>>>& list_r,
+    const std::vector<double>& orb_cutoff,
+    const double Rc,
+    LRI_CV<Tdata>& cv,
+    std::map<TA, std::map<TAC, RI::Tensor<Tdata>>>& Vs_cut)
+{
+    ModuleBase::TITLE("Rotate_abfs", "discard0_VR");
+    ModuleBase::timer::tick("Rotate_abfs", "discard0_VR");
+
+    const double tiny1 = 1e-12;
+    const ModuleBase::Element_Basis_Index::Range range = Exx_Abfs::Abfs_Index::construct_range(orb_in);
+    const ModuleBase::Element_Basis_Index::IndexLNM index = ModuleBase::Element_Basis_Index::construct_index(range);
+
+    const auto list_A0 = list_r.first;
+    const auto list_A1 = list_r.second[0];
+    auto& Vws = cv.Vws;
+
+    // Process cv.Vws - only modify tensors in the moment method range
+    for (size_t i0 = 0; i0 < list_A0.size(); ++i0)
+    {
+        const TA iat0 = list_A0[i0];
+        const int T1 = ucell.iat2it[iat0];
+        const size_t I1 = ucell.iat2ia[iat0];
+        const auto& tauA = ucell.atoms[T1].tau[I1];
+
+        for (size_t i1 = 0; i1 < list_A1.size(); ++i1)
+        {
+            const TA iat1 = list_A1[i1].first;
+            const int T2 = ucell.iat2it[iat1];
+            const size_t I2 = ucell.iat2ia[iat1];
+            const auto& tauB = ucell.atoms[T2].tau[I2];
+            const auto R = list_A1[i1].second;
+
+            // delta_R: Angstrom
+            const auto delta_R = tauB - tauA + (RI_Util::array3_to_Vector3(R) * ucell.latvec);
+            // bohr
+            const double distance_true = (delta_R).norm() * ucell.lat0;
+            const double distance = (distance_true >= tiny1) ? distance_true : distance_true + tiny1;
+
+            double Rcut_lcao = orb_cutoff[T1] + orb_cutoff[T2];
+            double Rcut_coul = std::min(cv.cal_V_Rcut(T1, T2), cv.cal_V_Rcut(T2, T2));
+
+            // Skip if not in moment method range
+            if (distance < Rcut_lcao || distance >= Rcut_coul)
+                continue;
+
+            // Check if this tensor exists in Vws
+            if (Vws.find(T1) != Vws.end() && Vws[T1].find(T2) != Vws[T1].end())
+            {
+                auto& delta_R_map = Vws[T1][T2];
+                if (delta_R_map.find(delta_R) != delta_R_map.end())
+                {
+                    RI::Tensor<Tdata>& tensor = delta_R_map[delta_R];
+
+                    // Zero out elements where N1 != 0 or N2 != 0
+                    for (int L1 = 0; L1 != orb_in[T1].size(); ++L1)
+                    {
+                        for (int L2 = 0; L2 != orb_in[T2].size(); ++L2)
+                        {
+                            for (int M1 = -L1; M1 <= L1; ++M1)
+                            {
+                                const int index_M1 = M1 + L1;
+                                for (int M2 = -L2; M2 <= L2; ++M2)
+                                {
+                                    const int index_M2 = M2 + L2;
+
+                                    // Set all N1 != 0 or N2 != 0 elements to zero
+                                    for (int N1 = 1; N1 != orb_in[T1][L1].size(); ++N1)
+                                    {
+                                        const size_t iA = index[T1][L1][N1][index_M1];
+                                        for (int N2 = 0; N2 != orb_in[T2][L2].size(); ++N2)
+                                        {
+                                            const size_t iB = index[T2][L2][N2][index_M2];
+                                            tensor(iA, iB) = static_cast<Tdata>(0);
+                                        }
+                                    }
+                                    for (int N2 = 1; N2 != orb_in[T2][L2].size(); ++N2)
+                                    {
+                                        const size_t iB = index[T2][L2][N2][index_M2];
+                                        for (int N1 = 0; N1 != orb_in[T1][L1].size(); ++N1)
+                                        {
+                                            const size_t iA = index[T1][L1][N1][index_M1];
+                                            tensor(iA, iB) = static_cast<Tdata>(0);
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // Process Vs_cut - only modify tensors in the moment method range
+    for (auto& iat_inner_map : Vs_cut)
+    {
+        const TA iat0 = iat_inner_map.first;
+        const int T1 = ucell.iat2it[iat0];
+        const size_t I1 = ucell.iat2ia[iat0];
+        const auto& tauA = ucell.atoms[T1].tau[I1];
+
+        for (auto& JR_tensor : iat_inner_map.second)
+        {
+            const TA iat1 = JR_tensor.first.first;
+            const int T2 = ucell.iat2it[iat1];
+            const size_t I2 = ucell.iat2ia[iat1];
+            const auto& tauB = ucell.atoms[T2].tau[I2];
+            const auto& R = JR_tensor.first.second;
+
+            // delta_R: Angstrom
+            const auto delta_R = tauB - tauA + (RI_Util::array3_to_Vector3(R) * ucell.latvec);
+            // bohr
+            const double distance_true = (delta_R).norm() * ucell.lat0;
+            const double distance = (distance_true >= tiny1) ? distance_true : distance_true + tiny1;
+
+            double Rcut_lcao = orb_cutoff[T1] + orb_cutoff[T2];
+            double Rcut_coul = std::min(cv.cal_V_Rcut(T1, T2), cv.cal_V_Rcut(T2, T2));
+
+            // Skip if not in moment method range
+            if (distance < Rcut_lcao || distance >= Rcut_coul)
+                continue;
+
+            RI::Tensor<Tdata>& tensor = JR_tensor.second;
+
+            // Zero out elements where N1 != 0 or N2 != 0
+            for (int L1 = 0; L1 != orb_in[T1].size(); ++L1)
+            {
+                for (int L2 = 0; L2 != orb_in[T2].size(); ++L2)
+                {
+                    for (int M1 = -L1; M1 <= L1; ++M1)
+                    {
+                        const int index_M1 = M1 + L1;
+                        for (int M2 = -L2; M2 <= L2; ++M2)
+                        {
+                            const int index_M2 = M2 + L2;
+
+                            // Set all N1 != 0 or N2 != 0 elements to zero
+                            for (int N1 = 1; N1 != orb_in[T1][L1].size(); ++N1)
+                            {
+                                const size_t iA = index[T1][L1][N1][index_M1];
+                                for (int N2 = 0; N2 != orb_in[T2][L2].size(); ++N2)
+                                {
+                                    const size_t iB = index[T2][L2][N2][index_M2];
+                                    tensor(iA, iB) = static_cast<Tdata>(0);
+                                }
+                            }
+                            for (int N2 = 1; N2 != orb_in[T2][L2].size(); ++N2)
+                            {
+                                const size_t iB = index[T2][L2][N2][index_M2];
+                                for (int N1 = 0; N1 != orb_in[T1][L1].size(); ++N1)
+                                {
+                                    const size_t iA = index[T1][L1][N1][index_M1];
+                                    tensor(iA, iB) = static_cast<Tdata>(0);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    ModuleBase::timer::tick("Rotate_abfs", "discard0_VR");
 }
 
 template <typename Tdata>

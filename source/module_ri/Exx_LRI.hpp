@@ -502,6 +502,7 @@ void Exx_LRI<Tdata>::cal_exx_ions_rpa(std::map<TA, std::map<TAC, RI::Tensor<Tdat
         double hf_Rcut = std::pow(0.75 * this->p_kv->get_nkstot_full() * ucell.omega / (ModuleBase::PI), 1.0 / 3.0);
         // To cal Cs, we still cal all Vs(R) in r space
         moment_abfs->cal_VR(ucell, this->abfs, list_As_Vs, orb_cutoff_, hf_Rcut, this->cv, Vs_cut);
+        //moment_abfs->discard0_VR(ucell, this->abfs, list_As_Vs, orb_cutoff_, hf_Rcut, this->cv, Vs_cut);
         delete moment_abfs;
         moment_abfs = nullptr;
         malloc_trim(0);
