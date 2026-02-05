@@ -382,8 +382,8 @@ std::pair<RI::Tensor<Tdata>, std::array<RI::Tensor<Tdata>, 3>> LRI_CV<Tdata>::DP
                                                                              Matrix_Orbs21::Matrix_Order::A1A2B);
             const RI::Tensor<Tdata> V = this->DPcal_V(it0, it0, {0, 0, 0}, {{"writable_Vws", true}});
             RI::Tensor<Tdata> L;
-            if (GlobalC::exx_info.info_ri.Cs_inv_thr > 0)
-                L = LRI_CV_Tools::cal_I(V, Inverse_Matrix<Tdata>::Method::syev, GlobalC::exx_info.info_ri.Cs_inv_thr);
+            if (GlobalC::exx_info.info_ri.exx_cs_inv_thr > 0)
+                L = LRI_CV_Tools::cal_I(V, Inverse_Matrix<Tdata>::Method::syev, GlobalC::exx_info.info_ri.exx_cs_inv_thr);
             else
                 L = LRI_CV_Tools::cal_I(V);
 
@@ -441,8 +441,8 @@ std::pair<RI::Tensor<Tdata>, std::array<RI::Tensor<Tdata>, 3>> LRI_CV<Tdata>::DP
                    {DPcal_V(it1, it0, Rm, flags), DPcal_V(it1, it1, {0, 0, 0}, {{"writable_Vws", true}})}};
 
             std::vector<std::vector<RI::Tensor<Tdata>>> L;
-            if (GlobalC::exx_info.info_ri.Cs_inv_thr > 0)
-                L = LRI_CV_Tools::cal_I(V, Inverse_Matrix<Tdata>::Method::syev, GlobalC::exx_info.info_ri.Cs_inv_thr);
+            if (GlobalC::exx_info.info_ri.exx_cs_inv_thr > 0)
+                L = LRI_CV_Tools::cal_I(V, Inverse_Matrix<Tdata>::Method::syev, GlobalC::exx_info.info_ri.exx_cs_inv_thr);
             else
                 L = LRI_CV_Tools::cal_I(V);
 

@@ -564,7 +564,7 @@ struct Input_para
     double shrink_LU_inv_thr
         = 1e-6; ///< threshold to get inverse of overlap matrix by LU decomposition in auxiliary basis representation
     bool out_unshrinked_v = false;              ///< whether to output the large Vq matrix in unshrinked auxiliary basis
-    double Cs_inv_thr = -1;                      ///< threshold to inverse Vq in abfs for generating Cs
+    double exx_cs_inv_thr = -1;                 ///< threshold to inverse Vq in abfs for generating Cs
     bool exx_coul_moment = false;                 ///< whether to use moment method for Coulomb calculation
     bool exx_rotate_abfs = false;                 ///< whether to rotate auxiliary basis for Coulomb calculation
     double exx_multip_moments_threshold = 1e-10; ///< threshold to screen multipole moments in Coulomb calculation
