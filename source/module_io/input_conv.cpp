@@ -421,7 +421,7 @@ void Input_Conv::Convert()
         GlobalC::exx_info.info_ri.cauchy_force_threshold = PARAM.inp.exx_cauchy_force_threshold;
         GlobalC::exx_info.info_ri.cauchy_stress_threshold = PARAM.inp.exx_cauchy_stress_threshold;
         GlobalC::exx_info.info_ri.ccp_rmesh_times = std::stod(PARAM.inp.exx_ccp_rmesh_times);
-        GlobalC::exx_info.info_ri.Cs_inv_thr = PARAM.inp.exx_cs_inv_thr;
+        GlobalC::exx_info.info_ri.exx_cs_inv_thr = PARAM.inp.exx_cs_inv_thr;
         GlobalC::exx_info.info_ri.shrink_abfs_pca_thr = PARAM.inp.shrink_abfs_pca_thr;
         GlobalC::exx_info.info_ri.shrink_LU_inv_thr = PARAM.inp.shrink_LU_inv_thr;
         GlobalC::exx_info.info_ri.coul_moment = PARAM.inp.exx_coul_moment;
