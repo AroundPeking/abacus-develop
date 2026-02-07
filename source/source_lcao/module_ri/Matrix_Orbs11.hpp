@@ -49,8 +49,8 @@ RI::Tensor<Tdata> Matrix_Orbs11::cal_overlap_matrix(const size_t TA,
                         const size_t NB = co6.first;
                         for (size_t MB = 0; MB != 2 * LB + 1; ++MB)
                         {
-                            const Tdata overlap = co6.second.cal_overlap(tauA * this->lat0,
-                                                                         tauB * this->lat0,
+                            const Tdata overlap = co6.second.cal_overlap(tauA * (*this->lat0),
+                                                                         tauB * (*this->lat0),
                                                                          MA,
                                                                          MB);
                             const size_t iA = index_A[TA][LA][NA][MA];
@@ -121,8 +121,8 @@ std::array<RI::Tensor<Tdata>, 3> Matrix_Orbs11::cal_grad_overlap_matrix(
                         for (size_t MB = 0; MB != 2 * LB + 1; ++MB)
                         {
                             const std::array<double, 3> grad_overlap
-                                = RI_Util::Vector3_to_array3(co6.second.cal_grad_overlap(tauA * this->lat0,
-                                                                                         tauB * this->lat0,
+                                = RI_Util::Vector3_to_array3(co6.second.cal_grad_overlap(tauA * (*this->lat0),
+                                                                                         tauB * (*this->lat0),
                                                                                          MA,
                                                                                          MB));
                             const size_t iA = index_A[TA][LA][NA][MA];
