@@ -16,7 +16,9 @@
 
 namespace LRI_CV_Tools {
 template <typename Tdata>
-extern RI::Tensor<Tdata> cal_I(const RI::Tensor<Tdata>& m);
+extern RI::Tensor<Tdata> cal_I(const RI::Tensor<Tdata>& m,
+                               const typename Inverse_Matrix<Tdata>::Method& method,
+                               const double& threshold_condition_number);
 template <typename Tdata>
 extern std::vector<std::vector<RI::Tensor<Tdata>>>
     cal_I(const std::vector<std::vector<RI::Tensor<Tdata>>>& ms);
@@ -301,7 +303,9 @@ struct plus {
 
 namespace LRI_CV_Tools {
 template <typename Tdata>
-extern RI::Tensor<Tdata> cal_I(const RI::Tensor<Tdata>& m);
+extern RI::Tensor<Tdata> cal_I(const RI::Tensor<Tdata>& m,
+                               const typename Inverse_Matrix<Tdata>::Method& method,
+                               const double& threshold_condition_number);
 template <typename Tdata>
 extern std::vector<std::vector<RI::Tensor<Tdata>>>
     cal_I(const std::vector<std::vector<RI::Tensor<Tdata>>>& ms);

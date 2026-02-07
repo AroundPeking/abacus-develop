@@ -374,7 +374,7 @@ LRI_CV<Tdata>::DPcal_C_dC(
 				I.cal_inverse(Inverse_Matrix<Tdata>::Method::syev, GlobalC::exx_info.info_ri.exx_cs_inv_thr);
 				L = I.output();
 			} else {
-				L = LRI_CV_Tools::cal_I(V);
+				L = LRI_CV_Tools::cal_I(V, Inverse_Matrix<Tdata>::Method::potrf, -1.0);
 			}
 
 			const RI::Tensor<Tdata> C = RI::Global_Func::convert<Tdata>(0.5) * LRI_CV_Tools::mul1(L,A);					// Attention 0.5!
@@ -431,7 +431,7 @@ LRI_CV<Tdata>::DPcal_C_dC(
 				L = I.output({V[0][0].shape[0], V[1][0].shape[0]},
 				             {V[0][0].shape[1], V[0][1].shape[1]});
 			} else {
-				L = LRI_CV_Tools::cal_I(V);
+				L = LRI_CV_Tools::cal_I(V, Inverse_Matrix<Tdata>::Method::potrf, -1.0);
 			}
 
 			const std::vector<RI::Tensor<Tdata>> C = LRI_CV_Tools::mul2(L,A);
@@ -1083,7 +1083,7 @@ LRI_CV<Tdata>::DPcal_C_dC(
 				I.cal_inverse(Inverse_Matrix<Tdata>::Method::syev, GlobalC::exx_info.info_ri.exx_cs_inv_thr);
 				L = I.output();
 			} else {
-				L = LRI_CV_Tools::cal_I(V);
+				L = LRI_CV_Tools::cal_I(V, Inverse_Matrix<Tdata>::Method::potrf, -1.0);
 			}
 
 			const RI::Tensor<Tdata> C = RI::Global_Func::convert<Tdata>(0.5) * LRI_CV_Tools::mul1(L,A);					// Attention 0.5!
@@ -1140,7 +1140,7 @@ LRI_CV<Tdata>::DPcal_C_dC(
 				L = I.output({V[0][0].shape[0], V[1][0].shape[0]},
 				             {V[0][0].shape[1], V[0][1].shape[1]});
 			} else {
-				L = LRI_CV_Tools::cal_I(V);
+				L = LRI_CV_Tools::cal_I(V, Inverse_Matrix<Tdata>::Method::potrf, -1.0);
 			}
 
 			const std::vector<RI::Tensor<Tdata>> C = LRI_CV_Tools::mul2(L,A);

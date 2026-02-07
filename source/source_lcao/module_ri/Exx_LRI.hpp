@@ -468,7 +468,7 @@ void Exx_LRI<Tdata>::cal_exx_ions_rpa(std::map<TA, std::map<TAC, RI::Tensor<Tdat
 	std::cout << "All No. VIJR =" << flag << std::endl;
 
 	// Handle Ewald method with Ccp Coulomb type
-	if(coulomb_method == Conv_Coulomb_Pot_K::Coulomb_Method::Ewald &&  && this->info.ccp_type == Conv_Coulomb_Pot_K::Ccp_Type::Ccp)
+	if(coulomb_method == Conv_Coulomb_Pot_K::Coulomb_Method::Ewald && this->info.ccp_type == Conv_Coulomb_Pot_K::Ccp_Type::Ccp)
 	{
 		this->exx_objs[coulomb_method].evq.init_ions(ucell, period_Vs);
 

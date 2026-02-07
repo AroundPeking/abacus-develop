@@ -15,10 +15,12 @@
 #include "../../source_pw/module_pwdft/global.h"
 
 template <typename Tdata>
-RI::Tensor<Tdata> LRI_CV_Tools::cal_I(const RI::Tensor<Tdata>& m) {
+RI::Tensor<Tdata> LRI_CV_Tools::cal_I(const RI::Tensor<Tdata>& m,
+                                       const typename Inverse_Matrix<Tdata>::Method& method,
+                                       const double& threshold_condition_number) {
     Inverse_Matrix<Tdata> I;
     I.input(m);
-    I.cal_inverse(Inverse_Matrix<Tdata>::Method::potrf);
+    I.cal_inverse(method, threshold_condition_number);
     return I.output();
 }
 
@@ -505,10 +507,12 @@ std::array<RI::Tensor<Tout>, N>
 #include <RI/global/Map_Operator.h>
 
 template <typename Tdata>
-RI::Tensor<Tdata> LRI_CV_Tools::cal_I(const RI::Tensor<Tdata>& m) {
+RI::Tensor<Tdata> LRI_CV_Tools::cal_I(const RI::Tensor<Tdata>& m,
+                                       const typename Inverse_Matrix<Tdata>::Method& method,
+                                       const double& threshold_condition_number) {
     Inverse_Matrix<Tdata> I;
     I.input(m);
-    I.cal_inverse(Inverse_Matrix<Tdata>::Method::potrf);
+    I.cal_inverse(method, threshold_condition_number);
     return I.output();
 }
 
