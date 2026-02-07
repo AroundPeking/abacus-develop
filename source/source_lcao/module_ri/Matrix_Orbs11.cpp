@@ -47,7 +47,6 @@ void Matrix_Orbs11::init(
 
     // (3) make Gaunt coefficients table
     //=========================================
-=======
     // //=========================================
     // // (3) make Gaunt coefficients table
     // //=========================================
@@ -149,7 +148,6 @@ void Matrix_Orbs11::init_radial_table(const std::map<size_t, std::map<size_t, st
 }
     ModuleBase::timer::tick("Matrix_Orbs11", "init_radial_table");
 }
-=======
 //=======================
 // AUTHOR : Peize Lin
 // DATE :   2022-08-17

@@ -402,7 +402,6 @@ void RI_2D_Comm::add_datas(std::map<Tkey0, std::map<Tkey1, Tvalue>>&& data_local
     }
 }
 
-=======
 //=======================
 // AUTHOR : Peize Lin
 // DATE :   2022-08-17

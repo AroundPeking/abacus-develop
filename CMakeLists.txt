@@ -4,12 +4,12 @@ if(POLICY CMP0135) # https://cmake.org/cmake/help/git-stage/policy/CMP0135.html
   # Otherwise this policy generates a warning on CMake 3.24
 endif()
 
-set(CEREAL_DIR   "/mnt/sg001/home/ks_iopcas_rxg/software/cereal-1.3.0" CACHE STRING "")
-set(CEREAL_INCLUDE_DIR   "/mnt/sg001/home/ks_iopcas_rxg/software/cereal-1.3.0/include" CACHE STRING "")
-set(ELPA_DIR "/mnt/sg001/home/ks_iopcas_rxg/software/elpa-build" CACHE STRING "")
-set(LIBRI_DIR "/mnt/sg001/home/ks_iopcas_rxg/ghj/app/LibRI"  CACHE STRING "")
-set(LIBCOMM_DIR "/mnt/sg001/home/ks_iopcas_rxg/ghj/app/LibComm" CACHE STRING "")
-set(Libxc_DIR "/mnt/sg001/home/ks_iopcas_rxg/software/libxc-6.2.2-build" CACHE STRING "")
+set(CEREAL_DIR   "/opt/cereal-1.3.2" CACHE STRING "")
+set(CEREAL_INCLUDE_DIR   "/opt/cereal-1.3.2/include" CACHE STRING "")
+set(ELPA_DIR "/opt/elpa_2025.06.001-install" CACHE STRING "")
+set(LIBRI_DIR "/home/ghj/app/librpa/260205/LibRPA/thirdparty/LibRI"  CACHE STRING "")
+set(LIBCOMM_DIR "/home/ghj/app/librpa/260205/LibRPA/thirdparty/LibComm" CACHE STRING "")
+set(Libxc_DIR "/opt/libxc-7.0.0-install" CACHE STRING "")
 
 project(
   ABACUS

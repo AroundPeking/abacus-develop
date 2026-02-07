@@ -488,7 +488,6 @@ std::array<RI::Tensor<Tout>, N>
 }
 
 #endif
-=======
 //=======================
 // AUTHOR : Peize Lin
 // DATE :   2022-10-24

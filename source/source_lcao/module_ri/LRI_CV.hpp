@@ -757,7 +757,6 @@ LRI_CV<Tdata>::get_orb_q(const K_Vectors* kv,
 // }
 
 #endif
-=======
 //=======================
 // AUTHOR : Peize Lin
 // DATE :   2022-08-17

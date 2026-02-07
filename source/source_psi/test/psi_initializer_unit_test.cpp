@@ -12,9 +12,7 @@
 #include "source_cell/klist.h"
 
 /*
-=========================
 psi initializer unit test
-=========================
 - Tested functions:
     - psi_initializer_random::psi_initializer_random
       - constructor of psi_initializer_random

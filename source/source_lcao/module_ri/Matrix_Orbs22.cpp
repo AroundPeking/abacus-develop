@@ -51,7 +51,6 @@ void Matrix_Orbs22::init(
     // this->MGT.init_Gaunt_CH(2 * Lmax + 1); // why +1
     // this->MGT.init_Gaunt(2 * Lmax + 1);
     Lmax = 2 * Lmax + 1;
-=======
     Lmax = 2 * Lmax + 1;
 
     // //=========================================

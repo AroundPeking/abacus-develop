@@ -49,7 +49,6 @@ void Matrix_Orbs21::init(
     // this->MGT.init_Gaunt_CH(2 * Lmax + 1); // why +1
     // this->MGT.init_Gaunt(2 * Lmax + 1);
     Lmax = 2 * Lmax + 1;
-=======
     // //=========================================
     // // (3) make Gaunt coefficients table
     // //=========================================
@@ -208,7 +207,6 @@ void Matrix_Orbs21::init_radial_table(const std::map<size_t, std::map<size_t, st
     }
     ModuleBase::timer::tick("Matrix_Orbs21", "init_radial_table");
 }
-=======
 //=======================
 // AUTHOR : Peize Lin
 // DATE :   2022-08-17
@@ -435,7 +433,6 @@ void Matrix_Orbs21::init_radial_table(const std::map<size_t, std::map<size_t, st
     }
     ModuleBase::timer::tick("Matrix_Orbs21", "init_radial_table");
 }
-=======
 //=======================
 // AUTHOR : Peize Lin
 // DATE :   2022-08-17

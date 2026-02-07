@@ -200,7 +200,6 @@ template class Inverse_Matrix<std::complex<double>>;
 template class Inverse_Matrix<double>;
 
 #endif
-=======
 
 //=======================
 // AUTHOR : Peize Lin

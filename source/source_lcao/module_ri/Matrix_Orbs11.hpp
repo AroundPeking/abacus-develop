@@ -184,7 +184,6 @@ std::map<size_t, std::map<size_t, std::map<size_t, std::map<size_t, RI::Tensor<T
 }
 
 #endif
-=======
 //=======================
 // AUTHOR : Peize Lin
 // DATE :   2022-08-17

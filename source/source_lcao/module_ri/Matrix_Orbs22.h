@@ -121,7 +121,6 @@ public:
 #include "Matrix_Orbs22.hpp"
 
 #endif
-=======
 //=======================
 // AUTHOR : Peize Lin
 // DATE :   2023-02-23
@@ -247,4 +246,3 @@ public:
 #include "Matrix_Orbs22.hpp"
 
 #endif
->>>>>>> efaec1357 (Refactor: move init_Gaunt out of Matrix_Orbs* init):source/module_ri/Matrix_Orbs22.h
