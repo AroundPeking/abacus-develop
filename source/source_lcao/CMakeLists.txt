@@ -8,19 +8,19 @@ if(ENABLE_LCAO)
     add_subdirectory(module_operator_lcao)
     list(APPEND objects
         hamilt_lcao.cpp
-        operator_lcao/operator_lcao.cpp
-        operator_lcao/veff_lcao.cpp
-        operator_lcao/meta_lcao.cpp
-        operator_lcao/op_dftu_lcao.cpp
-        operator_lcao/deepks_lcao.cpp
-        operator_lcao/op_exx_lcao.cpp
-        operator_lcao/overlap_new.cpp
-        operator_lcao/ekinetic_new.cpp
-        operator_lcao/nonlocal_new.cpp
-        operator_lcao/td_ekinetic_lcao.cpp
-        operator_lcao/td_nonlocal_lcao.cpp
-        operator_lcao/sc_lambda_lcao.cpp
-        operator_lcao/dftu_lcao.cpp
+        module_operator_lcao/operator_lcao.cpp
+        module_operator_lcao/veff_lcao.cpp
+        module_operator_lcao/meta_lcao.cpp
+        module_operator_lcao/op_dftu_lcao.cpp
+        module_operator_lcao/deepks_lcao.cpp
+        module_operator_lcao/op_exx_lcao.cpp
+        module_operator_lcao/overlap_new.cpp
+        module_operator_lcao/ekinetic_new.cpp
+        module_operator_lcao/nonlocal_new.cpp
+        module_operator_lcao/td_ekinetic_lcao.cpp
+        module_operator_lcao/td_nonlocal_lcao.cpp
+        module_operator_lcao/dspin_lcao.cpp
+        module_operator_lcao/dftu_lcao.cpp
         pulay_force_stress_center2.cpp
         FORCE_STRESS.cpp
         FORCE_gamma.cpp
@@ -59,5 +59,4 @@ if(ENABLE_LCAO)
     endif()
 
 endif()
-
 
