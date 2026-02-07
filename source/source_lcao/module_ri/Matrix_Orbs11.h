@@ -1,3 +1,4 @@
+//=======================
 // AUTHOR : Peize Lin
 // DATE :   2022-08-17
 //=======================
@@ -19,15 +20,16 @@
 
 class Matrix_Orbs11
 {
-public:
-	// mode:
-	//    1: <lcaos|lcaos>
-	//    2: <jYs|jYs>  <abfs|abfs>
-	void init(
-		const int mode,
-		const double kmesh_times,  		// extend Kcut, keep dK
-		const double rmax,
-        int& Lmax);		// extend Rcut, keep dR
+  public:
+    // mode:
+    //    1: <lcaos|lcaos>
+    //    2: <jYs|jYs>  <abfs|abfs>
+    void init(const int mode,
+              const UnitCell& ucell,
+              const LCAO_Orbitals& orb,
+              const double kmesh_times,  // extend Kcut, keep dK
+              const double rmax,
+              int& Lmax); 
 
     void init_radial(const std::vector<std::vector<std::vector<Numerical_Orbital_Lm>>>& orb_A,
                      const std::vector<std::vector<std::vector<Numerical_Orbital_Lm>>>& orb_B,
