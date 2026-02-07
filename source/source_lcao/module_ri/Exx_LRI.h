@@ -69,7 +69,17 @@ public:
 		const UnitCell &ucell,
 		const K_Vectors &kv_in,
 		const LCAO_Orbitals& orb);
+	void init(
+		const MPI_Comm &mpi_comm_in,
+		const UnitCell &ucell,
+		const K_Vectors &kv_in,
+		const LCAO_Orbitals& orb,
+		const std::vector<std::vector<std::vector<Numerical_Orbital_Lm>>>& abfs_s);
 	void cal_exx_ions(const UnitCell& ucell, const bool write_cv = false);
+	void cal_exx_ions_rpa(std::map<TA, std::map<TAC, RI::Tensor<Tdata>>>& Vs_cut,
+	                      std::map<TA, std::map<TAC, RI::Tensor<Tdata>>>& Cs,
+	                      const UnitCell& ucell,
+	                      const bool write_cv = false);
 	void cal_exx_elec(
 		const std::vector<std::map<TA, std::map<TAC, RI::Tensor<Tdata>>>>& Ds,
 		const UnitCell& ucell,
