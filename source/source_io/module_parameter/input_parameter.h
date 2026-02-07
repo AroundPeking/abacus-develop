@@ -690,9 +690,7 @@ struct Input_para
         101, 0.8040, 0.2195149727645171}; 
     // src/gga_c_pbe.c
     std::vector<double> xc_corr_ext = {
-        130, 0.06672455060314922, 0.031090690869654895034, 1.00000}; 
-=======
-=======
+        130, 0.06672455060314922, 0.031090690869654895034, 1.00000};
     bool exx_gamma_extrapolation
         = true; // gamma point extrapolation for exx, https://doi.org/10.1103/PhysRevB.79.205114
 };

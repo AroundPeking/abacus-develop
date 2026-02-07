@@ -183,8 +183,6 @@ class K_Vectors
     int nkstot_full; /// number of k points before symmetry reduction in full k mesh
 
     int nspin = 0;
-    bool kc_done = false;
-    bool kd_done = false;
     double koffset[3] = {0.0}; // used only in automatic k-points.
     std::string k_kword;       // LiuXh add 20180619
     int k_nkstot = 0;          // LiuXh add 20180619
