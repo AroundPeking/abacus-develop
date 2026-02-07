@@ -48,24 +48,96 @@ void Exx_LRI<Tdata>::init(const MPI_Comm &mpi_comm_in,
 		{ this->abfs = Exx_Abfs::IO::construct_abfs( abfs_same_atom, orb, this->info.files_abfs, this->info.kmesh_times ); 	}
 	Exx_Abfs::Construct_Orbs::print_orbs_size(ucell, this->abfs, GlobalV::ofs_running);
 
+	// Save original abfs before rotation for later Gaussian fitting
+	std::vector<std::vector<std::vector<Numerical_Orbital_Lm>>> abfs_original = this->abfs;
+
+	if (this->info.coul_moment == true)
+	{
+		if (!moment_abfs)
+			moment_abfs = new Moment_abfs<Tdata>(GlobalC::exx_info.info_ri);
+
+		ModuleBase::TITLE("cal_multipole_start");
+		moment_abfs->cal_multipole(this->abfs);
+		ModuleBase::TITLE("cal_multipole_end");
+
+		if (this->info.rotate_abfs == true)
+		{
+			ModuleBase::TITLE("rotate_abfs_start");
+			moment_abfs->rotate_abfs(this->abfs);
+			ModuleBase::TITLE("rotate_abfs_end");
+		}
+	}
+
+	// Calculate modified rmesh_times for coul_moment case
+	double ccp_rmesh_times_modified = this->info.ccp_rmesh_times;
+	if (this->info.coul_moment == true)
+	{
+		// ccp_rcut = abfs_rcut + rcut_max to calculate VR in the range of Rcut
+		// rcut calculated in k-space
+		// To keep safe for different abfs_rcut, use rcut_max*2 / rcut_min
+		// For Cs = (ij|v)(v|u)^{-1}, 2*rcut_max is enough due to ij must has overlap.
+		double rcut_max = 0.0;
+		double rcut_min = 0.0;
+		for (const double& rc: this->orb_cutoff_)
+		{
+			rcut_max = std::max(rcut_max, rc);
+			rcut_min = (rcut_min == 0.0) ? rc : std::min(rcut_min, rc);
+		}
+		ccp_rmesh_times_modified = (rcut_max * 2.0) / rcut_min;
+		std::cout << "ccp_rmesh_times is modified to " << ccp_rmesh_times_modified << " due to moment method." << std::endl;
+	}
+
 	for( size_t T=0; T!=this->abfs.size(); ++T )
 		{ GlobalC::exx_info.info_ri.abfs_Lmax = std::max( GlobalC::exx_info.info_ri.abfs_Lmax, static_cast<int>(this->abfs[T].size())-1 ); }
 
 	this->coulomb_settings = RI_Util::update_coulomb_settings(this->info.coulomb_param, ucell, this->p_kv);
-	
+
 	bool init_MGT = true;
 	for(const auto &settings_list : this->coulomb_settings)
 	{
-		this->exx_objs[settings_list.first].abfs_ccp = Conv_Coulomb_Pot_K::cal_orbs_ccp(this->abfs, settings_list.second.second, this->info.ccp_rmesh_times);
+		this->exx_objs[settings_list.first].abfs_ccp = Conv_Coulomb_Pot_K::cal_orbs_ccp(this->abfs, settings_list.second.second, ccp_rmesh_times_modified);
 		this->exx_objs[settings_list.first].cv.set_orbitals(ucell, orb,
 															this->lcaos, this->abfs, this->exx_objs[settings_list.first].abfs_ccp,
 															this->info.kmesh_times, this->MGT, init_MGT, settings_list.second.first );
 		init_MGT = false; // only init once
 		if (settings_list.first == Conv_Coulomb_Pot_K::Coulomb_Method::Ewald)
 		{
-			this->exx_objs[settings_list.first].evq.init(ucell, orb, 
-														this->mpi_comm, this->p_kv, this->lcaos, this->abfs, 
-														settings_list.second.second, this->MGT, this->info.ccp_rmesh_times, this->info.kmesh_times);
+			const auto &coulomb_param = settings_list.second.second;
+
+			// Handle hybrid_beta (short-range) case
+			if (this->info.hybrid_beta)
+			{
+				std::map<std::string, double> ccp_param_sr = {{"hse_omega", this->info.hse_omega}, {"hybrid_beta", -this->info.hybrid_beta}};
+				this->exx_objs[settings_list.first].abfs_ccp_sr = Conv_Coulomb_Pot_K::cal_orbs_ccp(
+					this->abfs, Conv_Coulomb_Pot_K::Ccp_Type::Erfc, ccp_param_sr, this->info.ccp_rmesh_times);
+				this->exx_objs[settings_list.first].sr_cv.set_orbitals(ucell, orb,
+					this->lcaos, this->abfs, this->exx_objs[settings_list.first].abfs_ccp_sr,
+					this->info.kmesh_times, this->MGT, false, false);
+			}
+
+			if (this->info.rotate_abfs == true)
+			{
+				// Fit Gaussian to original abfs and rotate with same coefficients
+				ModuleBase::TITLE("fit_gaussian_before_rotate_start");
+				std::vector<std::vector<std::vector<Numerical_Orbital_Lm>>> g_abfs;
+				g_abfs = this->exx_objs[settings_list.first].evq.init_gauss(abfs_original);
+				ModuleBase::TITLE("fit_gaussian_before_rotate_end");
+
+				ModuleBase::TITLE("rotate_gaussian_start");
+				// moment_abfs->rotate_abfs(g_abfs);
+				ModuleBase::TITLE("rotate_gaussian_end");
+
+				// Pass both abfs (rotated non-Gaussian) and g_abfs (Gaussian-fitted and rotated)
+				this->exx_objs[settings_list.first].evq.init(ucell, orb,
+															 this->mpi_comm, this->p_kv, this->lcaos, this->abfs, g_abfs,
+															 coulomb_param, this->MGT, this->info.ccp_rmesh_times, this->info.kmesh_times);
+			}
+			else
+			{
+				this->exx_objs[settings_list.first].evq.init(ucell, orb,
+															 this->mpi_comm, this->p_kv, this->lcaos, this->abfs,
+															 coulomb_param, this->MGT, this->info.ccp_rmesh_times, this->info.kmesh_times);
+			}
 		}
 	}
 
@@ -108,6 +180,25 @@ void Exx_LRI<Tdata>::init(const MPI_Comm& mpi_comm_in,
 		}
 	}
 
+	// Calculate modified rmesh_times for coul_moment case
+	double ccp_rmesh_times_modified = this->info.ccp_rmesh_times;
+	if (this->info.coul_moment == true)
+	{
+		// ccp_rcut = abfs_rcut + rcut_max to calculate VR in the range of Rcut
+		// rcut calculated in k-space
+		// To keep safe for different abfs_rcut, use rcut_max*2 / rcut_min
+		// For Cs = (ij|v)(v|u)^{-1}, 2*rcut_max is enough due to ij must has overlap.
+		double rcut_max = 0.0;
+		double rcut_min = 0.0;
+		for (const double& rc: this->orb_cutoff_)
+		{
+			rcut_max = std::max(rcut_max, rc);
+			rcut_min = (rcut_min == 0.0) ? rc : std::min(rcut_min, rc);
+		}
+		ccp_rmesh_times_modified = (rcut_max * 2.0) / rcut_min;
+		std::cout << "ccp_rmesh_times is modified to " << ccp_rmesh_times_modified << " due to moment method." << std::endl;
+	}
+
 	for( size_t T=0; T!=this->abfs.size(); ++T )
 		{ GlobalC::exx_info.info_ri.abfs_Lmax = std::max( GlobalC::exx_info.info_ri.abfs_Lmax, static_cast<int>(this->abfs[T].size())-1 ); }
 
@@ -117,7 +208,7 @@ void Exx_LRI<Tdata>::init(const MPI_Comm& mpi_comm_in,
 	for(const auto &settings_list : this->coulomb_settings)
 	{
 		this->exx_objs[settings_list.first].abfs_ccp = Conv_Coulomb_Pot_K::cal_orbs_ccp(
-			this->abfs, settings_list.second.second, this->info.ccp_rmesh_times);
+			this->abfs, settings_list.second.second, ccp_rmesh_times_modified);
 		this->exx_objs[settings_list.first].cv.set_orbitals(ucell, orb,
 															this->lcaos, this->abfs, this->exx_objs[settings_list.first].abfs_ccp,
 															this->info.kmesh_times, this->MGT, init_MGT, settings_list.second.first );
@@ -125,6 +216,18 @@ void Exx_LRI<Tdata>::init(const MPI_Comm& mpi_comm_in,
 		if (settings_list.first == Conv_Coulomb_Pot_K::Coulomb_Method::Ewald)
 		{
 			const auto &coulomb_param = settings_list.second.second;
+
+			// Handle hybrid_beta (short-range) case
+			if (this->info.hybrid_beta)
+			{
+				std::map<std::string, double> ccp_param_sr = {{"hse_omega", this->info.hse_omega}, {"hybrid_beta", -this->info.hybrid_beta}};
+				this->exx_objs[settings_list.first].abfs_ccp_sr = Conv_Coulomb_Pot_K::cal_orbs_ccp(
+					this->abfs, Conv_Coulomb_Pot_K::Ccp_Type::Erfc, ccp_param_sr, this->info.ccp_rmesh_times);
+				this->exx_objs[settings_list.first].sr_cv.set_orbitals(ucell, orb,
+					this->lcaos, this->abfs, this->exx_objs[settings_list.first].abfs_ccp_sr,
+					this->info.kmesh_times, this->MGT, false, false);
+			}
+
 			if (this->info.rotate_abfs == true)
 			{
 				// Fit Gaussian to original abfs and rotate with same coefficients
