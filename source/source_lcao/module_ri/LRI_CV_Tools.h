@@ -6,6 +6,7 @@
 #define LRI_CV_TOOLS_H
 
 #include "abfs.h"
+#include "Inverse_Matrix.h"
 
 #include <RI/global/Array_Operator.h>
 #include <RI/global/Tensor.h>

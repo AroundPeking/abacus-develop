@@ -10,7 +10,7 @@
 #include "Matrix_Orbs21.h"
 #include "source_basis/module_ao/ORB_atomic_lm.h"
 #include "source_base/abfs-vector3_order.h"
-#include "module_base/element_basis_index.h"
+#include "source_base/element_basis_index.h"
 
 #include <RI/global/Tensor.h>
 #include <RI/global/Global_Func-2.h>
