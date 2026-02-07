@@ -103,18 +103,6 @@ void Exx_LRI<Tdata>::init(const MPI_Comm &mpi_comm_in,
 		if (settings_list.first == Conv_Coulomb_Pot_K::Coulomb_Method::Ewald)
 		{
 			const auto &coulomb_param = settings_list.second.second;
-
-			// Handle hybrid_beta (short-range) case
-			if (this->info.hybrid_beta)
-			{
-				std::map<std::string, double> ccp_param_sr = {{"hse_omega", this->info.hse_omega}, {"hybrid_beta", -this->info.hybrid_beta}};
-				this->exx_objs[settings_list.first].abfs_ccp_sr = Conv_Coulomb_Pot_K::cal_orbs_ccp(
-					this->abfs, Conv_Coulomb_Pot_K::Ccp_Type::Erfc, ccp_param_sr, this->info.ccp_rmesh_times);
-				this->exx_objs[settings_list.first].sr_cv.set_orbitals(ucell, orb,
-					this->lcaos, this->abfs, this->exx_objs[settings_list.first].abfs_ccp_sr,
-					this->info.kmesh_times, this->MGT, false, false);
-			}
-
 			if (this->info.rotate_abfs == true)
 			{
 				// Fit Gaussian to original abfs and rotate with same coefficients
