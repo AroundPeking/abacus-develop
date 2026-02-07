@@ -201,7 +201,7 @@ void Exx_LRI<Tdata>::init(const MPI_Comm& mpi_comm_in,
 															this->lcaos, this->abfs, this->exx_objs[settings_list.first].abfs_ccp,
 															this->info.kmesh_times, this->MGT, init_MGT, settings_list.second.first );
 		init_MGT = false; // only init once
-		if (settings_list.first == Conv_Coulomb_Pot_K::Coulomb_Method::Ewald && this->info.ccp_type == Conv_Coulomb_Pot_K::Ccp_Type::Ccp)
+		if (settings_list.first == Conv_Coulomb_Pot_K::Coulomb_Method::Ewald)
 		{
 			const auto &coulomb_param = settings_list.second.second;
 			if (this->info.rotate_abfs == true)
@@ -468,7 +468,7 @@ void Exx_LRI<Tdata>::cal_exx_ions_rpa(std::map<TA, std::map<TAC, RI::Tensor<Tdat
 	std::cout << "All No. VIJR =" << flag << std::endl;
 
 	// Handle Ewald method with Ccp Coulomb type
-	if(coulomb_method == Conv_Coulomb_Pot_K::Coulomb_Method::Ewald)
+	if(coulomb_method == Conv_Coulomb_Pot_K::Coulomb_Method::Ewald &&  && this->info.ccp_type == Conv_Coulomb_Pot_K::Ccp_Type::Ccp)
 	{
 		this->exx_objs[coulomb_method].evq.init_ions(ucell, period_Vs);
 
