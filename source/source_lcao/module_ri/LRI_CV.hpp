@@ -7,7 +7,8 @@
 
 #include "LRI_CV.h"
 #include "LRI_CV_Tools.h"
-#include "module_ri/exx_abfs-abfs_index.h"
+#include "Inverse_Matrix.h"
+#include "module_ri/exx_abfs-abfs-index.h"
 #include "exx_abfs-construct_orbs.h"
 #include "RI_Util.h"
 #include "RI_2D_Comm.h"
@@ -366,7 +367,15 @@ LRI_CV<Tdata>::DPcal_C_dC(
 						this->index_abfs, this->index_lcaos, this->index_lcaos,
 						Matrix_Orbs21::Matrix_Order::A1A2B);
 			const RI::Tensor<Tdata> V = this->DPcal_V( it0, it0, {0,0,0}, {{"writable_Vws",true}});
-			const RI::Tensor<Tdata> L = LRI_CV_Tools::cal_I(V);
+			RI::Tensor<Tdata> L;
+			if(GlobalC::exx_info.info_ri.exx_cs_inv_thr > 0) {
+				Inverse_Matrix<Tdata> I;
+				I.input(V);
+				I.cal_inverse(Inverse_Matrix<Tdata>::Method::syev, GlobalC::exx_info.info_ri.exx_cs_inv_thr);
+				L = I.output();
+			} else {
+				L = LRI_CV_Tools::cal_I(V);
+			}
 
 			const RI::Tensor<Tdata> C = RI::Global_Func::convert<Tdata>(0.5) * LRI_CV_Tools::mul1(L,A);					// Attention 0.5!
 			if(flags.at("writable_Cws"))
@@ -414,8 +423,16 @@ LRI_CV<Tdata>::DPcal_C_dC(
 				     {DPcal_V(it1, it0, Rm,      flags),
 				      DPcal_V(it1, it1, {0,0,0}, {{"writable_Vws",true}})}};
 
-			const std::vector<std::vector<RI::Tensor<Tdata>>>
+			std::vector<std::vector<RI::Tensor<Tdata>>> L;
+			if(GlobalC::exx_info.info_ri.exx_cs_inv_thr > 0) {
+				Inverse_Matrix<Tdata> I;
+				I.input(V);
+				I.cal_inverse(Inverse_Matrix<Tdata>::Method::syev, GlobalC::exx_info.info_ri.exx_cs_inv_thr);
+				L = I.output({V[0][0].shape[0], V[1][0].shape[0]},
+				             {V[0][0].shape[1], V[0][1].shape[1]});
+			} else {
 				L = LRI_CV_Tools::cal_I(V);
+			}
 
 			const std::vector<RI::Tensor<Tdata>> C = LRI_CV_Tools::mul2(L,A);
 			if(flags.at("writable_Cws"))
@@ -751,7 +768,8 @@ LRI_CV<Tdata>::get_orb_q(const K_Vectors* kv,
 
 #include "LRI_CV.h"
 #include "LRI_CV_Tools.h"
-#include "module_ri/exx_abfs-abfs_index.h"
+#include "Inverse_Matrix.h"
+#include "module_ri/exx_abfs-abfs-index.h"
 #include "exx_abfs-construct_orbs.h"
 #include "RI_Util.h"
 #include "RI_2D_Comm.h"
@@ -1058,7 +1076,15 @@ LRI_CV<Tdata>::DPcal_C_dC(
 						this->index_abfs, this->index_lcaos, this->index_lcaos,
 						Matrix_Orbs21::Matrix_Order::A1A2B);
 			const RI::Tensor<Tdata> V = this->DPcal_V( it0, it0, {0,0,0}, {{"writable_Vws",true}});
-			const RI::Tensor<Tdata> L = LRI_CV_Tools::cal_I(V);
+			RI::Tensor<Tdata> L;
+			if(GlobalC::exx_info.info_ri.exx_cs_inv_thr > 0) {
+				Inverse_Matrix<Tdata> I;
+				I.input(V);
+				I.cal_inverse(Inverse_Matrix<Tdata>::Method::syev, GlobalC::exx_info.info_ri.exx_cs_inv_thr);
+				L = I.output();
+			} else {
+				L = LRI_CV_Tools::cal_I(V);
+			}
 
 			const RI::Tensor<Tdata> C = RI::Global_Func::convert<Tdata>(0.5) * LRI_CV_Tools::mul1(L,A);					// Attention 0.5!
 			if(flags.at("writable_Cws"))
@@ -1106,8 +1132,16 @@ LRI_CV<Tdata>::DPcal_C_dC(
 				     {DPcal_V(it1, it0, Rm,      flags),
 				      DPcal_V(it1, it1, {0,0,0}, {{"writable_Vws",true}})}};
 
-			const std::vector<std::vector<RI::Tensor<Tdata>>>
+			std::vector<std::vector<RI::Tensor<Tdata>>> L;
+			if(GlobalC::exx_info.info_ri.exx_cs_inv_thr > 0) {
+				Inverse_Matrix<Tdata> I;
+				I.input(V);
+				I.cal_inverse(Inverse_Matrix<Tdata>::Method::syev, GlobalC::exx_info.info_ri.exx_cs_inv_thr);
+				L = I.output({V[0][0].shape[0], V[1][0].shape[0]},
+				             {V[0][0].shape[1], V[0][1].shape[1]});
+			} else {
 				L = LRI_CV_Tools::cal_I(V);
+			}
 
 			const std::vector<RI::Tensor<Tdata>> C = LRI_CV_Tools::mul2(L,A);
 			if(flags.at("writable_Cws"))
