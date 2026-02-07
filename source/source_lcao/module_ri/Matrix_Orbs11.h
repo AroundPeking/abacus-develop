@@ -85,6 +85,16 @@ public:
 #include "Matrix_Orbs11.hpp"
 
 #endif
+=======
+//=======================
+// AUTHOR : Peize Lin
+// DATE :   2022-08-17
+//=======================
+
+#ifndef MATRIX_ORB11_H
+#define MATRIX_ORB11_H
+
+#include "module_base/element_basis_index.h"
 #include "module_base/sph_bessel_recursive.h"
 #include "module_base/vector3.h"
 #include "module_basis/module_ao/ORB_gaunt_table.h"
