@@ -213,21 +213,9 @@ void Exx_LRI<Tdata>::init(const MPI_Comm& mpi_comm_in,
 															this->lcaos, this->abfs, this->exx_objs[settings_list.first].abfs_ccp,
 															this->info.kmesh_times, this->MGT, init_MGT, settings_list.second.first );
 		init_MGT = false; // only init once
-		if (settings_list.first == Conv_Coulomb_Pot_K::Coulomb_Method::Ewald)
+		if (settings_list.first == Conv_Coulomb_Pot_K::Coulomb_Method::Ewald && this->info.ccp_type == Conv_Coulomb_Pot_K::Ccp_Type::Ccp)
 		{
 			const auto &coulomb_param = settings_list.second.second;
-
-			// Handle hybrid_beta (short-range) case
-			if (this->info.hybrid_beta)
-			{
-				std::map<std::string, double> ccp_param_sr = {{"hse_omega", this->info.hse_omega}, {"hybrid_beta", -this->info.hybrid_beta}};
-				this->exx_objs[settings_list.first].abfs_ccp_sr = Conv_Coulomb_Pot_K::cal_orbs_ccp(
-					this->abfs, Conv_Coulomb_Pot_K::Ccp_Type::Erfc, ccp_param_sr, this->info.ccp_rmesh_times);
-				this->exx_objs[settings_list.first].sr_cv.set_orbitals(ucell, orb,
-					this->lcaos, this->abfs, this->exx_objs[settings_list.first].abfs_ccp_sr,
-					this->info.kmesh_times, this->MGT, false, false);
-			}
-
 			if (this->info.rotate_abfs == true)
 			{
 				// Fit Gaussian to original abfs and rotate with same coefficients
@@ -297,7 +285,7 @@ void Exx_LRI<Tdata>::cal_exx_ions(const UnitCell& ucell,
 				list_As_Vs.first, list_As_Vs.second[0],
 				{{"writable_Vws",true}});
 		this->exx_objs[settings_list.first].cv.Vws = LRI_CV_Tools::get_CVws(ucell,Vs_temp);
-		if (settings_list.first == Conv_Coulomb_Pot_K::Coulomb_Method::Ewald)
+		if (settings_list.first == Conv_Coulomb_Pot_K::Coulomb_Method::Ewald && this->info.ccp_type == Conv_Coulomb_Pot_K::Ccp_Type::Ccp)
 		{
 			this->exx_objs[settings_list.first].evq.init_ions(ucell, period_Vs);
 			const auto &coulomb_param = settings_list.second.second;

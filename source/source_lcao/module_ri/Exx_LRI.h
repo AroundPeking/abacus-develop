@@ -45,9 +45,7 @@ class Exx_Obj
 	public:
 		LRI_CV<Tdata> cv;
 		Ewald_Vq<Tdata> evq;
-		LRI_CV<Tdata> sr_cv;	// short-range cv for hybrid_beta
 		std::vector<std::vector<std::vector<Numerical_Orbital_Lm>>> abfs_ccp;
-		std::vector<std::vector<std::vector<Numerical_Orbital_Lm>>> abfs_ccp_sr;	// short-range abfs_ccp for hybrid_beta
 };
 
 template<typename Tdata>
