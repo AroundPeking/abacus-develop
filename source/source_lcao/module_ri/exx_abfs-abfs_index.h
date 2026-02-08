@@ -2,8 +2,8 @@
 #ifndef EXX_ABFS_ABFS_INDEX_H
 #define EXX_ABFS_ABFS_INDEX_H
 
-#include "../module_base/element_basis_index.h"
-#include "../module_basis/module_ao/ORB_atomic_lm.h"
+#include "../source_base/element_basis_index.h"
+#include "../source_basis/module_ao/ORB_atomic_lm.h"
 #include "exx_abfs.h"
 
 #include <vector>
