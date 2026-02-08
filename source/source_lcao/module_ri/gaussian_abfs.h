@@ -7,10 +7,10 @@
 #define GAUSSIAN_ABFS_H
 
 #include "conv_coulomb_pot_k.h"
-#include "module_basis/module_ao/ORB_atomic_lm.h"
-#include "module_basis/module_ao/ORB_gaunt_table.h"
-#include "module_basis/module_pw/pw_basis_k.h"
-#include "module_cell/klist.h"
+#include "source_basis/module_ao/ORB_atomic_lm.h"
+#include "source_basis/module_ao/ORB_gaunt_table.h"
+#include "source_basis/module_pw/pw_basis_k.h"
+#include "source_cell/klist.h"
 
 #include <RI/global/Tensor.h>
 #include <array>
