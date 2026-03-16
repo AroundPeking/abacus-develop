@@ -4,6 +4,8 @@
 #include <RI/global/Tensor.h>
 #include "source_lcao/module_hcontainer/hcontainer.h"
 #include "source_cell/module_neighbor/sltk_grid_driver.h"
+#include <iomanip>
+#include <sstream>
 
 namespace ModuleSymmetry
 {
@@ -176,9 +178,16 @@ namespace ModuleSymmetry
 
     };
 
+    template<typename T> std::string scalar_fmt(const T& value)
+    {
+        std::ostringstream oss;
+        oss << std::scientific << std::setprecision(15) << value;
+        return oss.str();
+    }
+
     template<typename T>  std::string vec3_fmt(const T& x, const T& y, const T& z)
     {
-        return  "(" + std::to_string(x) + " " + std::to_string(y) + " " + std::to_string(z) + ")";
+        return  "(" + scalar_fmt(x) + " " + scalar_fmt(y) + " " + scalar_fmt(z) + ")";
     }
     template<typename T>  std::string vec3_fmt(const ModuleBase::Vector3<T>& v)
     {
@@ -187,6 +196,10 @@ namespace ModuleSymmetry
     // output k stars and the rotation matrices of Bloch orbitals
     void print_symrot_info_k(const ModuleSymmetry::Symmetry_rotation& symrot,
         const K_Vectors& kv, const UnitCell& ucell);
+    void print_symrot_info_abf_k(const ModuleSymmetry::Symmetry_rotation& symrot,
+        const K_Vectors& kv, const UnitCell& ucell,
+        const std::vector<std::string>& type_labels,
+        const std::vector<std::vector<std::vector<int>>>& abf_layout_candidates);
     void print_symrot_info_R(const Symmetry_rotation& symrot, const Symmetry& symm,
         const int lmax_ao, const std::vector<TC>& Rs);
 }

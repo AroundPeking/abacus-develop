@@ -5,6 +5,7 @@
 
 #ifndef RPA_LRI_HPP
 #define RPA_LRI_HPP
+#include <algorithm>
 #include <cstring>
 #include <fstream>
 #include <iomanip>
@@ -30,6 +31,77 @@ inline void trim_malloc_cache()
 #if defined(__GLIBC__)
     malloc_trim(0);
 #endif
+}
+
+inline std::vector<std::vector<int>>
+collect_abfs_l_nchi(const std::vector<std::vector<std::vector<Numerical_Orbital_Lm>>>& abfs)
+{
+    std::vector<std::vector<int>> abfs_l_nchi;
+    abfs_l_nchi.reserve(abfs.size());
+    for (const auto& abfs_type : abfs)
+    {
+        std::vector<int> shell_counts;
+        shell_counts.reserve(abfs_type.size());
+        for (const auto& abfs_l : abfs_type)
+        {
+            shell_counts.push_back(static_cast<int>(abfs_l.size()));
+        }
+        abfs_l_nchi.push_back(std::move(shell_counts));
+    }
+    return abfs_l_nchi;
+}
+
+inline void append_unique_abfs_layout_candidates(
+    std::vector<std::vector<std::vector<int>>>& candidates_by_type,
+    const std::vector<std::vector<std::vector<Numerical_Orbital_Lm>>>& abfs)
+{
+    if (abfs.empty())
+    {
+        return;
+    }
+
+    const auto shell_counts_by_type = collect_abfs_l_nchi(abfs);
+    if (candidates_by_type.empty())
+    {
+        candidates_by_type.resize(shell_counts_by_type.size());
+    }
+    else if (candidates_by_type.size() != shell_counts_by_type.size())
+    {
+        throw std::runtime_error("ABF shell-layout candidates are inconsistent with the atom-type count.");
+    }
+
+    for (std::size_t itype = 0; itype < shell_counts_by_type.size(); ++itype)
+    {
+        const auto& shell_counts = shell_counts_by_type[itype];
+        auto& layouts = candidates_by_type[itype];
+        if (std::find(layouts.begin(), layouts.end(), shell_counts) == layouts.end())
+        {
+            layouts.push_back(shell_counts);
+        }
+    }
+}
+
+inline std::vector<std::string> collect_atom_type_labels(const UnitCell& ucell)
+{
+    std::vector<std::string> labels(static_cast<std::size_t>(ucell.ntype));
+    for (int itype = 0; itype < ucell.ntype; ++itype)
+    {
+        labels[static_cast<std::size_t>(itype)] = ucell.atom_label[itype];
+    }
+    return labels;
+}
+
+inline int max_layout_lmax(const std::vector<std::vector<std::vector<int>>>& candidates_by_type)
+{
+    int lmax = -1;
+    for (const auto& type_candidates : candidates_by_type)
+    {
+        for (const auto& shell_counts : type_candidates)
+        {
+            lmax = std::max(lmax, static_cast<int>(shell_counts.size()) - 1);
+        }
+    }
+    return lmax;
 }
 }
 
@@ -70,6 +142,7 @@ void RPA_LRI<T, Tdata>::postSCF(const UnitCell& ucell,
         cal_abfs_overlap(ucell, orb, kv);
         RpaLriDetail::trim_malloc_cache();
     }
+    this->output_symmetry_sidecars(ucell, kv, dm);
     this->output_ewald_coulomb(ucell, kv, orb);
 
     ModuleBase::timer::tick("RPA_LRI", "postSCF");
@@ -130,9 +203,6 @@ void RPA_LRI<T, Tdata>::cal_postSCF_exx(const elecstate::DensityMatrix<T, Tdata>
         // set Lmax of the rotation matrices to max(l_ao, l_abf), to support rotation under ABF
         symrot.set_abfs_Lmax(GlobalC::exx_info.info_ri.abfs_Lmax);
         symrot.cal_Ms(kv, ucell, *dm.get_paraV_pointer());
-        // output Ts (symrot_R.txt) and Ms (symrot_k.txt)
-        ModuleSymmetry::print_symrot_info_R(symrot, ucell.symm, ucell.lmax, Rs);
-        ModuleSymmetry::print_symrot_info_k(symrot, kv, ucell);
         mix_DMk_2D.mix(symrot.restore_dm(kv, dm.get_DMK_vector(), *dm.get_paraV_pointer()), true);
     }
     else { mix_DMk_2D.mix(dm.get_DMK_vector(), true); }
@@ -179,6 +249,7 @@ void RPA_LRI<T, Tdata>::cal_postSCF_exx(const elecstate::DensityMatrix<T, Tdata>
     }
     else
         exx_cut_coulomb->init_spencer(mpi_comm_in, ucell, kv, orb);
+
     // cal C and V for exx
     this->output_cut_coulomb_cs(ucell, exx_cut_coulomb);
     // cal CVCD
@@ -570,6 +641,51 @@ void RPA_LRI<T, Tdata>::cal_abfs_overlap(const UnitCell& ucell, const LCAO_Orbit
     overlap_abfs_abf.clear();
 
     out_abfs_overlap(ucell, overlap_abfs_abfs_IJ, overlap_abfs_abf_IJ, "shrink_sinvS_", index_abfs_s, index_abfs);
+}
+
+template <typename T, typename Tdata>
+void RPA_LRI<T, Tdata>::output_symmetry_sidecars(const UnitCell& ucell,
+                                                 const K_Vectors& kv,
+                                                 const elecstate::DensityMatrix<T, Tdata>& dm)
+{
+    const bool exx_spacegroup_symmetry =
+        (PARAM.inp.nspin < 4 && ModuleSymmetry::Symmetry::symm_flag == 1);
+    if (!exx_spacegroup_symmetry)
+    {
+        return;
+    }
+
+    std::vector<std::vector<std::vector<int>>> abf_layout_candidates;
+    if (GlobalC::exx_info.info_ri.shrink_abfs_pca_thr >= 0.0)
+    {
+        RpaLriDetail::append_unique_abfs_layout_candidates(abf_layout_candidates, this->abfs_shrink);
+        RpaLriDetail::append_unique_abfs_layout_candidates(abf_layout_candidates, this->abfs);
+    }
+    else
+    {
+        RpaLriDetail::append_unique_abfs_layout_candidates(abf_layout_candidates, this->abfs);
+    }
+
+    ModuleSymmetry::Symmetry_rotation symrot;
+    const std::array<Tcell, Ndim> period = RI_Util::get_Born_vonKarmen_period(kv);
+    const auto& Rs = RI_Util::get_Born_von_Karmen_cells(period);
+    symrot.find_irreducible_sector(ucell.symm, ucell.atoms, ucell.st, Rs, period, ucell.lat);
+
+    const int abf_lmax = RpaLriDetail::max_layout_lmax(abf_layout_candidates);
+    if (abf_lmax >= 0)
+    {
+        symrot.set_abfs_Lmax(abf_lmax);
+    }
+    else
+    {
+        symrot.set_abfs_Lmax(GlobalC::exx_info.info_ri.abfs_Lmax);
+    }
+    symrot.cal_Ms(kv, ucell, *dm.get_paraV_pointer());
+
+    ModuleSymmetry::print_symrot_info_R(symrot, ucell.symm, ucell.lmax, Rs);
+    ModuleSymmetry::print_symrot_info_k(symrot, kv, ucell);
+    ModuleSymmetry::print_symrot_info_abf_k(
+        symrot, kv, ucell, RpaLriDetail::collect_atom_type_labels(ucell), abf_layout_candidates);
 }
 
 template <typename T, typename Tdata>
@@ -1014,13 +1130,18 @@ void RPA_LRI<T, Tdata>::out_struc(const UnitCell& ucell)
     ss << "stru_out";
     std::ofstream ofs;
     ofs.open(ss.str().c_str(), std::ios::out);
-    ofs << lat.e11 << std::setw(15) << lat.e12 << std::setw(15) << lat.e13 << std::endl;
-    ofs << lat.e21 << std::setw(15) << lat.e22 << std::setw(15) << lat.e23 << std::endl;
-    ofs << lat.e31 << std::setw(15) << lat.e32 << std::setw(15) << lat.e33 << std::endl;
+    const auto write_scientific_triplet = [&ofs](const double x, const double y, const double z) {
+        ofs << std::setw(24) << std::scientific << std::setprecision(15) << x
+            << std::setw(24) << std::scientific << std::setprecision(15) << y
+            << std::setw(24) << std::scientific << std::setprecision(15) << z << std::endl;
+    };
+    write_scientific_triplet(lat.e11, lat.e12, lat.e13);
+    write_scientific_triplet(lat.e21, lat.e22, lat.e23);
+    write_scientific_triplet(lat.e31, lat.e32, lat.e33);
 
-    ofs << G_RPA.e11 << std::setw(15) << G_RPA.e12 << std::setw(15) << G_RPA.e13 << std::endl;
-    ofs << G_RPA.e21 << std::setw(15) << G_RPA.e22 << std::setw(15) << G_RPA.e23 << std::endl;
-    ofs << G_RPA.e31 << std::setw(15) << G_RPA.e32 << std::setw(15) << G_RPA.e33 << std::endl;
+    write_scientific_triplet(G_RPA.e11, G_RPA.e12, G_RPA.e13);
+    write_scientific_triplet(G_RPA.e21, G_RPA.e22, G_RPA.e23);
+    write_scientific_triplet(G_RPA.e31, G_RPA.e32, G_RPA.e33);
 
     ofs << ucell.nat << std::endl;
     std::string& Coordinate = ucell.Coordinate;
@@ -1037,8 +1158,9 @@ void RPA_LRI<T, Tdata>::out_struc(const UnitCell& ucell)
                                      : ucell.atoms[it].tau[ia].y;
             const double& z = direct ? ucell.atoms[it].tau[ia].z * ucell.lat0
                                      : ucell.atoms[it].tau[ia].z;
-            ofs << std::setw(15) << std::fixed << std::setprecision(9) << x << std::setw(15) << std::fixed
-                << std::setprecision(9) << y << std::setw(15) << std::fixed << std::setprecision(9) << z
+            ofs << std::setw(24) << std::scientific << std::setprecision(15) << x
+                << std::setw(24) << std::scientific << std::setprecision(15) << y
+                << std::setw(24) << std::scientific << std::setprecision(15) << z
                 << std::setw(15) << 1 << std::endl;
         }
     }
@@ -1047,9 +1169,9 @@ void RPA_LRI<T, Tdata>::out_struc(const UnitCell& ucell)
 
     for (int ik = 0; ik != nks_tot; ik++)
     {
-        ofs << std::setw(15) << std::fixed << std::setprecision(9) << p_kv->kvec_c[ik].x * TWOPI_Bohr2A << std::setw(15)
-            << std::fixed << std::setprecision(9) << p_kv->kvec_c[ik].y * TWOPI_Bohr2A << std::setw(15) << std::fixed
-            << std::setprecision(9) << p_kv->kvec_c[ik].z * TWOPI_Bohr2A << std::endl;
+        write_scientific_triplet(p_kv->kvec_c[ik].x * TWOPI_Bohr2A,
+                                 p_kv->kvec_c[ik].y * TWOPI_Bohr2A,
+                                 p_kv->kvec_c[ik].z * TWOPI_Bohr2A);
     }
     // added for BZ to IBZ (actually LibRPA interface only support BZ by 2025/03/30)
     if (PARAM.inp.symmetry == "-1")
