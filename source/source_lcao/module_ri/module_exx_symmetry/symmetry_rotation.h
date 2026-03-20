@@ -100,6 +100,11 @@ namespace ModuleSymmetry
         std::map<int, std::map<std::pair<int, TC>, RI::Tensor<Tdata>>> restore_HR(
             const Symmetry& symm, const Atom* atoms, const Statistics& st, const char mode,
             const std::map<int, std::map<std::pair<int, TC>, RI::Tensor<Tdata>>>& HR_irreduceble)const;
+        // Restore a real-space operator in the ABF representation from the irreducible sector.
+        template<typename Tdata>
+        std::map<int, std::map<std::pair<int, TC>, RI::Tensor<Tdata>>> restore_HR_abf(
+            const Symmetry& symm, const Atom* atoms, const Statistics& st,
+            const std::map<int, std::map<std::pair<int, TC>, RI::Tensor<Tdata>>>& HR_irreduceble) const;
         template<typename TR>   // HContainer type
         void restore_HR(
             const Symmetry& symm, const Atom* atoms, const Statistics& st, const char mode,
@@ -138,6 +143,9 @@ namespace ModuleSymmetry
         template<typename Tdata>    // pointer type, blas
         void rotate_atompair_serial(Tdata* TAT, const Tdata* A, const int& nw1, const int& nw2, const int isym,
             const Atom& a1, const Atom& a2, const char mode)const;
+        template<typename Tdata>
+        RI::Tensor<Tdata> rotate_atompair_serial_abf(const RI::Tensor<Tdata>& A, const int isym,
+            const int& type1, const int& type2, const bool output = false) const;
         template<typename TR>    // HContainer type, pblas
         void rotate_atompair_parallel(const TR* Alocal_in, const int isym, const Atom* atoms, const Statistics& st,
             const Tap& ap_in, const Tap& ap_out, const char mode, const Parallel_Orbitals& pv, TR* Alocal_out, const bool output = false)const;
