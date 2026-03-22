@@ -543,6 +543,7 @@ struct Input_para
     double exx_pca_threshold = 0.0001;           ///< threshold to screen on-site ABFs in exx
     double exx_c_threshold = 0.0001;             ///< threshold to screen C matrix in exx
     double exx_v_threshold = 0.1;                ///< threshold to screen C matrix in exx
+    double exx_v_threshold_long = 0.0;           ///< threshold to screen long-range V matrix in exx
     double exx_dm_threshold = 0.0001;            ///< threshold to screen density matrix in exx
     double exx_c_grad_threshold = 0.0001;        ///< threshold to screen nabla C matrix in exx
     double exx_v_grad_threshold = 0.1;           ///< threshold to screen nabla V matrix in exx

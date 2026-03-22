@@ -482,6 +482,7 @@ void Input_Conv::Convert()
         GlobalC::exx_info.info_ri.pca_threshold = PARAM.inp.exx_pca_threshold;
         GlobalC::exx_info.info_ri.C_threshold = PARAM.inp.exx_c_threshold;
         GlobalC::exx_info.info_ri.V_threshold = PARAM.inp.exx_v_threshold;
+        GlobalC::exx_info.info_ri.V_threshold_long = PARAM.inp.exx_v_threshold_long;
         GlobalC::exx_info.info_ri.dm_threshold = PARAM.inp.exx_dm_threshold;
         GlobalC::exx_info.info_ri.C_grad_threshold = PARAM.inp.exx_c_grad_threshold;
         GlobalC::exx_info.info_ri.V_grad_threshold = PARAM.inp.exx_v_grad_threshold;
@@ -494,6 +495,12 @@ void Input_Conv::Convert()
         GlobalC::exx_info.info_ri.shrink_LU_inv_thr = PARAM.inp.shrink_LU_inv_thr;
         GlobalC::exx_info.info_ri.coul_moment = PARAM.inp.exx_coul_moment;
         GlobalC::exx_info.info_ri.rotate_abfs = PARAM.inp.exx_rotate_abfs;
+        if (GlobalC::exx_info.info_ri.rotate_abfs)
+        {
+            ModuleBase::WARNING(
+                "Input_Conv",
+                "exx_rotate_abfs currently enables the rotated-basis Ewald split: short-range uses the full rotated ABFS, and the Gaussian long-range channel is reconstructed on the full rotated basis from the leading N=0 multipole contribution of each (type, L).");
+        }
         GlobalC::exx_info.info_ri.multip_moments_threshold = PARAM.inp.exx_multip_moments_threshold;
         GlobalC::exx_info.info_opt_abfs.pca_threshold = PARAM.inp.exx_pca_threshold;
         GlobalC::exx_info.info_opt_abfs.abfs_Lmax = PARAM.inp.exx_opt_orb_lmax;

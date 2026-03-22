@@ -62,6 +62,7 @@ struct Exx_Info
         std::vector<std::string> files_shrink_abfs;
         double C_threshold = 0;
         double V_threshold = 0;
+        double V_threshold_long = 0;
         double dm_threshold = 0;
         double C_grad_threshold = 0;
         double V_grad_threshold = 0;
