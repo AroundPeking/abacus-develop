@@ -373,6 +373,26 @@ std::map<TA, std::map<TAC, T>> RI_2D_Comm::comm_map2(const MPI_Comm& mpi_comm,
                                                      const std::map<TA, std::map<TAC, T>>& Ds_in,
                                                      const Tjudge& judge)
 {
+    int mpi_size = 1;
+    MPI_Comm_size(mpi_comm, &mpi_size);
+    if (mpi_size == 1)
+    {
+        std::map<TA, std::map<TAC, T>> Ds_out;
+        for (const auto& a_pair: Ds_in)
+        {
+            for (const auto& ac_pair: a_pair.second)
+            {
+                const auto key = std::make_tuple(a_pair.first, ac_pair.first);
+                if (!judge.judge(key))
+                {
+                    continue;
+                }
+                Ds_out[a_pair.first][ac_pair.first] = ac_pair.second;
+            }
+        }
+        return Ds_out;
+    }
+
     Comm::Comm_Assemble<std::tuple<TA, TAC>, T, std::map<TA, std::map<TAC, T>>, Tjudge, std::map<TA, std::map<TAC, T>>>
         com(mpi_comm);
 
