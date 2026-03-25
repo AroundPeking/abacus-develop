@@ -151,19 +151,25 @@ namespace ModuleSymmetry
     // calculate Wigner D matrix
     double Symmetry_rotation::wigner_d(const double beta, const int l, const int m1, const int m2) const
     {
-        auto factorial = [](int n) -> int {
-            int result = 1;
-            for (int i = 1;i <= n;++i) { result *= i;
-}
-            return result;
+        auto factorial = [](const int n) -> long double
+            {
+                return std::exp(std::lgammal(static_cast<long double>(n) + 1.0L));
             };
-        double result = 0.0;
+        long double result = 0.0L;
         for (int i = std::max(0, m2 - m1);i <= std::min(l - m1, l + m2);++i) {
-            result += std::pow(-1, i) * std::sqrt(factorial(l + m1) * factorial(l - m1) * factorial(l + m2) * factorial(l - m2))
-            * std::pow(std::cos(beta / 2), 2 * l + m2 - m1 - 2 * i) * std::pow(-std::sin(beta / 2), m1 - m2 + 2 * i)
-            / (factorial(i) * factorial(l - m1 - i) * factorial(l + m2 - i) * factorial(i - m2 + m1));
+            const long double sign = (i % 2 == 0) ? 1.0L : -1.0L;
+            const long double numerator =
+                sign
+                * std::sqrt(factorial(l + m1) * factorial(l - m1)
+                            * factorial(l + m2) * factorial(l - m2))
+                * std::pow(std::cos(beta / 2), 2 * l + m2 - m1 - 2 * i)
+                * std::pow(-std::sin(beta / 2), m1 - m2 + 2 * i);
+            const long double denominator =
+                factorial(i) * factorial(l - m1 - i)
+                * factorial(l + m2 - i) * factorial(i - m2 + m1);
+            result += numerator / denominator;
 }
-        return result;
+        return static_cast<double>(result);
     }
 
     std::complex<double> Symmetry_rotation::wigner_D(const TCdouble& euler_angle, const int l, const int m1, const int m2, const bool inv) const
