@@ -98,8 +98,11 @@ namespace ModuleIO
                 Abfs::Vector3_Order<int> dR(R[0], R[1], R[2]);
                 for (int i = 0;i < nw1;++i) {
                     for (int j = 0;j < nw2;++j) {
-                        target[dR][start1 + i][start2 + j] = 
-                        ((std::abs(matrix(i, j)) > sparse_threshold) ? matrix(i, j) : static_cast<Tdata>(0));
+                        const Tdata value = matrix(i, j);
+                        if (std::abs(value) > sparse_threshold)
+                        {
+                            target[dR][start1 + i][start2 + j] = value;
+                        }
                     }
                 }
             }

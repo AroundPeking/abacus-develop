@@ -4,6 +4,7 @@
 
 #include "op_exx_lcao.h"
 #include "source_base/parallel_reduce.h"
+#include "source_base/global_variable.h"
 #include "source_io/module_parameter/parameter.h"
 #include "source_lcao/module_ri/RI_2D_Comm.h"
 #include "source_hamilt/module_xc/xc_functional.h"
@@ -11,9 +12,135 @@
 #include "source_lcao/module_rt/td_info.h"
 #include "source_io/module_restart/restart.h"
 
+#include <algorithm>
+#include <cstdlib>
+#include <fstream>
+#include <iomanip>
+#include <iostream>
+#include <sstream>
+#include <string>
+#include <vector>
+
 namespace hamilt
 {
     using TAC = std::pair<int, std::array<int, 3>>;
+
+    namespace
+    {
+        inline bool abacus_debug_dump_exx_ao_enabled()
+        {
+            const char* env = std::getenv("ABACUS_DUMP_EXX_AO");
+            if (env == nullptr)
+            {
+                return false;
+            }
+            const std::string value(env);
+            return !(value.empty() || value == "0" || value == "f" || value == "F"
+                     || value == "false" || value == "FALSE");
+        }
+
+        inline bool abacus_debug_k_is_offgrid(const ModuleBase::Vector3<double>& kfrac,
+                                              const std::array<int, 3>& nmp)
+        {
+            if (nmp[0] <= 0 || nmp[1] <= 0 || nmp[2] <= 0)
+            {
+                return true;
+            }
+            const double tol = 1e-10;
+            return std::abs(kfrac.x * nmp[0] - std::round(kfrac.x * nmp[0])) > tol
+                   || std::abs(kfrac.y * nmp[1] - std::round(kfrac.y * nmp[1])) > tol
+                   || std::abs(kfrac.z * nmp[2] - std::round(kfrac.z * nmp[2])) > tol;
+        }
+
+        inline std::string abacus_debug_format_double(const double value)
+        {
+            std::ostringstream oss;
+            oss << std::fixed << std::setprecision(6) << value;
+            std::string text = oss.str();
+            std::replace(text.begin(), text.end(), '-', 'm');
+            std::replace(text.begin(), text.end(), '.', 'p');
+            return text;
+        }
+
+        inline std::complex<double> abacus_debug_to_complex(const double value)
+        {
+            return std::complex<double>(value, 0.0);
+        }
+
+        inline std::complex<double> abacus_debug_to_complex(const std::complex<double>& value)
+        {
+            return value;
+        }
+
+        template <typename T>
+        void abacus_debug_dump_exx_ao_delta_if_requested(const K_Vectors& kv,
+                                                         const int ik,
+                                                         const Parallel_Orbitals* pv,
+                                                         const T* hk_before,
+                                                         const T* hk_after)
+        {
+            if (!abacus_debug_dump_exx_ao_enabled())
+            {
+                return;
+            }
+            if (GlobalV::NPROC != 1 || GlobalV::MY_RANK != 0 || pv == nullptr)
+            {
+                return;
+            }
+
+            const auto kfrac = kv.kvec_d[ik];
+            const std::array<int, 3> nmp{kv.nmp[0], kv.nmp[1], kv.nmp[2]};
+            if (!abacus_debug_k_is_offgrid(kfrac, nmp))
+            {
+                std::cout << "[ABACUS_DUMP_EXX_AO] skip ik=" << ik
+                          << " because k is on the mesh: ("
+                          << kfrac.x << ", " << kfrac.y << ", " << kfrac.z
+                          << "), nmp=(" << nmp[0] << ", " << nmp[1] << ", " << nmp[2]
+                          << ")" << std::endl;
+                return;
+            }
+
+            const int nrow = pv->get_row_size();
+            const int ncol = pv->get_col_size();
+            if (nrow <= 0 || ncol <= 0 || nrow != ncol)
+            {
+                std::cout << "[ABACUS_DUMP_EXX_AO] skip ik=" << ik
+                          << " because local HK shape is invalid: "
+                          << nrow << "x" << ncol << std::endl;
+                return;
+            }
+
+            std::ostringstream filename;
+            filename << PARAM.globalv.global_out_dir << "abacus_hexx_ao_ik" << ik << "_kx_"
+                     << abacus_debug_format_double(kfrac.x) << "_ky_"
+                     << abacus_debug_format_double(kfrac.y) << "_kz_"
+                     << abacus_debug_format_double(kfrac.z) << ".mtx";
+            std::ofstream ofs(filename.str());
+            if (!ofs.good())
+            {
+                std::cout << "[ABACUS_DUMP_EXX_AO] failed to open " << filename.str()
+                          << std::endl;
+                return;
+            }
+
+            std::cout << "[ABACUS_DUMP_EXX_AO] writing " << filename.str() << std::endl;
+
+            ofs << "%%MatrixMarket matrix coordinate complex general\n";
+            ofs << std::scientific << std::setprecision(15);
+            ofs << nrow << " " << ncol << " " << static_cast<long long>(nrow) * ncol << "\n";
+            for (int i = 0; i != nrow; ++i)
+            {
+                for (int j = 0; j != ncol; ++j)
+                {
+                    const int index = j * nrow + i;
+                    const auto delta = abacus_debug_to_complex(hk_after[index])
+                                       - abacus_debug_to_complex(hk_before[index]);
+                    ofs << (i + 1) << " " << (j + 1) << " " << delta.real() << " "
+                        << delta.imag() << "\n";
+                }
+            }
+        }
+    } // namespace
 
     // allocate according to the read-in HexxR, used in nscf
     template <typename Tdata, typename TR>
@@ -111,7 +238,9 @@ OperatorEXX<OperatorLCAO<TK, TR>>::OperatorEXX(HS_Matrix_K<TK>* hsk_in,
     this->cal_type = calculation_type::lcao_exx;
     const Parallel_Orbitals* const pv = hR_in->get_paraV();
 
-    if (PARAM.inp.calculation == "nscf" && GlobalC::exx_info.info_global.cal_exx)
+    if (PARAM.inp.calculation == "nscf"
+        && (GlobalC::exx_info.info_global.cal_exx
+            || abacus_debug_dump_exx_ao_enabled()))
     {    // if nscf, read HexxR first and reallocate hR according to the read-in HexxR
         auto file_name_list_csr = []() -> std::vector<std::string>
         {
@@ -346,8 +475,20 @@ void OperatorEXX<OperatorLCAO<TK, TR>>::contributeHk(int ik)
 
     if (this->add_hexx_type == Add_Hexx_Type::R) { throw std::invalid_argument("Set Add_Hexx_Type::k sto call OperatorEXX::contributeHk()."); }
 
-    if (XC_Functional::get_func_type() == 4 || XC_Functional::get_func_type() == 5)
+    const bool enable_debug_loaded_hexx =
+        (PARAM.inp.calculation == "nscf" && abacus_debug_dump_exx_ao_enabled());
+    if (XC_Functional::get_func_type() == 4 || XC_Functional::get_func_type() == 5
+        || enable_debug_loaded_hexx)
     {
+        if (abacus_debug_dump_exx_ao_enabled() && GlobalV::MY_RANK == 0)
+        {
+            std::cout << "[ABACUS_DUMP_EXX_AO] OperatorEXX::contributeHk entered for ik="
+                      << ik << ", restart=" << this->restart
+                      << ", two_level_step="
+                      << ((this->two_level_step != nullptr) ? *this->two_level_step : -1)
+                      << ", func_type=" << XC_Functional::get_func_type()
+                      << ", debug_loaded_hexx=" << enable_debug_loaded_hexx << std::endl;
+        }
         if (this->restart && this->two_level_step != nullptr)
         {
             if (*this->two_level_step == 0)
@@ -367,6 +508,17 @@ void OperatorEXX<OperatorLCAO<TK, TR>>::contributeHk(int ik)
                     this->Hexxc_k_load.clear();
                     this->Hexxc_k_load.shrink_to_fit();
                 }
+            }
+        }
+        std::vector<TK> hk_before;
+        const Parallel_Orbitals* pv = this->hR->get_paraV();
+        if (abacus_debug_dump_exx_ao_enabled() && GlobalV::NPROC == 1 && pv != nullptr)
+        {
+            const int nrow = pv->get_row_size();
+            const int ncol = pv->get_col_size();
+            if (nrow > 0 && ncol > 0)
+            {
+                hk_before.assign(this->hsk->get_hk(), this->hsk->get_hk() + nrow * ncol);
             }
         }
         // cal H(k) from H(R) normally
@@ -403,6 +555,11 @@ void OperatorEXX<OperatorLCAO<TK, TR>>::contributeHk(int ik)
                     *this->hR->get_paraV(),
                     this->hsk->get_hk());
             }
+        }
+        if (!hk_before.empty())
+        {
+            abacus_debug_dump_exx_ao_delta_if_requested(
+                this->kv, ik, pv, hk_before.data(), this->hsk->get_hk());
         }
     }
 }

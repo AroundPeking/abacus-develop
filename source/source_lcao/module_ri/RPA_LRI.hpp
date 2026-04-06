@@ -19,6 +19,7 @@
 #include "source_basis/module_ao/element_basis_index-ORB.h"
 #include "source_estate/elecstate_lcao.h"
 #include "source_io/module_parameter/parameter.h"
+#include "source_io/module_restart/restart_exx_csr.h"
 
 #if defined(__GLIBC__)
 #include <malloc.h>
@@ -31,6 +32,18 @@ inline void trim_malloc_cache()
 #if defined(__GLIBC__)
     malloc_trim(0);
 #endif
+}
+
+inline bool debug_dump_exx_ao_enabled()
+{
+    const char* env = std::getenv("ABACUS_DUMP_EXX_AO");
+    if (env == nullptr)
+    {
+        return false;
+    }
+    const std::string value(env);
+    return !(value.empty() || value == "0" || value == "f" || value == "F"
+             || value == "false" || value == "FALSE");
 }
 
 inline std::vector<std::vector<int>>
@@ -168,6 +181,12 @@ void RPA_LRI<T, Tdata>::postSCF(const UnitCell& ucell,
     ModuleBase::timer::tick("RPA_LRI", "postSCF");
 
     this->cal_postSCF_exx(dm, mpi_comm_in, ucell, kv, orb);
+    if (RpaLriDetail::debug_dump_exx_ao_enabled())
+    {
+        const std::string file_name_exx
+            = PARAM.globalv.global_out_dir + "HexxR" + std::to_string(GlobalV::MY_RANK);
+        ModuleIO::write_Hexxs_csr(file_name_exx, ucell, exx_cut_coulomb->Hexxs);
+    }
     this->init(mpi_comm_in, kv, orb.cutoffs());
     this->out_bands(pelec);
     this->out_eigen_vector(parav, psi);

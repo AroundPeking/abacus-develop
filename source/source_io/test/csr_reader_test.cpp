@@ -98,3 +98,22 @@ TEST_F(csrFileReaderTest, CsrReader)
     EXPECT_DOUBLE_EQ(sparse_matrix(3, 3), 10.0);
     EXPECT_DOUBLE_EQ(sparse_matrix(0, 0), 0.0);
 }
+
+TEST_F(csrFileReaderTest, CsrReaderCompactHeader)
+{
+    ModuleIO::csrFileReader<double> csr("./support/SR_compact.csr");
+    EXPECT_TRUE(csr.isOpen());
+    EXPECT_EQ(csr.getStep(), 0);
+    EXPECT_EQ(csr.getMatrixDimension(), 4);
+    EXPECT_EQ(csr.getNumberOfR(), 2);
+
+    std::vector<int> rcoord = csr.getRCoordinate(0);
+    EXPECT_EQ(rcoord[0], 0);
+    EXPECT_EQ(rcoord[1], 1);
+    EXPECT_EQ(rcoord[2], 1);
+
+    ModuleIO::SparseMatrix<double> sparse_matrix = csr.getMatrix(0, 0, 0);
+    EXPECT_DOUBLE_EQ(sparse_matrix(2, 2), 5.0);
+    EXPECT_DOUBLE_EQ(sparse_matrix(2, 3), 6.0);
+    EXPECT_DOUBLE_EQ(sparse_matrix(3, 3), 10.0);
+}
