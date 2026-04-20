@@ -18,3 +18,9 @@ ABACUS (**A**tomic-orbital **B**ased **A**b-initio **C**omputation at **US**tc) 
 For detailed documentation, please refer to [our documentation website](https://abacus.deepmodeling.com/).
 
 See our [Github Pages](https://mcresearch.github.io/abacus-user-guide/) for more tutorials and developer guides.
+
+# SIAB-Compatible Baseline
+
+For the ABACUS + SIAB GTH/SOC workflow validated by AroundPeking, use this branch together with
+`AroundPeking/ABACUS-orbitals` branch `siab-abacus-v3907-compat`. The pinned stack and usage notes
+are summarized in [docs/community/siab_stack.md](docs/community/siab_stack.md).
