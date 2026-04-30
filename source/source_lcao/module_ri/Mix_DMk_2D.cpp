@@ -4,6 +4,7 @@
 //=======================
 
 #include "Mix_DMk_2D.h"
+#include "source_base/tool_quit.h"
 #include "source_base/tool_title.h"
 
 Mix_DMk_2D &Mix_DMk_2D::set_nks(const int nks, const bool gamma_only_in)
@@ -44,14 +45,28 @@ Mix_DMk_2D &Mix_DMk_2D::set_mixing_beta(const double mixing_beta)
 void Mix_DMk_2D::mix(const std::vector<std::vector<double>>& dm, const bool flag_restart)
 {
 	ModuleBase::TITLE("Mix_DMk_2D","mix");
-	assert(this->mix_DMk_gamma.size() == dm.size());
+	if (this->mix_DMk_gamma.size() != dm.size())
+	{
+		ModuleBase::WARNING_QUIT(
+			"Mix_DMk_2D::mix",
+			"gamma DMK count mismatch: mixer_nks=" + std::to_string(this->mix_DMk_gamma.size())
+				+ ", dm_nks=" + std::to_string(dm.size())
+				+ ", flag_restart=" + std::to_string(flag_restart));
+	}
 	for(int ik=0; ik<dm.size(); ++ik)
 		this->mix_DMk_gamma[ik].mix(dm[ik], flag_restart);
 }
 void Mix_DMk_2D::mix(const std::vector<std::vector<std::complex<double>>>& dm, const bool flag_restart)
 {
 	ModuleBase::TITLE("Mix_DMk_2D","mix");
-	assert(this->mix_DMk_k.size() == dm.size());
+	if (this->mix_DMk_k.size() != dm.size())
+	{
+		ModuleBase::WARNING_QUIT(
+			"Mix_DMk_2D::mix",
+			"k DMK count mismatch: mixer_nks=" + std::to_string(this->mix_DMk_k.size())
+				+ ", dm_nks=" + std::to_string(dm.size())
+				+ ", flag_restart=" + std::to_string(flag_restart));
+	}
 	for(int ik=0; ik<dm.size(); ++ik)
 		this->mix_DMk_k[ik].mix(dm[ik], flag_restart);
 }

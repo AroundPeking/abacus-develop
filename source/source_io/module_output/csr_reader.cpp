@@ -1,5 +1,54 @@
 #include "csr_reader.h"
 #include "source_base/tool_quit.h"
+#include <cctype>
+#include <sstream>
+#include <string>
+
+namespace
+{
+bool is_digit_char(const char c)
+{
+    return std::isdigit(static_cast<unsigned char>(c)) != 0;
+}
+
+int parse_last_int_token(const std::string& line)
+{
+    std::stringstream iss(line);
+    std::string token;
+    int value = 0;
+    bool found = false;
+    while (iss >> token)
+    {
+        size_t begin = 0;
+        while (begin < token.size() && !(is_digit_char(token[begin]) || token[begin] == '-' || token[begin] == '+'))
+        {
+            ++begin;
+        }
+        if (begin == token.size())
+        {
+            continue;
+        }
+        size_t end = token.size();
+        while (end > begin && !is_digit_char(token[end - 1]))
+        {
+            --end;
+        }
+        try
+        {
+            value = std::stoi(token.substr(begin, end - begin));
+            found = true;
+        }
+        catch (...)
+        {
+        }
+    }
+    if (!found)
+    {
+        ModuleBase::WARNING_QUIT("csrFileReader::parseFile", "Failed to parse integer from line: " + line);
+    }
+    return value;
+}
+}
 
 namespace ModuleIO
 {
@@ -23,42 +72,54 @@ void csrFileReader<T>::parseFile()
 
     std::string tmp_string;
 
-    // Read the step
+    // Read the step and detect file flavor.
     readLine();
-    ss >> tmp_string >> tmp_string >> tmp_string >> step;
+    const std::string first_line = ss.str();
+    const bool compact_format = first_line.rfind("STEP:", 0) == 0;
+    if (compact_format)
+    {
+        step = parse_last_int_token(first_line);
 
-    //std::cout << " step is " << step << std::endl; 
-    // Read the title
-    readLine();
-    // Read the total spin
-    readLine();
-    // Read the spin index
-    readLine();
+        readLine();
+        matrixDimension = parse_last_int_token(ss.str());
 
-    // Read the matrix dimension
-    readLine();
-    ss >> matrixDimension;
-    // std::cout << " mat dim is " << matrixDimension << std::endl; 
+        readLine();
+        numberOfR = parse_last_int_token(ss.str());
+    }
+    else
+    {
+        ss >> tmp_string >> tmp_string >> tmp_string >> step;
 
-    // Read the number of R
-    readLine();
-    ss >> numberOfR;
-    // std::cout << " number of R is " << numberOfR << std::endl;
-    readLine();
+        // Read the title
+        readLine();
+        // Read the total spin
+        readLine();
+        // Read the spin index
+        readLine();
 
-    // Read cell
-    read_ucell();
+        // Read the matrix dimension
+        readLine();
+        ss >> matrixDimension;
 
-    // Read CSR format
-    readLine();
-    readLine();
-    readLine();
-    readLine();
-    readLine();
-    readLine();
-    readLine();
-    readLine();
-    readLine(); // read the last line of CSR format
+        // Read the number of R
+        readLine();
+        ss >> numberOfR;
+        readLine();
+
+        // Read cell
+        read_ucell();
+
+        // Read CSR format
+        readLine();
+        readLine();
+        readLine();
+        readLine();
+        readLine();
+        readLine();
+        readLine();
+        readLine();
+        readLine(); // read the last line of CSR format
+    }
 
     // Read the matrices
     for (int i = 0; i < numberOfR; i++)
@@ -68,7 +129,10 @@ void csrFileReader<T>::parseFile()
         std::vector<int> RCoord(3);
         int nonZero = 0;
 
-        readLine();
+        if (!compact_format)
+        {
+            readLine();
+        }
         readLine();
         ss >> RCoord[0] >> RCoord[1] >> RCoord[2] >> nonZero;
         RCoordinates.push_back(RCoord);
@@ -78,9 +142,10 @@ void csrFileReader<T>::parseFile()
         std::vector<int> csr_row_ptr(matrixDimension + 1);
 
         // read CSR values
-        readLine();
-        // std::cout << " ss1: " << ss.str() << std::endl;
-
+        if (!compact_format)
+        {
+            readLine();
+        }
         readLine();
 	size_t count1 = 0;
         while (count1 < nonZero)
@@ -97,8 +162,11 @@ void csrFileReader<T>::parseFile()
         // std::cout << "count1=" << count1 << std::endl;
 
         // read CSR column indices
+        if (!compact_format)
+        {
+            readLine();
+        }
         readLine();
-        // std::cout << " ss2: " << ss.str() << std::endl;
 
 	size_t count2 = 0;
         while (count2 < nonZero)
@@ -115,8 +183,11 @@ void csrFileReader<T>::parseFile()
         // std::cout << "count2=" << count2 << std::endl;
 
         // read row pointers
+        if (!compact_format)
+        {
+            readLine();
+        }
         readLine();
-        // std::cout << " ss3: " << ss.str() << std::endl;
 
 	size_t count3 = 0;
         while (count3 < matrixDimension + 1)
