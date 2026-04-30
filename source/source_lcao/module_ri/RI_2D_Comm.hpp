@@ -107,12 +107,16 @@ auto RI_2D_Comm::split_m2D_ktoR(const UnitCell& ucell,
 					const int it1 = ucell.iat2it[iat1];
 
 					const int is_b = RI_2D_Comm::get_is_block(is_k, is0_b, is1_b);
-					RI::Tensor<Tdata> &mR_a2D = mRs_a2D[is_b][iat0][{iat1,cell}];
+                    RI::Tensor<Tdata> &mR_a2D = mRs_a2D[is_b][iat0][{iat1,cell}];
                     if (mR_a2D.empty()) {
                         mR_a2D = RI::Tensor<Tdata>(
                             {static_cast<size_t>(ucell.atoms[it0].nw),
                              static_cast<size_t>(
                                  ucell.atoms[it1].nw)});
+                        for (int i = 0; i < mR_a2D.get_shape_all(); ++i)
+                        {
+                            mR_a2D.ptr()[i] = Tdata{};
+                        }
                     }
                     mR_a2D(iw0_b,iw1_b) = mR_2D(iwt0_2D, iwt1_2D);
 				}
@@ -369,6 +373,26 @@ std::map<TA, std::map<TAC, T>> RI_2D_Comm::comm_map2(const MPI_Comm& mpi_comm,
                                                      const std::map<TA, std::map<TAC, T>>& Ds_in,
                                                      const Tjudge& judge)
 {
+    int mpi_size = 1;
+    MPI_Comm_size(mpi_comm, &mpi_size);
+    if (mpi_size == 1)
+    {
+        std::map<TA, std::map<TAC, T>> Ds_out;
+        for (const auto& a_pair: Ds_in)
+        {
+            for (const auto& ac_pair: a_pair.second)
+            {
+                const auto key = std::make_tuple(a_pair.first, ac_pair.first);
+                if (!judge.judge(key))
+                {
+                    continue;
+                }
+                Ds_out[a_pair.first][ac_pair.first] = ac_pair.second;
+            }
+        }
+        return Ds_out;
+    }
+
     Comm::Comm_Assemble<std::tuple<TA, TAC>, T, std::map<TA, std::map<TAC, T>>, Tjudge, std::map<TA, std::map<TAC, T>>>
         com(mpi_comm);
 

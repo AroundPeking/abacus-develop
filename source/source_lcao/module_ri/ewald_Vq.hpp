@@ -7,6 +7,7 @@
 #define EWALD_VQ_HPP
 
 #include <RI/comm/mix/Communicate_Tensors_Map_Judge.h>
+#include <RI/distribute/Divide_Atoms.h>
 #include <RI/distribute/Distribute_Equally.h>
 #include <RI/global/Global_Func-1.h>
 
@@ -22,7 +23,13 @@
 #include "source_base/tool_title.h"
 #include "singular_value.h"
 
+#include <algorithm>
 #include <cmath>
+#include <numeric>
+
+#ifdef _OPENMP
+#include <omp.h>
+#endif
 
 template<typename Tdata>
 Ewald_Vq<Tdata>::Ewald_Vq(){}
@@ -40,7 +47,8 @@ void Ewald_Vq<Tdata>::init(const UnitCell& ucell,
                            const std::map<Conv_Coulomb_Pot_K::Coulomb_Type, std::vector<std::map<std::string,std::string>>> &coulomb_param_in,
                            std::shared_ptr<ORB_gaunt_table> MGT_in,
                            const double &ccp_rmesh_times_in,
-                           const double &kmesh_times_in)
+                           const double &kmesh_times_in,
+                           const ModuleBase::Element_Basis_Index::IndexPermutation &abfs_old_to_new)
 {
     ModuleBase::TITLE("Ewald_Vq", "init");
     ModuleBase::timer::tick("Ewald_Vq", "init");
@@ -63,10 +71,18 @@ void Ewald_Vq<Tdata>::init(const UnitCell& ucell,
     this->g_abfs_ccp_rcut = Exx_Abfs::Construct_Orbs::get_Rcut(this->g_abfs_ccp);
 
     const ModuleBase::Element_Basis_Index::Range range_abfs = ModuleBase::Element_Basis_Index::construct_range(abfs_in);
-    this->index_abfs = ModuleBase::Element_Basis_Index::construct_index(range_abfs);
+    this->index_abfs = ModuleBase::Element_Basis_Index::construct_index(range_abfs, abfs_old_to_new);
 
     this->cv
-        .set_orbitals(ucell, orb, this->g_lcaos, this->g_abfs, this->g_abfs_ccp, kmesh_times_in, MGT_in, false);
+        .set_orbitals(ucell,
+                      orb,
+                      this->g_lcaos,
+                      this->g_abfs,
+                      this->g_abfs_ccp,
+                      kmesh_times_in,
+                      MGT_in,
+                      false,
+                      abfs_old_to_new);
     this->gaunt.create(MGT_in->Gaunt_Coefficients.getBound1(),
                        MGT_in->Gaunt_Coefficients.getBound2(),
                        MGT_in->Gaunt_Coefficients.getBound3());
@@ -252,10 +268,9 @@ auto Ewald_Vq<Tdata>::set_Vs_dVs_minus_gauss(const UnitCell& ucell,
 
     using Tin_convert = typename LRI_CV_Tools::TinType<Tresult>::type;
     std::map<TA, std::map<TAC, Tresult>> pVs_dVs_gauss;
-#pragma omp parallel
+#pragma omp parallel for collapse(2) schedule(dynamic)
     for (size_t i0 = 0; i0 < list_A0.size(); ++i0)
     {
-#pragma omp for schedule(dynamic) nowait
         for (size_t i1 = 0; i1 < list_A1.size(); ++i1)
         {
             const TA iat0 = list_A0[i0];
@@ -417,10 +432,9 @@ auto Ewald_Vq<Tdata>::set_Vq_dVq_gauss(const UnitCell& ucell,
         {
             alpha = std::complex<double>(std::stod(param.at("alpha")), 0);
         }
-#pragma omp parallel
+#pragma omp parallel for collapse(2) schedule(dynamic)
         for (size_t i0 = 0; i0 < list_A0_k.size(); ++i0)
         {
-#pragma omp for schedule(dynamic) nowait
             for (size_t i1 = 0; i1 < list_A1_k.size(); ++i1)
             {
                 const TA iat0 = list_A0_k[i0];
@@ -611,9 +625,9 @@ auto Ewald_Vq<Tdata>::cal_Vq(const UnitCell& ucell,
     auto Vq = this->set_Vq_dVq(ucell,
                                this->list_A0_pair_k,
                                this->list_A1_pair_k,
-                               Vs_minus_gauss,
-                               func_cal_Vq_minus_gauss,
-                               func_cal_Vq_gauss); //{ia0, ia1}
+	                               Vs_minus_gauss,
+	                               func_cal_Vq_minus_gauss,
+	                               func_cal_Vq_gauss); //{ia0, ia1}
 
     ModuleBase::timer::tick("Ewald_Vq", "cal_Vq");
     return Vq;
@@ -693,11 +707,11 @@ auto Ewald_Vq<Tdata>::set_Vq_dVq(const UnitCell& ucell,
 
     std::map<TA, std::map<TAC, Tin>> Vs_dVs_minus_gauss
         = RI_2D_Comm::comm_map2_first(this->mpi_comm, Vs_dVs_minus_gauss_in, atoms00, atoms01);
-    std::map<TA, std::map<TAK, Tout>> Vq_dVq_minus_gauss = func_cal_Vq_dVq_minus_gauss(Vs_dVs_minus_gauss); //{ia0, ia1}
+    std::map<TA, std::map<TAK, Tout>> Vq_dVq_minus_gauss_local
+        = func_cal_Vq_dVq_minus_gauss(Vs_dVs_minus_gauss); // partial sum over local R blocks
 
-    // MPI: {ia0, {ia1, k}} to {ia0, ia1}
-    std::map<TA, std::map<TAK, Tout>> Vq_dVq_gauss_out = func_cal_Vq_dVq_gauss(shift_for_mpi); //{ia0, {ia1, k}}
-    // MPI: {ia0, {ia1, k}} to {ia0, ia1}
+    // MPI: combine partial Fourier sums from different local R subsets onto the
+    // target (I, J, k) distribution.
     std::set<TA> atoms10;
     std::set<TA> atoms11;
     for (const auto& I: this->list_A0_pair_k)
@@ -708,14 +722,17 @@ auto Ewald_Vq<Tdata>::set_Vq_dVq(const UnitCell& ucell,
     {
         atoms11.insert(JR.first);
     }
+    std::map<TA, std::map<TAK, Tout>> Vq_dVq_minus_gauss
+        = RI_2D_Comm::comm_map2_first(this->mpi_comm, Vq_dVq_minus_gauss_local, atoms10, atoms11);
 
+    // MPI: {ia0, {ia1, k}} to {ia0, ia1}
+    std::map<TA, std::map<TAK, Tout>> Vq_dVq_gauss_out = func_cal_Vq_dVq_gauss(shift_for_mpi); //{ia0, {ia1, k}}
     std::map<TA, std::map<TAK, Tout>> Vq_dVq_gauss
         = RI_2D_Comm::comm_map2_first(this->mpi_comm, Vq_dVq_gauss_out, atoms10, atoms11); //{ia0, ia1}
 
-#pragma omp parallel
+#pragma omp parallel for collapse(2) schedule(dynamic)
     for (size_t i0 = 0; i0 < list_A0_pair_k.size(); ++i0)
     {
-#pragma omp for schedule(dynamic) nowait
         for (size_t i1 = 0; i1 < list_A1_pair_k.size(); ++i1)
         {
             const TA iat0 = list_A0_pair_k[i0];
@@ -790,8 +807,8 @@ auto Ewald_Vq<Tdata>::cal_Vs(const UnitCell& ucell,
                              std::map<TA, std::map<TAC, RI::Tensor<Tdata>>>& Vs_in) //{ia0, {ia1, R}}
     -> std::map<TA, std::map<TAC, RI::Tensor<Tdata>>>
 {
-    ModuleBase::TITLE("Ewald_Vq", "cal_Vs");
-    ModuleBase::timer::tick("Ewald_Vq", "cal_Vs");
+	ModuleBase::TITLE("Ewald_Vq", "cal_Vs");
+	ModuleBase::timer::tick("Ewald_Vq", "cal_Vs");
 
     std::map<TA, std::map<TAK, RI::Tensor<std::complex<double>>>> Vq = this->cal_Vq(ucell, chi, Vs_in);
     auto Vs = this->set_Vs_dVs<RI::Tensor<Tdata>>(ucell,
@@ -801,6 +818,58 @@ auto Ewald_Vq<Tdata>::cal_Vs(const UnitCell& ucell,
 
     ModuleBase::timer::tick("Ewald_Vq", "cal_Vs");
     return Vs;
+}
+
+template <typename Tdata>
+auto Ewald_Vq<Tdata>::cal_Vs_serial_full(const UnitCell& ucell,
+                                         const double& chi,
+                                         std::map<TA, std::map<TAC, RI::Tensor<Tdata>>>& Vs_in_full,
+                                         const std::array<Tcell, Ndim>& period_Vs_NAO)
+    -> std::map<TA, std::map<TAC, RI::Tensor<Tdata>>>
+{
+    const MPI_Comm mpi_comm_saved = this->mpi_comm;
+    const auto list_A0_saved = this->list_A0;
+    const auto list_A1_saved = this->list_A1;
+    const auto list_A0_k_saved = this->list_A0_k;
+    const auto list_A1_k_saved = this->list_A1_k;
+    const auto list_A0_pair_R_saved = this->list_A0_pair_R;
+    const auto list_A1_pair_R_saved = this->list_A1_pair_R;
+    const auto list_A0_pair_R_period_saved = this->list_A0_pair_R_period;
+    const auto list_A1_pair_R_period_saved = this->list_A1_pair_R_period;
+    const auto list_A0_pair_k_saved = this->list_A0_pair_k;
+    const auto list_A1_pair_k_saved = this->list_A1_pair_k;
+
+    const std::array<Tcell, Ndim> period_Vs
+        = LRI_CV_Tools::cal_latvec_range<Tcell>(1 + this->ccp_rmesh_times, ucell, this->g_lcaos_rcut);
+    const std::array<int, 1> Nks = {this->nks0};
+
+    this->mpi_comm = MPI_COMM_SELF;
+    this->list_A0 = this->atoms_vec;
+    this->list_A1 = RI::Divide_Atoms::traversal_atom_period(this->atoms_vec, period_Vs);
+    this->list_A0_k = this->atoms_vec;
+    this->list_A1_k = RI::Divide_Atoms::traversal_atom_period(this->atoms_vec, Nks);
+    this->list_A0_pair_R = this->atoms_vec;
+    this->list_A1_pair_R = RI::Divide_Atoms::traversal_atom_period(this->atoms_vec, period_Vs_NAO);
+    this->list_A0_pair_R_period = this->atoms_vec;
+    this->list_A1_pair_R_period = RI::Divide_Atoms::traversal_atom_period(this->atoms_vec, this->nmp);
+    this->list_A0_pair_k = this->atoms_vec;
+    this->list_A1_pair_k = RI::Divide_Atoms::traversal_atom_period(this->atoms_vec, Nks);
+
+    auto Vs_full = this->cal_Vs(ucell, chi, Vs_in_full);
+
+    this->mpi_comm = mpi_comm_saved;
+    this->list_A0 = list_A0_saved;
+    this->list_A1 = list_A1_saved;
+    this->list_A0_k = list_A0_k_saved;
+    this->list_A1_k = list_A1_k_saved;
+    this->list_A0_pair_R = list_A0_pair_R_saved;
+    this->list_A1_pair_R = list_A1_pair_R_saved;
+    this->list_A0_pair_R_period = list_A0_pair_R_period_saved;
+    this->list_A1_pair_R_period = list_A1_pair_R_period_saved;
+    this->list_A0_pair_k = list_A0_pair_k_saved;
+    this->list_A1_pair_k = list_A1_pair_k_saved;
+
+    return Vs_full;
 }
 
 template <typename Tdata>
@@ -822,6 +891,237 @@ auto Ewald_Vq<Tdata>::cal_dVs(
 
     ModuleBase::timer::tick("Ewald_Vq", "cal_dVs");
     return dVs;
+}
+
+template <typename Tdata>
+auto Ewald_Vq<Tdata>::cal_short_range_Vs(const UnitCell& ucell,
+                                         const std::vector<TA>& list_A0,
+                                         const std::vector<TAC>& list_A1,
+                                         std::map<TA, std::map<TAC, RI::Tensor<Tdata>>>& Vs_in)
+    -> std::map<TA, std::map<TAC, RI::Tensor<Tdata>>>
+{
+    ModuleBase::TITLE("Ewald_Vq", "cal_short_range_Vs");
+    ModuleBase::timer::tick("Ewald_Vq", "cal_short_range_Vs");
+
+    auto Vs_minus_gauss = this->cal_Vs_minus_gauss(ucell, list_A0, list_A1, Vs_in);
+    auto Vq_minus_gauss = this->cal_Vq_minus_gauss(ucell, list_A0, list_A1, Vs_minus_gauss);
+    auto Vs_short = this->set_Vs_dVs<RI::Tensor<Tdata>>(ucell,
+                                                        this->list_A0_pair_R_period,
+                                                        this->list_A1_pair_R_period,
+                                                        Vq_minus_gauss);
+
+    ModuleBase::timer::tick("Ewald_Vq", "cal_short_range_Vs");
+    return Vs_short;
+}
+
+template <typename Tdata>
+auto Ewald_Vq<Tdata>::cal_short_range_Vs_serial_full(
+    const UnitCell& ucell,
+    std::map<TA, std::map<TAC, RI::Tensor<Tdata>>>& Vs_in_full,
+    const std::array<Tcell, Ndim>& period_Vs_NAO) -> std::map<TA, std::map<TAC, RI::Tensor<Tdata>>>
+{
+    const MPI_Comm mpi_comm_saved = this->mpi_comm;
+    const auto list_A0_saved = this->list_A0;
+    const auto list_A1_saved = this->list_A1;
+    const auto list_A0_k_saved = this->list_A0_k;
+    const auto list_A1_k_saved = this->list_A1_k;
+    const auto list_A0_pair_R_saved = this->list_A0_pair_R;
+    const auto list_A1_pair_R_saved = this->list_A1_pair_R;
+    const auto list_A0_pair_R_period_saved = this->list_A0_pair_R_period;
+    const auto list_A1_pair_R_period_saved = this->list_A1_pair_R_period;
+    const auto list_A0_pair_k_saved = this->list_A0_pair_k;
+    const auto list_A1_pair_k_saved = this->list_A1_pair_k;
+
+    const std::array<Tcell, Ndim> period_Vs
+        = LRI_CV_Tools::cal_latvec_range<Tcell>(1 + this->ccp_rmesh_times, ucell, this->g_lcaos_rcut);
+    const std::array<int, 1> Nks = {this->nks0};
+
+    this->mpi_comm = MPI_COMM_SELF;
+    this->list_A0 = this->atoms_vec;
+    this->list_A1 = RI::Divide_Atoms::traversal_atom_period(this->atoms_vec, period_Vs);
+    this->list_A0_k = this->atoms_vec;
+    this->list_A1_k = RI::Divide_Atoms::traversal_atom_period(this->atoms_vec, Nks);
+    this->list_A0_pair_R = this->atoms_vec;
+    this->list_A1_pair_R = RI::Divide_Atoms::traversal_atom_period(this->atoms_vec, period_Vs_NAO);
+    this->list_A0_pair_R_period = this->atoms_vec;
+    this->list_A1_pair_R_period = RI::Divide_Atoms::traversal_atom_period(this->atoms_vec, this->nmp);
+    this->list_A0_pair_k = this->atoms_vec;
+    this->list_A1_pair_k = RI::Divide_Atoms::traversal_atom_period(this->atoms_vec, Nks);
+
+    auto Vs_short_full = this->cal_short_range_Vs(ucell, this->list_A0, this->list_A1, Vs_in_full);
+
+    this->mpi_comm = mpi_comm_saved;
+    this->list_A0 = list_A0_saved;
+    this->list_A1 = list_A1_saved;
+    this->list_A0_k = list_A0_k_saved;
+    this->list_A1_k = list_A1_k_saved;
+    this->list_A0_pair_R = list_A0_pair_R_saved;
+    this->list_A1_pair_R = list_A1_pair_R_saved;
+    this->list_A0_pair_R_period = list_A0_pair_R_period_saved;
+    this->list_A1_pair_R_period = list_A1_pair_R_period_saved;
+    this->list_A0_pair_k = list_A0_pair_k_saved;
+    this->list_A1_pair_k = list_A1_pair_k_saved;
+
+    return Vs_short_full;
+}
+
+template <typename Tdata>
+auto Ewald_Vq<Tdata>::cal_long_range_Vs_gauss(const UnitCell& ucell, const double& chi)
+    -> std::map<TA, std::map<TAC, RI::Tensor<Tdata>>>
+{
+    ModuleBase::TITLE("Ewald_Vq", "cal_long_range_Vs_gauss");
+    ModuleBase::timer::tick("Ewald_Vq", "cal_long_range_Vs_gauss");
+
+    const int shift_for_mpi = std::floor(this->nks0 / 2.0);
+    const T_func_DPget_Vq_dVq<RI::Tensor<std::complex<double>>> func_DPget_Vq
+        = std::bind(&Gaussian_Abfs::get_Vq,
+                    &this->gaussian_abfs,
+                    std::placeholders::_1,
+                    std::placeholders::_2,
+                    std::placeholders::_3,
+                    chi,
+                    std::placeholders::_4,
+                    this->gaunt);
+    std::map<TA, std::map<TAK, RI::Tensor<std::complex<double>>>> Vq_gauss_out
+        = this->set_Vq_dVq_gauss(ucell, this->list_A0_k, this->list_A1_k, shift_for_mpi, func_DPget_Vq);
+
+    std::set<TA> atoms10;
+    std::set<TA> atoms11;
+    for (const auto& I: this->list_A0_pair_k)
+    {
+        atoms10.insert(I);
+    }
+    for (const auto& JR: this->list_A1_pair_k)
+    {
+        atoms11.insert(JR.first);
+    }
+    std::map<TA, std::map<TAK, RI::Tensor<std::complex<double>>>> Vq_gauss
+        = RI_2D_Comm::comm_map2_first(this->mpi_comm, Vq_gauss_out, atoms10, atoms11);
+
+    using Tin_convert = typename LRI_CV_Tools::TinType<RI::Tensor<std::complex<double>>>::type;
+    std::map<TA, std::map<TAK, RI::Tensor<std::complex<double>>>> Vq_long_full;
+#pragma omp parallel
+    for (size_t i0 = 0; i0 < this->list_A0_pair_k.size(); ++i0)
+    {
+#pragma omp for schedule(dynamic) nowait
+        for (size_t i1 = 0; i1 < this->list_A1_pair_k.size(); ++i1)
+        {
+            const TA iat0 = this->list_A0_pair_k[i0];
+            const int it0 = ucell.iat2it[iat0];
+            const TA iat1 = this->list_A1_pair_k[i1].first;
+            const int it1 = ucell.iat2it[iat1];
+            const int ik = this->list_A1_pair_k[i1].second[0] + shift_for_mpi;
+            const TAK re_index = std::make_pair(iat1, std::array<int, 1>{ik});
+
+            auto it_outer = Vq_gauss.find(this->list_A0_pair_k[i0]);
+            if (it_outer == Vq_gauss.end())
+            {
+                continue;
+            }
+            auto it_inner = it_outer->second.find(this->list_A1_pair_k[i1]);
+            if (it_inner == it_outer->second.end())
+            {
+                continue;
+            }
+
+            RI::Tensor<std::complex<double>> data;
+            LRI_CV_Tools::init_elem(data, this->index_abfs[it0].count_size, this->index_abfs[it1].count_size);
+            for (int l0 = 0; l0 != this->g_abfs_ccp.at(it0).size(); ++l0)
+            {
+                for (int l1 = 0; l1 != this->g_abfs.at(it1).size(); ++l1)
+                {
+                    for (size_t n0 = 0; n0 != this->g_abfs_ccp.at(it0).at(l0).size(); ++n0)
+                    {
+                        const double pA = this->multipole.at(it0).at(l0).at(n0);
+                        for (size_t n1 = 0; n1 != this->g_abfs.at(it1).at(l1).size(); ++n1)
+                        {
+                            const double pB = this->multipole.at(it1).at(l1).at(n1);
+                            Tin_convert frac = RI::Global_Func::convert<Tin_convert>(pA * pB);
+                            for (size_t m0 = 0; m0 != 2 * l0 + 1; ++m0)
+                            {
+                                const size_t index0 = this->index_abfs.at(it0).at(l0).at(n0).at(m0);
+                                const size_t lm0 = l0 * l0 + m0;
+                                for (size_t m1 = 0; m1 != 2 * l1 + 1; ++m1)
+                                {
+                                    const size_t index1 = this->index_abfs.at(it1).at(l1).at(n1).at(m1);
+                                    const size_t lm1 = l1 * l1 + m1;
+                                    LRI_CV_Tools::add_elem(data,
+                                                           index0,
+                                                           index1,
+                                                           it_inner->second,
+                                                           lm0,
+                                                           lm1,
+                                                           frac);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+#pragma omp critical(Ewald_Vq_cal_long_range_Vs_gauss)
+            Vq_long_full[this->list_A0_pair_k[i0]][re_index] = std::move(data);
+        }
+    }
+
+    auto Vs_long = this->set_Vs_dVs<RI::Tensor<Tdata>>(ucell,
+                                                       this->list_A0_pair_R_period,
+                                                       this->list_A1_pair_R_period,
+                                                       Vq_long_full);
+
+    ModuleBase::timer::tick("Ewald_Vq", "cal_long_range_Vs_gauss");
+    return Vs_long;
+}
+
+template <typename Tdata>
+auto Ewald_Vq<Tdata>::cal_long_range_Vs_gauss_serial_full(const UnitCell& ucell,
+                                                          const double& chi,
+                                                          const std::array<Tcell, Ndim>& period_Vs_NAO)
+    -> std::map<TA, std::map<TAC, RI::Tensor<Tdata>>>
+{
+    const MPI_Comm mpi_comm_saved = this->mpi_comm;
+    const auto list_A0_saved = this->list_A0;
+    const auto list_A1_saved = this->list_A1;
+    const auto list_A0_k_saved = this->list_A0_k;
+    const auto list_A1_k_saved = this->list_A1_k;
+    const auto list_A0_pair_R_saved = this->list_A0_pair_R;
+    const auto list_A1_pair_R_saved = this->list_A1_pair_R;
+    const auto list_A0_pair_R_period_saved = this->list_A0_pair_R_period;
+    const auto list_A1_pair_R_period_saved = this->list_A1_pair_R_period;
+    const auto list_A0_pair_k_saved = this->list_A0_pair_k;
+    const auto list_A1_pair_k_saved = this->list_A1_pair_k;
+
+    const std::array<Tcell, Ndim> period_Vs
+        = LRI_CV_Tools::cal_latvec_range<Tcell>(1 + this->ccp_rmesh_times, ucell, this->g_lcaos_rcut);
+    const std::array<int, 1> Nks = {this->nks0};
+
+    this->mpi_comm = MPI_COMM_SELF;
+    this->list_A0 = this->atoms_vec;
+    this->list_A1 = RI::Divide_Atoms::traversal_atom_period(this->atoms_vec, period_Vs);
+    this->list_A0_k = this->atoms_vec;
+    this->list_A1_k = RI::Divide_Atoms::traversal_atom_period(this->atoms_vec, Nks);
+    this->list_A0_pair_R = this->atoms_vec;
+    this->list_A1_pair_R = RI::Divide_Atoms::traversal_atom_period(this->atoms_vec, period_Vs_NAO);
+    this->list_A0_pair_R_period = this->atoms_vec;
+    this->list_A1_pair_R_period = RI::Divide_Atoms::traversal_atom_period(this->atoms_vec, this->nmp);
+    this->list_A0_pair_k = this->atoms_vec;
+    this->list_A1_pair_k = RI::Divide_Atoms::traversal_atom_period(this->atoms_vec, Nks);
+
+    auto Vs_long_full = this->cal_long_range_Vs_gauss(ucell, chi);
+
+    this->mpi_comm = mpi_comm_saved;
+    this->list_A0 = list_A0_saved;
+    this->list_A1 = list_A1_saved;
+    this->list_A0_k = list_A0_k_saved;
+    this->list_A1_k = list_A1_k_saved;
+    this->list_A0_pair_R = list_A0_pair_R_saved;
+    this->list_A1_pair_R = list_A1_pair_R_saved;
+    this->list_A0_pair_R_period = list_A0_pair_R_period_saved;
+    this->list_A1_pair_R_period = list_A1_pair_R_period_saved;
+    this->list_A0_pair_k = list_A0_pair_k_saved;
+    this->list_A1_pair_k = list_A1_pair_k_saved;
+
+    return Vs_long_full;
 }
 
 template <typename Tdata>

@@ -1,5 +1,7 @@
 #include "csr_reader.h"
 #include "source_base/tool_quit.h"
+#include <sstream>
+#include <string>
 
 namespace ModuleIO
 {

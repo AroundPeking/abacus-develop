@@ -383,12 +383,9 @@ auto Gaussian_Abfs::DPcal_lattice_sum(
                                                                                    omp_out.begin(),                    \
                                                                                    LRI_CV_Tools::plus<Tresult>()))     \
     initializer(omp_priv = decltype(omp_orig)(omp_orig.size()))
-//     // auto start0 = std::chrono::system_clock::now();
-#pragma omp parallel for reduction(vec_plus : result)
-    for (int idx = 0; idx < total_cells; ++idx)
-    {
+    auto accumulate_cell = [&](const int idx, std::vector<Tresult>& out) {
         if (exclude_Gamma && this->check_gamma[ik][idx])
-            continue;
+            return;
 
         ModuleBase::Vector3<double> vec = this->qGvecs[ik][idx];
         const double vec_sq = vec.norm2() * tpiba * tpiba;
@@ -404,10 +401,18 @@ auto Gaussian_Abfs::DPcal_lattice_sum(
             {
                 const int lm = L * L + m;
                 const double val_lm = val_l * this->ylm[ik](lm, idx);
-                result[lm] = result[lm] + RI::Global_Func::convert<std::complex<double>>(val_lm) * phase;
+                out[lm] = out[lm] + RI::Global_Func::convert<std::complex<double>>(val_lm) * phase;
             }
         }
+    };
+
+//     // auto start0 = std::chrono::system_clock::now();
+#pragma omp parallel for reduction(vec_plus : result)
+    for (int idx = 0; idx < total_cells; ++idx)
+    {
+        accumulate_cell(idx, result);
     }
+
     // auto end0 = std::chrono::system_clock::now();
     // auto duration0 =
     // std::chrono::duration_cast<std::chrono::microseconds>(end0 - start0);

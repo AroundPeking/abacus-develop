@@ -123,14 +123,15 @@ private:
 
 	std::vector<std::vector<std::vector<Numerical_Orbital_Lm>>> lcaos;
 	std::vector<std::vector<std::vector<Numerical_Orbital_Lm>>> abfs;
-	//std::vector<std::vector<std::vector<Numerical_Orbital_Lm>>> abfs_ccp;
 	std::map<Conv_Coulomb_Pot_K::Coulomb_Method, Exx_Obj<Tdata>> exx_objs;
-	//LRI_CV<Tdata> cv;
 	RI::Exx<TA,Tcell,Ndim,Tdata> exx_lri;
-	std::map<Conv_Coulomb_Pot_K::Coulomb_Method, 
-        std::pair<bool, 
-            std::map<Conv_Coulomb_Pot_K::Coulomb_Type, 
+	std::map<Conv_Coulomb_Pot_K::Coulomb_Method,
+        std::pair<bool,
+            std::map<Conv_Coulomb_Pot_K::Coulomb_Type,
                 std::vector<std::map<std::string,std::string>>>>> coulomb_settings;
+	bool use_rotated_n0_long_range = false;
+	ModuleBase::Element_Basis_Index::IndexPermutation abfs_old_to_new_per_type;
+	std::vector<std::size_t> abfs_long_prefix_size_per_type;
 
 	void post_process_Hexx( std::map<TA, std::map<TAC, RI::Tensor<Tdata>>> &Hexxs_io ) const;
 	double post_process_Eexx(const double& Eexx_in) const;

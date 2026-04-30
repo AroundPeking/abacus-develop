@@ -721,7 +721,11 @@ void ModuleIO::save_sparse(
         auto iter = smat.find(R_coor);
         if (iter != smat.end()) {
             for (auto& row_loop: iter->second) {
-                nonzero_num[count] += row_loop.second.size();
+                for (const auto& col_loop: row_loop.second) {
+                    if (std::abs(col_loop.second) > sparse_thr) {
+                        ++nonzero_num[count];
+                    }
+                }
             }
         }
         ++count;
