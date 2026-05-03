@@ -11,4 +11,9 @@ AddTest(
   LIBS base ${math_libs} device parameter
   SOURCES ri_cv_io_test.cpp
 )
+AddTest(
+  TARGET MODULE_RI_exx_lri_rotation_policy_test
+  LIBS base ${math_libs} device parameter
+  SOURCES exx_lri_rotation_policy_test.cpp
+)
 install(DIRECTORY support DESTINATION ${CMAKE_CURRENT_BINARY_DIR})

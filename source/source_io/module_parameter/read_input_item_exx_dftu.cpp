@@ -635,6 +635,13 @@ void ReadInput::item_exx()
         this->add_item(item);
     }
     {
+        Input_Item item("rpa_rotate_abfs");
+        item.annotation = "whether to rotate auxiliary basis during rpa=1 EXX initialization";
+        item.default_value = "true";
+        read_sync_bool(input.rpa_rotate_abfs);
+        this->add_item(item);
+    }
+    {
         Input_Item item("exx_multip_moments_threshold");
         item.annotation = "threshold to screen multipole moments in Coulomb calculation";
         read_sync_double(input.exx_multip_moments_threshold);

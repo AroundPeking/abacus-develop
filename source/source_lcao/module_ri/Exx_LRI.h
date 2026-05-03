@@ -21,6 +21,7 @@
 
 #include "module_exx_symmetry/symmetry_rotation.h"
 
+struct Input_para;
 	class Parallel_Orbitals;
 
 	template<typename T, typename Tdata>
@@ -145,6 +146,11 @@ private:
 	friend class LR::OperatorLREXX<double>;
 	friend class LR::OperatorLREXX<std::complex<double>>;
 };
+
+namespace ExxLriDetail
+{
+bool should_rotate_abfs_for_init(const Input_para& inp);
+}
 
 #include "Exx_LRI.hpp"
 

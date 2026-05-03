@@ -570,6 +570,7 @@ struct Input_para
     bool out_unshrinked_v = false; ///< whether to output the large Vq matrix in unshrinked auxiliary basis
     bool exx_coul_moment = false;                 ///< whether to use moment method for Coulomb calculation
     bool exx_rotate_abfs = false;                 ///< whether to rotate auxiliary basis for Coulomb calculation
+    bool rpa_rotate_abfs = true;                  ///< whether to rotate auxiliary basis during rpa=1 EXX initialization
     double exx_multip_moments_threshold = 1e-10; ///< threshold to screen multipole moments in Coulomb calculation
     // ==============   #Parameters (16.dft+u) ======================
     //    DFT+U       Xin Qu added on 2020-10-29

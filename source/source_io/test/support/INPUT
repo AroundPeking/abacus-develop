@@ -296,6 +296,7 @@ shrink_abfs_pca_thr            0.02 #
 shrink_lu_inv_thr              1e-5 #
 exx_coul_moment                1 #
 exx_rotate_abfs                1 #
+rpa_rotate_abfs                1 #
 exx_multip_moments_threshold   1e-12 #
 
 #Parameters (16.tddft)

@@ -302,6 +302,7 @@ TEST_F(InputParaTest, ParaRead)
     EXPECT_DOUBLE_EQ(param.inp.shrink_LU_inv_thr, 1e-5);
     EXPECT_TRUE(param.inp.exx_coul_moment);
     EXPECT_TRUE(param.inp.exx_rotate_abfs);
+    EXPECT_TRUE(param.inp.rpa_rotate_abfs);
     EXPECT_DOUBLE_EQ(param.inp.exx_multip_moments_threshold, 1e-12);
     EXPECT_FALSE(param.inp.noncolin);
     EXPECT_FALSE(param.inp.lspinorb);

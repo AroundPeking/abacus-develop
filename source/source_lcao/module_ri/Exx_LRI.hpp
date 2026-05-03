@@ -63,6 +63,15 @@ inline bool rotate_abfs_in_place_for_current_full_matrix(const Exx_Info::Exx_Inf
     return true;
 }
 
+inline bool should_rotate_abfs_for_init(const Input_para& inp)
+{
+    if (inp.exx_rotate_abfs)
+    {
+        return true;
+    }
+    return inp.rpa && inp.rpa_rotate_abfs;
+}
+
 inline bool allow_rt_tddft_ewald_force_stress_bypass()
 {
     return PARAM.inp.esolver_type == "tddft";
@@ -703,7 +712,9 @@ void Exx_LRI<Tdata>::init(const MPI_Comm &mpi_comm_in,
 	else
 		{ this->abfs = Exx_Abfs::IO::construct_abfs( abfs_same_atom, orb, this->info.files_abfs, this->info.kmesh_times ); 	}
 	Exx_Abfs::Construct_Orbs::filter_empty_orbs(this->abfs);
-    if (this->info.rotate_abfs && ExxLriDetail::rotate_abfs_in_place_for_current_full_matrix(this->info))
+    const bool rotate_abfs_for_init
+        = ExxLriDetail::should_rotate_abfs_for_init(PARAM.inp);
+    if (rotate_abfs_for_init && ExxLriDetail::rotate_abfs_in_place_for_current_full_matrix(this->info))
     {
         ExxLriDetail::rotate_abfs_by_multipole(this->abfs, this->info.multip_moments_threshold);
     }
@@ -787,7 +798,9 @@ void Exx_LRI<Tdata>::init(const MPI_Comm &mpi_comm_in,
 
 	this->abfs = abfs_in;
 	Exx_Abfs::Construct_Orbs::filter_empty_orbs(this->abfs);
-    if (this->info.rotate_abfs && ExxLriDetail::rotate_abfs_in_place_for_current_full_matrix(this->info))
+    const bool rotate_abfs_for_init
+        = ExxLriDetail::should_rotate_abfs_for_init(PARAM.inp);
+    if (rotate_abfs_for_init && ExxLriDetail::rotate_abfs_in_place_for_current_full_matrix(this->info))
     {
         ExxLriDetail::rotate_abfs_by_multipole(this->abfs, this->info.multip_moments_threshold);
     }
@@ -883,7 +896,9 @@ void Exx_LRI<Tdata>::init_spencer(const MPI_Comm& mpi_comm_in,
         this->abfs = Exx_Abfs::IO::construct_abfs(abfs_same_atom, orb, this->info.files_abfs, this->info.kmesh_times);
     }
     Exx_Abfs::Construct_Orbs::filter_empty_orbs(this->abfs);
-    if (this->info.rotate_abfs && ExxLriDetail::rotate_abfs_in_place_for_current_full_matrix(this->info))
+    const bool rotate_abfs_for_init
+        = ExxLriDetail::should_rotate_abfs_for_init(PARAM.inp);
+    if (rotate_abfs_for_init && ExxLriDetail::rotate_abfs_in_place_for_current_full_matrix(this->info))
     {
         ExxLriDetail::rotate_abfs_by_multipole(this->abfs, this->info.multip_moments_threshold);
     }
@@ -948,7 +963,9 @@ void Exx_LRI<Tdata>::init_spencer(const MPI_Comm& mpi_comm_in,
 
     this->abfs = abfs_in;
     Exx_Abfs::Construct_Orbs::filter_empty_orbs(this->abfs);
-    if (this->info.rotate_abfs && ExxLriDetail::rotate_abfs_in_place_for_current_full_matrix(this->info))
+    const bool rotate_abfs_for_init
+        = ExxLriDetail::should_rotate_abfs_for_init(PARAM.inp);
+    if (rotate_abfs_for_init && ExxLriDetail::rotate_abfs_in_place_for_current_full_matrix(this->info))
     {
         ExxLriDetail::rotate_abfs_by_multipole(this->abfs, this->info.multip_moments_threshold);
     }
