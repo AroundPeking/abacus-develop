@@ -868,10 +868,11 @@ void Exx_LRI<Tdata>::init(const MPI_Comm &mpi_comm_in,
 															this->abfs_old_to_new_per_type );
 				if (settings_list.first == Conv_Coulomb_Pot_K::Coulomb_Method::Ewald)
 				{
-					this->exx_objs[settings_list.first].evq.init(ucell, orb,
-																this->mpi_comm, this->p_kv, this->lcaos, this->abfs,
-																settings_list.second.second, this->MGT, this->info.ccp_rmesh_times, this->info.kmesh_times,
-																this->abfs_old_to_new_per_type);
+						this->exx_objs[settings_list.first].evq.init(ucell, orb,
+																	this->mpi_comm, this->p_kv, this->lcaos, this->abfs,
+																	settings_list.second.second, this->MGT, this->info.ccp_rmesh_times,
+																	this->info.ewald_lambda, this->info.kmesh_times,
+																	this->abfs_old_to_new_per_type);
 				}
 			}
 
@@ -952,10 +953,11 @@ void Exx_LRI<Tdata>::init(const MPI_Comm &mpi_comm_in,
 															this->abfs_old_to_new_per_type );
 				if (settings_list.first == Conv_Coulomb_Pot_K::Coulomb_Method::Ewald)
 				{
-					this->exx_objs[settings_list.first].evq.init(ucell, orb,
-																this->mpi_comm, this->p_kv, this->lcaos, this->abfs,
-																settings_list.second.second, this->MGT, this->info.ccp_rmesh_times, this->info.kmesh_times,
-																this->abfs_old_to_new_per_type);
+						this->exx_objs[settings_list.first].evq.init(ucell, orb,
+																	this->mpi_comm, this->p_kv, this->lcaos, this->abfs,
+																	settings_list.second.second, this->MGT, this->info.ccp_rmesh_times,
+																	this->info.ewald_lambda, this->info.kmesh_times,
+																	this->abfs_old_to_new_per_type);
 				}
 			}
 
