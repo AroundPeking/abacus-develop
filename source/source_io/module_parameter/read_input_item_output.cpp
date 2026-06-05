@@ -785,6 +785,26 @@ If EXX(exact exchange) is calculated (i.e. dft_fuctional==hse/hf/pbe0/scan0 or r
         this->add_item(item);
     }
     {
+        Input_Item item("out_librpa_reader_version");
+        item.annotation = "LibRPA reader format version for ABACUS RPA/GW producer files";
+        item.category = "Output information";
+        item.type = "Integer";
+        item.description = "Select the ABACUS output format for files consumed by LibRPA. "
+                           "0 writes the legacy text files, and 1 writes LibRPA reader-v1 binary files directly.";
+        item.default_value = "0";
+        item.unit = "";
+        item.availability = "Numerical atomic orbital basis with rpa=True.";
+        read_sync_int(input.out_librpa_reader_version);
+        item.check_value = [](const Input_Item& item, const Parameter& para) {
+            if (para.input.out_librpa_reader_version != 0 && para.input.out_librpa_reader_version != 1)
+            {
+                ModuleBase::WARNING_QUIT("ReadInput",
+                                         item.label + " supports only 0 (legacy) or 1 (LibRPA reader-v1).");
+            }
+        };
+        this->add_item(item);
+    }
+    {
         Input_Item item("out_pchg");
         item.annotation = "specify the bands to be calculated for the partial (band-decomposed) charge densities";
         item.category = "Output information";
