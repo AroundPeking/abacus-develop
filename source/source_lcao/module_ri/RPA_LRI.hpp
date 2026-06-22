@@ -36,6 +36,8 @@ namespace RpaLriDetail
 constexpr int LIBRPA_COULOMB_V1_MARKER = -20129433;
 constexpr int LIBRPA_LRICOEF_V1_MARKER = -10267453;
 constexpr int LIBRPA_SHRINK_SINVS_V1_MARKER = -30241621;
+constexpr int LIBRPA_KS_EIGENVECTOR_V1_MARKER = -12345679;
+constexpr int LIBRPA_KS_EIGENVECTOR_V1_KIND_COMPLEX_DOUBLE = 28;
 constexpr int LIBRPA_COULOMB_V1_COMPLEX_FLAG = 1;
 
 static_assert(sizeof(std::complex<double>) == 2 * sizeof(double),
@@ -111,6 +113,34 @@ inline std::int64_t checked_i64_from_u64(const unsigned long long value, const s
         throw std::runtime_error(context + " exceeds int64_t range.");
     }
     return static_cast<std::int64_t>(value);
+}
+
+inline std::int32_t checked_i32_from_size(const std::size_t value, const std::string& context)
+{
+    if (value > static_cast<std::size_t>(std::numeric_limits<std::int32_t>::max()))
+    {
+        throw std::runtime_error(context + " exceeds int32_t range.");
+    }
+    return static_cast<std::int32_t>(value);
+}
+
+inline std::int32_t checked_i32_from_int(const int value, const std::string& context)
+{
+    if (value < 0)
+    {
+        throw std::runtime_error(context + " is negative.");
+    }
+    return checked_i32_from_size(static_cast<std::size_t>(value), context);
+}
+
+inline int checked_near_int(const double value, const std::string& context)
+{
+    const double rounded = std::round(value);
+    if (std::abs(value - rounded) > 1e-8)
+    {
+        throw std::runtime_error(context + " is not close to an integer.");
+    }
+    return static_cast<int>(rounded);
 }
 
 inline int sum_int_vector(const std::vector<int>& values)
@@ -406,6 +436,7 @@ void RPA_LRI<T, Tdata>::postSCF(const UnitCell& ucell,
     this->out_bands(pelec);
     this->out_eigen_vector(parav, psi);
     this->out_struc(ucell);
+    this->out_bz_sampling();
 
     std::cout << "rpa_pca_threshold: " << this->info.pca_threshold << std::endl;
     std::cout << "rpa_ccp_rmesh_times: " << this->info.ccp_rmesh_times << std::endl;
@@ -1646,6 +1677,147 @@ void RPA_LRI<T, Tdata>::out_eigen_vector(const Parallel_Orbitals& parav, const p
     const int npsin_tmp = PARAM.inp.nspin == 2 ? 2 : 1;
     const std::complex<double> zero(0.0, 0.0);
 
+    if (PARAM.inp.out_librpa_reader_version == 1)
+    {
+        struct KSEigenRecord
+        {
+            std::int32_t ik = 0;
+            std::int64_t payload_offset = 0;
+            std::vector<std::complex<double>> payload;
+        };
+
+        std::vector<KSEigenRecord> records;
+        records.reserve(static_cast<std::size_t>(nks_tot));
+
+        for (int ik = 0; ik < nks_tot; ik++)
+        {
+            std::vector<ModuleBase::ComplexMatrix> is_wfc_ib_iw(npsin_tmp);
+            for (int is = 0; is < npsin_tmp; is++)
+            {
+                is_wfc_ib_iw[is].create(PARAM.inp.nbands, PARAM.globalv.nlocal);
+                for (int ib_global = 0; ib_global < PARAM.inp.nbands; ++ib_global)
+                {
+                    std::vector<std::complex<double>> wfc_iks(PARAM.globalv.nlocal, zero);
+
+                    const int ib_local = parav.global2local_col(ib_global);
+
+                    if (ib_local >= 0)
+                    {
+                        for (int ir = 0; ir < psi.get_nbasis(); ir++)
+                        {
+                            wfc_iks[parav.local2global_row(ir)] = psi(ik + nks_tot * is, ib_local, ir);
+                        }
+                    }
+
+                    std::vector<std::complex<double>> tmp = wfc_iks;
+#ifdef __MPI
+                    MPI_Allreduce(&tmp[0],
+                                  &wfc_iks[0],
+                                  PARAM.globalv.nlocal,
+                                  MPI_DOUBLE_COMPLEX,
+                                  MPI_SUM,
+                                  MPI_COMM_WORLD);
+#endif
+                    for (int iw = 0; iw < PARAM.globalv.nlocal; iw++)
+                    {
+                        is_wfc_ib_iw[is](ib_global, iw) = wfc_iks[iw];
+                    }
+                }
+            }
+
+            if (GlobalV::MY_RANK == 0)
+            {
+                KSEigenRecord record;
+                record.ik = static_cast<std::int32_t>(ik + 1);
+                record.payload.reserve(static_cast<std::size_t>(npsin_tmp)
+                                       * static_cast<std::size_t>(PARAM.inp.nbands)
+                                       * static_cast<std::size_t>(PARAM.globalv.nlocal));
+                if (PARAM.inp.nspin == 4)
+                {
+                    if (PARAM.globalv.nlocal % 2 != 0)
+                    {
+                        throw std::runtime_error("SOC KS eigenvector output expects an even basis size.");
+                    }
+                    const int nlocal_ao = PARAM.globalv.nlocal / 2;
+                    for (int isoc = 0; isoc < 2; ++isoc)
+                    {
+                        for (int ib = 0; ib < PARAM.inp.nbands; ++ib)
+                        {
+                            for (int iw = 0; iw < nlocal_ao; ++iw)
+                            {
+                                record.payload.push_back(is_wfc_ib_iw[0](ib, iw * 2 + isoc));
+                            }
+                        }
+                    }
+                }
+                else
+                {
+                    for (int is = 0; is < npsin_tmp; ++is)
+                    {
+                        for (int ib = 0; ib < PARAM.inp.nbands; ++ib)
+                        {
+                            for (int iw = 0; iw < PARAM.globalv.nlocal; ++iw)
+                            {
+                                record.payload.push_back(is_wfc_ib_iw[is](ib, iw));
+                            }
+                        }
+                    }
+                }
+                records.push_back(std::move(record));
+            }
+        }
+
+        if (GlobalV::MY_RANK == 0)
+        {
+            const std::string out_name = "KS_eigenvector_0.dat";
+            const std::int64_t record_bytes = static_cast<std::int64_t>(sizeof(std::int32_t))
+                + static_cast<std::int64_t>(sizeof(std::int64_t));
+            std::int64_t offset = 6 * static_cast<std::int64_t>(sizeof(std::int32_t))
+                + static_cast<std::int64_t>(records.size()) * record_bytes;
+            for (auto& record: records)
+            {
+                record.payload_offset = offset;
+                offset += static_cast<std::int64_t>(record.payload.size() * sizeof(std::complex<double>));
+            }
+
+            std::ofstream ofs(out_name.c_str(), std::ios::out | std::ios::binary | std::ios::trunc);
+            if (!ofs.good())
+            {
+                throw std::runtime_error("Failed to open " + out_name);
+            }
+
+            const std::int32_t marker = RpaLriDetail::LIBRPA_KS_EIGENVECTOR_V1_MARKER;
+            const std::int32_t kind = RpaLriDetail::LIBRPA_KS_EIGENVECTOR_V1_KIND_COMPLEX_DOUBLE;
+            const std::int32_t nkpoints_local = RpaLriDetail::checked_i32_from_size(records.size(),
+                                                                                    "KS eigenvector k-point count");
+            const std::int32_t nspins = RpaLriDetail::checked_i32_from_int(npsin_tmp, "KS eigenvector spin count");
+            const std::int32_t nstates = RpaLriDetail::checked_i32_from_int(PARAM.inp.nbands,
+                                                                            "KS eigenvector state count");
+            const std::int32_t nbasis_wfc = RpaLriDetail::checked_i32_from_int(PARAM.globalv.nlocal,
+                                                                               "KS eigenvector basis count");
+            RpaLriDetail::write_scalar(ofs, marker, out_name);
+            RpaLriDetail::write_scalar(ofs, kind, out_name);
+            RpaLriDetail::write_scalar(ofs, nkpoints_local, out_name);
+            RpaLriDetail::write_scalar(ofs, nspins, out_name);
+            RpaLriDetail::write_scalar(ofs, nstates, out_name);
+            RpaLriDetail::write_scalar(ofs, nbasis_wfc, out_name);
+            for (const auto& record: records)
+            {
+                RpaLriDetail::write_scalar(ofs, record.ik, out_name);
+                RpaLriDetail::write_scalar(ofs, record.payload_offset, out_name);
+            }
+            for (const auto& record: records)
+            {
+                RpaLriDetail::checked_write(ofs,
+                                            record.payload.data(),
+                                            record.payload.size() * sizeof(std::complex<double>),
+                                            out_name);
+            }
+            ofs.close();
+        }
+        return;
+    }
+
     for (int ik = 0; ik < nks_tot; ik++)
     {
         std::stringstream ss;
@@ -1711,7 +1883,6 @@ void RPA_LRI<T, Tdata>::out_struc(const UnitCell& ucell)
     }
     ModuleBase::TITLE("DFT_RPA_interface", "out_struc");
     double TWOPI_Bohr2A = ModuleBase::TWO_PI * ModuleBase::BOHR_TO_A;
-    const int nks_tot = PARAM.inp.nspin == 2 ? (int)p_kv->get_nks() / 2 : p_kv->get_nks();
     ModuleBase::Matrix3 lat = ucell.latvec / ModuleBase::BOHR_TO_A;
     ModuleBase::Matrix3 G_RPA = ucell.G * TWOPI_Bohr2A;
     std::stringstream ss;
@@ -1753,24 +1924,90 @@ void RPA_LRI<T, Tdata>::out_struc(const UnitCell& ucell)
         }
     }
 
-    ofs << p_kv->nmp[0] << std::setw(6) << p_kv->nmp[1] << std::setw(6) << p_kv->nmp[2] << std::setw(6) << std::endl;
-
-    for (int ik = 0; ik != nks_tot; ik++)
+    if (ModuleSymmetry::Symmetry::symm_flag == 1 && ucell.symm.nrotk > 0)
     {
-        write_scientific_triplet(p_kv->kvec_c[ik].x * TWOPI_Bohr2A,
-                                 p_kv->kvec_c[ik].y * TWOPI_Bohr2A,
-                                 p_kv->kvec_c[ik].z * TWOPI_Bohr2A);
-    }
-    // added for BZ to IBZ (actually LibRPA interface only support BZ by 2025/03/30)
-    if (PARAM.inp.symmetry == "-1")
-    {
-        for (int ik = 0; ik != nks_tot; ++ik)
+        ofs << ucell.symm.nrotk << " row" << std::endl;
+        for (int isym = 0; isym < ucell.symm.nrotk; ++isym)
         {
-            ofs << (ik + 1) << std::endl;
+            const auto& rot = ucell.symm.gmatrix[isym];
+            const auto& trans = ucell.symm.gtrans[isym];
+            ofs << std::setw(4) << RpaLriDetail::checked_near_int(rot.e11, "symmetry rotation e11")
+                << std::setw(4) << RpaLriDetail::checked_near_int(rot.e12, "symmetry rotation e12")
+                << std::setw(4) << RpaLriDetail::checked_near_int(rot.e13, "symmetry rotation e13")
+                << std::setw(4) << RpaLriDetail::checked_near_int(rot.e21, "symmetry rotation e21")
+                << std::setw(4) << RpaLriDetail::checked_near_int(rot.e22, "symmetry rotation e22")
+                << std::setw(4) << RpaLriDetail::checked_near_int(rot.e23, "symmetry rotation e23")
+                << std::setw(4) << RpaLriDetail::checked_near_int(rot.e31, "symmetry rotation e31")
+                << std::setw(4) << RpaLriDetail::checked_near_int(rot.e32, "symmetry rotation e32")
+                << std::setw(4) << RpaLriDetail::checked_near_int(rot.e33, "symmetry rotation e33")
+                << std::setw(24) << std::scientific << std::setprecision(15) << trans.x
+                << std::setw(24) << std::scientific << std::setprecision(15) << trans.y
+                << std::setw(24) << std::scientific << std::setprecision(15) << trans.z
+                << std::endl;
         }
     }
     ofs.close();
     return;
+}
+
+template <typename T, typename Tdata>
+void RPA_LRI<T, Tdata>::out_bz_sampling()
+{
+    if (GlobalV::MY_RANK != 0)
+    {
+        return;
+    }
+
+    ModuleBase::TITLE("DFT_RPA_interface", "out_bz_sampling");
+    const double TWOPI_Bohr2A = ModuleBase::TWO_PI * ModuleBase::BOHR_TO_A;
+    const int nks_tot = PARAM.inp.nspin == 2 ? static_cast<int>(p_kv->get_nks()) / 2 : p_kv->get_nks();
+    int n_coulomb_irreducible = nks_tot;
+    if (ModuleSymmetry::Symmetry::symm_flag == 1 && !p_kv->kstars.empty())
+    {
+        n_coulomb_irreducible = static_cast<int>(p_kv->kstars.size());
+    }
+
+    std::ofstream ofs("bz_sampling_out", std::ios::out | std::ios::trunc);
+    if (!ofs.good())
+    {
+        throw std::runtime_error("Failed to open bz_sampling_out");
+    }
+    ofs << p_kv->nmp[0] << std::setw(6) << p_kv->nmp[1] << std::setw(6) << p_kv->nmp[2] << std::endl;
+    ofs << nks_tot << std::setw(8) << n_coulomb_irreducible << std::endl;
+    double weight_sum = 0.0;
+    for (int ik = 0; ik < nks_tot; ++ik)
+    {
+        weight_sum += p_kv->wk[ik];
+    }
+    if (weight_sum <= 0.0)
+    {
+        throw std::runtime_error("Cannot write bz_sampling_out with non-positive total k-point weight.");
+    }
+    for (int ik = 0; ik < nks_tot; ++ik)
+    {
+        int coulomb_irreducible_index = ik + 1;
+        int representative_scf_index = ik + 1;
+        if (ModuleSymmetry::Symmetry::symm_flag == 1
+            && ik < static_cast<int>(p_kv->ibz_index.size())
+            && p_kv->ibz_index[ik] >= 0)
+        {
+            coulomb_irreducible_index = p_kv->ibz_index[ik] + 1;
+            representative_scf_index = coulomb_irreducible_index;
+        }
+        ofs << std::setw(8) << ik + 1
+            << std::setw(24) << std::scientific << std::setprecision(15)
+            << (p_kv->wk[ik] / weight_sum)
+            << std::setw(24) << std::scientific << std::setprecision(15) << p_kv->kvec_d[ik].x
+            << std::setw(24) << std::scientific << std::setprecision(15) << p_kv->kvec_d[ik].y
+            << std::setw(24) << std::scientific << std::setprecision(15) << p_kv->kvec_d[ik].z
+            << std::setw(24) << std::scientific << std::setprecision(15) << p_kv->kvec_c[ik].x * TWOPI_Bohr2A
+            << std::setw(24) << std::scientific << std::setprecision(15) << p_kv->kvec_c[ik].y * TWOPI_Bohr2A
+            << std::setw(24) << std::scientific << std::setprecision(15) << p_kv->kvec_c[ik].z * TWOPI_Bohr2A
+            << std::setw(8) << coulomb_irreducible_index
+            << std::setw(8) << representative_scf_index
+            << std::endl;
+    }
+    ofs.close();
 }
 
 template <typename T, typename Tdata>
