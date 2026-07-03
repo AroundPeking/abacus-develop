@@ -805,6 +805,63 @@ If EXX(exact exchange) is calculated (i.e. dft_fuctional==hse/hf/pbe0/scan0 or r
         this->add_item(item);
     }
     {
+        Input_Item item("out_sternheimer_librpa");
+        item.annotation = "true: output Sternheimer chi0 files for LibRPA; false: default";
+        item.category = "Output information";
+        item.type = "Boolean";
+        item.description = "Generate Sternheimer independent-particle response files for LibRPA. "
+                           "This switch is independent of rpa=True and currently requires "
+                           "out_librpa_reader_version=1.";
+        item.default_value = "False";
+        item.unit = "";
+        item.availability = "PW calculation with EXX/LRI support.";
+        read_sync_bool(input.out_sternheimer_librpa);
+        item.check_value = [](const Input_Item& item, const Parameter& para) {
+            if (para.input.out_sternheimer_librpa && para.input.out_librpa_reader_version != 1)
+            {
+                ModuleBase::WARNING_QUIT("ReadInput",
+                                         item.label + " currently requires out_librpa_reader_version 1.");
+            }
+        };
+        this->add_item(item);
+    }
+    {
+        Input_Item item("sternheimer_nfreq");
+        item.annotation = "Number of minimax imaginary-frequency points for Sternheimer chi0 output";
+        item.category = "Output information";
+        item.type = "Integer";
+        item.description = "Set the number of GreenX minimax imaginary-frequency points used by "
+                           "out_sternheimer_librpa. For direct comparison with LibRPA SOS chi0, this value must "
+                           "match nfreq in librpa.in.";
+        item.default_value = "6";
+        item.unit = "";
+        item.availability = "PW calculation with out_sternheimer_librpa=True.";
+        read_sync_int(input.sternheimer_nfreq);
+        item.check_value = [](const Input_Item& item, const Parameter& para) {
+            if (para.input.sternheimer_nfreq <= 0)
+            {
+                ModuleBase::WARNING_QUIT("ReadInput", item.label + " must be a positive integer.");
+            }
+        };
+        this->add_item(item);
+    }
+    {
+        Input_Item item("sternheimer_frequency_grid_file");
+        item.annotation = "Optional fixed imaginary-frequency grid file for Sternheimer chi0 output";
+        item.category = "Output information";
+        item.type = "String";
+        item.description = "Read Sternheimer imaginary-frequency points and quadrature weights from a text file "
+                           "instead of generating a GreenX minimax grid. Each non-comment row must contain either "
+                           "\"omega_Ha weight_Ha\" or \"index omega_Ha weight_Ha\". The number of rows must match "
+                           "sternheimer_nfreq. Use this option to compare Sternheimer chi0 with LibRPA SOS chi0 "
+                           "on exactly the same frequency grid.";
+        item.default_value = "";
+        item.unit = "";
+        item.availability = "PW calculation with out_sternheimer_librpa=True.";
+        read_sync_string(input.sternheimer_frequency_grid_file);
+        this->add_item(item);
+    }
+    {
         Input_Item item("out_pchg");
         item.annotation = "specify the bands to be calculated for the partial (band-decomposed) charge densities";
         item.category = "Output information";

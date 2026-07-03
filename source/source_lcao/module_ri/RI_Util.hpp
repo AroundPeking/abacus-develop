@@ -130,6 +130,12 @@ namespace RI_Util
 						{
 							coulomb_param_ewald[param_list.first].push_back(param);
 						}
+						else
+						{
+							throw std::invalid_argument(
+								"Unsupported Fock singularity_correction for RI Coulomb settings: "
+								+ param.at("singularity_correction"));
+						}
 					}
 					break;
 				}
