@@ -34,8 +34,11 @@
 
 #include "source_hamilt/module_xc/exx_info.h" // use GlobalC::exx_info
 
-#ifdef __EXX
+#if defined(__EXX)
 #include "source_lcao/module_ri/sternheimer_abacus_fd_smoke.h"
+#endif
+#if defined(__EXX) && defined(__LCAO)
+#include "source_lcao/module_ri/sternheimer_abacus_st_smoke.h"
 #endif
 
 namespace ModuleESolver
@@ -285,6 +288,13 @@ void ESolver_KS_PW<T, Device>::after_scf(UnitCell& ucell, const int istep, const
                                                       ucell,
                                                       *(this->pelec),
                                                       PARAM.globalv.global_out_dir);
+#if defined(__LCAO)
+        ModuleRI::run_sternheimer_abacus_st_smoke(*(this->pelec->pot),
+                                                  *(this->pw_rho),
+                                                  ucell,
+                                                  *(this->pelec),
+                                                  PARAM.globalv.global_out_dir);
+#endif
     }
 #endif
 
