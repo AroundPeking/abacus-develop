@@ -862,6 +862,59 @@ If EXX(exact exchange) is calculated (i.e. dft_fuctional==hse/hf/pbe0/scan0 or r
         this->add_item(item);
     }
     {
+        Input_Item item("sternheimer_delta");
+        item.annotation = "true: use Delta-Sternheimer projected solver for Sternheimer chi0 output; false: default";
+        item.category = "Output information";
+        item.type = "Boolean";
+        item.description = "When out_sternheimer_librpa is enabled, replace the standard Sternheimer linear solve "
+                           "with a Delta-Sternheimer solve in the complement of a fixed AO/NAO virtual subspace. "
+                           "The final LibRPA v1 chi0 file format is unchanged.";
+        item.default_value = "False";
+        item.unit = "";
+        item.availability = "PW calculation with out_sternheimer_librpa=True.";
+        read_sync_bool(input.sternheimer_delta);
+        this->add_item(item);
+    }
+    {
+        Input_Item item("sternheimer_delta_max_states");
+        item.annotation = "maximum number of fixed AO virtual states for Delta-Sternheimer";
+        item.category = "Output information";
+        item.type = "Integer";
+        item.description = "Limit the number of fixed AO/NAO virtual states used by sternheimer_delta. "
+                           "The value 0 keeps all accepted candidates after occupied-state projection and "
+                           "orthogonalization.";
+        item.default_value = "0";
+        item.unit = "";
+        item.availability = "PW calculation with out_sternheimer_librpa=True and sternheimer_delta=True.";
+        read_sync_int(input.sternheimer_delta_max_states);
+        item.check_value = [](const Input_Item& item, const Parameter& para) {
+            if (para.input.sternheimer_delta_max_states < 0)
+            {
+                ModuleBase::WARNING_QUIT("ReadInput", item.label + " must be non-negative.");
+            }
+        };
+        this->add_item(item);
+    }
+    {
+        Input_Item item("sternheimer_delta_norm_tol");
+        item.annotation = "norm threshold for Delta-Sternheimer AO virtual-state orthogonalization";
+        item.category = "Output information";
+        item.type = "Double";
+        item.description = "Discard fixed AO/NAO candidate functions whose norm after projection out of occupied "
+                           "states and previously accepted candidates is below this threshold.";
+        item.default_value = "1e-10";
+        item.unit = "";
+        item.availability = "PW calculation with out_sternheimer_librpa=True and sternheimer_delta=True.";
+        read_sync_double(input.sternheimer_delta_norm_tol);
+        item.check_value = [](const Input_Item& item, const Parameter& para) {
+            if (para.input.sternheimer_delta_norm_tol < 0.0)
+            {
+                ModuleBase::WARNING_QUIT("ReadInput", item.label + " must be non-negative.");
+            }
+        };
+        this->add_item(item);
+    }
+    {
         Input_Item item("out_pchg");
         item.annotation = "specify the bands to be calculated for the partial (band-decomposed) charge densities";
         item.category = "Output information";
