@@ -862,6 +862,21 @@ If EXX(exact exchange) is calculated (i.e. dft_fuctional==hse/hf/pbe0/scan0 or r
         this->add_item(item);
     }
     {
+        Input_Item item("sternheimer_frequency_mpi");
+        item.annotation = "true: split Sternheimer chi0 frequency points over MPI ranks; false: default";
+        item.category = "Output information";
+        item.type = "Boolean";
+        item.description = "When out_sternheimer_librpa is enabled in a PW calculation, distribute independent "
+                           "imaginary-frequency Sternheimer solves over MPI ranks. The zero-order FD states are "
+                           "solved once on rank 0 and broadcast; each rank then writes the chi0 files for its "
+                           "assigned frequency points.";
+        item.default_value = "False";
+        item.unit = "";
+        item.availability = "PW calculation with out_sternheimer_librpa=True.";
+        read_sync_bool(input.sternheimer_frequency_mpi);
+        this->add_item(item);
+    }
+    {
         Input_Item item("sternheimer_delta");
         item.annotation = "true: use Delta-Sternheimer projected solver for Sternheimer chi0 output; false: default";
         item.category = "Output information";
