@@ -27,11 +27,61 @@
 #ifdef __EXX
 #include "source_lcao/module_ri/Exx_LRI_interface.h" // use EXX codes
 #include "source_lcao/module_ri/RPA_LRI.h"           // use RPA code
+#include "source_lcao/module_ri/sternheimer_abacus_st_smoke.h"
 #endif
 #include "../module_qo/to_qo.h"                // use toQO
 #include "source_lcao/module_rdmft/rdmft.h" // use RDMFT codes
 #include "source_lcao/rho_tau_lcao.h"       // mohan add 2025-10-24
 #include "source_lcao/module_operator_lcao/overlap.h" // use hamilt::Overlap for NAMD
+
+#ifdef __EXX
+namespace
+{
+
+template <typename TK>
+std::vector<std::vector<std::complex<double>>> gather_sternheimer_lcao_occupied_coefficients(
+    const elecstate::ElecState& elec_state,
+    const Parallel_Orbitals& parallel_orbitals,
+    const psi::Psi<TK>& psi)
+{
+    int occupied_count = 0;
+    for (int ib = 0; ib != elec_state.wg.nc; ++ib)
+    {
+        if (elec_state.wg(0, ib) > 1.0e-8)
+        {
+            occupied_count = ib + 1;
+        }
+    }
+    std::vector<std::vector<std::complex<double>>> coefficients(
+        static_cast<std::size_t>(occupied_count),
+        std::vector<std::complex<double>>(static_cast<std::size_t>(PARAM.globalv.nlocal),
+                                          std::complex<double>(0.0, 0.0)));
+    for (int ib = 0; ib != occupied_count; ++ib)
+    {
+        const int local_band = parallel_orbitals.global2local_col(ib);
+        if (local_band >= 0)
+        {
+            for (int local_basis = 0; local_basis != psi.get_nbasis(); ++local_basis)
+            {
+                const int global_basis = parallel_orbitals.local2global_row(local_basis);
+                coefficients[static_cast<std::size_t>(ib)][static_cast<std::size_t>(global_basis)]
+                    = std::complex<double>(psi(0, local_band, local_basis));
+            }
+        }
+#ifdef __MPI
+        MPI_Allreduce(MPI_IN_PLACE,
+                      coefficients[static_cast<std::size_t>(ib)].data(),
+                      PARAM.globalv.nlocal,
+                      MPI_DOUBLE_COMPLEX,
+                      MPI_SUM,
+                      MPI_COMM_WORLD);
+#endif
+    }
+    return coefficients;
+}
+
+} // namespace
+#endif
 
 template <typename TK, typename TR>
 void ModuleIO::ctrl_scf_lcao(UnitCell& ucell,
@@ -412,6 +462,23 @@ void ModuleIO::ctrl_scf_lcao(UnitCell& ucell,
     {
         RPA_LRI<TK, double> rpa_lri_double(GlobalC::exx_info.info_ri);
         rpa_lri_double.postSCF(ucell, MPI_COMM_WORLD, *dm, pelec, kv, orb, pv, *psi);
+    }
+
+    if (inp.out_sternheimer_librpa)
+    {
+        if (pelec == nullptr || pelec->pot == nullptr || pw_rho == nullptr || psi == nullptr)
+        {
+            ModuleBase::WARNING_QUIT("ctrl_scf_lcao", "Sternheimer LCAO output requires potential, grid, and KS states.");
+        }
+        const auto occupied_coefficients
+            = gather_sternheimer_lcao_occupied_coefficients(*pelec, pv, *psi);
+        ModuleRI::run_sternheimer_abacus_lcao_chi0_output(*(pelec->pot),
+                                                          *pw_rho,
+                                                          ucell,
+                                                          *pelec,
+                                                          orb,
+                                                          occupied_coefficients,
+                                                          global_out_dir);
     }
 #endif
 
