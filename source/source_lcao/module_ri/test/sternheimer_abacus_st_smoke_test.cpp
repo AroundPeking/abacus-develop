@@ -1,5 +1,6 @@
 #include "source_lcao/module_ri/sternheimer_abacus_st_smoke.h"
 
+#include <array>
 #include <complex>
 #include <gtest/gtest.h>
 
@@ -80,4 +81,18 @@ TEST(SternheimerABACUSSTSmoke, ValidatesSpinResolvedLCAOOccupiedChannels)
     out_of_range_channels.front().spin_index = 2;
     EXPECT_THROW(ModuleRI::validate_sternheimer_lcao_occupied_channels(out_of_range_channels, 2, 3),
                  std::invalid_argument);
+}
+
+TEST(SternheimerABACUSSTSmoke, AcceptsOnlyPhysicalGammaSpinRows)
+{
+    const std::vector<std::array<double, 3>> one_gamma = {{{0.0, 0.0, 0.0}}};
+    const std::vector<std::array<double, 3>> two_gamma = {{{0.0, 0.0, 0.0}, {0.0, 0.0, 0.0}}};
+
+    EXPECT_NO_THROW(ModuleRI::validate_sternheimer_lcao_gamma_layout(1, 1, 1, one_gamma));
+    EXPECT_NO_THROW(ModuleRI::validate_sternheimer_lcao_gamma_layout(2, 2, 2, two_gamma));
+
+    EXPECT_THROW(ModuleRI::validate_sternheimer_lcao_gamma_layout(1, 2, 2, two_gamma), std::invalid_argument);
+
+    const std::vector<std::array<double, 3>> non_gamma = {{{0.25, 0.0, 0.0}}};
+    EXPECT_THROW(ModuleRI::validate_sternheimer_lcao_gamma_layout(1, 1, 1, non_gamma), std::invalid_argument);
 }
