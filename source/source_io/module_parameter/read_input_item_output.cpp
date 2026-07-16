@@ -846,6 +846,25 @@ If EXX(exact exchange) is calculated (i.e. dft_fuctional==hse/hf/pbe0/scan0 or r
         this->add_item(item);
     }
     {
+        Input_Item item("sternheimer_q_index");
+        item.annotation = "One-based nonzero q-point index for periodic Sternheimer chi0 output";
+        item.category = "Output information";
+        item.type = "Integer";
+        item.description = "Select one nonzero q point by its one-based global index on the full k mesh. "
+                           "The default 0 preserves the single-k Gamma molecular path.";
+        item.default_value = "0";
+        item.unit = "";
+        item.availability = "LCAO calculation with out_sternheimer_librpa=True.";
+        read_sync_int(input.sternheimer_q_index);
+        item.check_value = [](const Input_Item& item, const Parameter& para) {
+            if (para.input.sternheimer_q_index < 0)
+            {
+                ModuleBase::WARNING_QUIT("ReadInput", item.label + " must be zero or a positive integer.");
+            }
+        };
+        this->add_item(item);
+    }
+    {
         Input_Item item("sternheimer_frequency_grid_file");
         item.annotation = "Optional fixed imaginary-frequency grid file for Sternheimer chi0 output";
         item.category = "Output information";
