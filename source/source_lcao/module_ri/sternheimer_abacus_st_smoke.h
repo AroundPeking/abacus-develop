@@ -82,6 +82,30 @@ inline int sternheimer_lcao_total_occupied_bands(
     return count;
 }
 
+inline std::vector<int> sternheimer_lcao_spin_indices(
+    const std::vector<SternheimerLCAOOccupiedChannel>& channels)
+{
+    std::vector<int> indices;
+    indices.reserve(channels.size());
+    for (const SternheimerLCAOOccupiedChannel& channel: channels)
+    {
+        indices.push_back(channel.spin_index);
+    }
+    return indices;
+}
+
+inline std::vector<int> sternheimer_lcao_occupied_bands_per_spin(
+    const std::vector<SternheimerLCAOOccupiedChannel>& channels)
+{
+    std::vector<int> counts;
+    counts.reserve(channels.size());
+    for (const SternheimerLCAOOccupiedChannel& channel: channels)
+    {
+        counts.push_back(static_cast<int>(channel.coefficients.size()));
+    }
+    return counts;
+}
+
 struct SternheimerABACUSSTChannelResult
 {
     int band_index = -1;
