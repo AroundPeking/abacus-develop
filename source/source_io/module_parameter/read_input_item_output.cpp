@@ -832,7 +832,8 @@ If EXX(exact exchange) is calculated (i.e. dft_fuctional==hse/hf/pbe0/scan0 or r
         item.type = "Boolean";
         item.description = "Write deterministic Sternheimer-SIAB v1 targets to "
                            "OUT.ABACUS/sternheimer_matrix.dat for basis_type=lcao. Delta-ST requires the loaded "
-                           "LCAO orbitals. This output-only switch is independent of rpa.";
+                           "LCAO orbitals and exactly one explicit bessel_nao_rcut. This output-only switch is "
+                           "independent of rpa.";
         item.default_value = "False";
         item.unit = "";
         item.availability
@@ -852,6 +853,12 @@ If EXX(exact exchange) is calculated (i.e. dft_fuctional==hse/hf/pbe0/scan0 or r
                     "ReadInput",
                     item.label + " currently requires out_sternheimer_librpa True and sternheimer_delta True; "
                                  "enable both inputs.");
+            }
+            if (para.input.out_sternheimer_siab && para.input.bessel_nao_rcuts.size() != 1)
+            {
+                ModuleBase::WARNING_QUIT(
+                    "ReadInput",
+                    item.label + " requires exactly one explicit bessel_nao_rcut; the H campaign uses 8 bohr.");
             }
         };
         this->add_item(item);
