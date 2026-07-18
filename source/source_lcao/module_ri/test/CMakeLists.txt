@@ -84,4 +84,9 @@ AddTest(
   LIBS ${math_libs}
   SOURCES sternheimer_abacus_st_smoke_test.cpp
 )
+AddTest(
+  TARGET MODULE_RI_sternheimer_channel_resources_test
+  LIBS ${math_libs}
+  SOURCES sternheimer_channel_resources_test.cpp ../sternheimer_channel_resources.cpp
+)
 install(DIRECTORY support DESTINATION ${CMAKE_CURRENT_BINARY_DIR})
