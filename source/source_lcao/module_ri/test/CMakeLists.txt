@@ -84,4 +84,9 @@ AddTest(
   LIBS ${math_libs}
   SOURCES sternheimer_abacus_st_smoke_test.cpp
 )
+AddTest(
+  TARGET MODULE_RI_sternheimer_siab_overlap_test
+  LIBS ${math_libs}
+  SOURCES test_sternheimer_siab_overlap.cpp ../sternheimer_siab_overlap.cpp
+)
 install(DIRECTORY support DESTINATION ${CMAKE_CURRENT_BINARY_DIR})
