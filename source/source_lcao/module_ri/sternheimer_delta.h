@@ -106,6 +106,11 @@ struct SternheimerDeltaLinearResponse
     double residual_norm = 0.0;
 };
 
+struct SternheimerDeltaFixedSubspace
+{
+    std::vector<SternheimerFDHamiltonian::Vector> functions;
+};
+
 SternheimerDeltaPostprocessResult postprocess_delta_sternheimer_solution(
     const SternheimerFDHamiltonian::Vector& standard_delta_wavefunction,
     const SternheimerDeltaPostprocessInput& input);
@@ -148,6 +153,21 @@ std::vector<SternheimerFDHamiltonian::Complex> delta_sternheimer_perturbation_ma
     const std::vector<double>& perturbation_potential,
     const SternheimerFDHamiltonian::Vector& occupied_wavefunction,
     double volume_element);
+
+SternheimerDeltaFixedSubspace build_delta_sternheimer_fixed_subspace(
+    const std::vector<SternheimerFDHamiltonian::Vector>& occupied_wavefunctions,
+    const std::vector<SternheimerDeltaVirtualState>& virtual_states);
+
+SternheimerDeltaLinearResponse solve_delta_sternheimer_linear_response(
+    const SternheimerFDHamiltonian& hamiltonian,
+    const SternheimerDeltaFixedSubspace& fixed_subspace,
+    double reference_eigenvalue,
+    const SternheimerFDHamiltonian::Vector& rhs,
+    const std::vector<SternheimerDeltaVirtualState>& virtual_states,
+    const std::vector<SternheimerFDHamiltonian::Complex>& perturbation_matrix_elements,
+    double omega,
+    double volume_element,
+    const SternheimerRPA::SolverOptions& options = SternheimerRPA::SolverOptions());
 
 SternheimerDeltaLinearResponse solve_delta_sternheimer_linear_response(
     const SternheimerFDHamiltonian& hamiltonian,

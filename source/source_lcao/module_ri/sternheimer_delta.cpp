@@ -946,9 +946,18 @@ std::vector<SternheimerFDHamiltonian::Complex> delta_sternheimer_perturbation_ma
     return elements;
 }
 
+SternheimerDeltaFixedSubspace build_delta_sternheimer_fixed_subspace(
+    const std::vector<SternheimerFDHamiltonian::Vector>& occupied_wavefunctions,
+    const std::vector<SternheimerDeltaVirtualState>& virtual_states)
+{
+    SternheimerDeltaFixedSubspace fixed_subspace;
+    fixed_subspace.functions = collect_fixed_subspace(occupied_wavefunctions, virtual_states);
+    return fixed_subspace;
+}
+
 SternheimerDeltaLinearResponse solve_delta_sternheimer_linear_response(
     const SternheimerFDHamiltonian& hamiltonian,
-    const std::vector<SternheimerFDHamiltonian::Vector>& occupied_wavefunctions,
+    const SternheimerDeltaFixedSubspace& fixed_subspace,
     const double reference_eigenvalue,
     const SternheimerFDHamiltonian::Vector& rhs,
     const std::vector<SternheimerDeltaVirtualState>& virtual_states,
@@ -968,16 +977,16 @@ SternheimerDeltaLinearResponse solve_delta_sternheimer_linear_response(
     {
         throw std::invalid_argument("Sternheimer delta linear response requires a positive grid volume element.");
     }
-    for (const Vector& occupied: occupied_wavefunctions)
+    for (const Vector& function: fixed_subspace.functions)
     {
-        check_vector_size(occupied, static_cast<std::size_t>(grid_size), "Sternheimer delta occupied state");
+        check_vector_size(function, static_cast<std::size_t>(grid_size), "Sternheimer delta fixed-subspace state");
     }
     validate_virtual_states(virtual_states, static_cast<std::size_t>(grid_size));
 
     auto dot = [volume_element](const Vector& lhs, const Vector& rhs_vec) {
         return sternheimer_fd_grid_dot(lhs, rhs_vec, volume_element);
     };
-    const std::vector<Vector> fixed_subspace = collect_fixed_subspace(occupied_wavefunctions, virtual_states);
+    const std::vector<Vector>& fixed_functions = fixed_subspace.functions;
 
     std::vector<Complex> denominators(virtual_states.size(), Complex(0.0, 0.0));
     for (std::size_t ia = 0; ia != virtual_states.size(); ++ia)
@@ -990,7 +999,7 @@ SternheimerDeltaLinearResponse solve_delta_sternheimer_linear_response(
     }
 
     Vector projected_rhs = rhs;
-    SternheimerRPA::project_out_subspace(fixed_subspace, dot, projected_rhs);
+    SternheimerRPA::project_out_subspace(fixed_functions, dot, projected_rhs);
     for (std::size_t ia = 0; ia != virtual_states.size(); ++ia)
     {
         axpy(-perturbation_matrix_elements[ia] / denominators[ia], virtual_states[ia].residual, projected_rhs);
@@ -998,11 +1007,11 @@ SternheimerDeltaLinearResponse solve_delta_sternheimer_linear_response(
 
     SternheimerRPA::LinearProblem problem;
     problem.dot = dot;
-    problem.apply = [&hamiltonian, &fixed_subspace, &virtual_states, &denominators, reference_eigenvalue, omega, dot](
+    problem.apply = [&hamiltonian, &fixed_functions, &virtual_states, &denominators, reference_eigenvalue, omega, dot](
                         const Vector& input,
                         Vector& output) {
         Vector q_input = input;
-        SternheimerRPA::project_out_subspace(fixed_subspace, dot, q_input);
+        SternheimerRPA::project_out_subspace(fixed_functions, dot, q_input);
 
         hamiltonian.apply(q_input, output);
         const Complex shift(-reference_eigenvalue, omega);
@@ -1010,7 +1019,7 @@ SternheimerDeltaLinearResponse solve_delta_sternheimer_linear_response(
         {
             output[ir] += shift * q_input[ir];
         }
-        SternheimerRPA::project_out_subspace(fixed_subspace, dot, output);
+        SternheimerRPA::project_out_subspace(fixed_functions, dot, output);
         for (std::size_t ia = 0; ia != virtual_states.size(); ++ia)
         {
             const Complex coupling = dot(virtual_states[ia].residual, q_input) / denominators[ia];
@@ -1021,7 +1030,7 @@ SternheimerDeltaLinearResponse solve_delta_sternheimer_linear_response(
     SternheimerDeltaLinearResponse result;
     result.response.out_wavefunction.assign(static_cast<std::size_t>(grid_size), Complex(0.0, 0.0));
     result.solver = SternheimerRPA::solve_gmres(problem, projected_rhs, result.response.out_wavefunction, options);
-    SternheimerRPA::project_out_subspace(fixed_subspace, dot, result.response.out_wavefunction);
+    SternheimerRPA::project_out_subspace(fixed_functions, dot, result.response.out_wavefunction);
 
     const SternheimerDeltaCoefficientComponents components
         = compute_delta_coefficient_components(virtual_states,
@@ -1043,14 +1052,14 @@ SternheimerDeltaLinearResponse solve_delta_sternheimer_linear_response(
     {
         q_residual[ir] += shift * result.response.out_wavefunction[ir];
     }
-    SternheimerRPA::project_out_subspace(fixed_subspace, dot, q_residual);
+    SternheimerRPA::project_out_subspace(fixed_functions, dot, q_residual);
     for (std::size_t ia = 0; ia != virtual_states.size(); ++ia)
     {
         axpy(result.response.coefficients[ia], virtual_states[ia].residual, q_residual);
     }
 
     Vector q_rhs = rhs;
-    SternheimerRPA::project_out_subspace(fixed_subspace, dot, q_rhs);
+    SternheimerRPA::project_out_subspace(fixed_functions, dot, q_rhs);
     for (std::size_t ir = 0; ir != q_residual.size(); ++ir)
     {
         q_residual[ir] -= q_rhs[ir];
@@ -1069,6 +1078,30 @@ SternheimerDeltaLinearResponse solve_delta_sternheimer_linear_response(
     result.residual_norm = std::sqrt(residual_norm_squared);
     result.response.reconstruction_error = result.residual_norm;
     return result;
+}
+
+SternheimerDeltaLinearResponse solve_delta_sternheimer_linear_response(
+    const SternheimerFDHamiltonian& hamiltonian,
+    const std::vector<SternheimerFDHamiltonian::Vector>& occupied_wavefunctions,
+    const double reference_eigenvalue,
+    const SternheimerFDHamiltonian::Vector& rhs,
+    const std::vector<SternheimerDeltaVirtualState>& virtual_states,
+    const std::vector<SternheimerFDHamiltonian::Complex>& perturbation_matrix_elements,
+    const double omega,
+    const double volume_element,
+    const SternheimerRPA::SolverOptions& options)
+{
+    const SternheimerDeltaFixedSubspace fixed_subspace
+        = build_delta_sternheimer_fixed_subspace(occupied_wavefunctions, virtual_states);
+    return solve_delta_sternheimer_linear_response(hamiltonian,
+                                                    fixed_subspace,
+                                                    reference_eigenvalue,
+                                                    rhs,
+                                                    virtual_states,
+                                                    perturbation_matrix_elements,
+                                                    omega,
+                                                    volume_element,
+                                                    options);
 }
 
 SternheimerFDHamiltonian::Complex accumulate_delta_sternheimer_response(
