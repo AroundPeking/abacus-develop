@@ -12,14 +12,231 @@
 #include "numerical_basis_jyjy.h"
 
 #include <algorithm>
+#include <cmath>
 #include <cstring>
 #include <functional>
+#include <memory>
+#include <stdexcept>
 #include <vector>
 Numerical_Basis::Numerical_Basis()
 {
 }
 Numerical_Basis::~Numerical_Basis()
 {
+}
+
+int Numerical_Basis::siab_abacus_m(const int conventional_m)
+{
+    if (conventional_m == 0)
+    {
+        return 0;
+    }
+    return conventional_m > 0 ? 2 * conventional_m - 1 : -2 * conventional_m;
+}
+
+Numerical_Basis::SIABPrimitiveParameters Numerical_Basis::siab_parameters_from_input(const int rcut_index)
+{
+    if (rcut_index < 0 || rcut_index >= static_cast<int>(PARAM.inp.bessel_nao_rcuts.size()))
+    {
+        throw std::out_of_range("SIAB primitive rcut index is out of range");
+    }
+    return SIABPrimitiveParameters{
+        std::stod(PARAM.inp.bessel_nao_ecut),
+        PARAM.inp.bessel_nao_rcuts[rcut_index],
+        PARAM.inp.bessel_nao_smooth,
+        PARAM.inp.bessel_nao_sigma,
+        PARAM.inp.bessel_nao_tolerence,
+    };
+}
+
+void Numerical_Basis::initialize_siab_basis(const UnitCell& ucell,
+                                            const SIABPrimitiveParameters& parameters)
+{
+    if (!std::isfinite(parameters.ecut_ry) || !std::isfinite(parameters.rcut_bohr)
+        || !std::isfinite(parameters.sigma) || !std::isfinite(parameters.tolerance)
+        || !(parameters.ecut_ry > 0.0) || !(parameters.rcut_bohr > 0.0)
+        || (parameters.smooth && !(parameters.sigma > 0.0)) || !(parameters.tolerance > 0.0))
+    {
+        throw std::invalid_argument("SIAB primitive parameters are invalid");
+    }
+
+    const std::vector<int> basis_shape = Numerical_Basis::siab_basis_shape_signature(ucell);
+    const bool same_parameters = this->initialized_siab_parameters.ecut_ry == parameters.ecut_ry
+                                 && this->initialized_siab_parameters.rcut_bohr == parameters.rcut_bohr
+                                 && this->initialized_siab_parameters.smooth == parameters.smooth
+                                 && this->initialized_siab_parameters.sigma == parameters.sigma
+                                 && this->initialized_siab_parameters.tolerance == parameters.tolerance;
+    if (this->init_label && same_parameters && this->initialized_siab_ntype == ucell.ntype
+        && this->initialized_siab_lmax == ucell.lmax && this->initialized_siab_nmax == ucell.nmax
+        && this->initialized_siab_basis_shape == basis_shape)
+    {
+        return;
+    }
+
+    this->bessel_basis.init(false,
+                            parameters.ecut_ry,
+                            ucell.ntype,
+                            ucell.lmax,
+                            parameters.smooth,
+                            parameters.sigma,
+                            parameters.rcut_bohr,
+                            parameters.tolerance,
+                            ucell);
+    this->mu_index = this->init_mu_index(ucell);
+    this->initialized_siab_parameters = parameters;
+    this->initialized_siab_ntype = ucell.ntype;
+    this->initialized_siab_lmax = ucell.lmax;
+    this->initialized_siab_nmax = ucell.nmax;
+    this->initialized_siab_basis_shape = basis_shape;
+    this->init_label = true;
+}
+
+std::vector<int> Numerical_Basis::siab_basis_shape_signature(const UnitCell& ucell)
+{
+    std::vector<int> signature;
+    for (int type = 0; type < ucell.ntype; ++type)
+    {
+        signature.push_back(ucell.atoms[type].na);
+        signature.push_back(ucell.atoms[type].nwl);
+        signature.push_back(static_cast<int>(ucell.atoms[type].l_nchi.size()));
+        signature.insert(signature.end(), ucell.atoms[type].l_nchi.begin(), ucell.atoms[type].l_nchi.end());
+    }
+    return signature;
+}
+
+void Numerical_Basis::fill_reciprocal_primitive(
+    const int l,
+    const int abacus_m,
+    const int primitive_index,
+    const std::complex<double>* structure_factor,
+    const ModuleBase::realArray& flq,
+    const ModuleBase::matrix& ylm,
+    const std::vector<double>& gpow,
+    const double normalization,
+    std::vector<std::complex<double>>& values)
+{
+    const int npw = static_cast<int>(gpow.size());
+    if (values.size() < static_cast<std::size_t>(npw))
+    {
+        throw std::invalid_argument("SIAB reciprocal primitive storage is too small");
+    }
+
+    const int lm = l * l + abacus_m;
+    const std::complex<double> lphase = normalization * std::pow(ModuleBase::IMAG_UNIT, -l);
+    for (int ig = 0; ig < npw; ++ig)
+    {
+        values[ig] = lphase * structure_factor[ig] * ylm(lm, ig) * flq(l, primitive_index, ig) * gpow[ig];
+    }
+}
+
+std::vector<Numerical_Basis::SIABPrimitiveGridBlock> Numerical_Basis::siab_primitive_grid_values(
+    const int ik,
+    const ModulePW::PW_Basis_K* wfcpw,
+    const Structure_Factor& sf,
+    const UnitCell& ucell,
+    const SIABPrimitiveParameters& parameters)
+{
+    if (wfcpw == nullptr)
+    {
+        throw std::invalid_argument("SIAB primitive grid requires a PW basis");
+    }
+    if (ik < 0 || ik >= wfcpw->nks)
+    {
+        throw std::out_of_range("SIAB primitive k-point index is out of range");
+    }
+    if (!(ucell.omega > 0.0))
+    {
+        throw std::invalid_argument("SIAB primitive grid requires a positive cell volume");
+    }
+
+    this->initialize_siab_basis(ucell, parameters);
+
+    const int npw = wfcpw->npwk[ik];
+    std::unique_ptr<ModuleBase::realArray> flq;
+    std::unique_ptr<ModuleBase::matrix> ylm;
+    std::vector<double> gpow;
+    if (npw > 0)
+    {
+        std::vector<ModuleBase::Vector3<double>> gk(npw);
+        for (int ig = 0; ig < npw; ++ig)
+        {
+            gk[ig] = wfcpw->getgpluskcar(ik, ig) * ucell.tpiba;
+        }
+        flq.reset(new ModuleBase::realArray(this->cal_flq(gk, ucell.lmax)));
+        ylm.reset(new ModuleBase::matrix(Numerical_Basis::cal_ylm(gk, ucell.lmax)));
+        gpow.assign(npw, 1.0);
+    }
+    const double normalization = 4.0 * ModuleBase::PI / std::sqrt(ucell.omega);
+    const double real_space_scale = 1.0 / std::sqrt(ucell.omega);
+    const int nprimitive = this->bessel_basis.get_ecut_number();
+
+    std::vector<SIABPrimitiveGridBlock> blocks;
+    int offset = 0;
+    for (int type = 0; type < ucell.ntype; ++type)
+    {
+        for (int atom = 0; atom < ucell.atoms[type].na; ++atom)
+        {
+            std::unique_ptr<std::complex<double>[]> sk(sf.get_sk(ik, type, atom, wfcpw));
+            for (int l = 0; l <= ucell.atoms[type].nwl; ++l)
+            {
+                for (int conventional_m = -l; conventional_m <= l; ++conventional_m)
+                {
+                    SIABPrimitiveGridBlock block;
+                    block.type_index = type;
+                    block.element = ucell.atoms[type].label;
+                    block.atom_index = atom;
+                    block.l = l;
+                    block.m = conventional_m;
+                    block.n_primitive = nprimitive;
+                    block.offset = offset;
+                    block.values.reserve(nprimitive);
+
+                    const int abacus_m = Numerical_Basis::siab_abacus_m(conventional_m);
+                    for (int ie = 0; ie < nprimitive; ++ie)
+                    {
+                        std::vector<std::complex<double>> reciprocal(std::max(1, npw), ModuleBase::ZERO);
+                        if (npw > 0)
+                        {
+                            Numerical_Basis::fill_reciprocal_primitive(l,
+                                                                      abacus_m,
+                                                                      ie,
+                                                                      sk.get(),
+                                                                      *flq,
+                                                                      *ylm,
+                                                                      gpow,
+                                                                      normalization,
+                                                                      reciprocal);
+                        }
+
+                        std::vector<std::complex<double>> local_grid(wfcpw->nrxx, ModuleBase::ZERO);
+                        if (wfcpw->gamma_only)
+                        {
+                            std::vector<double> local_real(std::max(1, wfcpw->nrxx), 0.0);
+                            wfcpw->recip2real(reciprocal.data(), local_real.data(), ik);
+                            for (int ir = 0; ir < wfcpw->nrxx; ++ir)
+                            {
+                                local_grid[ir] = std::complex<double>(local_real[ir] * real_space_scale, 0.0);
+                            }
+                        }
+                        else
+                        {
+                            std::vector<std::complex<double>> local_complex(std::max(1, wfcpw->nrxx),
+                                                                            ModuleBase::ZERO);
+                            wfcpw->recip2real(reciprocal.data(), local_complex.data(), ik);
+                            for (int ir = 0; ir < wfcpw->nrxx; ++ir)
+                            {
+                                local_grid[ir] = local_complex[ir] * real_space_scale;
+                            }
+                        }
+                        block.values.push_back(std::move(local_grid));
+                    }
+                    blocks.push_back(std::move(block));
+                    offset += nprimitive;
+                }
+            }
+        }
+    }
+    return blocks;
 }
 
 //============================================================
@@ -65,21 +282,14 @@ void Numerical_Basis::output_overlap(const psi::Psi<std::complex<double>>& psi,
 {
     ModuleBase::TITLE("Numerical_Basis", "output_overlap");
     ModuleBase::GlobalFunc::NEW_PART("Overlap Data For Spillage Minimization");
-    const double bessel_nao_rcut = PARAM.inp.bessel_nao_rcuts[index];
+    const SIABPrimitiveParameters parameters = Numerical_Basis::siab_parameters_from_input(index);
+    const double bessel_nao_rcut = parameters.rcut_bohr;
 
     //---------------------------------------------------------
     // if the numerical_basis hasn't been initialized yet,
     // then we initial here.
     //---------------------------------------------------------
-    if (!this->init_label)
-    {
-        // false stands for : 'Faln' is not used.
-        this->bessel_basis.init(false, std::stod(PARAM.inp.bessel_nao_ecut), ucell.ntype, ucell.lmax,
-                                PARAM.inp.bessel_nao_smooth, PARAM.inp.bessel_nao_sigma, bessel_nao_rcut,
-                                PARAM.inp.bessel_nao_tolerence, ucell);
-        this->mu_index = this->init_mu_index(ucell);
-        this->init_label = true;
-    }
+    this->initialize_siab_basis(ucell, parameters);
     ModuleBase::GlobalFunc::MAKE_DIR(PARAM.inp.spillage_outdir);
     for (int derivative_order = 0; derivative_order <= 1; ++derivative_order) // Peize Lin add 2020.04.23
     {
@@ -261,25 +471,28 @@ ModuleBase::ComplexArray Numerical_Basis::cal_overlap_Q(const int& ik, const int
                 GlobalV::ofs_running << " " << std::setw(5) << ik + 1 << std::setw(8) << ucell.atoms[T].label
                                      << std::setw(8) << I + 1 << std::setw(8) << L << std::endl;
                 // OUT("l",l);
-                std::complex<double> lphase
-                    = normalization * pow(ModuleBase::IMAG_UNIT, -L); // Peize Lin add normalization 2015-12-29
                 for (int ie = 0; ie < this->bessel_basis.get_ecut_number(); ie++)
                 {
                     const int N = 0;
                     assert(ucell.nmax == 1);
                     for (int m = 0; m < 2 * L + 1; m++)
                     {
-                        const int lm = L * L + m;
+                        std::vector<std::complex<double>> primitive(np);
+                        Numerical_Basis::fill_reciprocal_primitive(L,
+                                                                  m,
+                                                                  ie,
+                                                                  sk,
+                                                                  flq,
+                                                                  ylm,
+                                                                  gpow,
+                                                                  normalization,
+                                                                  primitive);
                         for (int ib = 0; ib < PARAM.inp.nbands; ib++)
                         {
                             std::complex<double> overlap_tmp = ModuleBase::ZERO;
                             for (int ig = 0; ig < np; ig++)
                             {
-                                //                              const std::complex<double> local_tmp = lphase * sk[ig] *
-                                //                              ylm(lm, ig) * flq[ig];
-                                const std::complex<double> local_tmp = lphase * sk[ig] * ylm(lm, ig) * flq(L, ie, ig)
-                                                                       * gpow[ig]; // Peize Lin add for dpsi 2020.04.23
-                                overlap_tmp += conj(local_tmp) * psi(ib, ig);      // psi is bloch orbitals
+                                overlap_tmp += conj(primitive[ig]) * psi(ib, ig); // psi is bloch orbitals
                             }
                             overlap_Q(ib, this->mu_index[T](I, L, N, m), ie) = overlap_tmp;
                         }
