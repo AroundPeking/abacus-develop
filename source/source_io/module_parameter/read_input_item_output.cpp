@@ -826,6 +826,37 @@ If EXX(exact exchange) is calculated (i.e. dft_fuctional==hse/hf/pbe0/scan0 or r
         this->add_item(item);
     }
     {
+        Input_Item item("out_sternheimer_siab");
+        item.annotation = "true: output Sternheimer first-order-wavefunction targets for SIAB; false: default";
+        item.category = "Output information";
+        item.type = "Boolean";
+        item.description = "Write deterministic Sternheimer-SIAB v1 targets to "
+                           "OUT.ABACUS/sternheimer_matrix.dat for basis_type=lcao. Delta-ST requires the loaded "
+                           "LCAO orbitals. This output-only switch is independent of rpa.";
+        item.default_value = "False";
+        item.unit = "";
+        item.availability
+            = "basis_type=lcao with out_sternheimer_librpa=True and sternheimer_delta=True.";
+        read_sync_bool(input.out_sternheimer_siab);
+        item.check_value = [](const Input_Item& item, const Parameter& para) {
+            if (para.input.out_sternheimer_siab && para.input.basis_type != "lcao")
+            {
+                ModuleBase::WARNING_QUIT(
+                    "ReadInput",
+                    item.label + " requires basis_type=lcao so Delta-ST can use the loaded LCAO orbitals.");
+            }
+            if (para.input.out_sternheimer_siab
+                && (!para.input.out_sternheimer_librpa || !para.input.sternheimer_delta))
+            {
+                ModuleBase::WARNING_QUIT(
+                    "ReadInput",
+                    item.label + " currently requires out_sternheimer_librpa True and sternheimer_delta True; "
+                                 "enable both inputs.");
+            }
+        };
+        this->add_item(item);
+    }
+    {
         Input_Item item("sternheimer_nfreq");
         item.annotation = "Number of minimax imaginary-frequency points for Sternheimer chi0 output";
         item.category = "Output information";

@@ -27,6 +27,7 @@ if (ENABLE_LIBRI)
         sternheimer_fd_solver.cpp
         sternheimer_rpa.cpp
         sternheimer_siab_overlap.cpp
+        sternheimer_siab_writer.cpp
   )
 
   if(ENABLE_LCAO)
