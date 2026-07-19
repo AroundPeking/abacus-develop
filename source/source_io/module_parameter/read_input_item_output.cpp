@@ -864,6 +864,26 @@ If EXX(exact exchange) is calculated (i.e. dft_fuctional==hse/hf/pbe0/scan0 or r
         this->add_item(item);
     }
     {
+        Input_Item item("sternheimer_siab_lmax");
+        item.annotation = "Maximum angular momentum of Sternheimer-SIAB target primitives";
+        item.category = "Output information";
+        item.type = "Integer";
+        item.description = "Set an output-only angular cutoff for the spherical-Bessel primitive blocks in "
+                           "sternheimer_matrix.dat. The default -1 follows the loaded orbital lmax; use 2 to "
+                           "include complete d blocks without adding d orbitals to the Delta-ST fixed subspace.";
+        item.default_value = "-1";
+        item.unit = "";
+        item.availability = "out_sternheimer_siab=True.";
+        read_sync_int(input.sternheimer_siab_lmax);
+        item.check_value = [](const Input_Item& item, const Parameter& para) {
+            if (para.input.sternheimer_siab_lmax < -1)
+            {
+                ModuleBase::WARNING_QUIT("ReadInput", item.label + " must be -1 or a non-negative integer.");
+            }
+        };
+        this->add_item(item);
+    }
+    {
         Input_Item item("sternheimer_nfreq");
         item.annotation = "Number of minimax imaginary-frequency points for Sternheimer chi0 output";
         item.category = "Output information";
