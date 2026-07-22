@@ -82,12 +82,19 @@ AddTest(
 AddTest(
   TARGET MODULE_RI_sternheimer_abacus_st_smoke_test
   LIBS ${math_libs}
-  SOURCES sternheimer_abacus_st_smoke_test.cpp
+  SOURCES sternheimer_abacus_st_smoke_test.cpp ../sternheimer_siab_memory.cpp
+)
+AddTest(
+  TARGET MODULE_RI_sternheimer_coulomb_whitening_test
+  LIBS ${math_libs}
+  SOURCES sternheimer_coulomb_whitening_test.cpp ../sternheimer_coulomb_whitening.cpp
 )
 AddTest(
   TARGET MODULE_RI_sternheimer_siab_overlap_test
   LIBS ${math_libs}
-  SOURCES test_sternheimer_siab_overlap.cpp ../sternheimer_siab_overlap.cpp
+  SOURCES test_sternheimer_siab_overlap.cpp
+          ../sternheimer_siab_overlap.cpp
+          ../../../source_base/module_external/blas_connector_matrix.cpp
 )
 AddTest(
   TARGET MODULE_RI_sternheimer_siab_writer_test
@@ -109,6 +116,7 @@ if(ENABLE_MPI)
   )
   target_link_libraries(
     MODULE_RI_sternheimer_siab_mpi_test
+    base
     ${math_libs}
     Threads::Threads
     GTest::gtest
