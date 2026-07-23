@@ -257,6 +257,7 @@ void kvec_mpi_k(K_Vectors& kv)
     }
 
     std::vector<int> isk_aux(kv.nkstot);
+    std::vector<int> ibz_index_aux(kv.nkstot_full);
     std::vector<double> wk_aux(kv.nkstot);
     std::vector<double> kvec_c_aux(kv.nkstot * 3);
     std::vector<double> kvec_d_aux(kv.nkstot * 3);
@@ -281,6 +282,7 @@ void kvec_mpi_k(K_Vectors& kv)
         // because EXX/RPA Ewald builds index this array with `nkstot_full`.
         for (int ik = 0; ik < kv.nkstot_full; ik++)
         {
+            ibz_index_aux[ik] = kv.ibz_index[ik];
             kvec_c_full_aux[3 * ik] = kv.kvec_c_full[ik].x;
             kvec_c_full_aux[3 * ik + 1] = kv.kvec_c_full[ik].y;
             kvec_c_full_aux[3 * ik + 2] = kv.kvec_c_full[ik].z;
@@ -289,6 +291,7 @@ void kvec_mpi_k(K_Vectors& kv)
 
     // broadcast k point data to all processors
     Parallel_Common::bcast_int(isk_aux.data(), kv.nkstot);
+    Parallel_Common::bcast_int(ibz_index_aux.data(), kv.nkstot_full);
 
     Parallel_Common::bcast_double(wk_aux.data(), kv.nkstot);
     Parallel_Common::bcast_double(kvec_c_aux.data(), kv.nkstot * 3);
@@ -298,6 +301,7 @@ void kvec_mpi_k(K_Vectors& kv)
     // process k point data in each processor
     kv.renew(kv.nks * kv.nspin);
     kv.kvec_c_full.resize(kv.nkstot_full);
+    kv.ibz_index = ibz_index_aux;
 
     // distribute
     int k_index = 0;
