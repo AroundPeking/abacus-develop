@@ -8,6 +8,10 @@
 #include <string>
 #include <utility>
 
+#ifdef _OPENMP
+#include <omp.h>
+#endif
+
 namespace ModuleRI
 {
 
@@ -92,6 +96,11 @@ int SternheimerFDHamiltonian::shifted_index(int ix, int iy, int iz) const
 
 void SternheimerFDHamiltonian::apply(const Vector& psi, Vector& hpsi) const
 {
+    apply(psi, hpsi, nullptr);
+}
+
+void SternheimerFDHamiltonian::apply(const Vector& psi, Vector& hpsi, int* threads_used) const
+{
     if (static_cast<int>(psi.size()) != grid_.size())
     {
         throw std::invalid_argument("SternheimerFDHamiltonian::apply input size does not match the grid.");
@@ -102,52 +111,73 @@ void SternheimerFDHamiltonian::apply(const Vector& psi, Vector& hpsi) const
     const double hy2_inv = 1.0 / (grid_.hy * grid_.hy);
     const double hz2_inv = 1.0 / (grid_.hz * grid_.hz);
 
-    for (int iz = 0; iz != grid_.nz; ++iz)
+#ifdef _OPENMP
+#pragma omp parallel
     {
-        for (int iy = 0; iy != grid_.ny; ++iy)
+#pragma omp single
         {
-            for (int ix = 0; ix != grid_.nx; ++ix)
+            if (threads_used != nullptr)
             {
-                const int center = index(ix, iy, iz);
-                const Complex psi_center = psi[center];
-
-                Complex laplacian = -2.0 * (hx2_inv + hy2_inv + hz2_inv) * psi_center;
-                const int xp = shifted_index(ix + 1, iy, iz);
-                const int xm = shifted_index(ix - 1, iy, iz);
-                const int yp = shifted_index(ix, iy + 1, iz);
-                const int ym = shifted_index(ix, iy - 1, iz);
-                const int zp = shifted_index(ix, iy, iz + 1);
-                const int zm = shifted_index(ix, iy, iz - 1);
-
-                if (xp >= 0)
-                {
-                    laplacian += hx2_inv * psi[xp];
-                }
-                if (xm >= 0)
-                {
-                    laplacian += hx2_inv * psi[xm];
-                }
-                if (yp >= 0)
-                {
-                    laplacian += hy2_inv * psi[yp];
-                }
-                if (ym >= 0)
-                {
-                    laplacian += hy2_inv * psi[ym];
-                }
-                if (zp >= 0)
-                {
-                    laplacian += hz2_inv * psi[zp];
-                }
-                if (zm >= 0)
-                {
-                    laplacian += hz2_inv * psi[zm];
-                }
-
-                hpsi[center] = -kinetic_prefactor_ * laplacian + local_potential_[center] * psi_center;
+                *threads_used = omp_get_num_threads();
             }
         }
+
+#pragma omp for collapse(2) schedule(static)
+#endif
+        for (int ix = 0; ix != grid_.nx; ++ix)
+        {
+            for (int iy = 0; iy != grid_.ny; ++iy)
+            {
+                for (int iz = 0; iz != grid_.nz; ++iz)
+                {
+                    const int center = index(ix, iy, iz);
+                    const Complex psi_center = psi[center];
+
+                    Complex laplacian = -2.0 * (hx2_inv + hy2_inv + hz2_inv) * psi_center;
+                    const int xp = shifted_index(ix + 1, iy, iz);
+                    const int xm = shifted_index(ix - 1, iy, iz);
+                    const int yp = shifted_index(ix, iy + 1, iz);
+                    const int ym = shifted_index(ix, iy - 1, iz);
+                    const int zp = shifted_index(ix, iy, iz + 1);
+                    const int zm = shifted_index(ix, iy, iz - 1);
+
+                    if (xp >= 0)
+                    {
+                        laplacian += hx2_inv * psi[xp];
+                    }
+                    if (xm >= 0)
+                    {
+                        laplacian += hx2_inv * psi[xm];
+                    }
+                    if (yp >= 0)
+                    {
+                        laplacian += hy2_inv * psi[yp];
+                    }
+                    if (ym >= 0)
+                    {
+                        laplacian += hy2_inv * psi[ym];
+                    }
+                    if (zp >= 0)
+                    {
+                        laplacian += hz2_inv * psi[zp];
+                    }
+                    if (zm >= 0)
+                    {
+                        laplacian += hz2_inv * psi[zm];
+                    }
+
+                    hpsi[center] = -kinetic_prefactor_ * laplacian + local_potential_[center] * psi_center;
+                }
+            }
+        }
+#ifdef _OPENMP
     }
+#else
+    if (threads_used != nullptr)
+    {
+        *threads_used = 1;
+    }
+#endif
 
     if (nonlocal_projector_ != nullptr)
     {
