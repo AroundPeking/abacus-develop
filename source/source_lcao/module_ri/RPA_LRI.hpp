@@ -62,6 +62,18 @@ inline bool debug_dump_exx_ao_enabled()
              || value == "false" || value == "FALSE");
 }
 
+inline bool ewald_component_output_enabled()
+{
+    const char* env = std::getenv("ABACUS_RPA_EWALD_COMPONENTS");
+    if (env == nullptr)
+    {
+        return false;
+    }
+    const std::string value(env);
+    return !(value.empty() || value == "0" || value == "f" || value == "F"
+             || value == "false" || value == "FALSE");
+}
+
 inline std::size_t coulomb_atom_pair_index(const std::size_t I, const std::size_t J, const std::size_t natoms)
 {
     if (I > J)
@@ -715,7 +727,13 @@ void RPA_LRI<T, Tdata>::output_ewald_coulomb(const UnitCell& ucell, const K_Vect
     std::map<TA, std::map<TAC, RI::Tensor<Tdata>>> Vs_full_IJR;
     std::map<TA, std::map<TAC, RI::Tensor<Tdata>>> Cs;
     std::map<TA, std::map<TAC, RI::Tensor<Tdata>>> tmp;
-    exx_full_coulomb->cal_ewald_coulomb(Vs_full_IJR, Cs, ucell, PARAM.inp.out_ri_cv);
+    const bool output_ewald_components = RpaLriDetail::ewald_component_output_enabled();
+    typename Exx_LRI<double>::EwaldCoulombComponents ewald_components;
+    exx_full_coulomb->cal_ewald_coulomb(Vs_full_IJR,
+                                        Cs,
+                                        ucell,
+                                        PARAM.inp.out_ri_cv,
+                                        output_ewald_components ? &ewald_components : nullptr);
     // MPI: {ia0, {ia1, R}} to {ia0, ia1}
     std::vector<TA> atoms(ucell.nat);
     for (int iat = 0; iat < ucell.nat; ++iat)
@@ -736,12 +754,13 @@ void RPA_LRI<T, Tdata>::output_ewald_coulomb(const UnitCell& ucell, const K_Vect
     {
         atoms01.insert(JR.first);
     }
-    std::map<TA, std::map<TAC, RI::Tensor<Tdata>>> Vs_full_IJ
-        = RI_2D_Comm::comm_map2_first(mpi_comm, Vs_full_IJR, atoms00, atoms01);
-    Vs_full_IJR.clear();
-
     const std::array<Tcell, Ndim> period = {p_kv->nmp[0], p_kv->nmp[1], p_kv->nmp[2]};
-    this->Vs_period = RI::RI_Tools::cal_period(Vs_full_IJ, period);
+    const auto gather_periodic = [&](auto& distributed_blocks) {
+        auto atom_pair_blocks = RI_2D_Comm::comm_map2_first(mpi_comm, distributed_blocks, atoms00, atoms01);
+        distributed_blocks.clear();
+        return RI::RI_Tools::cal_period(atom_pair_blocks, period);
+    };
+    this->Vs_period = gather_periodic(Vs_full_IJR);
     if (PARAM.inp.out_librpa_reader_version == 1)
     {
         const bool use_shrink = GlobalC::exx_info.info_ri.shrink_abfs_pca_thr >= 0.0;
@@ -750,9 +769,28 @@ void RPA_LRI<T, Tdata>::output_ewald_coulomb(const UnitCell& ucell, const K_Vect
                                   use_shrink ? "basis_aux_shrink_out" : "basis_aux_out",
                                   use_shrink ? "basis_out_shrink" : "basis_out");
         this->out_coulomb_k_v1(ucell, this->Vs_period, "v1_coulomb_full_iq_", exx_full_coulomb);
+        if (output_ewald_components)
+        {
+            auto bare_periodic = gather_periodic(ewald_components.bare_periodic);
+            auto gaussian_real = gather_periodic(ewald_components.gaussian_real);
+            auto short_range = gather_periodic(ewald_components.short_range);
+            auto long_range = gather_periodic(ewald_components.long_range);
+            this->out_coulomb_k_v1(
+                ucell, bare_periodic, "v1_coulomb_ewald_bare_iq_", exx_full_coulomb);
+            this->out_coulomb_k_v1(
+                ucell, gaussian_real, "v1_coulomb_ewald_gaussian_real_iq_", exx_full_coulomb);
+            this->out_coulomb_k_v1(
+                ucell, short_range, "v1_coulomb_ewald_short_iq_", exx_full_coulomb);
+            this->out_coulomb_k_v1(
+                ucell, long_range, "v1_coulomb_ewald_long_iq_", exx_full_coulomb);
+        }
     }
     else
     {
+        if (output_ewald_components)
+        {
+            throw std::runtime_error("ABACUS_RPA_EWALD_COMPONENTS requires out_librpa_reader_version=1.");
+        }
         this->out_coulomb_k(ucell, this->Vs_period, "coulomb_mat_", exx_full_coulomb);
     }
     Vs_period.clear();
