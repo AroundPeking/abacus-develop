@@ -14,6 +14,13 @@ namespace ModuleSymmetry
     using TapR = std::pair<Tap, TC>;
     using TCdouble = Abfs::Vector3_Order<double>;
 
+    /// Rotate a full AO coefficient vector using the column-major matrix M from
+    /// Symmetry_rotation: c(k) = M^T c(k_ibz), with optional time reversal.
+    std::vector<std::complex<double>> rotate_ao_coefficients_dense(
+        const std::vector<std::complex<double>>& rotation_matrix,
+        const std::vector<std::complex<double>>& coefficients,
+        bool time_reversal = false);
+
     class Symmetry_rotation
     {
     public:
@@ -65,6 +72,15 @@ namespace ModuleSymmetry
             const Parallel_2D& pv)const;
         std::vector<std::complex<double>> rot_matrix_ao(const std::vector<std::complex<double>>& DMkibz,
             const int ik_ibz, const int kstar_size, const int isym, const Parallel_2D& pv, const bool TRS_conj = false) const;
+
+        /// Recover normalized orbital coefficients at a full-grid k point.
+        /// Unlike restore_dm, this function does not apply the k-star weight.
+        std::vector<std::vector<std::complex<double>>> rotate_ao_coefficients(
+            const std::vector<std::vector<std::complex<double>>>& coefficients,
+            int ik_ibz,
+            int isym,
+            const Parallel_2D& pv,
+            bool time_reversal = false) const;
 
         /// calculate Wigner D matrix
         double wigner_d(const double beta, const int l, const int m1, const int m2) const;
