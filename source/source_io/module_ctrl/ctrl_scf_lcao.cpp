@@ -50,45 +50,37 @@ std::vector<ModuleRI::SternheimerLCAOOccupiedChannel> gather_sternheimer_lcao_oc
     const int spin_channel_count = ModuleRI::sternheimer_lcao_physical_spin_channel_count(PARAM.inp.nspin);
     for (int spin_index = 0; spin_index != spin_channel_count; ++spin_index)
     {
-        int occupied_count = 0;
-        for (int ib = 0; ib != elec_state.wg.nc; ++ib)
-        {
-            if (elec_state.wg(spin_index, ib) > 1.0e-8)
-            {
-                occupied_count = ib + 1;
-            }
-        }
-        if (occupied_count == 0)
-        {
-            continue;
-        }
-
         ModuleRI::SternheimerLCAOOccupiedChannel channel;
         channel.spin_index = spin_index;
-        channel.coefficients.assign(
-            static_cast<std::size_t>(occupied_count),
-            std::vector<std::complex<double>>(static_cast<std::size_t>(PARAM.globalv.nlocal),
-                                              std::complex<double>(0.0, 0.0)));
-        for (int ib = 0; ib != occupied_count; ++ib)
+        for (int ib = 0; ib != elec_state.wg.nc; ++ib)
         {
+            auto& target = elec_state.wg(spin_index, ib) > 1.0e-8 ? channel.coefficients
+                                                                  : channel.unoccupied_coefficients;
+            target.emplace_back(static_cast<std::size_t>(PARAM.globalv.nlocal),
+                                std::complex<double>(0.0, 0.0));
+            auto& band_coefficients = target.back();
             const int local_band = parallel_orbitals.global2local_col(ib);
             if (local_band >= 0)
             {
                 for (int local_basis = 0; local_basis != psi.get_nbasis(); ++local_basis)
                 {
                     const int global_basis = parallel_orbitals.local2global_row(local_basis);
-                    channel.coefficients[static_cast<std::size_t>(ib)][static_cast<std::size_t>(global_basis)]
+                    band_coefficients[static_cast<std::size_t>(global_basis)]
                         = std::complex<double>(psi(spin_index, local_band, local_basis));
                 }
             }
 #ifdef __MPI
             MPI_Allreduce(MPI_IN_PLACE,
-                          channel.coefficients[static_cast<std::size_t>(ib)].data(),
+                          band_coefficients.data(),
                           PARAM.globalv.nlocal,
                           MPI_DOUBLE_COMPLEX,
                           MPI_SUM,
                           MPI_COMM_WORLD);
 #endif
+        }
+        if (channel.coefficients.empty())
+        {
+            continue;
         }
         channels.push_back(std::move(channel));
     }
