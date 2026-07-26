@@ -948,17 +948,32 @@ If EXX(exact exchange) is calculated (i.e. dft_fuctional==hse/hf/pbe0/scan0 or r
     }
     {
         Input_Item item("sternheimer_frequency_mpi");
-        item.annotation = "true: split Sternheimer chi0 frequency points over MPI ranks; false: default";
+        item.annotation = "true: split Sternheimer frequency points over MPI ranks; false: default";
         item.category = "Output information";
         item.type = "Boolean";
-        item.description = "When out_sternheimer_librpa is enabled in a PW calculation, distribute independent "
+        item.description = "When Sternheimer output is enabled, distribute independent "
                            "imaginary-frequency Sternheimer solves over MPI ranks. The zero-order FD states are "
-                           "solved once on rank 0 and broadcast; each rank then writes the chi0 files for its "
-                           "assigned frequency points.";
+                           "solved once on rank 0 and broadcast; each rank then processes its assigned frequency "
+                           "points.";
         item.default_value = "False";
         item.unit = "";
-        item.availability = "PW calculation with out_sternheimer_librpa=True.";
+        item.availability = "PW calculation with Sternheimer output enabled.";
         read_sync_bool(input.sternheimer_frequency_mpi);
+        this->add_item(item);
+    }
+    {
+        Input_Item item("sternheimer_channel_mpi");
+        item.annotation = "true: split each Sternheimer SIAB frequency over an MPI rank group; false: default";
+        item.category = "Output information";
+        item.type = "Boolean";
+        item.description = "With sternheimer_frequency_mpi enabled, assign an integer group of MPI ranks to each "
+                           "frequency and distribute occupied-state/auxiliary-channel equations within that group. "
+                           "The MPI rank count must be an integer multiple of sternheimer_nfreq. This first "
+                           "implementation supports out_sternheimer_siab only.";
+        item.default_value = "False";
+        item.unit = "";
+        item.availability = "PW calculation with out_sternheimer_siab=True.";
+        read_sync_bool(input.sternheimer_channel_mpi);
         this->add_item(item);
     }
     {
