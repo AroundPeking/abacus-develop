@@ -977,6 +977,29 @@ If EXX(exact exchange) is calculated (i.e. dft_fuctional==hse/hf/pbe0/scan0 or r
         this->add_item(item);
     }
     {
+        Input_Item item("sternheimer_mpi_layout");
+        item.annotation = "MPI ownership layout for Sternheimer SIAB response equations";
+        item.category = "Output information";
+        item.type = "String";
+        item.description = "Use frequency_grouped to assign a fixed MPI rank group to each imaginary frequency, "
+                           "or global_equation to distribute occupied-state/frequency/auxiliary-channel equations "
+                           "over all MPI ranks. The global_equation layout requires Sternheimer frequency MPI, "
+                           "channel MPI, and SIAB output.";
+        item.default_value = "frequency_grouped";
+        item.unit = "";
+        item.availability = "PW calculation with out_sternheimer_siab=True.";
+        read_sync_string(input.sternheimer_mpi_layout);
+        item.check_value = [](const Input_Item& item, const Parameter& para) {
+            if (para.input.sternheimer_mpi_layout != "frequency_grouped"
+                && para.input.sternheimer_mpi_layout != "global_equation")
+            {
+                ModuleBase::WARNING_QUIT("ReadInput",
+                                         item.label + " must be frequency_grouped or global_equation.");
+            }
+        };
+        this->add_item(item);
+    }
+    {
         Input_Item item("sternheimer_delta");
         item.annotation = "true: use Delta-Sternheimer projected solver for Sternheimer chi0 output; false: default";
         item.category = "Output information";
