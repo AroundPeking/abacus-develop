@@ -82,7 +82,80 @@ AddTest(
 AddTest(
   TARGET MODULE_RI_sternheimer_abacus_st_smoke_test
   LIBS ${math_libs}
-  SOURCES sternheimer_abacus_st_smoke_test.cpp
+  SOURCES sternheimer_abacus_st_smoke_test.cpp ../sternheimer_siab_memory.cpp
+)
+AddTest(
+  TARGET MODULE_RI_sternheimer_coulomb_whitening_test
+  LIBS ${math_libs}
+  SOURCES sternheimer_coulomb_whitening_test.cpp ../sternheimer_coulomb_whitening.cpp
+)
+AddTest(
+  TARGET MODULE_RI_sternheimer_siab_overlap_test
+  LIBS ${math_libs}
+  SOURCES test_sternheimer_siab_overlap.cpp
+          ../sternheimer_siab_overlap.cpp
+          ../../../source_base/module_external/blas_connector_matrix.cpp
+)
+AddTest(
+  TARGET MODULE_RI_sternheimer_siab_writer_test
+  LIBS parameter ${math_libs} base device io_input
+  SOURCES test_sternheimer_siab_writer.cpp ../sternheimer_siab_writer.cpp
+)
+AddTest(
+  TARGET MODULE_RI_sternheimer_siab_provenance_test
+  LIBS ${math_libs}
+  SOURCES test_sternheimer_siab_provenance.cpp ../sternheimer_siab_provenance.cpp
+)
+if(ENABLE_MPI)
+  add_executable(
+    MODULE_RI_sternheimer_siab_mpi_test
+    test_sternheimer_siab_mpi.cpp
+    ../sternheimer_rpa.cpp
+    ../sternheimer_siab_mpi.cpp
+    ../sternheimer_siab_overlap.cpp
+    ../sternheimer_siab_writer.cpp
+  )
+  target_link_libraries(
+    MODULE_RI_sternheimer_siab_mpi_test
+    parameter
+    base
+    device
+    io_input
+    ${STERNHEIMER_RPA_TEST_LIBS}
+    Threads::Threads
+    GTest::gtest
+  )
+  if(USE_OPENMP)
+    target_link_libraries(MODULE_RI_sternheimer_siab_mpi_test OpenMP::OpenMP_CXX)
+  endif()
+  if(ENABLE_COVERAGE)
+    add_coverage(MODULE_RI_sternheimer_siab_mpi_test)
+  endif()
+  install(TARGETS MODULE_RI_sternheimer_siab_mpi_test DESTINATION ${CMAKE_BINARY_DIR}/tests)
+  add_test(
+    NAME MODULE_RI_sternheimer_siab_mpi_test
+    COMMAND $<TARGET_FILE:MODULE_RI_sternheimer_siab_mpi_test>
+    WORKING_DIRECTORY $<TARGET_FILE_DIR:MODULE_RI_sternheimer_siab_mpi_test>
+  )
+  add_test(
+    NAME MODULE_RI_sternheimer_siab_mpi_test_mpi2
+    COMMAND mpirun -np 2 $<TARGET_FILE:MODULE_RI_sternheimer_siab_mpi_test>
+    WORKING_DIRECTORY $<TARGET_FILE_DIR:MODULE_RI_sternheimer_siab_mpi_test>
+  )
+endif()
+AddTest(
+  TARGET MODULE_RI_sternheimer_siab_primitives_test
+  LIBS parameter base ${math_libs} device planewave container psi
+  SOURCES test_sternheimer_siab_primitives.cpp
+          ../../../source_io/module_bessel/numerical_basis.cpp
+          ../../../source_io/module_bessel/bessel_basis.cpp
+          ../../../source_cell/parallel_kpoints.cpp
+)
+target_compile_options(MODULE_RI_sternheimer_siab_primitives_test PRIVATE -U__LCAO)
+add_test(
+  NAME MODULE_RI_sternheimer_siab_primitives_test_mpi2
+  COMMAND mpirun -np 2 ./MODULE_RI_sternheimer_siab_primitives_test
+  WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
 )
 AddTest(
   TARGET MODULE_RI_sternheimer_channel_resources_test

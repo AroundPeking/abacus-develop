@@ -5,6 +5,11 @@
 #include "source_cell/unitcell.h"
 namespace unitcell
 {
+    bool should_read_abfs_orbitals(bool cal_exx,
+                                   bool rpa,
+                                   bool out_sternheimer_librpa,
+                                   bool out_sternheimer_siab);
+
     bool check_tau(const Atom* atoms,
                    const int& ntype,
                    const double& lat0);
