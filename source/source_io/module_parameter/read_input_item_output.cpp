@@ -3,6 +3,8 @@
 #include "read_input.h"
 #include "read_input_tool.h"
 
+#include <algorithm>
+#include <cctype>
 #include <cmath>
 
 namespace ModuleIO
@@ -963,31 +965,30 @@ If EXX(exact exchange) is calculated (i.e. dft_fuctional==hse/hf/pbe0/scan0 or r
     }
     {
         Input_Item item("sternheimer_channel_mpi");
-        item.annotation = "true: split each Sternheimer SIAB frequency over an MPI rank group; false: default";
+        item.annotation = "true: split each Sternheimer frequency over MPI ranks; false: default";
         item.category = "Output information";
         item.type = "Boolean";
-        item.description = "With sternheimer_frequency_mpi enabled, assign an integer group of MPI ranks to each "
-                           "frequency and distribute occupied-state/auxiliary-channel equations within that group. "
-                           "The MPI rank count must be an integer multiple of sternheimer_nfreq. This first "
-                           "implementation supports out_sternheimer_siab only.";
+        item.description = "With sternheimer_frequency_mpi enabled, distribute occupied-state/auxiliary-channel "
+                           "equations within each frequency group or across all ranks in global_equation mode. "
+                           "LibRPA partial chi0 columns are reduced before reader-v1 output.";
         item.default_value = "False";
         item.unit = "";
-        item.availability = "PW calculation with out_sternheimer_siab=True.";
+        item.availability = "PW calculation with Sternheimer output enabled.";
         read_sync_bool(input.sternheimer_channel_mpi);
         this->add_item(item);
     }
     {
         Input_Item item("sternheimer_mpi_layout");
-        item.annotation = "MPI ownership layout for Sternheimer SIAB response equations";
+        item.annotation = "MPI ownership layout for Sternheimer response equations";
         item.category = "Output information";
         item.type = "String";
         item.description = "Use frequency_grouped to assign a fixed MPI rank group to each imaginary frequency, "
                            "or global_equation to distribute occupied-state/frequency/auxiliary-channel equations "
-                           "over all MPI ranks. The global_equation layout requires Sternheimer frequency MPI, "
-                           "channel MPI, and SIAB output.";
+                           "over all MPI ranks. The global_equation layout requires Sternheimer frequency MPI and "
+                           "channel MPI, and supports SIAB or LibRPA output.";
         item.default_value = "frequency_grouped";
         item.unit = "";
-        item.availability = "PW calculation with out_sternheimer_siab=True.";
+        item.availability = "PW calculation with Sternheimer output enabled.";
         read_sync_string(input.sternheimer_mpi_layout);
         item.check_value = [](const Input_Item& item, const Parameter& para) {
             if (para.input.sternheimer_mpi_layout != "frequency_grouped"
@@ -1011,6 +1012,34 @@ If EXX(exact exchange) is calculated (i.e. dft_fuctional==hse/hf/pbe0/scan0 or r
         item.unit = "";
         item.availability = "PW calculation with out_sternheimer_librpa=True.";
         read_sync_bool(input.sternheimer_delta);
+        this->add_item(item);
+    }
+    {
+        Input_Item item("sternheimer_delta_virtual_source");
+        item.annotation = "ks_bands: complete LCAO KS virtual space; projected_ao: diagnostic AO projection";
+        item.category = "Output information";
+        item.type = "String";
+        item.description = "Select the fixed LCAO virtual candidates used by Delta-Sternheimer. ks_bands uses every "
+                           "unoccupied LCAO KS eigenvector and requires nbands=nlocal. projected_ao is retained for "
+                           "diagnostic comparison with the earlier projected-AO construction.";
+        item.default_value = "ks_bands";
+        item.unit = "";
+        item.availability = "LCAO calculation with Sternheimer output and sternheimer_delta=True.";
+        read_sync_string(input.sternheimer_delta_virtual_source);
+        item.reset_value = [](const Input_Item& item, Parameter& para) {
+            std::transform(para.input.sternheimer_delta_virtual_source.begin(),
+                           para.input.sternheimer_delta_virtual_source.end(),
+                           para.input.sternheimer_delta_virtual_source.begin(),
+                           [](const unsigned char character) { return static_cast<char>(std::tolower(character)); });
+        };
+        item.check_value = [](const Input_Item& item, const Parameter& para) {
+            const std::vector<std::string> sources = {"ks_bands", "projected_ao"};
+            if (std::find(sources.begin(), sources.end(), para.input.sternheimer_delta_virtual_source)
+                == sources.end())
+            {
+                ModuleBase::WARNING_QUIT("ReadInput", nofound_str(sources, item.label));
+            }
+        };
         this->add_item(item);
     }
     {

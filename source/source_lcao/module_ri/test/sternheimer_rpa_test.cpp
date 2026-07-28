@@ -467,6 +467,13 @@ TEST(SternheimerRPA, ValidatesGlobalEquationMPILayoutRequirements)
                                                                    false,
                                                                    16,
                                                                    32));
+    EXPECT_NO_THROW(ModuleRI::SternheimerRPA::validate_mpi_layout("frequency_grouped",
+                                                                   true,
+                                                                   true,
+                                                                   false,
+                                                                   true,
+                                                                   16,
+                                                                   32));
     EXPECT_THROW(ModuleRI::SternheimerRPA::validate_mpi_layout("frequency_grouped",
                                                                 true,
                                                                 true,
@@ -481,6 +488,20 @@ TEST(SternheimerRPA, ValidatesGlobalEquationMPILayoutRequirements)
                                                                    true,
                                                                    true,
                                                                    false,
+                                                                   6,
+                                                                   4));
+    EXPECT_NO_THROW(ModuleRI::SternheimerRPA::validate_mpi_layout("global_equation",
+                                                                   true,
+                                                                   true,
+                                                                   false,
+                                                                   true,
+                                                                   6,
+                                                                   4));
+    EXPECT_NO_THROW(ModuleRI::SternheimerRPA::validate_mpi_layout("global_equation",
+                                                                   true,
+                                                                   true,
+                                                                   true,
+                                                                   true,
                                                                    6,
                                                                    4));
     EXPECT_THROW(ModuleRI::SternheimerRPA::validate_mpi_layout("global_equation",
@@ -504,14 +525,6 @@ TEST(SternheimerRPA, ValidatesGlobalEquationMPILayoutRequirements)
                                                                 true,
                                                                 false,
                                                                 false,
-                                                                6,
-                                                                4),
-                 std::invalid_argument);
-    EXPECT_THROW(ModuleRI::SternheimerRPA::validate_mpi_layout("global_equation",
-                                                                true,
-                                                                true,
-                                                                true,
-                                                                true,
                                                                 6,
                                                                 4),
                  std::invalid_argument);
