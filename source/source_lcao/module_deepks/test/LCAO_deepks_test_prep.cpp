@@ -27,7 +27,7 @@ void test_deepks<T>::preparation()
     this->count_ntype();
     this->set_parameters();
 
-    this->setup_cell();
+    this->setup_cell(, 0);
 
     this->setup_kpt();
 
@@ -156,7 +156,7 @@ void test_deepks<T>::set_ekcut()
 template <typename T>
 void test_deepks<T>::setup_cell()
 {
-    ucell.setup_cell("STRU", GlobalV::ofs_running);
+    ucell.setup_cell("STRU", GlobalV::ofs_running, 0);
     elecstate::read_pseudo(GlobalV::ofs_running, ucell);
 
     return;

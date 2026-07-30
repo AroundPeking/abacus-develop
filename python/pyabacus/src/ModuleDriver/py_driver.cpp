@@ -425,7 +425,7 @@ CalculationResult PyDriver::run(
         );
 
         // Read structure
-        impl_->ucell_->setup_cell(PARAM.globalv.global_in_stru, GlobalV::ofs_running);
+        impl_->ucell_->setup_cell(PARAM.globalv.global_in_stru, GlobalV::ofs_running, std::stoi(PARAM.inp.symmetry));
 
         // Check atomic structure
         unitcell::check_atomic_stru(*impl_->ucell_, PARAM.inp.min_dist_coef);

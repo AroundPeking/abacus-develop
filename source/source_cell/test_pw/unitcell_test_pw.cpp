@@ -105,7 +105,7 @@ if(GlobalV::MY_RANK==0)
 	delete[] ucell->magnet.start_mag;
 	ucell->magnet.start_mag = new double[ucell->ntype];
 	//call read_atom_positions
-	EXPECT_NO_THROW(unitcell::read_atom_positions(*ucell,ifa, ofs_running, ofs_warning));
+	EXPECT_NO_THROW(unitcell::read_atom_positions(*ucell,ifa, ofs_running, ofs_warning, 0));
 	ofs_running.close();
 	ofs_warning.close();
 	ifa.close();
@@ -122,7 +122,7 @@ TEST_F(UcellTest,SetupCell)
 	std::ofstream ofs_running;
 	ofs_running.open("setup_cell.tmp");
 	PARAM.input.nspin = 1;
-	ucell->setup_cell(fn,ofs_running);
+	ucell->setup_cell(fn,ofs_running, 0);
 	ofs_running.close();
 	remove("setup_cell.tmp");
 }

@@ -1306,7 +1306,7 @@ TEST_F(UcellTestReadStru, ReadAtomPositionsS1)
     // mandatory preliminaries
     delete[] ucell->magnet.start_mag;
     ucell->magnet.start_mag = new double[ucell->ntype];
-    unitcell::read_atom_positions(*ucell,ifa, ofs_running, ofs_warning);
+    unitcell::read_atom_positions(*ucell,ifa, ofs_running, ofs_warning, 0);
     ofs_running.close();
     ofs_warning.close();
     ifa.close();
@@ -1338,7 +1338,7 @@ TEST_F(UcellTestReadStru, ReadAtomPositionsS2)
     // mandatory preliminaries
     delete[] ucell->magnet.start_mag;
     ucell->magnet.start_mag = new double[ucell->ntype];
-    unitcell::read_atom_positions(*ucell,ifa, ofs_running, ofs_warning);
+    unitcell::read_atom_positions(*ucell,ifa, ofs_running, ofs_warning, 0);
     ofs_running.close();
     ofs_warning.close();
     ifa.close();
@@ -1371,7 +1371,7 @@ TEST_F(UcellTestReadStru, ReadAtomPositionsS4Noncolin)
     // mandatory preliminaries
     delete[] ucell->magnet.start_mag;
     ucell->magnet.start_mag = new double[ucell->ntype];
-    unitcell::read_atom_positions(*ucell,ifa, ofs_running, ofs_warning);
+    unitcell::read_atom_positions(*ucell,ifa, ofs_running, ofs_warning, 0);
     ofs_running.close();
     ofs_warning.close();
     ifa.close();
@@ -1404,7 +1404,7 @@ TEST_F(UcellTestReadStru, ReadAtomPositionsS4Colin)
     // mandatory preliminaries
     delete[] ucell->magnet.start_mag;
     ucell->magnet.start_mag = new double[ucell->ntype];
-    unitcell::read_atom_positions(*ucell,ifa, ofs_running, ofs_warning);
+    unitcell::read_atom_positions(*ucell,ifa, ofs_running, ofs_warning, 0);
     ofs_running.close();
     ofs_warning.close();
     ifa.close();
@@ -1436,7 +1436,7 @@ TEST_F(UcellTestReadStru, ReadAtomPositionsC)
     // mandatory preliminaries
     delete[] ucell->magnet.start_mag;
     ucell->magnet.start_mag = new double[ucell->ntype];
-    unitcell::read_atom_positions(*ucell,ifa, ofs_running, ofs_warning);
+    unitcell::read_atom_positions(*ucell,ifa, ofs_running, ofs_warning, 0);
     ofs_running.close();
     ofs_warning.close();
     ifa.close();
@@ -1468,7 +1468,7 @@ TEST_F(UcellTestReadStru, ReadAtomPositionsCA)
     // mandatory preliminaries
     delete[] ucell->magnet.start_mag;
     ucell->magnet.start_mag = new double[ucell->ntype];
-    unitcell::read_atom_positions(*ucell,ifa, ofs_running, ofs_warning);
+    unitcell::read_atom_positions(*ucell,ifa, ofs_running, ofs_warning, 0);
     ofs_running.close();
     ofs_warning.close();
     ifa.close();
@@ -1500,7 +1500,7 @@ TEST_F(UcellTestReadStru, ReadAtomPositionsCACXY)
     // mandatory preliminaries
     delete[] ucell->magnet.start_mag;
     ucell->magnet.start_mag = new double[ucell->ntype];
-    unitcell::read_atom_positions(*ucell,ifa, ofs_running, ofs_warning);
+    unitcell::read_atom_positions(*ucell,ifa, ofs_running, ofs_warning, 0);
     ofs_running.close();
     ofs_warning.close();
     ifa.close();
@@ -1532,7 +1532,7 @@ TEST_F(UcellTestReadStru, ReadAtomPositionsCACXZ)
     // mandatory preliminaries
     delete[] ucell->magnet.start_mag;
     ucell->magnet.start_mag = new double[ucell->ntype];
-    unitcell::read_atom_positions(*ucell,ifa, ofs_running, ofs_warning);
+    unitcell::read_atom_positions(*ucell,ifa, ofs_running, ofs_warning, 0);
     ofs_running.close();
     ofs_warning.close();
     ifa.close();
@@ -1564,7 +1564,7 @@ TEST_F(UcellTestReadStru, ReadAtomPositionsCACYZ)
     // mandatory preliminaries
     delete[] ucell->magnet.start_mag;
     ucell->magnet.start_mag = new double[ucell->ntype];
-    unitcell::read_atom_positions(*ucell,ifa, ofs_running, ofs_warning);
+    unitcell::read_atom_positions(*ucell,ifa, ofs_running, ofs_warning, 0);
     ofs_running.close();
     ofs_warning.close();
     ifa.close();
@@ -1596,7 +1596,7 @@ TEST_F(UcellTestReadStru, ReadAtomPositionsCACXYZ)
     // mandatory preliminaries
     delete[] ucell->magnet.start_mag;
     ucell->magnet.start_mag = new double[ucell->ntype];
-    unitcell::read_atom_positions(*ucell,ifa, ofs_running, ofs_warning);
+    unitcell::read_atom_positions(*ucell,ifa, ofs_running, ofs_warning, 0);
     ofs_running.close();
     ofs_warning.close();
     ifa.close();
@@ -1629,7 +1629,7 @@ TEST_F(UcellTestReadStru, ReadAtomPositionsCAU)
     // mandatory preliminaries
     delete[] ucell->magnet.start_mag;
     ucell->magnet.start_mag = new double[ucell->ntype];
-    unitcell::read_atom_positions(*ucell,ifa, ofs_running, ofs_warning);
+    unitcell::read_atom_positions(*ucell,ifa, ofs_running, ofs_warning, 0);
     ofs_running.close();
     ofs_warning.close();
     ifa.close();
@@ -1661,7 +1661,7 @@ TEST_F(UcellTestReadStru, ReadAtomPositionsAutosetMag)
     // mandatory preliminaries
     delete[] ucell->magnet.start_mag;
     ucell->magnet.start_mag = new double[ucell->ntype];
-    unitcell::read_atom_positions(*ucell,ifa, ofs_running, ofs_warning);
+    unitcell::read_atom_positions(*ucell,ifa, ofs_running, ofs_warning, 0);
     for (int it = 0; it < ucell->ntype; it++)
     {
         for (int ia = 0; ia < ucell->atoms[it].na; ia++)
@@ -1674,7 +1674,7 @@ TEST_F(UcellTestReadStru, ReadAtomPositionsAutosetMag)
     PARAM.input.nspin = 4;
     delete[] ucell->magnet.start_mag;
     ucell->magnet.start_mag = new double[ucell->ntype];
-    unitcell::read_atom_positions(*ucell,ifa, ofs_running, ofs_warning);
+    unitcell::read_atom_positions(*ucell,ifa, ofs_running, ofs_warning, 0);
     for (int it = 0; it < ucell->ntype; it++)
     {
         for (int ia = 0; ia < ucell->atoms[it].na; ia++)
@@ -1715,7 +1715,7 @@ TEST_F(UcellTestReadStru, ReadAtomPositionsWarning1)
     // mandatory preliminaries
     delete[] ucell->magnet.start_mag;
     ucell->magnet.start_mag = new double[ucell->ntype];
-    EXPECT_NO_THROW(unitcell::read_atom_positions(*ucell,ifa, ofs_running, ofs_warning));
+    EXPECT_NO_THROW(unitcell::read_atom_positions(*ucell,ifa, ofs_running, ofs_warning, 0));
     ofs_running.close();
     ofs_warning.close();
     ifa.close();
@@ -1759,7 +1759,7 @@ TEST_F(UcellTestReadStru, ReadAtomPositionsWarning2)
     // mandatory preliminaries
     delete[] ucell->magnet.start_mag;
     ucell->magnet.start_mag = new double[ucell->ntype];
-    EXPECT_NO_THROW(unitcell::read_atom_positions(*ucell,ifa, ofs_running, ofs_warning));
+    EXPECT_NO_THROW(unitcell::read_atom_positions(*ucell,ifa, ofs_running, ofs_warning, 0));
     ofs_running.close();
     ofs_warning.close();
     ifa.close();
@@ -1796,7 +1796,7 @@ TEST_F(UcellTestReadStru, ReadAtomPositionsWarning3)
     // mandatory preliminaries
     delete[] ucell->magnet.start_mag;
     ucell->magnet.start_mag = new double[ucell->ntype];
-    EXPECT_NO_THROW(unitcell::read_atom_positions(*ucell,ifa, ofs_running, GlobalV::ofs_warning));
+    EXPECT_NO_THROW(unitcell::read_atom_positions(*ucell,ifa, ofs_running, GlobalV::ofs_warning, 0));
     ofs_running.close();
     GlobalV::ofs_warning.close();
     ifa.close();
@@ -1835,7 +1835,7 @@ TEST_F(UcellTestReadStru, ReadAtomPositionsWarning4)
     delete[] ucell->magnet.start_mag;
     ucell->magnet.start_mag = new double[ucell->ntype];
     testing::internal::CaptureStdout();
-    EXPECT_EXIT(unitcell::read_atom_positions(*ucell,ifa, ofs_running, ofs_warning), ::testing::ExitedWithCode(1), "");
+    EXPECT_EXIT(unitcell::read_atom_positions(*ucell,ifa, ofs_running, ofs_warning, 0), ::testing::ExitedWithCode(1), "");
     output = testing::internal::GetCapturedStdout();
     EXPECT_THAT(output, testing::HasSubstr("read_atom_positions, mismatch in atom number for atom type: Mg"));
     ofs_running.close();
@@ -1869,7 +1869,7 @@ TEST_F(UcellTestReadStru, ReadAtomPositionsWarning5)
     // mandatory preliminaries
     delete[] ucell->magnet.start_mag;
     ucell->magnet.start_mag = new double[ucell->ntype];
-    EXPECT_NO_THROW(unitcell::read_atom_positions(*ucell,ifa, ofs_running, GlobalV::ofs_warning));
+    EXPECT_NO_THROW(unitcell::read_atom_positions(*ucell,ifa, ofs_running, GlobalV::ofs_warning, 0));
     ofs_running.close();
     GlobalV::ofs_warning.close();
     ifa.close();

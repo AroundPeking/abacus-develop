@@ -183,7 +183,7 @@ std::vector<ModuleBase::Vector3<int>> UnitCell::get_constrain() const
 //==============================================================
 // Calculate various lattice related quantities for given latvec
 //==============================================================
-void UnitCell::setup_cell(const std::string& fn, std::ofstream& log)
+void UnitCell::setup_cell(const std::string& fn, std::ofstream& log, const int symmetry)
 {
     ModuleBase::TITLE("UnitCell", "setup_cell");
 
@@ -261,7 +261,7 @@ void UnitCell::setup_cell(const std::string& fn, std::ofstream& log)
             //==========================
             // call read_atom_positions
             //==========================
-            ok2 = unitcell::read_atom_positions(*this, ifa, log, GlobalV::ofs_warning);
+            ok2 = unitcell::read_atom_positions(*this, ifa, log, GlobalV::ofs_warning, symmetry);
         }
     }
 #ifdef __MPI

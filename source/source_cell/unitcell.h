@@ -210,7 +210,7 @@ class UnitCell {
 
     void set_iat2itia();
 
-    void setup_cell(const std::string& fn, std::ofstream& log);
+    void setup_cell(const std::string& fn, std::ofstream& log, const int symmetry);
 
 #ifdef __LCAO
     InfoNonlocal infoNL; // store nonlocal information of lcao, added by zhengdy

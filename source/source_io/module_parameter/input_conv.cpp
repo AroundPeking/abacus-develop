@@ -520,11 +520,9 @@ void Input_Conv::Convert()
         GlobalC::exx_info.info_opt_abfs.ecut_exx = PARAM.inp.exx_opt_orb_ecut;
         GlobalC::exx_info.info_opt_abfs.tolerence = PARAM.inp.exx_opt_orb_tolerence;
 
-        // EXX does not support symmetry for nspin==4
-        if (PARAM.inp.calculation != "nscf" && PARAM.inp.symmetry == "1" && PARAM.inp.nspin == 4 && PARAM.inp.basis_type == "lcao")
-        {
-            ModuleSymmetry::Symmetry::symm_flag = -1;
-        }
+        // Space-group symmetry is supported for LCAO EXX (nspin=1,2 via restore_dm/restore_HR;
+        // nspin=4/SOC via restore_dm + restore_HR_nspin4), so symmetry=1 is honored here.
+
     }
 
     if (GlobalC::exx_info.info_global.cal_exx && PARAM.inp.basis_type == "pw")
@@ -554,12 +552,6 @@ void Input_Conv::Convert()
     if (PARAM.inp.efield_flag && ModuleSymmetry::Symmetry::symm_flag == 1)
     {
         ModuleSymmetry::Symmetry::symm_flag = 0;
-    }
-    // In these case, inversion symmetry is also not allowed, symmetry should be
-    // reset to -1
-    if (PARAM.inp.lspinorb)
-    {
-        ModuleSymmetry::Symmetry::symm_flag = -1;
     }
     // end of symmetry reset
 

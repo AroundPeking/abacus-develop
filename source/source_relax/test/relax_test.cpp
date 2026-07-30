@@ -184,7 +184,7 @@ class Test_RELAX : public testing::Test
             double energy;
             PARAM.input.stress_thr = 0.01;
 
-            this->setup_cell();
+            this->setup_cell(, 0);
 
             ModuleBase::matrix force_in, stress_in;
             force_in.create(nat,3);

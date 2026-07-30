@@ -85,7 +85,7 @@ TEST_F(UcellTest,SetupCellS1)
 	ofs_running.open("setup_cell.tmp");
 	PARAM.input.nspin = 1;
 	
-	ucell->setup_cell(fn,ofs_running);
+	ucell->setup_cell(fn,ofs_running, 0);
 	ofs_running.close();
 	remove("setup_cell.tmp");
 }
@@ -97,7 +97,7 @@ TEST_F(UcellTest,SetupCellS2)
 	ofs_running.open("setup_cell.tmp");
 	PARAM.input.nspin = 2;
 	
-	ucell->setup_cell(fn,ofs_running);
+	ucell->setup_cell(fn,ofs_running, 0);
 	ofs_running.close();
 	remove("setup_cell.tmp");
 }
@@ -109,7 +109,7 @@ TEST_F(UcellTest,SetupCellS4)
 	ofs_running.open("setup_cell.tmp");
 	PARAM.input.nspin = 4;
 	
-	ucell->setup_cell(fn,ofs_running);
+	ucell->setup_cell(fn,ofs_running, 0);
 	ofs_running.close();
 	remove("setup_cell.tmp");
 }
@@ -121,7 +121,7 @@ TEST_F(UcellDeathTest,SetupCellWarning1)
 	ofs_running.open("setup_cell.tmp");
 	
 	testing::internal::CaptureStdout();
-	EXPECT_EXIT(ucell->setup_cell(fn,ofs_running),::testing::ExitedWithCode(1),"");
+	EXPECT_EXIT(ucell->setup_cell(fn,ofs_running, 0),::testing::ExitedWithCode(1),"");
 	output = testing::internal::GetCapturedStdout();
 	EXPECT_THAT(output,testing::HasSubstr("Can not find the file containing atom positions.!"));
 	ofs_running.close();
@@ -135,7 +135,7 @@ TEST_F(UcellDeathTest,SetupCellWarning2)
 	ofs_running.open("setup_cell.tmp");
 	
 	testing::internal::CaptureStdout();
-	EXPECT_EXIT(ucell->setup_cell(fn,ofs_running),::testing::ExitedWithCode(1),"");
+	EXPECT_EXIT(ucell->setup_cell(fn,ofs_running, 0),::testing::ExitedWithCode(1),"");
 	output = testing::internal::GetCapturedStdout();
 	EXPECT_THAT(output,testing::HasSubstr("Something wrong during read_atom_positions"));
 	ofs_running.close();
@@ -153,7 +153,7 @@ TEST_F(UcellTest,SetupCellAfterVC)
 	ucell->magnet.start_mag = new double[ucell->ntype];
 
 	
-	ucell->setup_cell(fn,ofs_running);
+	ucell->setup_cell(fn,ofs_running, 0);
 	ucell->lat0 = 1.0;
 	ucell->latvec.Zero();
 	ucell->latvec.e11 = 10.0;

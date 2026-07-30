@@ -48,11 +48,7 @@ void pw::setup_pot(const int istep,
 	//! Symmetry_rho should behind init_scf, because charge should be
 	//! initialized first. liuyu comment: Symmetry_rho should be
 	//! located between init_rho and v_of_rho?
-	Symmetry_rho srho;
-	for (int is = 0; is < inp.nspin; is++)
-	{
-		srho.begin(is, chr, pw_rhod, ucell.symm);
-	}
+	Symmetry_rho::symmetrize_rho(inp.nspin, chr, pw_rhod, ucell.symm);
 
 	//----------------------------------------------------------
 	//! 3) Calculate the effective potential with rho

@@ -38,7 +38,7 @@ void calculate()
 	output out;
 	ucell.setup_cell(
 	"STRU", 
-	ofs_running);
+	ofs_running, 0);
 	std::cout << "set up cell classic done." << std::endl;
     symm.analy_sys(ucell.lat, ucell.st, ucell.atoms, ofs_running);
 	ofs_running.close();

@@ -139,11 +139,7 @@ void RDMFT<TK, TR>::update_charge(UnitCell& ucell)
     }
 
     // charge density symmetrization
-    Symmetry_rho srho;
-    for (int is = 0; is < nspin; is++)
-    {
-        srho.begin(is, *(this->charge), rho_basis, ucell.symm);
-    }
+    Symmetry_rho::symmetrize_rho(nspin, *(this->charge), rho_basis, ucell.symm);
 
 }
 
