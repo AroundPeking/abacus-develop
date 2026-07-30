@@ -35,6 +35,49 @@ class InputTest : public testing::Test
     }
 };
 
+class ReadInputItemTest : public InputTest
+{
+};
+
+TEST_F(ReadInputItemTest, output)
+{
+    ModuleIO::ReadInput readinput(0);
+    readinput.check_ntype_flag = false;
+    Parameter param;
+
+    auto it = find_label("sternheimer_siab_source_only", readinput.input_lists);
+    ASSERT_NE(it, readinput.input_lists.end());
+    EXPECT_FALSE(param.input.sternheimer_siab_source_only);
+
+    it->second.str_values = {"true"};
+    it->second.read_value(it->second, param);
+    EXPECT_TRUE(param.input.sternheimer_siab_source_only);
+
+    param.input.out_sternheimer_siab = false;
+    param.input.out_sternheimer_librpa = false;
+    testing::internal::CaptureStdout();
+    EXPECT_EXIT(it->second.check_value(it->second, param), ::testing::ExitedWithCode(1), "");
+    std::string output = testing::internal::GetCapturedStdout();
+    EXPECT_THAT(output,
+                testing::AllOf(testing::HasSubstr("sternheimer_siab_source_only"),
+                               testing::HasSubstr("out_sternheimer_siab")));
+
+    param.input.out_sternheimer_siab = true;
+    param.input.out_sternheimer_librpa = true;
+    testing::internal::CaptureStdout();
+    EXPECT_EXIT(it->second.check_value(it->second, param), ::testing::ExitedWithCode(1), "");
+    output = testing::internal::GetCapturedStdout();
+    EXPECT_THAT(output,
+                testing::AllOf(testing::HasSubstr("sternheimer_siab_source_only"),
+                               testing::HasSubstr("out_sternheimer_librpa")));
+
+    param.input.out_sternheimer_librpa = false;
+    param.input.basis_type = "lcao";
+    param.input.sternheimer_delta = true;
+    param.input.bessel_nao_rcuts = {8.0};
+    it->second.check_value(it->second, param);
+}
+
 TEST_F(InputTest, Item_test)
 {
     ModuleIO::ReadInput readinput(0);

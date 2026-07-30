@@ -872,6 +872,30 @@ If EXX(exact exchange) is calculated (i.e. dft_fuctional==hse/hf/pbe0/scan0 or r
         this->add_item(item);
     }
     {
+        Input_Item item("sternheimer_siab_source_only");
+        item.annotation = "true: write SIAB sources without solving first-order equations; false: default";
+        item.category = "Output information";
+        item.type = "Boolean";
+        item.description = "Write OUT.ABACUS/STERNHEIMER_SIAB_SOURCE_V1.dat without solving first-order equations.";
+        item.default_value = "False";
+        item.unit = "";
+        item.availability = "out_sternheimer_siab=True, out_sternheimer_librpa=False, basis_type=lcao, and "
+                            "sternheimer_delta=True.";
+        read_sync_bool(input.sternheimer_siab_source_only);
+        item.check_value = [](const Input_Item& item, const Parameter& para) {
+            if (para.input.sternheimer_siab_source_only && !para.input.out_sternheimer_siab)
+            {
+                ModuleBase::WARNING_QUIT("ReadInput", item.label + " requires out_sternheimer_siab True.");
+            }
+            if (para.input.sternheimer_siab_source_only && para.input.out_sternheimer_librpa)
+            {
+                ModuleBase::WARNING_QUIT("ReadInput",
+                                         item.label + " cannot be combined with out_sternheimer_librpa.");
+            }
+        };
+        this->add_item(item);
+    }
+    {
         Input_Item item("sternheimer_siab_lmax");
         item.annotation = "Maximum angular momentum of Sternheimer-SIAB target primitives";
         item.category = "Output information";

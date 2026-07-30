@@ -579,6 +579,7 @@ struct Input_para
     int out_librpa_reader_version = 0; ///< 0: legacy ABACUS LibRPA text files; 1: LibRPA reader-v1 binary files
     bool out_sternheimer_librpa = false; ///< whether to output Sternheimer chi0 files for LibRPA
     bool out_sternheimer_siab = false; ///< whether to output Sternheimer first-order-wavefunction targets for SIAB
+    bool sternheimer_siab_source_only = false; ///< whether to output SIAB sources without solving first-order equations
     int sternheimer_siab_lmax = -1; ///< maximum angular momentum of SIAB target primitives; -1 uses orbital lmax
     double sternheimer_siab_coulomb_threshold
         = 1.0e-10; ///< relative eigenvalue cutoff for global SIAB Coulomb whitening
