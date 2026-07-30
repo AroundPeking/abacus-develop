@@ -32,6 +32,15 @@ struct ReferenceRow
     int frequency_index;
 };
 
+struct SourceRow
+{
+    int occupied_state;
+    int auxiliary_channel;
+    double occupation;
+    double norm;
+    std::vector<std::complex<double>> d;
+};
+
 // The eight fields below are required-core v1; Task 4 may append deterministic optional provenance fields.
 struct Provenance
 {

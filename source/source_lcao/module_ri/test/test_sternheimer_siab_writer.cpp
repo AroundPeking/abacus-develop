@@ -679,3 +679,344 @@ TEST(SternheimerSIABInput, CoulombWhiteningThresholdIsExplicitAndPositive)
     input.sternheimer_siab_coulomb_threshold = 1.0;
     EXPECT_EXIT(item.check_value(item, parameter), ::testing::ExitedWithCode(1), "");
 }
+
+namespace
+{
+
+const char* canonical_source_fixture = R"fixture(<STERNHEIMER_SIAB_SOURCE_HEADER>
+format_version 1
+n_source 2
+n_primitive 2
+n_blocks 2
+grid_volume_bohr3 0.25
+</STERNHEIMER_SIAB_SOURCE_HEADER>
+<PRIMITIVE_BLOCKS>
+# element atom_index l m n_primitive offset
+H 0 0 0 1 0
+H 0 1 0 1 1
+</PRIMITIVE_BLOCKS>
+<SOURCE_METADATA>
+# occupied_state auxiliary_channel occupation norm
+0 0 1.0 0.5
+0 1 2.0 1.25
+</SOURCE_METADATA>
+<OVERLAP_D>
+# row-major <psi_i vbar_a|B_e>, real imag
+-0.125 0.0
+0.25 -0.5
+0.5 -0.25
+1.0 0.75
+</OVERLAP_D>
+<OVERLAP_S>
+# row-major <B_e|B_ep>, real imag
+1.0 0.0
+0.25 0.5
+0.25 -0.5
+2.0 0.0
+</OVERLAP_S>
+<PROVENANCE_JSON>
+{"abacus_commit":"19ab21e01d02cc805604ed77a6e269af698fdd1d","auxiliary_basis_sha256":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","cell_bohr":[20.0,0.0,0.0,0.0,20.0,0.0,0.0,0.0,20.0],"ecut_ry":25.0,"kernel":"full_coulomb","orbital_sha256":"7e398340398306a6baf1c61ea68944d81ed43667473fbcc290d6541c4a661d1c","pseudopotential_sha256":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb","spin_convention":"occupation_in_metadata"}
+</PROVENANCE_JSON>
+)fixture";
+
+std::vector<siab::PrimitiveBlock> canonical_source_blocks()
+{
+    return {siab::PrimitiveBlock{"H", 0, 0, 0, 1, 0}, siab::PrimitiveBlock{"H", 0, 1, 0, 1, 1}};
+}
+
+std::vector<siab::SourceRow> canonical_source_rows_reversed()
+{
+    siab::SourceRow channel_one;
+    channel_one.occupied_state = 0;
+    channel_one.auxiliary_channel = 1;
+    channel_one.occupation = 2.0;
+    channel_one.norm = 1.25;
+    channel_one.d = {{0.5, -0.25}, {1.0, 0.75}};
+
+    siab::SourceRow channel_zero;
+    channel_zero.occupied_state = 0;
+    channel_zero.auxiliary_channel = 0;
+    channel_zero.occupation = 1.0;
+    channel_zero.norm = 0.5;
+    channel_zero.d = {{-0.125, 0.0}, {0.25, -0.5}};
+    return {channel_one, channel_zero};
+}
+
+std::vector<Complex> canonical_source_overlap_s()
+{
+    return {{1.0, 0.0}, {0.25, 0.5}, {0.25, -0.5}, {2.0, 0.0}};
+}
+
+void write_canonical_source(const std::string& path,
+                            const std::vector<siab::SourceRow>& rows = canonical_source_rows_reversed(),
+                            const std::vector<Complex>& overlap_s = canonical_source_overlap_s(),
+                            const siab::Provenance& provenance = canonical_provenance())
+{
+    siab::write_source_v1(path, 0.25, canonical_source_blocks(), rows, overlap_s, provenance);
+}
+
+siab::Provenance canonical_whitening_provenance()
+{
+    siab::Provenance provenance = canonical_provenance();
+    provenance.auxiliary_whitening = "global_full_coulomb_v1";
+    provenance.raw_auxiliary_dimension = 2;
+    provenance.whitened_auxiliary_rank = 1;
+    provenance.discarded_auxiliary_rank = 1;
+    provenance.coulomb_relative_threshold = 1.0e-10;
+    provenance.coulomb_eigenvalues = {1.0e-12, 4.0};
+    provenance.coulomb_max_orthonormality_error = 2.0e-14;
+    provenance.coulomb_transform_sha256
+        = "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd";
+    return provenance;
+}
+
+} // namespace
+
+TEST(SternheimerSIABSourceWriter, MatchesCanonicalFixtureAndUsesPrimitiveFastDOrder)
+{
+    const std::string path = test_path("source_canonical");
+    const std::string tmp = path + ".tmp";
+    write_text(path, "old contents");
+    std::remove(tmp.c_str());
+
+    write_canonical_source(path);
+    const std::string text = read_text(path);
+    EXPECT_EQ(text, canonical_source_fixture);
+
+    const std::vector<std::string> sections = {"STERNHEIMER_SIAB_SOURCE_HEADER",
+                                               "PRIMITIVE_BLOCKS",
+                                               "SOURCE_METADATA",
+                                               "OVERLAP_D",
+                                               "OVERLAP_S",
+                                               "PROVENANCE_JSON"};
+    std::size_t previous = 0;
+    for (const std::string& section: sections)
+    {
+        const std::string opening = "<" + section + ">";
+        const std::string closing = "</" + section + ">";
+        EXPECT_EQ(count_occurrences(text, opening), 1);
+        EXPECT_EQ(count_occurrences(text, closing), 1);
+        const std::size_t position = text.find(opening);
+        EXPECT_NE(position, std::string::npos);
+        EXPECT_GE(position, previous);
+        previous = position;
+    }
+
+    EXPECT_EQ(section_body(text, "STERNHEIMER_SIAB_SOURCE_HEADER"),
+              "format_version 1\n"
+              "n_source 2\n"
+              "n_primitive 2\n"
+              "n_blocks 2\n"
+              "grid_volume_bohr3 0.25\n");
+    EXPECT_EQ(data_line_count(section_body(text, "PRIMITIVE_BLOCKS")), 2);
+    EXPECT_EQ(data_line_count(section_body(text, "SOURCE_METADATA")), 2);
+    EXPECT_EQ(data_line_count(section_body(text, "OVERLAP_D")), 4);
+    EXPECT_EQ(data_line_count(section_body(text, "OVERLAP_S")), 4);
+    EXPECT_EQ(section_body(text, "SOURCE_METADATA"),
+              "# occupied_state auxiliary_channel occupation norm\n"
+              "0 0 1.0 0.5\n"
+              "0 1 2.0 1.25\n");
+    EXPECT_EQ(section_body(text, "OVERLAP_D"),
+              "# row-major <psi_i vbar_a|B_e>, real imag\n"
+              "-0.125 0.0\n"
+              "0.25 -0.5\n"
+              "0.5 -0.25\n"
+              "1.0 0.75\n");
+
+    std::istringstream metadata(section_body(text, "SOURCE_METADATA"));
+    std::string comment;
+    std::getline(metadata, comment);
+    int occupied_state = -1;
+    int auxiliary_channel = -1;
+    double occupation = 0.0;
+    double norm = 0.0;
+    metadata >> occupied_state >> auxiliary_channel >> occupation >> norm;
+    metadata >> occupied_state >> auxiliary_channel >> occupation >> norm;
+    EXPECT_EQ(occupied_state, 0);
+    EXPECT_EQ(auxiliary_channel, 1);
+    EXPECT_DOUBLE_EQ(occupation, 2.0);
+    EXPECT_DOUBLE_EQ(norm, 1.25);
+    EXPECT_FALSE(std::ifstream(tmp.c_str()).good());
+
+    std::remove(path.c_str());
+}
+
+TEST(SternheimerSIABSourceWriter, SharesByteIdenticalProvenanceJsonWithResponseWriter)
+{
+    const std::string response_path = test_path("response_provenance_match");
+    const std::string source_path = test_path("source_provenance_match");
+    const siab::Provenance provenance = canonical_provenance();
+
+    write_canonical(response_path, canonical_rows_reversed(), canonical_overlap_s(), provenance);
+    write_canonical_source(source_path,
+                           canonical_source_rows_reversed(),
+                           canonical_source_overlap_s(),
+                           provenance);
+    EXPECT_EQ(section_body(read_text(source_path), "PROVENANCE_JSON"),
+              section_body(read_text(response_path), "PROVENANCE_JSON"));
+
+    std::remove(response_path.c_str());
+    std::remove(source_path.c_str());
+}
+
+TEST(SternheimerSIABSourceWriter, SortsRowsLexicographicallyByOccupiedStateAndAuxiliaryChannel)
+{
+    const std::string path = test_path("source_sort");
+    std::vector<siab::SourceRow> rows = canonical_source_rows_reversed();
+    siab::SourceRow occupied_one;
+    occupied_one.occupied_state = 1;
+    occupied_one.auxiliary_channel = 0;
+    occupied_one.occupation = 1.5;
+    occupied_one.norm = 2.0;
+    occupied_one.d = {{3.0, 0.0}, {4.0, 0.0}};
+    rows.insert(rows.begin(), occupied_one);
+
+    write_canonical_source(path, rows);
+    const std::string text = read_text(path);
+    EXPECT_EQ(section_body(text, "SOURCE_METADATA"),
+              "# occupied_state auxiliary_channel occupation norm\n"
+              "0 0 1.0 0.5\n"
+              "0 1 2.0 1.25\n"
+              "1 0 1.5 2.0\n");
+    EXPECT_EQ(section_body(text, "OVERLAP_D"),
+              "# row-major <psi_i vbar_a|B_e>, real imag\n"
+              "-0.125 0.0\n"
+              "0.25 -0.5\n"
+              "0.5 -0.25\n"
+              "1.0 0.75\n"
+              "3.0 0.0\n"
+              "4.0 0.0\n");
+
+    std::remove(path.c_str());
+}
+
+TEST(SternheimerSIABSourceWriter, RejectsInvalidRowsBeforeTouchingTmp)
+{
+    const std::string path = test_path("source_invalid_rows");
+    const std::string tmp = path + ".tmp";
+    std::remove(path.c_str());
+    write_text(tmp, "sentinel");
+    const auto expect_invalid = [&](const std::vector<siab::SourceRow>& rows) {
+        EXPECT_THROW(write_canonical_source(path, rows), std::invalid_argument);
+        EXPECT_EQ(read_text(tmp), "sentinel");
+    };
+
+    std::vector<siab::SourceRow> rows = canonical_source_rows_reversed();
+    rows.push_back(rows.front());
+    expect_invalid(rows);
+
+    rows = canonical_source_rows_reversed();
+    rows[0].occupied_state = -1;
+    expect_invalid(rows);
+    rows = canonical_source_rows_reversed();
+    rows[0].auxiliary_channel = -1;
+    expect_invalid(rows);
+    rows = canonical_source_rows_reversed();
+    rows[0].d.pop_back();
+    expect_invalid(rows);
+
+    rows = canonical_source_rows_reversed();
+    rows[0].occupation = 0.0;
+    expect_invalid(rows);
+    rows = canonical_source_rows_reversed();
+    rows[0].occupation = -1.0;
+    expect_invalid(rows);
+    rows = canonical_source_rows_reversed();
+    rows[0].occupation = std::numeric_limits<double>::infinity();
+    expect_invalid(rows);
+
+    rows = canonical_source_rows_reversed();
+    rows[0].norm = 0.0;
+    expect_invalid(rows);
+    rows = canonical_source_rows_reversed();
+    rows[0].norm = -1.0;
+    expect_invalid(rows);
+    rows = canonical_source_rows_reversed();
+    rows[0].norm = std::numeric_limits<double>::quiet_NaN();
+    expect_invalid(rows);
+
+    rows = canonical_source_rows_reversed();
+    rows[0].d[0] = Complex(0.0, std::numeric_limits<double>::infinity());
+    expect_invalid(rows);
+    EXPECT_FALSE(std::ifstream(path.c_str()).good());
+
+    std::remove(tmp.c_str());
+}
+
+TEST(SternheimerSIABSourceWriter, RejectsInvalidSharedInputsBeforeTouchingTmp)
+{
+    const std::string path = test_path("source_invalid_shared_inputs");
+    const std::string tmp = path + ".tmp";
+    const std::vector<siab::SourceRow> rows = canonical_source_rows_reversed();
+    const std::vector<siab::PrimitiveBlock> blocks = canonical_source_blocks();
+    const std::vector<Complex> overlap_s = canonical_source_overlap_s();
+    const siab::Provenance provenance = canonical_provenance();
+    std::remove(path.c_str());
+    write_text(tmp, "sentinel");
+
+    EXPECT_THROW(siab::write_source_v1("", 0.25, blocks, rows, overlap_s, provenance), std::invalid_argument);
+    EXPECT_EQ(read_text(tmp), "sentinel");
+
+    const auto expect_invalid = [&](const double grid_volume,
+                                    const std::vector<siab::PrimitiveBlock>& candidate_blocks,
+                                    const std::vector<Complex>& candidate_overlap_s,
+                                    const siab::Provenance& candidate_provenance) {
+        EXPECT_THROW(siab::write_source_v1(path,
+                                           grid_volume,
+                                           candidate_blocks,
+                                           rows,
+                                           candidate_overlap_s,
+                                           candidate_provenance),
+                     std::invalid_argument);
+        EXPECT_EQ(read_text(tmp), "sentinel");
+    };
+
+    expect_invalid(0.0, blocks, overlap_s, provenance);
+    expect_invalid(-0.25, blocks, overlap_s, provenance);
+    expect_invalid(std::numeric_limits<double>::infinity(), blocks, overlap_s, provenance);
+    expect_invalid(std::numeric_limits<double>::quiet_NaN(), blocks, overlap_s, provenance);
+
+    std::vector<siab::PrimitiveBlock> invalid_blocks = blocks;
+    invalid_blocks[1].offset = 2;
+    expect_invalid(0.25, invalid_blocks, overlap_s, provenance);
+
+    std::vector<Complex> invalid_overlap_s = overlap_s;
+    invalid_overlap_s.pop_back();
+    expect_invalid(0.25, blocks, invalid_overlap_s, provenance);
+    invalid_overlap_s = overlap_s;
+    invalid_overlap_s[1] = Complex(0.5, 0.5);
+    expect_invalid(0.25, blocks, invalid_overlap_s, provenance);
+    invalid_overlap_s = overlap_s;
+    invalid_overlap_s[0] = Complex(std::numeric_limits<double>::quiet_NaN(), 0.0);
+    expect_invalid(0.25, blocks, invalid_overlap_s, provenance);
+
+    siab::Provenance invalid_provenance = provenance;
+    invalid_provenance.orbital_sha256 = "invalid";
+    expect_invalid(0.25, blocks, overlap_s, invalid_provenance);
+    EXPECT_FALSE(std::ifstream(path.c_str()).good());
+
+    std::remove(tmp.c_str());
+}
+
+TEST(SternheimerSIABSourceWriter, RejectsChannelsOutsideWhitenedAuxiliaryRank)
+{
+    const std::string path = test_path("source_whitened_rank");
+    const std::string tmp = path + ".tmp";
+    const siab::Provenance provenance = canonical_whitening_provenance();
+    const std::vector<siab::SourceRow> rows = canonical_source_rows_reversed();
+    std::remove(path.c_str());
+    write_text(tmp, "sentinel");
+
+    EXPECT_THROW(write_canonical_source(path, rows, canonical_source_overlap_s(), provenance),
+                 std::invalid_argument);
+    EXPECT_EQ(read_text(tmp), "sentinel");
+
+    std::remove(tmp.c_str());
+    write_canonical_source(path, {rows[1]}, canonical_source_overlap_s(), provenance);
+    EXPECT_EQ(section_body(read_text(path), "SOURCE_METADATA"),
+              "# occupied_state auxiliary_channel occupation norm\n"
+              "0 0 1.0 0.5\n");
+    EXPECT_FALSE(std::ifstream(tmp.c_str()).good());
+
+    std::remove(path.c_str());
+}

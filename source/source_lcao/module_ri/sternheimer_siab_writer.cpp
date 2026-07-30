@@ -12,6 +12,7 @@
 #include <sstream>
 #include <stdexcept>
 #include <tuple>
+#include <utility>
 
 namespace module_ri
 {
@@ -307,8 +308,8 @@ void validate_provenance(const Provenance& provenance)
     }
 }
 
-std::vector<const ReferenceRow*> validate_and_sort_rows(const std::vector<ReferenceRow>& rows,
-                                                        const std::size_t n_primitive)
+std::vector<const ReferenceRow*> validate_and_sort_reference_rows(const std::vector<ReferenceRow>& rows,
+                                                                  const std::size_t n_primitive)
 {
     std::vector<const ReferenceRow*> sorted_rows;
     sorted_rows.reserve(rows.size());
@@ -345,6 +346,48 @@ std::vector<const ReferenceRow*> validate_and_sort_rows(const std::vector<Refere
         if (key(sorted_rows[i - 1]) == key(sorted_rows[i]))
         {
             throw std::invalid_argument("Sternheimer SIAB reference row keys must be unique");
+        }
+    }
+    return sorted_rows;
+}
+
+std::vector<const SourceRow*> validate_and_sort_source_rows(const std::vector<SourceRow>& rows,
+                                                            const std::size_t n_primitive)
+{
+    std::vector<const SourceRow*> sorted_rows;
+    sorted_rows.reserve(rows.size());
+    for (const SourceRow& row: rows)
+    {
+        if (row.d.size() != n_primitive)
+        {
+            throw std::invalid_argument("Sternheimer SIAB D row size does not match n_primitive");
+        }
+        if (row.occupied_state < 0 || row.auxiliary_channel < 0)
+        {
+            throw std::invalid_argument("Sternheimer SIAB source indices must be non-negative");
+        }
+        if (!std::isfinite(row.occupation) || !std::isfinite(row.norm) || row.occupation <= 0.0 || row.norm <= 0.0)
+        {
+            throw std::invalid_argument("Sternheimer SIAB source metadata is invalid");
+        }
+        if (!std::all_of(row.d.begin(), row.d.end(), finite_complex))
+        {
+            throw std::invalid_argument("Sternheimer SIAB D contains a non-finite value");
+        }
+        sorted_rows.push_back(&row);
+    }
+
+    const auto key = [](const SourceRow* row) {
+        return std::make_pair(row->occupied_state, row->auxiliary_channel);
+    };
+    std::sort(sorted_rows.begin(), sorted_rows.end(), [&key](const SourceRow* left, const SourceRow* right) {
+        return key(left) < key(right);
+    });
+    for (std::size_t i = 1; i < sorted_rows.size(); ++i)
+    {
+        if (key(sorted_rows[i - 1]) == key(sorted_rows[i]))
+        {
+            throw std::invalid_argument("Sternheimer SIAB source row keys must be unique");
         }
     }
     return sorted_rows;
@@ -713,6 +756,36 @@ std::string provenance_json(const Provenance& provenance)
     return output.str();
 }
 
+void write_primitive_blocks(std::ostream& output, const std::vector<PrimitiveBlock>& blocks)
+{
+    output << "<PRIMITIVE_BLOCKS>\n"
+           << "# element atom_index l m n_primitive offset\n";
+    for (const PrimitiveBlock& block: blocks)
+    {
+        output << block.element << " " << block.atom_index << " " << block.l << " " << block.m << " "
+               << block.n_primitive << " " << block.offset << "\n";
+    }
+    output << "</PRIMITIVE_BLOCKS>\n";
+}
+
+void write_overlap_s(std::ostream& output, const std::vector<std::complex<double>>& overlap_s)
+{
+    output << "<OVERLAP_S>\n"
+           << "# row-major <B_e|B_ep>, real imag\n";
+    for (const std::complex<double>& value: overlap_s)
+    {
+        output << format_double(value.real()) << " " << format_double(value.imag()) << "\n";
+    }
+    output << "</OVERLAP_S>\n";
+}
+
+void write_provenance_json(std::ostream& output, const std::string& json)
+{
+    output << "<PROVENANCE_JSON>\n"
+           << json << "\n"
+           << "</PROVENANCE_JSON>\n";
+}
+
 class TemporaryFile
 {
   public:
@@ -738,6 +811,37 @@ class TemporaryFile
     bool keep_;
 };
 
+template <typename WriteContents>
+void write_atomically(const std::string& path, const WriteContents& write_contents)
+{
+    const std::string temporary_path = path + ".tmp";
+    TemporaryFile temporary_file(temporary_path);
+    std::ofstream output(temporary_path.c_str(), std::ios::binary | std::ios::trunc);
+    output.imbue(std::locale::classic());
+    if (!output.is_open())
+    {
+        throw std::runtime_error("Failed to open Sternheimer SIAB temporary output: " + temporary_path);
+    }
+
+    write_contents(output);
+    output.flush();
+    if (!output.good())
+    {
+        throw std::runtime_error("Failed to flush Sternheimer SIAB temporary output: " + temporary_path);
+    }
+    output.close();
+    if (output.fail())
+    {
+        throw std::runtime_error("Failed to close Sternheimer SIAB temporary output: " + temporary_path);
+    }
+    if (std::rename(temporary_path.c_str(), path.c_str()) != 0)
+    {
+        const std::string reason = std::strerror(errno);
+        throw std::runtime_error("Failed to replace Sternheimer SIAB output " + path + ": " + reason);
+    }
+    temporary_file.keep();
+}
+
 } // namespace
 
 void write_v1(const std::string& path,
@@ -757,7 +861,7 @@ void write_v1(const std::string& path,
     }
 
     const std::size_t n_primitive = validate_blocks(blocks);
-    const std::vector<const ReferenceRow*> sorted_rows = validate_and_sort_rows(rows, n_primitive);
+    const std::vector<const ReferenceRow*> sorted_rows = validate_and_sort_reference_rows(rows, n_primitive);
     validate_overlap_s(overlap_s, n_primitive);
     validate_provenance(provenance);
     if (!provenance.auxiliary_whitening.empty())
@@ -773,79 +877,106 @@ void write_v1(const std::string& path,
     }
     const std::string json = provenance_json(provenance);
 
-    const std::string temporary_path = path + ".tmp";
-    TemporaryFile temporary_file(temporary_path);
-    std::ofstream output(temporary_path.c_str(), std::ios::binary | std::ios::trunc);
-    output.imbue(std::locale::classic());
-    if (!output.is_open())
-    {
-        throw std::runtime_error("Failed to open Sternheimer SIAB temporary output: " + temporary_path);
-    }
+    write_atomically(path, [&](std::ostream& output) {
+        output << "<STERNHEIMER_SIAB_HEADER>\n"
+               << "format_version 1\n"
+               << "n_reference " << sorted_rows.size() << "\n"
+               << "n_primitive " << n_primitive << "\n"
+               << "n_blocks " << blocks.size() << "\n"
+               << "grid_volume_bohr3 " << format_double(grid_volume_bohr3) << "\n"
+               << "</STERNHEIMER_SIAB_HEADER>\n";
+        write_primitive_blocks(output, blocks);
 
-    output << "<STERNHEIMER_SIAB_HEADER>\n"
-           << "format_version 1\n"
-           << "n_reference " << sorted_rows.size() << "\n"
-           << "n_primitive " << n_primitive << "\n"
-           << "n_blocks " << blocks.size() << "\n"
-           << "grid_volume_bohr3 " << format_double(grid_volume_bohr3) << "\n"
-           << "</STERNHEIMER_SIAB_HEADER>\n"
-           << "<PRIMITIVE_BLOCKS>\n"
-           << "# element atom_index l m n_primitive offset\n";
-    for (const PrimitiveBlock& block: blocks)
-    {
-        output << block.element << " " << block.atom_index << " " << block.l << " " << block.m << " "
-               << block.n_primitive << " " << block.offset << "\n";
-    }
-
-    output << "</PRIMITIVE_BLOCKS>\n"
-           << "<REFERENCE_METADATA>\n"
-           << "# occupied_state auxiliary_channel frequency_ha occupation frequency_weight norm\n";
-    for (const ReferenceRow* row: sorted_rows)
-    {
-        output << row->occupied_state << " " << row->auxiliary_channel << " " << format_double(row->frequency_ha) << " "
-               << format_double(row->occupation) << " " << format_double(row->frequency_weight) << " "
-               << format_double(row->norm) << "\n";
-    }
-
-    output << "</REFERENCE_METADATA>\n"
-           << "<OVERLAP_Q>\n"
-           << "# row-major <Y_rho|B_e>, real imag\n";
-    for (const ReferenceRow* row: sorted_rows)
-    {
-        for (const std::complex<double>& value: row->q)
+        output << "<REFERENCE_METADATA>\n"
+               << "# occupied_state auxiliary_channel frequency_ha occupation frequency_weight norm\n";
+        for (const ReferenceRow* row: sorted_rows)
         {
-            output << format_double(value.real()) << " " << format_double(value.imag()) << "\n";
+            output << row->occupied_state << " " << row->auxiliary_channel << " " << format_double(row->frequency_ha)
+                   << " " << format_double(row->occupation) << " " << format_double(row->frequency_weight) << " "
+                   << format_double(row->norm) << "\n";
+        }
+
+        output << "</REFERENCE_METADATA>\n"
+               << "<OVERLAP_Q>\n"
+               << "# row-major <Y_rho|B_e>, real imag\n";
+        for (const ReferenceRow* row: sorted_rows)
+        {
+            for (const std::complex<double>& value: row->q)
+            {
+                output << format_double(value.real()) << " " << format_double(value.imag()) << "\n";
+            }
+        }
+        output << "</OVERLAP_Q>\n";
+        write_overlap_s(output, overlap_s);
+        write_provenance_json(output, json);
+    });
+}
+
+void write_source_v1(const std::string& path,
+                     const double grid_volume_bohr3,
+                     const std::vector<PrimitiveBlock>& blocks,
+                     const std::vector<SourceRow>& rows,
+                     const std::vector<std::complex<double>>& overlap_s,
+                     const Provenance& provenance)
+{
+    if (path.empty())
+    {
+        throw std::invalid_argument("Sternheimer SIAB output path must not be empty");
+    }
+    if (!std::isfinite(grid_volume_bohr3) || grid_volume_bohr3 <= 0.0)
+    {
+        throw std::invalid_argument("Sternheimer SIAB grid volume must be finite and positive");
+    }
+
+    const std::size_t n_primitive = validate_blocks(blocks);
+    const std::vector<const SourceRow*> sorted_rows = validate_and_sort_source_rows(rows, n_primitive);
+    validate_overlap_s(overlap_s, n_primitive);
+    validate_provenance(provenance);
+    if (!provenance.auxiliary_whitening.empty())
+    {
+        for (const SourceRow* row: sorted_rows)
+        {
+            if (row->auxiliary_channel >= provenance.whitened_auxiliary_rank)
+            {
+                throw std::invalid_argument(
+                    "Sternheimer SIAB source row exceeds the retained Coulomb-whitened auxiliary rank");
+            }
         }
     }
+    const std::string json = provenance_json(provenance);
 
-    output << "</OVERLAP_Q>\n"
-           << "<OVERLAP_S>\n"
-           << "# row-major <B_e|B_ep>, real imag\n";
-    for (const std::complex<double>& value: overlap_s)
-    {
-        output << format_double(value.real()) << " " << format_double(value.imag()) << "\n";
-    }
-    output << "</OVERLAP_S>\n"
-           << "<PROVENANCE_JSON>\n"
-           << json << "\n"
-           << "</PROVENANCE_JSON>\n";
+    write_atomically(path, [&](std::ostream& output) {
+        output << "<STERNHEIMER_SIAB_SOURCE_HEADER>\n"
+               << "format_version 1\n"
+               << "n_source " << sorted_rows.size() << "\n"
+               << "n_primitive " << n_primitive << "\n"
+               << "n_blocks " << blocks.size() << "\n"
+               << "grid_volume_bohr3 " << format_double(grid_volume_bohr3) << "\n"
+               << "</STERNHEIMER_SIAB_SOURCE_HEADER>\n";
+        write_primitive_blocks(output, blocks);
 
-    output.flush();
-    if (!output.good())
-    {
-        throw std::runtime_error("Failed to flush Sternheimer SIAB temporary output: " + temporary_path);
-    }
-    output.close();
-    if (output.fail())
-    {
-        throw std::runtime_error("Failed to close Sternheimer SIAB temporary output: " + temporary_path);
-    }
-    if (std::rename(temporary_path.c_str(), path.c_str()) != 0)
-    {
-        const std::string reason = std::strerror(errno);
-        throw std::runtime_error("Failed to replace Sternheimer SIAB output " + path + ": " + reason);
-    }
-    temporary_file.keep();
+        output << "<SOURCE_METADATA>\n"
+               << "# occupied_state auxiliary_channel occupation norm\n";
+        for (const SourceRow* row: sorted_rows)
+        {
+            output << row->occupied_state << " " << row->auxiliary_channel << " " << format_double(row->occupation)
+                   << " " << format_double(row->norm) << "\n";
+        }
+
+        output << "</SOURCE_METADATA>\n"
+               << "<OVERLAP_D>\n"
+               << "# row-major <psi_i vbar_a|B_e>, real imag\n";
+        for (const SourceRow* row: sorted_rows)
+        {
+            for (const std::complex<double>& value: row->d)
+            {
+                output << format_double(value.real()) << " " << format_double(value.imag()) << "\n";
+            }
+        }
+        output << "</OVERLAP_D>\n";
+        write_overlap_s(output, overlap_s);
+        write_provenance_json(output, json);
+    });
 }
 
 } // namespace sternheimer_siab

@@ -19,6 +19,13 @@ void write_v1(const std::string& path,
               const std::vector<std::complex<double>>& overlap_s,
               const Provenance& provenance);
 
+void write_source_v1(const std::string& path,
+                     double grid_volume_bohr3,
+                     const std::vector<PrimitiveBlock>& blocks,
+                     const std::vector<SourceRow>& rows,
+                     const std::vector<std::complex<double>>& overlap_s,
+                     const Provenance& provenance);
+
 } // namespace sternheimer_siab
 } // namespace module_ri
 
