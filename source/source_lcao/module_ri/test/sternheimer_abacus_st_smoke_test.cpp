@@ -2,10 +2,12 @@
 
 #include "source_lcao/module_ri/sternheimer_channel_parallel.h"
 
+#include <array>
 #include <atomic>
 #include <chrono>
 #include <complex>
 #include <gtest/gtest.h>
+#include <limits>
 #include <stdexcept>
 #include <string>
 #include <thread>
@@ -919,4 +921,62 @@ TEST(SternheimerABACUSSTSmoke, PartitionsResponsePairsBySourceKWithoutOverlap)
         }
     }
     EXPECT_EQ(seen, std::vector<int>(plan.kq_pairs.size(), 1));
+}
+
+TEST(SternheimerABACUSSTSmoke, SIABSourceAssignsEachOccupiedChannelKeyExactlyOnce)
+{
+    constexpr int num_occupied_states = 2;
+    constexpr int num_channels = 5;
+    constexpr int mpi_ranks = 3;
+    std::array<int, num_occupied_states * num_channels> key_counts{};
+
+    for (int occupied_state = 0; occupied_state < num_occupied_states; ++occupied_state)
+    {
+        for (int channel = 0; channel < num_channels; ++channel)
+        {
+            const int key = occupied_state * num_channels + channel;
+            const int owner
+                = ModuleRI::siab_source_owner(occupied_state, channel, num_channels, mpi_ranks);
+            EXPECT_EQ(owner, key % mpi_ranks);
+            for (int rank = 0; rank < mpi_ranks; ++rank)
+            {
+                if (owner == rank)
+                {
+                    ++key_counts[static_cast<std::size_t>(key)];
+                }
+            }
+        }
+    }
+
+    for (const int count: key_counts)
+    {
+        EXPECT_EQ(count, 1);
+    }
+}
+
+TEST(SternheimerABACUSSTSmoke, SIABSourceCountsRowsWithoutFrequencyDimension)
+{
+    EXPECT_EQ(ModuleRI::expected_siab_source_rows({2}, 5), 10U);
+    EXPECT_EQ(ModuleRI::expected_siab_source_rows({1, 1}, 5), 10U);
+}
+
+TEST(SternheimerABACUSSTSmoke, SIABSourceRejectsInvalidDimensionsAndSizeOverflow)
+{
+    EXPECT_THROW(ModuleRI::siab_source_owner(-1, 0, 5, 3), std::invalid_argument);
+    EXPECT_THROW(ModuleRI::siab_source_owner(0, -1, 5, 3), std::invalid_argument);
+    EXPECT_THROW(ModuleRI::siab_source_owner(0, 5, 5, 3), std::invalid_argument);
+    EXPECT_THROW(ModuleRI::siab_source_owner(0, 0, 0, 3), std::invalid_argument);
+    EXPECT_THROW(ModuleRI::siab_source_owner(0, 0, -1, 3), std::invalid_argument);
+    EXPECT_THROW(ModuleRI::siab_source_owner(0, 0, 5, 0), std::invalid_argument);
+    EXPECT_THROW(ModuleRI::siab_source_owner(0, 0, 5, -1), std::invalid_argument);
+
+    EXPECT_THROW(ModuleRI::expected_siab_source_rows({}, 5), std::invalid_argument);
+    EXPECT_THROW(ModuleRI::expected_siab_source_rows({2}, 0), std::invalid_argument);
+    EXPECT_THROW(ModuleRI::expected_siab_source_rows({2}, -1), std::invalid_argument);
+    EXPECT_THROW(ModuleRI::expected_siab_source_rows({0}, 5), std::invalid_argument);
+    EXPECT_THROW(ModuleRI::expected_siab_source_rows({-1}, 5), std::invalid_argument);
+    EXPECT_THROW(ModuleRI::expected_siab_source_rows(
+                     std::vector<int>(5, std::numeric_limits<int>::max()),
+                     std::numeric_limits<int>::max()),
+                 std::overflow_error);
 }

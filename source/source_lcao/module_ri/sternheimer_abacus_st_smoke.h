@@ -11,8 +11,11 @@
 #include <cctype>
 #include <cmath>
 #include <complex>
+#include <cstddef>
+#include <cstdint>
 #include <cstdlib>
 #include <iomanip>
+#include <limits>
 #include <sstream>
 #include <stdexcept>
 #include <string>
@@ -42,6 +45,51 @@ namespace ModuleRI
 inline constexpr double default_sternheimer_solver_tolerance() noexcept
 {
     return 1.0e-6;
+}
+
+inline int siab_source_owner(const int occupied_state,
+                             const int channel,
+                             const int num_channels,
+                             const int mpi_ranks)
+{
+    if (occupied_state < 0 || num_channels <= 0 || channel < 0 || channel >= num_channels || mpi_ranks <= 0)
+    {
+        throw std::invalid_argument("SIAB source ownership requires valid occupied, channel, and MPI dimensions.");
+    }
+    const std::uint64_t key = static_cast<std::uint64_t>(occupied_state)
+                                  * static_cast<std::uint64_t>(num_channels)
+                              + static_cast<std::uint64_t>(channel);
+    return static_cast<int>(key % static_cast<std::uint64_t>(mpi_ranks));
+}
+
+inline std::size_t expected_siab_source_rows(const std::vector<int>& occupied_band_counts,
+                                             const int num_channels)
+{
+    if (occupied_band_counts.empty() || num_channels <= 0)
+    {
+        throw std::invalid_argument("SIAB source row dimensions must be positive and nonempty.");
+    }
+    const std::size_t channels = static_cast<std::size_t>(num_channels);
+    std::size_t rows = 0;
+    for (const int occupied_count: occupied_band_counts)
+    {
+        if (occupied_count <= 0)
+        {
+            throw std::invalid_argument("SIAB source occupied-band counts must be positive.");
+        }
+        const std::size_t occupied = static_cast<std::size_t>(occupied_count);
+        if (occupied > std::numeric_limits<std::size_t>::max() / channels)
+        {
+            throw std::overflow_error("SIAB source row count overflows size_t.");
+        }
+        const std::size_t spin_rows = occupied * channels;
+        if (rows > std::numeric_limits<std::size_t>::max() - spin_rows)
+        {
+            throw std::overflow_error("SIAB source row count overflows size_t.");
+        }
+        rows += spin_rows;
+    }
+    return rows;
 }
 
 struct SternheimerLCAOOccupiedKPoint

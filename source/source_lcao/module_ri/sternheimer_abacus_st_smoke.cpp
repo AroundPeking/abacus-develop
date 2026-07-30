@@ -30,6 +30,7 @@
 #include "source_lcao/module_ri/sternheimer_siab_mpi.h"
 #include "source_lcao/module_ri/sternheimer_siab_overlap.h"
 #include "source_lcao/module_ri/sternheimer_siab_provenance.h"
+#include "source_lcao/module_ri/sternheimer_siab_source.h"
 #include "source_lcao/module_ri/sternheimer_siab_writer.h"
 #include "source_lcao/module_ri/sternheimer_supercell_perturbation.h"
 #include "source_lcao/module_ri/sternheimer_supercell_sector.h"
@@ -4113,7 +4114,12 @@ void run_sternheimer_abacus_chi0_output_impl(
 {
     const bool write_librpa = PARAM.inp.out_sternheimer_librpa;
     const bool write_siab = PARAM.inp.out_sternheimer_siab;
+    const bool source_only = PARAM.inp.sternheimer_siab_source_only;
     const bool write_grid_diagnostics = PARAM.inp.sternheimer_grid_diagnostics;
+    if (source_only && !write_siab)
+    {
+        throw std::runtime_error("sternheimer_siab_source_only requires out_sternheimer_siab=true.");
+    }
     if (!write_librpa && !write_siab && !write_grid_diagnostics)
     {
         return;
@@ -4173,8 +4179,10 @@ void run_sternheimer_abacus_chi0_output_impl(
             return;
         }
         out << std::setprecision(16);
-        out << (write_siab ? "# ABACUS Coulomb-whitened Sternheimer target output for SIAB\n"
-                           : "# ABACUS Sternheimer chi0 output for LibRPA\n");
+        out << (write_siab
+                    ? (source_only ? "# ABACUS Coulomb-whitened Sternheimer source output for SIAB\n"
+                                   : "# ABACUS Coulomb-whitened Sternheimer target output for SIAB\n")
+                    : "# ABACUS Sternheimer chi0 output for LibRPA\n");
     }
 
     try
@@ -4460,6 +4468,8 @@ void run_sternheimer_abacus_chi0_output_impl(
                 PARAM.inp.sternheimer_siab_coulomb_threshold);
         }
         const int num_channels = write_siab ? coulomb_whitening.retained_rank : raw_num_channels;
+        const std::size_t expected_siab_source_row_count
+            = write_siab ? expected_siab_source_rows(occupied_band_counts, num_channels) : 0;
         append_chi0_progress_event("channels_ready",
                                    0,
                                    -1,
@@ -4758,7 +4768,7 @@ void run_sternheimer_abacus_chi0_output_impl(
         // ABFS Coulomb potentials are in Ha units; the FD Hamiltonian and omega are in Ry.
         // Keep Ha potentials for M=V chi0 V output, but use Ry perturbations in the linear equation.
 
-        if (use_delta_sternheimer)
+        if (use_delta_sternheimer && !source_only)
         {
             append_chi0_progress_event("delta_subspace_start",
                                        0,
@@ -4864,7 +4874,7 @@ void run_sternheimer_abacus_chi0_output_impl(
             chi0_qspace_branches.resize(static_cast<std::size_t>(nfreq));
         }
         std::vector<std::chrono::steady_clock::time_point> frequency_start_times(static_cast<std::size_t>(nfreq));
-        for (int ifrequency = 0; ifrequency != nfreq; ++ifrequency)
+        for (int ifrequency = 0; !source_only && ifrequency != nfreq; ++ifrequency)
         {
             const SternheimerRPA::FrequencyMPIAssignment assignment = frequency_assignment(ifrequency);
             const int owner_rank = assignment.frequency_leader_rank;
@@ -4911,6 +4921,49 @@ void run_sternheimer_abacus_chi0_output_impl(
             occupied_state_offset += static_cast<int>(states_by_response[response_index].wavefunctions.size());
         }
         std::vector<siab::ReferenceRow> local_siab_rows;
+        std::vector<siab::SourceRow> local_siab_source_rows;
+        if (write_siab)
+        {
+            for (std::size_t response_index = 0; response_index != response_count; ++response_index)
+            {
+                const SternheimerLCAOOccupiedKPoint* response_kpoint = response_kpoints[response_index];
+                const int response_k_index = response_kpoint == nullptr ? 0 : response_kpoint->local_k_index;
+                const SternheimerFDZeroOrderStates& states = states_by_response[response_index];
+                for (int ib = 0; ib != static_cast<int>(states.wavefunctions.size()); ++ib)
+                {
+                    const double occupation
+                        = use_lcao_zero_order
+                              ? sternheimer_lcao_weighted_occupation(*response_kpoint, ib)
+                              : elec_state.wg(response_k_index, ib);
+                    if (occupation <= 1.0e-8)
+                    {
+                        continue;
+                    }
+                    for (int ichannel = 0; ichannel != num_channels; ++ichannel)
+                    {
+                        if (siab_source_owner(occupied_state_offsets[response_index] + ib,
+                                              ichannel,
+                                              num_channels,
+                                              GlobalV::NPROC)
+                            != GlobalV::MY_RANK)
+                        {
+                            continue;
+                        }
+                        const std::vector<std::complex<double>> source
+                            = siab::build_source_grid_from_rydberg_potential(
+                                states.wavefunctions[static_cast<std::size_t>(ib)],
+                                perturbations_ry[static_cast<std::size_t>(ichannel)]);
+                        siab::SourceRow row;
+                        row.occupied_state = occupied_state_offsets[response_index] + ib;
+                        row.auxiliary_channel = ichannel;
+                        row.occupation = occupation;
+                        row.norm = siab::norm(source, grid_data.volume_element);
+                        row.d = project_siab_response_to_primitives(source, ucell, siab_primitives);
+                        local_siab_source_rows.push_back(std::move(row));
+                    }
+                }
+            }
+        }
         const SternheimerMemorySnapshot channel_memory = detect_sternheimer_memory_snapshot();
         const SternheimerChannelWorkerPlan channel_worker_plan
             = plan_sternheimer_channel_workers(num_channels,
@@ -4932,7 +4985,7 @@ void run_sternheimer_abacus_chi0_output_impl(
                                                                                 grid_data.grid.size(),
                                                                                 channel_worker_user_cap));
 
-        for (int ifrequency = 0; ifrequency != nfreq; ++ifrequency)
+        for (int ifrequency = 0; !source_only && ifrequency != nfreq; ++ifrequency)
         {
             const SternheimerRPA::FrequencyMPIAssignment assignment = frequency_assignment(ifrequency);
             const int owner_rank = assignment.frequency_leader_rank;
@@ -5168,18 +5221,85 @@ void run_sternheimer_abacus_chi0_output_impl(
 
         }
 
-        std::vector<siab::ReferenceRow> global_siab_rows;
+        std::vector<siab::SourceRow> global_siab_source_rows;
+        siab::Provenance siab_provenance;
         if (write_siab)
         {
 #ifdef __MPI
+            global_siab_source_rows
+                = siab::gather_source_rows_to_root(local_siab_source_rows,
+                                                   static_cast<std::size_t>(siab_primitives.primitive_count),
+                                                   0,
+                                                   MPI_COMM_WORLD);
+#else
+            global_siab_source_rows
+                = siab::gather_source_rows_to_root(local_siab_source_rows,
+                                                   static_cast<std::size_t>(siab_primitives.primitive_count),
+                                                   0);
+#endif
+            std::string source_write_error;
+            if (GlobalV::MY_RANK == 0)
+            {
+                try
+                {
+                    if (global_siab_source_rows.size() != expected_siab_source_row_count)
+                    {
+                        throw std::runtime_error(
+                            "Sternheimer SIAB global source row assembly has missing or duplicate rows.");
+                    }
+                    siab_provenance = make_siab_production_provenance(ucell,
+                                                                      auxiliary_basis_sha256,
+                                                                      frequency_grid,
+                                                                      pca_threshold,
+                                                                      coulomb_whitening);
+                    const std::string source_path
+                        = join_output_path(output_dir, "STERNHEIMER_SIAB_SOURCE_V1.dat");
+                    siab::write_source_v1(source_path,
+                                          grid_data.volume_element,
+                                          siab_primitives.blocks,
+                                          global_siab_source_rows,
+                                          siab_primitives.overlap_s,
+                                          siab_provenance);
+                    GlobalV::ofs_running << " Sternheimer SIAB source v1 output: " << source_path << std::endl;
+                }
+                catch (const std::exception& error)
+                {
+                    source_write_error = error.what();
+                }
+            }
+#ifdef __MPI
+            if (use_distributed_mpi && GlobalV::NPROC > 1)
+            {
+                int source_write_succeeded = GlobalV::MY_RANK == 0 && source_write_error.empty() ? 1 : 0;
+                MPI_Bcast(&source_write_succeeded, 1, MPI_INT, 0, MPI_COMM_WORLD);
+                if (source_write_succeeded == 0)
+                {
+                    if (GlobalV::MY_RANK == 0)
+                    {
+                        throw std::runtime_error(source_write_error);
+                    }
+                    throw std::runtime_error("Sternheimer SIAB source writer failed on the root MPI rank.");
+                }
+            }
+#endif
+            if (!source_write_error.empty())
+            {
+                throw std::runtime_error(source_write_error);
+            }
+        }
+
+        std::vector<siab::ReferenceRow> global_siab_rows;
+        if (write_siab && !source_only)
+        {
+#ifdef __MPI
             global_siab_rows = siab::gather_reference_rows_to_root(local_siab_rows,
-                                                                     static_cast<std::size_t>(siab_primitives.primitive_count),
-                                                                     0,
-                                                                     MPI_COMM_WORLD);
+                                                                   static_cast<std::size_t>(siab_primitives.primitive_count),
+                                                                   0,
+                                                                   MPI_COMM_WORLD);
 #else
             global_siab_rows = siab::gather_reference_rows_to_root(local_siab_rows,
-                                                                     static_cast<std::size_t>(siab_primitives.primitive_count),
-                                                                     0);
+                                                                   static_cast<std::size_t>(siab_primitives.primitive_count),
+                                                                   0);
 #endif
             if (GlobalV::MY_RANK == 0)
             {
@@ -5194,23 +5314,18 @@ void run_sternheimer_abacus_chi0_output_impl(
                 {
                     throw std::runtime_error("Sternheimer SIAB global row assembly has missing or duplicate rows.");
                 }
-                const siab::Provenance provenance = make_siab_production_provenance(ucell,
-                                                                                       auxiliary_basis_sha256,
-                                                                                       frequency_grid,
-                                                                                       pca_threshold,
-                                                                                       coulomb_whitening);
                 siab::write_v1(join_output_path(output_dir, "sternheimer_matrix.dat"),
                                grid_data.volume_element,
                                siab_primitives.blocks,
                                global_siab_rows,
                                siab_primitives.overlap_s,
-                               provenance);
+                               siab_provenance);
                 GlobalV::ofs_running << " Sternheimer SIAB v1 output: "
                                      << join_output_path(output_dir, "sternheimer_matrix.dat") << std::endl;
             }
         }
 
-        for (int ifrequency = 0; ifrequency != nfreq; ++ifrequency)
+        for (int ifrequency = 0; !source_only && ifrequency != nfreq; ++ifrequency)
         {
             const SternheimerRPA::FrequencyMPIAssignment assignment = frequency_assignment(ifrequency);
             const int owner_rank = assignment.frequency_leader_rank;
@@ -5363,21 +5478,38 @@ void run_sternheimer_abacus_chi0_output_impl(
         }
 #endif
 
-        reduce_chi0_output_stats(all_converged,
-                                 solved_equations,
-                                 max_solver_relative_residual,
-                                 max_equation_residual_norm,
-                                 use_frequency_mpi);
+        if (!source_only)
+        {
+            reduce_chi0_output_stats(all_converged,
+                                     solved_equations,
+                                     max_solver_relative_residual,
+                                     max_equation_residual_norm,
+                                     use_frequency_mpi);
 
 #ifdef __MPI
-        if (use_parallel_response_mpi && GlobalV::NPROC > 1)
-        {
-            MPI_Barrier(MPI_COMM_WORLD);
-        }
+            if (use_parallel_response_mpi && GlobalV::NPROC > 1)
+            {
+                MPI_Barrier(MPI_COMM_WORLD);
+            }
 #endif
+        }
+
+        if (write_siab)
+        {
+            append_chi0_progress_event("siab_source_written",
+                                       0,
+                                       0,
+                                       -1,
+                                       -1,
+                                       solved_equations,
+                                       nullptr,
+                                       -1.0,
+                                       elapsed_seconds_since(chi0_start_time),
+                                       "source_rows=" + std::to_string(expected_siab_source_row_count));
+        }
 
         std::vector<std::pair<std::string, SternheimerRPA::Chi0V1Metadata>> index_entries;
-        if (write_librpa && GlobalV::MY_RANK == 0)
+        if (write_librpa && !source_only && GlobalV::MY_RANK == 0)
         {
             index_entries.reserve(frequency_grid.omega_ha.size());
             for (int ifrequency = 0; ifrequency != nfreq; ++ifrequency)
@@ -5402,8 +5534,16 @@ void run_sternheimer_abacus_chi0_output_impl(
         }
 
         out << "status success\n";
-        out << "format " << (write_siab ? "siab_v1" : "librpa_v1") << '\n';
-        out << "data_files " << (write_siab ? 1 : index_entries.size()) << '\n';
+        out << "format " << (write_siab ? (source_only ? "siab_source_v1" : "siab_v1") : "librpa_v1") << '\n';
+        out << "data_files " << (write_siab ? (source_only ? 0 : 1) : index_entries.size()) << '\n';
+        if (write_siab)
+        {
+            out << "source_files 1\n";
+            out << "source_file STERNHEIMER_SIAB_SOURCE_V1.dat\n";
+            out << "sternheimer_siab_source_only " << (source_only ? "yes" : "no") << '\n';
+            out << "source_rows " << global_siab_source_rows.size() << '\n';
+            out << "target_file " << (source_only ? "none" : "sternheimer_matrix.dat") << '\n';
+        }
         out << "index_file " << (write_siab ? "none" : "v1_sternheimer_chi0_index.dat") << '\n';
         out << "grid " << grid_data.grid.nx << ' ' << grid_data.grid.ny << ' ' << grid_data.grid.nz << " size "
             << grid_size << " dV " << grid_data.volume_element << '\n';
