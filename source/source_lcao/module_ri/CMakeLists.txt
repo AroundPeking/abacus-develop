@@ -35,6 +35,7 @@ if (ENABLE_LIBRI)
         sternheimer_siab_mpi.cpp
         sternheimer_siab_memory.cpp
         sternheimer_siab_overlap.cpp
+        sternheimer_siab_source.cpp
         sternheimer_siab_provenance.cpp
         sternheimer_siab_writer.cpp
         sternheimer_supercell_perturbation.cpp

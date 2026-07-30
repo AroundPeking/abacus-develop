@@ -156,6 +156,14 @@ AddTest(
   SOURCES sternheimer_abacus_st_smoke_test.cpp ../sternheimer_kq.cpp
 )
 AddTest(
+  TARGET MODULE_RI_sternheimer_siab_source_test
+  LIBS ${math_libs}
+  SOURCES test_sternheimer_siab_source.cpp
+          ../sternheimer_siab_source.cpp
+          ../sternheimer_siab_overlap.cpp
+          ../../../source_base/module_external/blas_connector_matrix.cpp
+)
+AddTest(
   TARGET MODULE_RI_sternheimer_periodic_solver_test
   LIBS ${STERNHEIMER_RPA_TEST_LIBS}
   SOURCES sternheimer_periodic_solver_test.cpp
