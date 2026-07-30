@@ -6,6 +6,7 @@
 #include <new>
 #include <stdexcept>
 #include <tuple>
+#include <utility>
 
 namespace module_ri
 {
@@ -664,7 +665,11 @@ std::vector<SourceRow> gather_source_rows_to_root(const std::vector<SourceRow>& 
     collective_status = broadcast_source_gather_status(root_status, root, communicator);
     throw_source_gather_failure(collective_status,
                                 "Sternheimer SIAB gathered source row unpack failed on the root MPI rank.");
-    return rank == root ? result : std::vector<SourceRow>();
+    if (rank == root)
+    {
+        return result;
+    }
+    return {};
 }
 #else
 std::vector<std::vector<Complex>> allgather_full_primitive_grids(
