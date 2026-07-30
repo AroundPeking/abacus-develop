@@ -40,6 +40,11 @@ std::vector<ReferenceRow> gather_reference_rows_to_root(const std::vector<Refere
                                                         std::size_t nprimitive,
                                                         int root,
                                                         MPI_Comm communicator);
+
+std::vector<SourceRow> gather_source_rows_to_root(const std::vector<SourceRow>& local_rows,
+                                                  std::size_t nprimitive,
+                                                  int root,
+                                                  MPI_Comm communicator);
 #else
 std::vector<std::vector<std::complex<double>>> allgather_full_primitive_grids(
     const std::vector<std::vector<std::complex<double>>>& local_primitives,
@@ -51,6 +56,10 @@ std::vector<std::vector<std::complex<double>>> allgather_full_primitive_grids(
 std::vector<ReferenceRow> gather_reference_rows_to_root(const std::vector<ReferenceRow>& local_rows,
                                                         std::size_t nprimitive,
                                                         int root);
+
+std::vector<SourceRow> gather_source_rows_to_root(const std::vector<SourceRow>& local_rows,
+                                                  std::size_t nprimitive,
+                                                  int root);
 #endif
 
 } // namespace sternheimer_siab

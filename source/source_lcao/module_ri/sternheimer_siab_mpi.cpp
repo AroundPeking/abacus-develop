@@ -124,6 +124,124 @@ std::vector<ReferenceRow> unpack_rows(const std::vector<double>& packed, const s
     return sorted_rows(std::move(rows));
 }
 
+bool source_row_width(const std::size_t nprimitive, std::size_t& width)
+{
+    if (nprimitive > (std::numeric_limits<std::size_t>::max() - 4) / 2)
+    {
+        return false;
+    }
+    width = 4 + 2 * nprimitive;
+    return true;
+}
+
+bool valid_source_rows(const std::vector<SourceRow>& rows, const std::size_t nprimitive)
+{
+    for (const SourceRow& row: rows)
+    {
+        if (row.occupied_state < 0 || row.auxiliary_channel < 0 || !std::isfinite(row.occupation)
+            || row.occupation <= 0.0 || !std::isfinite(row.norm) || row.norm <= 0.0
+            || row.d.size() != nprimitive)
+        {
+            return false;
+        }
+        for (const Complex& value: row.d)
+        {
+            if (!std::isfinite(value.real()) || !std::isfinite(value.imag()))
+            {
+                return false;
+            }
+        }
+    }
+    return true;
+}
+
+std::vector<SourceRow> sorted_source_rows(std::vector<SourceRow> rows)
+{
+    const auto key = [](const SourceRow& row) {
+        return std::make_pair(row.occupied_state, row.auxiliary_channel);
+    };
+    std::sort(rows.begin(), rows.end(), [&key](const SourceRow& left, const SourceRow& right) {
+        return key(left) < key(right);
+    });
+    for (std::size_t index = 1; index < rows.size(); ++index)
+    {
+        if (key(rows[index - 1]) == key(rows[index]))
+        {
+            throw std::invalid_argument("Sternheimer SIAB gathered source rows contain a duplicate key.");
+        }
+    }
+    return rows;
+}
+
+bool source_payload_size(const std::size_t row_count, const std::size_t width, std::size_t& payload_size)
+{
+    if (row_count > std::numeric_limits<std::size_t>::max() / width)
+    {
+        return false;
+    }
+    payload_size = row_count * width;
+    return payload_size <= static_cast<std::size_t>(std::numeric_limits<int>::max());
+}
+
+std::vector<double> pack_source_rows(const std::vector<SourceRow>& rows, const std::size_t payload_size)
+{
+    std::vector<double> packed;
+    packed.reserve(payload_size);
+    for (const SourceRow& row: rows)
+    {
+        packed.push_back(static_cast<double>(row.occupied_state));
+        packed.push_back(static_cast<double>(row.auxiliary_channel));
+        packed.push_back(row.occupation);
+        packed.push_back(row.norm);
+        for (const Complex& value: row.d)
+        {
+            packed.push_back(value.real());
+            packed.push_back(value.imag());
+        }
+    }
+    return packed;
+}
+
+int unpack_source_index(const double value)
+{
+    if (!std::isfinite(value) || value < 0.0 || value > static_cast<double>(std::numeric_limits<int>::max())
+        || value != std::floor(value))
+    {
+        throw std::invalid_argument("Sternheimer SIAB gathered source row contains an invalid integer index.");
+    }
+    return static_cast<int>(value);
+}
+
+std::vector<SourceRow> unpack_source_rows(const std::vector<double>& packed, const std::size_t nprimitive)
+{
+    std::size_t width = 0;
+    if (!source_row_width(nprimitive, width) || packed.size() % width != 0)
+    {
+        throw std::invalid_argument("Sternheimer SIAB gathered source row payload has an invalid size.");
+    }
+
+    std::vector<SourceRow> rows(packed.size() / width);
+    for (std::size_t irow = 0; irow != rows.size(); ++irow)
+    {
+        const std::size_t offset = irow * width;
+        SourceRow& row = rows[irow];
+        row.occupied_state = unpack_source_index(packed[offset]);
+        row.auxiliary_channel = unpack_source_index(packed[offset + 1]);
+        row.occupation = packed[offset + 2];
+        row.norm = packed[offset + 3];
+        row.d.resize(nprimitive);
+        for (std::size_t ie = 0; ie != nprimitive; ++ie)
+        {
+            row.d[ie] = Complex(packed[offset + 4 + 2 * ie], packed[offset + 5 + 2 * ie]);
+        }
+    }
+    if (!valid_source_rows(rows, nprimitive))
+    {
+        throw std::invalid_argument("Sternheimer SIAB gathered source rows are invalid.");
+    }
+    return sorted_source_rows(std::move(rows));
+}
+
 } // namespace
 
 std::vector<std::vector<Complex>> assemble_full_primitive_grids(const std::vector<PrimitiveSlab>& slabs,
@@ -334,6 +452,130 @@ std::vector<ReferenceRow> gather_reference_rows_to_root(const std::vector<Refere
                 communicator);
     return rank == root ? unpack_rows(gathered, nprimitive) : std::vector<ReferenceRow>();
 }
+
+std::vector<SourceRow> gather_source_rows_to_root(const std::vector<SourceRow>& local_rows,
+                                                  const std::size_t nprimitive,
+                                                  const int root,
+                                                  MPI_Comm communicator)
+{
+    int rank = 0;
+    int rank_count = 0;
+    MPI_Comm_rank(communicator, &rank);
+    MPI_Comm_size(communicator, &rank_count);
+
+    int root_min = root;
+    int root_max = root;
+    unsigned long long nprimitive_min = static_cast<unsigned long long>(nprimitive);
+    unsigned long long nprimitive_max = nprimitive_min;
+    MPI_Allreduce(MPI_IN_PLACE, &root_min, 1, MPI_INT, MPI_MIN, communicator);
+    MPI_Allreduce(MPI_IN_PLACE, &root_max, 1, MPI_INT, MPI_MAX, communicator);
+    MPI_Allreduce(MPI_IN_PLACE, &nprimitive_min, 1, MPI_UNSIGNED_LONG_LONG, MPI_MIN, communicator);
+    MPI_Allreduce(MPI_IN_PLACE, &nprimitive_max, 1, MPI_UNSIGNED_LONG_LONG, MPI_MAX, communicator);
+    if (root_min != root_max || root_min < 0 || root_min >= rank_count)
+    {
+        throw std::invalid_argument("Sternheimer SIAB source row gather root is inconsistent or out of range.");
+    }
+    if (nprimitive_min != nprimitive_max)
+    {
+        throw std::invalid_argument("Sternheimer SIAB source primitive counts differ between MPI ranks.");
+    }
+
+    std::size_t width = 0;
+    std::size_t local_payload_size = 0;
+    const bool width_valid = source_row_width(nprimitive, width);
+    int local_checks[2] = {
+        valid_source_rows(local_rows, nprimitive) ? 1 : 0,
+        width_valid && source_payload_size(local_rows.size(), width, local_payload_size) ? 1 : 0};
+    MPI_Allreduce(MPI_IN_PLACE, local_checks, 2, MPI_INT, MPI_MIN, communicator);
+    if (local_checks[1] == 0)
+    {
+        throw std::overflow_error("Sternheimer SIAB source row payload exceeds MPI count capacity.");
+    }
+    if (local_checks[0] == 0)
+    {
+        throw std::invalid_argument("Sternheimer SIAB local source rows are invalid on at least one MPI rank.");
+    }
+
+    const std::vector<double> local_packed = pack_source_rows(local_rows, local_payload_size);
+    const int local_count = static_cast<int>(local_packed.size());
+    std::vector<int> counts(rank == root ? static_cast<std::size_t>(rank_count) : 0);
+    MPI_Gather(&local_count,
+               1,
+               MPI_INT,
+               rank == root ? counts.data() : nullptr,
+               1,
+               MPI_INT,
+               root,
+               communicator);
+
+    std::vector<int> displacements;
+    std::vector<double> gathered;
+    int gather_layout_valid = 1;
+    if (rank == root)
+    {
+        try
+        {
+            displacements.assign(static_cast<std::size_t>(rank_count), 0);
+            std::size_t total_count = 0;
+            for (int source_rank = 0; source_rank != rank_count; ++source_rank)
+            {
+                const int count = counts[static_cast<std::size_t>(source_rank)];
+                if (count < 0 || static_cast<std::size_t>(count) % width != 0
+                    || static_cast<std::size_t>(count)
+                           > static_cast<std::size_t>(std::numeric_limits<int>::max()) - total_count)
+                {
+                    gather_layout_valid = 0;
+                    break;
+                }
+                displacements[static_cast<std::size_t>(source_rank)] = static_cast<int>(total_count);
+                total_count += static_cast<std::size_t>(count);
+            }
+            if (gather_layout_valid != 0)
+            {
+                gathered.resize(total_count);
+            }
+        }
+        catch (...)
+        {
+            gather_layout_valid = 0;
+        }
+    }
+    MPI_Bcast(&gather_layout_valid, 1, MPI_INT, root, communicator);
+    if (gather_layout_valid == 0)
+    {
+        throw std::overflow_error("Sternheimer SIAB source row gather layout exceeds MPI capacity.");
+    }
+
+    MPI_Gatherv(local_packed.empty() ? nullptr : local_packed.data(),
+                local_count,
+                MPI_DOUBLE,
+                rank == root && !gathered.empty() ? gathered.data() : nullptr,
+                rank == root ? counts.data() : nullptr,
+                rank == root ? displacements.data() : nullptr,
+                MPI_DOUBLE,
+                root,
+                communicator);
+
+    std::vector<SourceRow> result;
+    int gathered_rows_valid = 1;
+    if (rank == root)
+    {
+        try
+        {
+            result = unpack_source_rows(gathered, nprimitive);
+        }
+        catch (...)
+        {
+            gathered_rows_valid = 0;
+        }
+    }
+    MPI_Bcast(&gathered_rows_valid, 1, MPI_INT, root, communicator);
+    if (gathered_rows_valid == 0)
+    {
+        throw std::invalid_argument("Sternheimer SIAB gathered source rows are invalid or contain duplicate keys.");
+    }
+    return rank == root ? result : std::vector<SourceRow>();
+}
 #else
 std::vector<std::vector<Complex>> allgather_full_primitive_grids(
     const std::vector<std::vector<Complex>>& local_primitives,
@@ -358,6 +600,26 @@ std::vector<ReferenceRow> gather_reference_rows_to_root(const std::vector<Refere
         throw std::invalid_argument("Sternheimer SIAB serial reference row gather input is invalid.");
     }
     return sorted_rows(local_rows);
+}
+
+std::vector<SourceRow> gather_source_rows_to_root(const std::vector<SourceRow>& local_rows,
+                                                  const std::size_t nprimitive,
+                                                  const int root)
+{
+    std::size_t width = 0;
+    if (root != 0)
+    {
+        throw std::invalid_argument("Sternheimer SIAB serial source row gather requires root zero.");
+    }
+    if (!source_row_width(nprimitive, width))
+    {
+        throw std::overflow_error("Sternheimer SIAB source row width overflows size_t.");
+    }
+    if (!valid_source_rows(local_rows, nprimitive))
+    {
+        throw std::invalid_argument("Sternheimer SIAB serial source rows are invalid.");
+    }
+    return sorted_source_rows(local_rows);
 }
 #endif
 

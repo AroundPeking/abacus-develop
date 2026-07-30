@@ -77,6 +77,37 @@ siab::ReferenceRow make_global_row(const int occupied_state,
     return row;
 }
 
+siab::SourceRow make_source_row(const int occupied_state, const int auxiliary_channel)
+{
+    const double base = 10.0 * occupied_state + auxiliary_channel;
+    siab::SourceRow row;
+    row.occupied_state = occupied_state;
+    row.auxiliary_channel = auxiliary_channel;
+    row.occupation = 1.5 + 0.25 * base;
+    row.norm = 2.0 + 0.5 * base;
+    row.d = {Complex(base + 1.25, -base - 0.5), Complex(-base - 2.0, base + 3.75)};
+    return row;
+}
+
+void expect_source_row_eq(const siab::SourceRow& actual, const siab::SourceRow& expected)
+{
+    EXPECT_EQ(actual.occupied_state, expected.occupied_state);
+    EXPECT_EQ(actual.auxiliary_channel, expected.auxiliary_channel);
+    EXPECT_EQ(actual.occupation, expected.occupation);
+    EXPECT_EQ(actual.norm, expected.norm);
+    EXPECT_EQ(actual.d, expected.d);
+}
+
+TEST(SternheimerSIABMPI, SourceRowFactoryHasExactComplexD)
+{
+    const siab::SourceRow row = make_source_row(0, 1);
+    EXPECT_EQ(row.occupied_state, 0);
+    EXPECT_EQ(row.auxiliary_channel, 1);
+    EXPECT_EQ(row.occupation, 1.75);
+    EXPECT_EQ(row.norm, 2.5);
+    EXPECT_EQ(row.d, (std::vector<Complex>{Complex(2.25, -1.5), Complex(-3.0, 4.75)}));
+}
+
 TEST(SternheimerSIABMPI, ReassemblesPWSlabsInFullGridOrder)
 {
     siab::PrimitiveSlab rank0;
@@ -361,6 +392,141 @@ TEST(SternheimerSIABMPI, DeltaResponseComponentsRemainCompleteAfterMPIReduction)
         EXPECT_TRUE(pulay.empty());
         EXPECT_TRUE(qspace.empty());
     }
+}
+
+TEST(SternheimerSIABMPI, GathersSourceRowsInGlobalKeyOrderAndWritesSerialIdentically)
+{
+    int rank = 0;
+    int size = 0;
+    MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+    MPI_Comm_size(MPI_COMM_WORLD, &size);
+    if (size != 2)
+    {
+        GTEST_SKIP() << "This regression requires exactly two MPI ranks.";
+    }
+
+    const siab::SourceRow local_row = make_source_row(0, rank == 0 ? 1 : 0);
+    const auto gathered = siab::gather_source_rows_to_root({local_row}, 2, 0, MPI_COMM_WORLD);
+    if (rank == 0)
+    {
+        const siab::SourceRow expected_zero = make_source_row(0, 0);
+        const siab::SourceRow expected_one = make_source_row(0, 1);
+        ASSERT_EQ(gathered.size(), 2);
+        expect_source_row_eq(gathered[0], expected_zero);
+        expect_source_row_eq(gathered[1], expected_one);
+
+        const std::vector<siab::PrimitiveBlock> blocks{{"H", 0, 0, 0, 2, 0}};
+        const std::vector<Complex> overlap_s{
+            Complex(2.0, 0.0), Complex(0.25, -0.5), Complex(0.25, 0.5), Complex(3.0, 0.0)};
+        const std::string mpi_path = "sternheimer_siab_mpi_source_rows.dat";
+        const std::string serial_path = "sternheimer_siab_serial_source_rows.dat";
+        siab::write_source_v1(mpi_path, 0.5, blocks, gathered, overlap_s, test_provenance());
+        siab::write_source_v1(
+            serial_path, 0.5, blocks, {expected_zero, expected_one}, overlap_s, test_provenance());
+        EXPECT_EQ(read_text(mpi_path), read_text(serial_path));
+        std::remove(mpi_path.c_str());
+        std::remove(serial_path.c_str());
+    }
+    else
+    {
+        EXPECT_TRUE(gathered.empty());
+    }
+}
+
+TEST(SternheimerSIABMPI, SupportsRankWithNoLocalSourceRows)
+{
+    int rank = 0;
+    int size = 0;
+    MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+    MPI_Comm_size(MPI_COMM_WORLD, &size);
+    if (size != 2)
+    {
+        GTEST_SKIP() << "This regression requires exactly two MPI ranks.";
+    }
+
+    std::vector<siab::SourceRow> local_rows;
+    if (rank == 1)
+    {
+        local_rows.push_back(make_source_row(0, 0));
+    }
+    const auto gathered = siab::gather_source_rows_to_root(local_rows, 2, 0, MPI_COMM_WORLD);
+    if (rank == 0)
+    {
+        ASSERT_EQ(gathered.size(), 1);
+        expect_source_row_eq(gathered.front(), make_source_row(0, 0));
+    }
+    else
+    {
+        EXPECT_TRUE(gathered.empty());
+    }
+}
+
+TEST(SternheimerSIABMPI, RejectsWrongSourceDWidthCollectively)
+{
+    int rank = 0;
+    int size = 0;
+    MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+    MPI_Comm_size(MPI_COMM_WORLD, &size);
+    if (size != 2)
+    {
+        GTEST_SKIP() << "This regression requires exactly two MPI ranks.";
+    }
+
+    siab::SourceRow local_row = make_source_row(0, rank);
+    if (rank == 1)
+    {
+        local_row.d.pop_back();
+    }
+    EXPECT_THROW(siab::gather_source_rows_to_root({local_row}, 2, 0, MPI_COMM_WORLD), std::invalid_argument);
+}
+
+TEST(SternheimerSIABMPI, RejectsDuplicateGlobalSourceKeyCollectively)
+{
+    int size = 0;
+    MPI_Comm_size(MPI_COMM_WORLD, &size);
+    if (size != 2)
+    {
+        GTEST_SKIP() << "This regression requires exactly two MPI ranks.";
+    }
+
+    EXPECT_THROW(siab::gather_source_rows_to_root({make_source_row(0, 0)}, 2, 0, MPI_COMM_WORLD),
+                 std::invalid_argument);
+}
+
+TEST(SternheimerSIABMPI, RejectsInconsistentSourceRootCollectively)
+{
+    int rank = 0;
+    int size = 0;
+    MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+    MPI_Comm_size(MPI_COMM_WORLD, &size);
+    if (size != 2)
+    {
+        GTEST_SKIP() << "This regression requires exactly two MPI ranks.";
+    }
+
+    EXPECT_THROW(siab::gather_source_rows_to_root({make_source_row(0, rank)}, 2, rank, MPI_COMM_WORLD),
+                 std::invalid_argument);
+}
+
+TEST(SternheimerSIABMPI, RejectsInconsistentSourcePrimitiveCountCollectively)
+{
+    int rank = 0;
+    int size = 0;
+    MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+    MPI_Comm_size(MPI_COMM_WORLD, &size);
+    if (size != 2)
+    {
+        GTEST_SKIP() << "This regression requires exactly two MPI ranks.";
+    }
+
+    siab::SourceRow local_row = make_source_row(0, rank);
+    const std::size_t nprimitive = rank == 0 ? 2 : 3;
+    if (rank == 1)
+    {
+        local_row.d.push_back(Complex(9.0, -9.0));
+    }
+    EXPECT_THROW(siab::gather_source_rows_to_root({local_row}, nprimitive, 0, MPI_COMM_WORLD),
+                 std::invalid_argument);
 }
 
 #endif
