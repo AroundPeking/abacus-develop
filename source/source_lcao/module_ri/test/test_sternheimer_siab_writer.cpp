@@ -3,6 +3,7 @@
 #include "source_lcao/module_ri/sternheimer_siab_writer.h"
 
 #include <algorithm>
+#include <climits>
 #include <cmath>
 #include <complex>
 #include <cstdio>
@@ -513,6 +514,20 @@ TEST(SternheimerSIABWriter, AtomicallyReplacesExistingPathAndRemovesTmp)
     std::remove(path.c_str());
 }
 
+TEST(SternheimerSIABWriter, RejectsEmbeddedNulPathBeforeTouchingDestination)
+{
+    const std::string prefix = test_path("embedded_nul_response_prefix");
+    const std::string sentinel = "response destination sentinel";
+    std::string path = prefix;
+    path.append("\0suffix", 7);
+    write_text(prefix, sentinel);
+
+    EXPECT_THROW(write_canonical(path), std::invalid_argument);
+    EXPECT_EQ(read_text(prefix), sentinel);
+
+    std::remove(prefix.c_str());
+}
+
 TEST(SternheimerSIABWriter, AppendsCompleteTask4ProvenanceDeterministically)
 {
     const std::string path = test_path("task4_provenance");
@@ -610,6 +625,26 @@ TEST(SternheimerSIABWriter, RejectsPartialCoulombWhiteningProvenance)
     provenance.whitened_auxiliary_rank = 1;
     EXPECT_THROW(write_canonical(path, canonical_rows_reversed(), canonical_overlap_s(), provenance),
                  std::invalid_argument);
+    std::remove(path.c_str());
+}
+
+TEST(SternheimerSIABWriter, RejectsOverflowingCoulombWhiteningRankSum)
+{
+    const std::string path = test_path("overflowing_coulomb_whitening_rank_sum");
+    siab::Provenance provenance = canonical_provenance();
+    provenance.auxiliary_whitening = "global_full_coulomb_v1";
+    provenance.raw_auxiliary_dimension = 1;
+    provenance.whitened_auxiliary_rank = INT_MAX;
+    provenance.discarded_auxiliary_rank = 1;
+    provenance.coulomb_relative_threshold = 1.0e-10;
+    provenance.coulomb_eigenvalues = {4.0};
+    provenance.coulomb_max_orthonormality_error = 2.0e-14;
+    provenance.coulomb_transform_sha256
+        = "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd";
+
+    EXPECT_THROW(write_canonical(path, canonical_rows_reversed(), canonical_overlap_s(), provenance),
+                 std::invalid_argument);
+
     std::remove(path.c_str());
 }
 
@@ -839,6 +874,36 @@ TEST(SternheimerSIABSourceWriter, MatchesCanonicalFixtureAndUsesPrimitiveFastDOr
     EXPECT_FALSE(std::ifstream(tmp.c_str()).good());
 
     std::remove(path.c_str());
+}
+
+TEST(SternheimerSIABSourceWriter, PreservesPreexistingFixedNameTemporaryFile)
+{
+    const std::string path = test_path("source_fixed_name_temporary_sentinel");
+    const std::string tmp = path + ".tmp";
+    const std::string sentinel = "fixed temporary sentinel";
+    std::remove(path.c_str());
+    write_text(tmp, sentinel);
+
+    write_canonical_source(path);
+    EXPECT_EQ(read_text(path), canonical_source_fixture);
+    EXPECT_EQ(read_text(tmp), sentinel);
+
+    std::remove(path.c_str());
+    std::remove(tmp.c_str());
+}
+
+TEST(SternheimerSIABSourceWriter, RejectsEmbeddedNulPathBeforeTouchingDestination)
+{
+    const std::string prefix = test_path("embedded_nul_source_prefix");
+    const std::string sentinel = "source destination sentinel";
+    std::string path = prefix;
+    path.append("\0suffix", 7);
+    write_text(prefix, sentinel);
+
+    EXPECT_THROW(write_canonical_source(path), std::invalid_argument);
+    EXPECT_EQ(read_text(prefix), sentinel);
+
+    std::remove(prefix.c_str());
 }
 
 TEST(SternheimerSIABSourceWriter, SharesByteIdenticalProvenanceJsonWithResponseWriter)

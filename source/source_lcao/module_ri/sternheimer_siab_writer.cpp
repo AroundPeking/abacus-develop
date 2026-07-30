@@ -1,10 +1,12 @@
 #include "sternheimer_siab_writer.h"
 
 #include <algorithm>
+#include <atomic>
 #include <cerrno>
 #include <cmath>
 #include <cstdio>
 #include <cstring>
+#include <fcntl.h>
 #include <fstream>
 #include <iomanip>
 #include <limits>
@@ -12,6 +14,7 @@
 #include <sstream>
 #include <stdexcept>
 #include <tuple>
+#include <unistd.h>
 #include <utility>
 
 namespace module_ri
@@ -22,6 +25,19 @@ namespace
 {
 
 const double hermitian_tolerance = 1.0e-10;
+std::atomic<unsigned long long> temporary_file_counter(0);
+
+void validate_output_path(const std::string& path)
+{
+    if (path.empty())
+    {
+        throw std::invalid_argument("Sternheimer SIAB output path must not be empty");
+    }
+    if (path.find('\0') != std::string::npos)
+    {
+        throw std::invalid_argument("Sternheimer SIAB output path must not contain an embedded NUL");
+    }
+}
 
 bool finite_complex(const std::complex<double>& value)
 {
@@ -264,11 +280,12 @@ void validate_provenance(const Provenance& provenance)
                                || !provenance.coulomb_transform_sha256.empty();
     if (has_whitening)
     {
+        const long long whitening_rank_sum = static_cast<long long>(provenance.whitened_auxiliary_rank)
+                                             + static_cast<long long>(provenance.discarded_auxiliary_rank);
         if (provenance.auxiliary_whitening != "global_full_coulomb_v1"
             || provenance.raw_auxiliary_dimension <= 0 || provenance.whitened_auxiliary_rank <= 0
             || provenance.discarded_auxiliary_rank < 0
-            || provenance.whitened_auxiliary_rank + provenance.discarded_auxiliary_rank
-                   != provenance.raw_auxiliary_dimension
+            || whitening_rank_sum != static_cast<long long>(provenance.raw_auxiliary_dimension)
             || provenance.coulomb_eigenvalues.size()
                    != static_cast<std::size_t>(provenance.raw_auxiliary_dimension)
             || !std::isfinite(provenance.coulomb_relative_threshold)
@@ -789,15 +806,56 @@ void write_provenance_json(std::ostream& output, const std::string& json)
 class TemporaryFile
 {
   public:
-    explicit TemporaryFile(const std::string& path) : path_(path), keep_(false)
+    explicit TemporaryFile(const std::string& output_path) : descriptor_(-1), keep_(true)
     {
+        const std::string prefix
+            = output_path + ".tmp." + std::to_string(static_cast<long long>(::getpid())) + ".";
+        while (true)
+        {
+            const unsigned long long sequence = temporary_file_counter.fetch_add(1, std::memory_order_relaxed);
+            path_ = prefix + std::to_string(sequence);
+            const int descriptor = ::open(path_.c_str(), O_WRONLY | O_CREAT | O_EXCL, 0666);
+            if (descriptor >= 0)
+            {
+                descriptor_ = descriptor;
+                keep_ = false;
+                return;
+            }
+            const int error_number = errno;
+            if (error_number != EEXIST)
+            {
+                throw std::runtime_error("Failed to reserve Sternheimer SIAB temporary output " + path_ + ": "
+                                         + std::strerror(error_number));
+            }
+        }
     }
 
     ~TemporaryFile()
     {
+        if (descriptor_ >= 0)
+        {
+            ::close(descriptor_);
+        }
         if (!keep_)
         {
             std::remove(path_.c_str());
+        }
+    }
+
+    const std::string& path() const
+    {
+        return path_;
+    }
+
+    void close_reservation()
+    {
+        const int descriptor = descriptor_;
+        descriptor_ = -1;
+        if (::close(descriptor) != 0)
+        {
+            const int error_number = errno;
+            throw std::runtime_error("Failed to close Sternheimer SIAB temporary reservation " + path_ + ": "
+                                     + std::strerror(error_number));
         }
     }
 
@@ -807,34 +865,35 @@ class TemporaryFile
     }
 
   private:
-    const std::string path_;
+    std::string path_;
+    int descriptor_;
     bool keep_;
 };
 
 template <typename WriteContents>
 void write_atomically(const std::string& path, const WriteContents& write_contents)
 {
-    const std::string temporary_path = path + ".tmp";
-    TemporaryFile temporary_file(temporary_path);
-    std::ofstream output(temporary_path.c_str(), std::ios::binary | std::ios::trunc);
-    output.imbue(std::locale::classic());
+    TemporaryFile temporary_file(path);
+    std::ofstream output(temporary_file.path().c_str(), std::ios::binary | std::ios::trunc);
     if (!output.is_open())
     {
-        throw std::runtime_error("Failed to open Sternheimer SIAB temporary output: " + temporary_path);
+        throw std::runtime_error("Failed to open Sternheimer SIAB temporary output: " + temporary_file.path());
     }
+    temporary_file.close_reservation();
+    output.imbue(std::locale::classic());
 
     write_contents(output);
     output.flush();
     if (!output.good())
     {
-        throw std::runtime_error("Failed to flush Sternheimer SIAB temporary output: " + temporary_path);
+        throw std::runtime_error("Failed to flush Sternheimer SIAB temporary output: " + temporary_file.path());
     }
     output.close();
     if (output.fail())
     {
-        throw std::runtime_error("Failed to close Sternheimer SIAB temporary output: " + temporary_path);
+        throw std::runtime_error("Failed to close Sternheimer SIAB temporary output: " + temporary_file.path());
     }
-    if (std::rename(temporary_path.c_str(), path.c_str()) != 0)
+    if (std::rename(temporary_file.path().c_str(), path.c_str()) != 0)
     {
         const std::string reason = std::strerror(errno);
         throw std::runtime_error("Failed to replace Sternheimer SIAB output " + path + ": " + reason);
@@ -851,10 +910,7 @@ void write_v1(const std::string& path,
               const std::vector<std::complex<double>>& overlap_s,
               const Provenance& provenance)
 {
-    if (path.empty())
-    {
-        throw std::invalid_argument("Sternheimer SIAB output path must not be empty");
-    }
+    validate_output_path(path);
     if (!std::isfinite(grid_volume_bohr3) || grid_volume_bohr3 <= 0.0)
     {
         throw std::invalid_argument("Sternheimer SIAB grid volume must be finite and positive");
@@ -919,10 +975,7 @@ void write_source_v1(const std::string& path,
                      const std::vector<std::complex<double>>& overlap_s,
                      const Provenance& provenance)
 {
-    if (path.empty())
-    {
-        throw std::invalid_argument("Sternheimer SIAB output path must not be empty");
-    }
+    validate_output_path(path);
     if (!std::isfinite(grid_volume_bohr3) || grid_volume_bohr3 <= 0.0)
     {
         throw std::invalid_argument("Sternheimer SIAB grid volume must be finite and positive");
