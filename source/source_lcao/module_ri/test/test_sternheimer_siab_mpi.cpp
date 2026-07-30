@@ -10,6 +10,7 @@
 #include <fstream>
 #include <gtest/gtest.h>
 #include <iterator>
+#include <limits>
 #include <stdexcept>
 #include <vector>
 
@@ -426,6 +427,37 @@ TEST(SternheimerSIABMPI, GathersSourceRowsInGlobalKeyOrderAndWritesSerialIdentic
         EXPECT_EQ(read_text(mpi_path), read_text(serial_path));
         std::remove(mpi_path.c_str());
         std::remove(serial_path.c_str());
+    }
+    else
+    {
+        EXPECT_TRUE(gathered.empty());
+    }
+}
+
+TEST(SternheimerSIABMPI, SourceKeysNearIntMaxRoundTripAndSortExactly)
+{
+    int rank = 0;
+    int size = 0;
+    MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+    MPI_Comm_size(MPI_COMM_WORLD, &size);
+    if (size != 2)
+    {
+        GTEST_SKIP() << "This regression requires exactly two MPI ranks.";
+    }
+
+    const int int_max = std::numeric_limits<int>::max();
+    siab::SourceRow local_row = make_source_row(0, rank);
+    local_row.occupied_state = rank == 0 ? int_max : int_max - 1;
+    local_row.auxiliary_channel = rank == 0 ? int_max - 2 : int_max;
+
+    const auto gathered = siab::gather_source_rows_to_root({local_row}, 2, 0, MPI_COMM_WORLD);
+    if (rank == 0)
+    {
+        ASSERT_EQ(gathered.size(), 2);
+        EXPECT_EQ(gathered[0].occupied_state, int_max - 1);
+        EXPECT_EQ(gathered[0].auxiliary_channel, int_max);
+        EXPECT_EQ(gathered[1].occupied_state, int_max);
+        EXPECT_EQ(gathered[1].auxiliary_channel, int_max - 2);
     }
     else
     {

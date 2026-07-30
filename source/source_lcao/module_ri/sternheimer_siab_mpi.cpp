@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cmath>
 #include <limits>
+#include <new>
 #include <stdexcept>
 #include <tuple>
 
@@ -14,6 +15,9 @@ namespace
 {
 
 using Complex = std::complex<double>;
+
+static_assert(std::numeric_limits<int>::digits <= std::numeric_limits<double>::digits,
+              "Sternheimer SIAB MPI packing requires every int value bit to fit in a double mantissa.");
 
 std::vector<ReferenceRow> sorted_rows(std::vector<ReferenceRow> rows)
 {
@@ -241,6 +245,97 @@ std::vector<SourceRow> unpack_source_rows(const std::vector<double>& packed, con
     }
     return sorted_source_rows(std::move(rows));
 }
+
+#ifdef __MPI
+enum class SourceGatherStatus : int
+{
+    ok = 0,
+    invalid_payload = 1,
+    overflow_capacity = 2,
+    length = 3,
+    allocation = 4,
+    unknown_runtime = 5
+};
+
+template <typename Operation>
+SourceGatherStatus source_gather_status(const Operation& operation)
+{
+    try
+    {
+        operation();
+        return SourceGatherStatus::ok;
+    }
+    catch (const std::bad_alloc&)
+    {
+        return SourceGatherStatus::allocation;
+    }
+    catch (const std::length_error&)
+    {
+        return SourceGatherStatus::length;
+    }
+    catch (const std::overflow_error&)
+    {
+        return SourceGatherStatus::overflow_capacity;
+    }
+    catch (const std::invalid_argument&)
+    {
+        return SourceGatherStatus::invalid_payload;
+    }
+    catch (const std::exception&)
+    {
+        return SourceGatherStatus::unknown_runtime;
+    }
+    catch (...)
+    {
+        return SourceGatherStatus::unknown_runtime;
+    }
+}
+
+SourceGatherStatus source_gather_status_from_code(const int code)
+{
+    if (code < static_cast<int>(SourceGatherStatus::ok) || code > static_cast<int>(SourceGatherStatus::unknown_runtime))
+    {
+        return SourceGatherStatus::unknown_runtime;
+    }
+    return static_cast<SourceGatherStatus>(code);
+}
+
+SourceGatherStatus allreduce_source_gather_status(const SourceGatherStatus local_status, MPI_Comm communicator)
+{
+    int status_code = static_cast<int>(local_status);
+    MPI_Allreduce(MPI_IN_PLACE, &status_code, 1, MPI_INT, MPI_MAX, communicator);
+    return source_gather_status_from_code(status_code);
+}
+
+SourceGatherStatus broadcast_source_gather_status(const SourceGatherStatus root_status,
+                                                  const int root,
+                                                  MPI_Comm communicator)
+{
+    int status_code = static_cast<int>(root_status);
+    MPI_Bcast(&status_code, 1, MPI_INT, root, communicator);
+    return source_gather_status_from_code(status_code);
+}
+
+void throw_source_gather_failure(const SourceGatherStatus status, const char* message)
+{
+    switch (status)
+    {
+    case SourceGatherStatus::ok:
+        return;
+    case SourceGatherStatus::invalid_payload:
+        throw std::invalid_argument(message);
+    case SourceGatherStatus::overflow_capacity:
+        throw std::overflow_error(message);
+    case SourceGatherStatus::length:
+        throw std::length_error(message);
+    case SourceGatherStatus::allocation:
+        throw std::bad_alloc();
+    case SourceGatherStatus::unknown_runtime:
+        throw std::runtime_error(message);
+    }
+    throw std::runtime_error(message);
+}
+#endif
 
 } // namespace
 
@@ -483,68 +578,71 @@ std::vector<SourceRow> gather_source_rows_to_root(const std::vector<SourceRow>& 
     std::size_t width = 0;
     std::size_t local_payload_size = 0;
     const bool width_valid = source_row_width(nprimitive, width);
-    int local_checks[2] = {
-        valid_source_rows(local_rows, nprimitive) ? 1 : 0,
-        width_valid && source_payload_size(local_rows.size(), width, local_payload_size) ? 1 : 0};
-    MPI_Allreduce(MPI_IN_PLACE, local_checks, 2, MPI_INT, MPI_MIN, communicator);
-    if (local_checks[1] == 0)
+    SourceGatherStatus local_status = SourceGatherStatus::ok;
+    if (!width_valid || !source_payload_size(local_rows.size(), width, local_payload_size))
     {
-        throw std::overflow_error("Sternheimer SIAB source row payload exceeds MPI count capacity.");
+        local_status = SourceGatherStatus::overflow_capacity;
     }
-    if (local_checks[0] == 0)
+    else if (!valid_source_rows(local_rows, nprimitive))
     {
-        throw std::invalid_argument("Sternheimer SIAB local source rows are invalid on at least one MPI rank.");
+        local_status = SourceGatherStatus::invalid_payload;
     }
+    SourceGatherStatus collective_status = allreduce_source_gather_status(local_status, communicator);
+    throw_source_gather_failure(collective_status,
+                                "Sternheimer SIAB source row validation failed on at least one MPI rank.");
 
-    const std::vector<double> local_packed = pack_source_rows(local_rows, local_payload_size);
+    std::vector<double> local_packed;
+    local_status = source_gather_status([&local_packed, &local_rows, local_payload_size]() {
+        local_packed = pack_source_rows(local_rows, local_payload_size);
+    });
+    collective_status = allreduce_source_gather_status(local_status, communicator);
+    throw_source_gather_failure(collective_status,
+                                "Sternheimer SIAB source row packing failed on at least one MPI rank.");
     const int local_count = static_cast<int>(local_packed.size());
-    std::vector<int> counts(rank == root ? static_cast<std::size_t>(rank_count) : 0);
-    MPI_Gather(&local_count,
-               1,
-               MPI_INT,
-               rank == root ? counts.data() : nullptr,
-               1,
-               MPI_INT,
-               root,
-               communicator);
+
+    std::vector<int> counts;
+    SourceGatherStatus root_status = SourceGatherStatus::ok;
+    if (rank == root)
+    {
+        root_status
+            = source_gather_status([&counts, rank_count]() { counts.resize(static_cast<std::size_t>(rank_count)); });
+    }
+    collective_status = broadcast_source_gather_status(root_status, root, communicator);
+    throw_source_gather_failure(collective_status,
+                                "Sternheimer SIAB source row count allocation failed on the root MPI rank.");
+
+    MPI_Gather(&local_count, 1, MPI_INT, rank == root ? counts.data() : nullptr, 1, MPI_INT, root, communicator);
 
     std::vector<int> displacements;
     std::vector<double> gathered;
-    int gather_layout_valid = 1;
+    root_status = SourceGatherStatus::ok;
     if (rank == root)
     {
-        try
-        {
+        root_status = source_gather_status([&counts, &displacements, &gathered, rank_count, width]() {
             displacements.assign(static_cast<std::size_t>(rank_count), 0);
             std::size_t total_count = 0;
             for (int source_rank = 0; source_rank != rank_count; ++source_rank)
             {
                 const int count = counts[static_cast<std::size_t>(source_rank)];
-                if (count < 0 || static_cast<std::size_t>(count) % width != 0
-                    || static_cast<std::size_t>(count)
-                           > static_cast<std::size_t>(std::numeric_limits<int>::max()) - total_count)
+                if (count < 0 || static_cast<std::size_t>(count) % width != 0)
                 {
-                    gather_layout_valid = 0;
-                    break;
+                    throw std::invalid_argument(
+                        "Sternheimer SIAB source row gather received an invalid rank payload size.");
+                }
+                if (static_cast<std::size_t>(count)
+                    > static_cast<std::size_t>(std::numeric_limits<int>::max()) - total_count)
+                {
+                    throw std::overflow_error("Sternheimer SIAB source row gather exceeds MPI displacement capacity.");
                 }
                 displacements[static_cast<std::size_t>(source_rank)] = static_cast<int>(total_count);
                 total_count += static_cast<std::size_t>(count);
             }
-            if (gather_layout_valid != 0)
-            {
-                gathered.resize(total_count);
-            }
-        }
-        catch (...)
-        {
-            gather_layout_valid = 0;
-        }
+            gathered.resize(total_count);
+        });
     }
-    MPI_Bcast(&gather_layout_valid, 1, MPI_INT, root, communicator);
-    if (gather_layout_valid == 0)
-    {
-        throw std::overflow_error("Sternheimer SIAB source row gather layout exceeds MPI capacity.");
-    }
+    collective_status = broadcast_source_gather_status(root_status, root, communicator);
+    throw_source_gather_failure(collective_status,
+                                "Sternheimer SIAB source row gather layout failed on the root MPI rank.");
 
     MPI_Gatherv(local_packed.empty() ? nullptr : local_packed.data(),
                 local_count,
@@ -557,23 +655,15 @@ std::vector<SourceRow> gather_source_rows_to_root(const std::vector<SourceRow>& 
                 communicator);
 
     std::vector<SourceRow> result;
-    int gathered_rows_valid = 1;
+    root_status = SourceGatherStatus::ok;
     if (rank == root)
     {
-        try
-        {
-            result = unpack_source_rows(gathered, nprimitive);
-        }
-        catch (...)
-        {
-            gathered_rows_valid = 0;
-        }
+        root_status = source_gather_status(
+            [&result, &gathered, nprimitive]() { result = unpack_source_rows(gathered, nprimitive); });
     }
-    MPI_Bcast(&gathered_rows_valid, 1, MPI_INT, root, communicator);
-    if (gathered_rows_valid == 0)
-    {
-        throw std::invalid_argument("Sternheimer SIAB gathered source rows are invalid or contain duplicate keys.");
-    }
+    collective_status = broadcast_source_gather_status(root_status, root, communicator);
+    throw_source_gather_failure(collective_status,
+                                "Sternheimer SIAB gathered source row unpack failed on the root MPI rank.");
     return rank == root ? result : std::vector<SourceRow>();
 }
 #else
