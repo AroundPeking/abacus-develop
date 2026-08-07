@@ -1,0 +1,16 @@
+source_commit=ad3d673a1289696544a98d95e11e4c74ed390c56
+archive_sha256=15e75bf2791779dec08b44aa52d80d145d23d26fb98c95e865d774626500fffa
+controller_sha256=b5f2d1709d7c94c0e5234b6c4c896815f4669782d40778708ec05b0fababe069
+formal_job_id=21540752
+partition=normal
+requested_nodes=1
+requested_cpus=30
+requested_memory_mib=110610
+requested_time=24:00:00
+initial_state=PENDING
+initial_reason=Priority
+login_writer_tests=16/16
+login_overlap_tests=10/10
+login_fixed_ao_assembly_tests=3/3
+login_smoke_validation_tests=5/5
+formal_status=not_started
