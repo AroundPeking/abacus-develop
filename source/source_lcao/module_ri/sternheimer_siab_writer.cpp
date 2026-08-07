@@ -449,6 +449,157 @@ ValidatedFixedAOData validate_fixed_ao_data(const FixedAOData& data)
     return validated;
 }
 
+struct ValidatedPrimitiveGalerkinData
+{
+    std::vector<const PrimitiveGalerkinSpinData*> spins;
+    std::vector<const AuxiliaryChannelMetadata*> channels;
+};
+
+ValidatedPrimitiveGalerkinData validate_primitive_galerkin_data(
+    const PrimitiveGalerkinData& data)
+{
+    if (data.n_primitive <= 0 || data.n_fixed_ao <= 0)
+    {
+        throw std::invalid_argument(
+            "Sternheimer SIAB primitive Galerkin dimensions must be positive");
+    }
+    const std::size_t n_primitive = static_cast<std::size_t>(data.n_primitive);
+    const std::size_t n_fixed_ao = static_cast<std::size_t>(data.n_fixed_ao);
+    if (validate_blocks(data.blocks) != n_primitive)
+    {
+        throw std::invalid_argument(
+            "Sternheimer SIAB primitive blocks do not cover n_primitive");
+    }
+    validate_hermitian_matrix(
+        data.overlap_s, n_primitive, "primitive Galerkin S");
+    validate_hermitian_matrix(
+        data.fixed_ao_grid_overlap,
+        n_fixed_ao,
+        "primitive Galerkin fixed-AO grid S");
+    if (n_primitive > static_cast<std::size_t>(-1) / n_fixed_ao
+        || data.primitive_ao_overlap.size() != n_primitive * n_fixed_ao
+        || !std::all_of(
+            data.primitive_ao_overlap.begin(),
+            data.primitive_ao_overlap.end(),
+            finite_complex))
+    {
+        throw std::invalid_argument(
+            "Sternheimer SIAB primitive-to-AO overlap dimensions are invalid");
+    }
+
+    if (data.spins.empty())
+    {
+        throw std::invalid_argument(
+            "Sternheimer SIAB primitive Galerkin data requires spin channels");
+    }
+    ValidatedPrimitiveGalerkinData validated;
+    validated.spins.reserve(data.spins.size());
+    for (const PrimitiveGalerkinSpinData& spin: data.spins)
+    {
+        if (spin.spin_index < 0
+            || spin.fixed_ao_occupations.size() != n_fixed_ao)
+        {
+            throw std::invalid_argument(
+                "Sternheimer SIAB primitive Galerkin spin metadata dimensions are invalid");
+        }
+        for (const double occupation: spin.fixed_ao_occupations)
+        {
+            if (!std::isfinite(occupation) || occupation < 0.0)
+            {
+                throw std::invalid_argument(
+                    "Sternheimer SIAB primitive Galerkin occupations are invalid");
+            }
+        }
+        validate_hermitian_matrix(
+            spin.hamiltonian_ha,
+            n_primitive,
+            "primitive Galerkin H");
+        validate_hermitian_matrix(
+            spin.fixed_ao_grid_hamiltonian_ha,
+            n_fixed_ao,
+            "primitive Galerkin fixed-AO grid H");
+        validated.spins.push_back(&spin);
+    }
+    std::sort(
+        validated.spins.begin(),
+        validated.spins.end(),
+        [](const PrimitiveGalerkinSpinData* left,
+           const PrimitiveGalerkinSpinData* right) {
+            return left->spin_index < right->spin_index;
+        });
+    for (std::size_t spin = 0; spin != validated.spins.size(); ++spin)
+    {
+        if (validated.spins[spin]->spin_index != static_cast<int>(spin))
+        {
+            throw std::invalid_argument(
+                "Sternheimer SIAB primitive Galerkin spin indices must be contiguous from zero");
+        }
+    }
+
+    if (data.auxiliary_channels.empty()
+        || data.perturbations_ha.size() != data.auxiliary_channels.size())
+    {
+        throw std::invalid_argument(
+            "Sternheimer SIAB primitive Galerkin auxiliary dimensions are invalid");
+    }
+    validated.channels.reserve(data.auxiliary_channels.size());
+    for (const AuxiliaryChannelMetadata& channel: data.auxiliary_channels)
+    {
+        if (channel.channel_index < 0 || channel.atom_index < 0
+            || channel.angular_momentum < 0 || channel.radial_index < 0
+            || channel.magnetic_index < -channel.angular_momentum
+            || channel.magnetic_index > channel.angular_momentum
+            || !valid_element_token(channel.label))
+        {
+            throw std::invalid_argument(
+                "Sternheimer SIAB primitive Galerkin auxiliary metadata is invalid");
+        }
+        validated.channels.push_back(&channel);
+    }
+    std::sort(
+        validated.channels.begin(),
+        validated.channels.end(),
+        [](const AuxiliaryChannelMetadata* left,
+           const AuxiliaryChannelMetadata* right) {
+            return left->channel_index < right->channel_index;
+        });
+    for (std::size_t channel = 0; channel != validated.channels.size(); ++channel)
+    {
+        if (validated.channels[channel]->channel_index
+            != static_cast<int>(channel))
+        {
+            throw std::invalid_argument(
+                "Sternheimer SIAB primitive Galerkin auxiliary indices must be contiguous from zero");
+        }
+        validate_hermitian_matrix(
+            data.perturbations_ha[channel],
+            n_primitive,
+            "primitive Galerkin V");
+    }
+
+    if (data.frequency_ha.empty()
+        || data.frequency_ha.size() != data.frequency_weights_ha.size())
+    {
+        throw std::invalid_argument(
+            "Sternheimer SIAB primitive Galerkin frequency dimensions are invalid");
+    }
+    for (std::size_t frequency = 0; frequency != data.frequency_ha.size(); ++frequency)
+    {
+        if (!std::isfinite(data.frequency_ha[frequency])
+            || data.frequency_ha[frequency] <= 0.0
+            || !std::isfinite(data.frequency_weights_ha[frequency])
+            || data.frequency_weights_ha[frequency] < 0.0
+            || (frequency != 0
+                && data.frequency_ha[frequency]
+                       <= data.frequency_ha[frequency - 1]))
+        {
+            throw std::invalid_argument(
+                "Sternheimer SIAB primitive Galerkin frequencies must be positive, finite, and strictly increasing");
+        }
+    }
+    return validated;
+}
+
 bool round_trips_exactly(const std::string& text, const double value)
 {
     std::istringstream input(text);
@@ -997,6 +1148,186 @@ void write_fixed_ao_v1(const std::string& path, const FixedAOData& data, const P
     {
         const std::string reason = std::strerror(errno);
         throw std::runtime_error("Failed to replace Sternheimer SIAB fixed-AO output " + path + ": " + reason);
+    }
+    temporary_file.keep();
+}
+
+void write_primitive_galerkin_v1(const std::string& path,
+                                 const PrimitiveGalerkinData& data,
+                                 const Provenance& provenance)
+{
+    if (path.empty())
+    {
+        throw std::invalid_argument(
+            "Sternheimer SIAB primitive Galerkin output path must not be empty");
+    }
+    const ValidatedPrimitiveGalerkinData validated
+        = validate_primitive_galerkin_data(data);
+    validate_provenance(provenance);
+    const std::string json = provenance_json(provenance);
+
+    const std::string temporary_path = path + ".tmp";
+    TemporaryFile temporary_file(temporary_path);
+    std::ofstream output(
+        temporary_path.c_str(), std::ios::binary | std::ios::trunc);
+    output.imbue(std::locale::classic());
+    if (!output.is_open())
+    {
+        throw std::runtime_error(
+            "Failed to open Sternheimer SIAB primitive Galerkin temporary output: "
+            + temporary_path);
+    }
+
+    output << "<STERNHEIMER_GALERKIN_PRIMITIVE_HEADER>\n"
+           << "format_version 1\n"
+           << "representation bessel_primitive_uniform_grid_gamma\n"
+           << "energy_unit Ha\n"
+           << "n_primitive " << data.n_primitive << "\n"
+           << "n_fixed_ao " << data.n_fixed_ao << "\n"
+           << "n_blocks " << data.blocks.size() << "\n"
+           << "n_spin " << validated.spins.size() << "\n"
+           << "n_auxiliary " << validated.channels.size() << "\n"
+           << "n_frequency " << data.frequency_ha.size() << "\n"
+           << "</STERNHEIMER_GALERKIN_PRIMITIVE_HEADER>\n"
+           << "<PRIMITIVE_BLOCKS>\n"
+           << "# element atom_index l m n_primitive offset\n";
+    for (const PrimitiveBlock& block: data.blocks)
+    {
+        output << block.element << " " << block.atom_index << " " << block.l
+               << " " << block.m << " " << block.n_primitive << " "
+               << block.offset << "\n";
+    }
+
+    output << "</PRIMITIVE_BLOCKS>\n"
+           << "<AUXILIARY_CHANNELS>\n"
+           << "# channel_index atom_index l radial_index m label\n";
+    for (const AuxiliaryChannelMetadata* channel: validated.channels)
+    {
+        output << channel->channel_index << " " << channel->atom_index << " "
+               << channel->angular_momentum << " " << channel->radial_index
+               << " " << channel->magnetic_index << " " << channel->label
+               << "\n";
+    }
+
+    output << "</AUXILIARY_CHANNELS>\n"
+           << "<FIXED_AO_OCCUPATIONS>\n"
+           << "# spin_index state_index occupation\n";
+    for (const PrimitiveGalerkinSpinData* spin: validated.spins)
+    {
+        for (std::size_t state = 0;
+             state != spin->fixed_ao_occupations.size();
+             ++state)
+        {
+            output << spin->spin_index << " " << state << " "
+                   << format_double(spin->fixed_ao_occupations[state]) << "\n";
+        }
+    }
+
+    output << "</FIXED_AO_OCCUPATIONS>\n"
+           << "<OVERLAP_S>\n"
+           << "# row-major <p_a|p_b>, real imag\n";
+    for (const std::complex<double>& value: data.overlap_s)
+    {
+        output << format_double(value.real()) << " "
+               << format_double(value.imag()) << "\n";
+    }
+
+    output << "</OVERLAP_S>\n"
+           << "<HAMILTONIAN_H>\n"
+           << "# row-major primitive H_ab in Ha; matrices follow spin_index order\n";
+    for (const PrimitiveGalerkinSpinData* spin: validated.spins)
+    {
+        output << "# spin_index " << spin->spin_index << "\n";
+        for (const std::complex<double>& value: spin->hamiltonian_ha)
+        {
+            output << format_double(value.real()) << " "
+                   << format_double(value.imag()) << "\n";
+        }
+    }
+
+    output << "</HAMILTONIAN_H>\n"
+           << "<PERTURBATION_V>\n"
+           << "# row-major primitive V_ab in Ha; matrices follow channel_index order\n";
+    for (const AuxiliaryChannelMetadata* channel: validated.channels)
+    {
+        output << "# channel_index " << channel->channel_index << "\n";
+        for (const std::complex<double>& value:
+             data.perturbations_ha[static_cast<std::size_t>(
+                 channel->channel_index)])
+        {
+            output << format_double(value.real()) << " "
+                   << format_double(value.imag()) << "\n";
+        }
+    }
+
+    output << "</PERTURBATION_V>\n"
+           << "<PRIMITIVE_AO_OVERLAP>\n"
+           << "# row-major <p_a|phi_b>, real imag\n";
+    for (const std::complex<double>& value: data.primitive_ao_overlap)
+    {
+        output << format_double(value.real()) << " "
+               << format_double(value.imag()) << "\n";
+    }
+
+    output << "</PRIMITIVE_AO_OVERLAP>\n"
+           << "<FIXED_AO_GRID_OVERLAP>\n"
+           << "# row-major uniform-grid <phi_a|phi_b>, real imag\n";
+    for (const std::complex<double>& value: data.fixed_ao_grid_overlap)
+    {
+        output << format_double(value.real()) << " "
+               << format_double(value.imag()) << "\n";
+    }
+
+    output << "</FIXED_AO_GRID_OVERLAP>\n"
+           << "<FIXED_AO_GRID_HAMILTONIAN>\n"
+           << "# row-major uniform-grid H_ab in Ha; matrices follow spin_index order\n";
+    for (const PrimitiveGalerkinSpinData* spin: validated.spins)
+    {
+        output << "# spin_index " << spin->spin_index << "\n";
+        for (const std::complex<double>& value:
+             spin->fixed_ao_grid_hamiltonian_ha)
+        {
+            output << format_double(value.real()) << " "
+                   << format_double(value.imag()) << "\n";
+        }
+    }
+
+    output << "</FIXED_AO_GRID_HAMILTONIAN>\n"
+           << "<FREQUENCY_GRID>\n"
+           << "# frequency_index frequency_ha weight_ha\n";
+    for (std::size_t frequency = 0;
+         frequency != data.frequency_ha.size();
+         ++frequency)
+    {
+        output << frequency << " " << format_double(data.frequency_ha[frequency])
+               << " " << format_double(data.frequency_weights_ha[frequency])
+               << "\n";
+    }
+    output << "</FREQUENCY_GRID>\n"
+           << "<PROVENANCE_JSON>\n"
+           << json << "\n"
+           << "</PROVENANCE_JSON>\n";
+
+    output.flush();
+    if (!output.good())
+    {
+        throw std::runtime_error(
+            "Failed to flush Sternheimer SIAB primitive Galerkin temporary output: "
+            + temporary_path);
+    }
+    output.close();
+    if (output.fail())
+    {
+        throw std::runtime_error(
+            "Failed to close Sternheimer SIAB primitive Galerkin temporary output: "
+            + temporary_path);
+    }
+    if (std::rename(temporary_path.c_str(), path.c_str()) != 0)
+    {
+        const std::string reason = std::strerror(errno);
+        throw std::runtime_error(
+            "Failed to replace Sternheimer SIAB primitive Galerkin output " + path
+            + ": " + reason);
     }
     temporary_file.keep();
 }

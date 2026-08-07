@@ -209,6 +209,38 @@ siab::FixedAOData canonical_fixed_ao_data()
     return data;
 }
 
+siab::PrimitiveGalerkinData canonical_primitive_galerkin_data()
+{
+    siab::PrimitiveGalerkinData data;
+    data.n_primitive = 2;
+    data.n_fixed_ao = 2;
+    data.blocks = {siab::PrimitiveBlock{"H", 0, 0, 0, 2, 0}};
+    data.spins = {
+        siab::PrimitiveGalerkinSpinData{
+            0,
+            {1.0, 0.0},
+            {{-0.4, 0.0}, {0.0, 0.1}, {0.0, -0.1}, {0.9, 0.0}},
+            {{-0.5, 0.0}, {0.0, 0.02}, {0.0, -0.02}, {0.7, 0.0}}},
+        siab::PrimitiveGalerkinSpinData{
+            1,
+            {0.0, 0.0},
+            {{-0.35, 0.0}, {0.03, 0.0}, {0.03, 0.0}, {0.95, 0.0}},
+            {{-0.45, 0.0}, {0.01, 0.0}, {0.01, 0.0}, {0.75, 0.0}}},
+    };
+    data.auxiliary_channels = {
+        siab::AuxiliaryChannelMetadata{0, 0, 1, 2, -1, "H0_l1_n2_m-1"}};
+    data.overlap_s = {{1.0, 0.0}, {0.1, 0.2}, {0.1, -0.2}, {1.5, 0.0}};
+    data.perturbations_ha = {
+        {{0.3, 0.0}, {0.1, 0.05}, {0.1, -0.05}, {-0.2, 0.0}}};
+    data.primitive_ao_overlap = {
+        {1.0, 0.0}, {0.2, 0.1}, {0.1, -0.1}, {0.9, 0.0}};
+    data.fixed_ao_grid_overlap = {
+        {1.0, 0.0}, {0.05, 0.0}, {0.05, 0.0}, {1.1, 0.0}};
+    data.frequency_ha = {0.2, 0.8};
+    data.frequency_weights_ha = {0.3, 0.7};
+    return data;
+}
+
 void write_canonical(const std::string& path,
                      const std::vector<siab::ReferenceRow>& rows = canonical_rows_reversed(),
                      const std::vector<Complex>& overlap_s = canonical_overlap_s(),
@@ -621,6 +653,65 @@ TEST(SternheimerSIABFixedAOWriter, RejectsIncompleteOrNonHermitianDataBeforeTouc
     EXPECT_THROW(siab::write_fixed_ao_v1(path, data, canonical_provenance()), std::invalid_argument);
     EXPECT_EQ(read_text(tmp), "sentinel");
 
+    std::remove(tmp.c_str());
+}
+
+TEST(SternheimerSIABPrimitiveGalerkinWriter, WritesCompleteVersionedSidecar)
+{
+    const std::string path = test_path("primitive_galerkin_canonical");
+    std::remove(path.c_str());
+    std::remove((path + ".tmp").c_str());
+
+    siab::write_primitive_galerkin_v1(
+        path,
+        canonical_primitive_galerkin_data(),
+        canonical_provenance());
+    const std::string text = read_text(path);
+
+    EXPECT_EQ(
+        section_body(text, "STERNHEIMER_GALERKIN_PRIMITIVE_HEADER"),
+        "format_version 1\nrepresentation bessel_primitive_uniform_grid_gamma\n"
+        "energy_unit Ha\nn_primitive 2\nn_fixed_ao 2\nn_blocks 1\n"
+        "n_spin 2\nn_auxiliary 1\nn_frequency 2\n");
+    EXPECT_EQ(data_line_count(section_body(text, "PRIMITIVE_BLOCKS")), 1);
+    EXPECT_EQ(data_line_count(section_body(text, "AUXILIARY_CHANNELS")), 1);
+    EXPECT_EQ(data_line_count(section_body(text, "FIXED_AO_OCCUPATIONS")), 4);
+    EXPECT_EQ(data_line_count(section_body(text, "OVERLAP_S")), 4);
+    EXPECT_EQ(data_line_count(section_body(text, "HAMILTONIAN_H")), 8);
+    EXPECT_EQ(data_line_count(section_body(text, "PERTURBATION_V")), 4);
+    EXPECT_EQ(data_line_count(section_body(text, "PRIMITIVE_AO_OVERLAP")), 4);
+    EXPECT_EQ(data_line_count(section_body(text, "FIXED_AO_GRID_OVERLAP")), 4);
+    EXPECT_EQ(
+        data_line_count(section_body(text, "FIXED_AO_GRID_HAMILTONIAN")),
+        8);
+    EXPECT_EQ(
+        section_body(text, "FREQUENCY_GRID"),
+        "# frequency_index frequency_ha weight_ha\n0 0.2 0.3\n1 0.8 0.7\n");
+    EXPECT_EQ(count_occurrences(text, "<PROVENANCE_JSON>"), 1);
+
+    std::remove(path.c_str());
+}
+
+TEST(SternheimerSIABPrimitiveGalerkinWriter, RejectsBadPrimitiveDimensions)
+{
+    const std::string path = test_path("primitive_galerkin_invalid");
+    const std::string tmp = path + ".tmp";
+    write_text(tmp, "sentinel");
+
+    siab::PrimitiveGalerkinData data = canonical_primitive_galerkin_data();
+    data.primitive_ao_overlap.pop_back();
+    EXPECT_THROW(
+        siab::write_primitive_galerkin_v1(path, data, canonical_provenance()),
+        std::invalid_argument);
+    EXPECT_EQ(read_text(tmp), "sentinel");
+
+    data = canonical_primitive_galerkin_data();
+    data.spins[0].fixed_ao_grid_hamiltonian_ha[1]
+        += Complex(0.0, 0.2);
+    EXPECT_THROW(
+        siab::write_primitive_galerkin_v1(path, data, canonical_provenance()),
+        std::invalid_argument);
+    EXPECT_EQ(read_text(tmp), "sentinel");
     std::remove(tmp.c_str());
 }
 

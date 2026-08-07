@@ -61,6 +61,29 @@ struct FixedAOData
     std::vector<double> frequency_weights_ha;
 };
 
+struct PrimitiveGalerkinSpinData
+{
+    int spin_index;
+    std::vector<double> fixed_ao_occupations;
+    std::vector<std::complex<double>> hamiltonian_ha;
+    std::vector<std::complex<double>> fixed_ao_grid_hamiltonian_ha;
+};
+
+struct PrimitiveGalerkinData
+{
+    int n_primitive;
+    int n_fixed_ao;
+    std::vector<PrimitiveBlock> blocks;
+    std::vector<PrimitiveGalerkinSpinData> spins;
+    std::vector<AuxiliaryChannelMetadata> auxiliary_channels;
+    std::vector<std::complex<double>> overlap_s;
+    std::vector<std::vector<std::complex<double>>> perturbations_ha;
+    std::vector<std::complex<double>> primitive_ao_overlap;
+    std::vector<std::complex<double>> fixed_ao_grid_overlap;
+    std::vector<double> frequency_ha;
+    std::vector<double> frequency_weights_ha;
+};
+
 // The eight fields below are required-core v1; Task 4 may append deterministic optional provenance fields.
 struct Provenance
 {

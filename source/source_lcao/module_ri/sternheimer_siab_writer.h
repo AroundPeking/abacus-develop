@@ -21,6 +21,10 @@ void write_v1(const std::string& path,
 
 void write_fixed_ao_v1(const std::string& path, const FixedAOData& data, const Provenance& provenance);
 
+void write_primitive_galerkin_v1(const std::string& path,
+                                 const PrimitiveGalerkinData& data,
+                                 const Provenance& provenance);
+
 } // namespace sternheimer_siab
 } // namespace module_ri
 
