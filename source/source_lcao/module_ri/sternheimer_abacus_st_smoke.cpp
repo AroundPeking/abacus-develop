@@ -777,6 +777,52 @@ std::vector<std::vector<double>> collect_channel_potentials(const std::vector<St
     return potentials;
 }
 
+std::string write_sternheimer_fixed_ao_sidecar(
+    const std::string& output_dir,
+    const UnitCell& ucell,
+    const std::vector<SternheimerABFGridChannel>& channels,
+    const SternheimerRPA::FrequencyGrid& frequency_grid,
+    const double pca_threshold,
+    const SternheimerABACUSFDGridData& grid_data,
+    const std::vector<SternheimerDeltaGridFunction>& sampled_ao_functions,
+    const std::vector<std::vector<double>>& potentials,
+    const SternheimerLCAOFixedAOMatrices& fixed_ao_matrices)
+{
+    std::vector<siab::AuxiliaryChannelMetadata> auxiliary_metadata;
+    auxiliary_metadata.reserve(channels.size());
+    for (const SternheimerABFGridChannel& channel: channels)
+    {
+        auxiliary_metadata.push_back(siab::AuxiliaryChannelMetadata{channel.channel_index,
+                                                                     channel.atom_index,
+                                                                     channel.angular_momentum,
+                                                                     channel.radial_index,
+                                                                     channel.magnetic_index,
+                                                                     channel.label});
+    }
+    std::vector<std::vector<std::complex<double>>> basis_values;
+    basis_values.reserve(sampled_ao_functions.size());
+    for (const SternheimerDeltaGridFunction& function: sampled_ao_functions)
+    {
+        basis_values.push_back(function.values);
+    }
+    const siab::FixedAOData fixed_ao_data
+        = siab::build_fixed_ao_data(fixed_ao_matrices.n_basis,
+                                    fixed_ao_matrices.overlap_s,
+                                    fixed_ao_matrices.spins,
+                                    auxiliary_metadata,
+                                    basis_values,
+                                    potentials,
+                                    frequency_grid.omega_ha,
+                                    frequency_grid.weights_ha,
+                                    grid_data.volume_element);
+    const siab::Provenance provenance
+        = make_siab_production_provenance(ucell, channels, frequency_grid, pca_threshold);
+    const std::string path = join_output_path(output_dir, "sternheimer_galerkin_fixed_ao.dat");
+    siab::write_fixed_ao_v1(path, fixed_ao_data, provenance);
+    GlobalV::ofs_running << " Sternheimer SIAB fixed-AO v1 output: " << path << std::endl;
+    return path;
+}
+
 std::vector<double> scale_potential(const std::vector<double>& potential, const double factor)
 {
     std::vector<double> scaled = potential;
@@ -1164,26 +1210,35 @@ void run_sternheimer_abacus_chi0_output_impl(const elecstate::Potential& potenti
                                              const ModulePW::PW_Basis_K* siab_pw_wfc,
                                              const Structure_Factor* siab_structure_factor)
 {
-    if (!PARAM.inp.out_sternheimer_librpa)
+    const SternheimerOutputMode output_mode
+        = select_sternheimer_output_mode(PARAM.inp.out_sternheimer_librpa,
+                                         PARAM.inp.out_sternheimer_siab,
+                                         PARAM.inp.out_sternheimer_galerkin);
+    if (!output_mode.run)
     {
         return;
     }
 
-    const bool use_frequency_mpi = PARAM.inp.sternheimer_frequency_mpi;
-    const bool write_siab = PARAM.inp.out_sternheimer_siab;
+    const bool use_frequency_mpi = output_mode.write_librpa && PARAM.inp.sternheimer_frequency_mpi;
+    const bool write_siab = output_mode.write_siab_targets;
+    const bool write_fixed_ao = output_mode.write_fixed_ao;
     if (!use_frequency_mpi && GlobalV::MY_RANK != 0)
     {
         return;
     }
 
-    const std::string status_path = chi0_status_path(output_dir);
+    const std::string status_path = output_mode.fixed_ao_only
+                                        ? join_output_path(output_dir, "STERNHEIMER_GALERKIN.dat")
+                                        : chi0_status_path(output_dir);
+    const std::string output_label = output_mode.fixed_ao_only ? "Sternheimer Galerkin output"
+                                                               : "Sternheimer chi0 output";
     std::ofstream out;
     if (GlobalV::MY_RANK == 0)
     {
         out.open(status_path.c_str(), std::ios::out | std::ios::trunc);
         if (!out)
         {
-            GlobalV::ofs_running << " Sternheimer chi0 output: failed to open " << status_path << std::endl;
+            GlobalV::ofs_running << ' ' << output_label << ": failed to open " << status_path << std::endl;
 #ifdef __MPI
             if (use_frequency_mpi && GlobalV::NPROC > 1)
             {
@@ -1193,28 +1248,32 @@ void run_sternheimer_abacus_chi0_output_impl(const elecstate::Potential& potenti
             return;
         }
         out << std::setprecision(16);
-        out << "# ABACUS Sternheimer chi0 output for LibRPA\n";
+        out << (output_mode.fixed_ao_only ? "# ABACUS fixed-AO Sternheimer Galerkin output\n"
+                                         : "# ABACUS Sternheimer chi0 output for LibRPA\n");
     }
 
     try
     {
-        reset_chi0_progress_file();
         const auto chi0_start_time = std::chrono::steady_clock::now();
-        append_chi0_progress_event("enter",
-                                   0,
-                                   -1,
-                                   -1,
-                                   -1,
-                                   0,
-                                   nullptr,
-                                   -1.0,
-                                   elapsed_seconds_since(chi0_start_time),
-                                   use_frequency_mpi ? "frequency_mpi=yes" : "frequency_mpi=no");
-        if (PARAM.inp.out_librpa_reader_version != 1)
+        if (output_mode.write_librpa)
+        {
+            reset_chi0_progress_file();
+            append_chi0_progress_event("enter",
+                                       0,
+                                       -1,
+                                       -1,
+                                       -1,
+                                       0,
+                                       nullptr,
+                                       -1.0,
+                                       elapsed_seconds_since(chi0_start_time),
+                                       use_frequency_mpi ? "frequency_mpi=yes" : "frequency_mpi=no");
+        }
+        if (output_mode.write_librpa && PARAM.inp.out_librpa_reader_version != 1)
         {
             throw std::runtime_error("out_sternheimer_librpa requires out_librpa_reader_version=1.");
         }
-        if (GlobalV::NPROC != 1 && !use_frequency_mpi)
+        if (output_mode.write_librpa && GlobalV::NPROC != 1 && !use_frequency_mpi)
         {
             throw std::runtime_error(
                 "Sternheimer chi0 output with multiple MPI ranks requires sternheimer_frequency_mpi=true.");
@@ -1234,13 +1293,14 @@ void run_sternheimer_abacus_chi0_output_impl(const elecstate::Potential& potenti
         {
             throw std::runtime_error("Sternheimer LCAO zero-order input is incomplete.");
         }
-        if (write_siab
-            && (!use_lcao_zero_order || fixed_ao_matrices == nullptr || siab_pw_wfc == nullptr
-                || siab_structure_factor == nullptr))
+        if (write_fixed_ao && (!use_lcao_zero_order || fixed_ao_matrices == nullptr))
+        {
+            throw std::runtime_error("Fixed-AO Sternheimer Galerkin output requires LCAO Delta-ST matrices.");
+        }
+        if (write_siab && (siab_pw_wfc == nullptr || siab_structure_factor == nullptr))
         {
             throw std::runtime_error(
-                "out_sternheimer_siab requires LCAO Delta-ST, complete fixed-AO matrices, the PW FFT basis, and the "
-                "structure factor.");
+                "out_sternheimer_siab requires the PW FFT basis and the structure factor.");
         }
 
         std::vector<int> response_spin_indices;
@@ -1258,7 +1318,7 @@ void run_sternheimer_abacus_chi0_output_impl(const elecstate::Potential& potenti
             validate_sternheimer_lcao_occupied_channels(*lcao_occupied_channels,
                                                         physical_spin_channel_count,
                                                         PARAM.globalv.nlocal);
-            if (write_siab)
+            if (write_fixed_ao)
             {
                 validate_sternheimer_lcao_fixed_ao_matrices(*fixed_ao_matrices,
                                                             physical_spin_channel_count,
@@ -1364,19 +1424,23 @@ void run_sternheimer_abacus_chi0_output_impl(const elecstate::Potential& potenti
                   : SternheimerRPA::generate_greenx_minimax_frequency_grid(nfreq,
                                                                            transition_window.emin_ha,
                                                                            transition_window.emax_ha);
-        append_chi0_progress_event("frequency_grid",
-                                   0,
-                                   -1,
-                                   -1,
-                                   -1,
-                                   0,
-                                   nullptr,
-                                   -1.0,
-                                   elapsed_seconds_since(chi0_start_time),
-                                   "rank_shift=" + std::to_string(frequency_rank_shift));
+        if (output_mode.write_librpa)
+        {
+            append_chi0_progress_event("frequency_grid",
+                                       0,
+                                       -1,
+                                       -1,
+                                       -1,
+                                       0,
+                                       nullptr,
+                                       -1.0,
+                                       elapsed_seconds_since(chi0_start_time),
+                                       "rank_shift=" + std::to_string(frequency_rank_shift));
+        }
 
+        const bool use_full_grid = use_frequency_mpi || write_fixed_ao;
         const SternheimerABACUSFDGridData grid_data
-            = use_frequency_mpi ? make_sternheimer_fd_full_grid(pw_basis) : make_sternheimer_fd_grid(pw_basis);
+            = use_full_grid ? make_sternheimer_fd_full_grid(pw_basis) : make_sternheimer_fd_grid(pw_basis);
         const std::vector<SternheimerABFGridChannel> channels
             = build_abfs_ccp_grid_channels(ucell, grid_data.grid, -1, pca_threshold, ccp_rmesh_times);
         if (channels.empty())
@@ -1385,16 +1449,19 @@ void run_sternheimer_abacus_chi0_output_impl(const elecstate::Potential& potenti
         }
 
         const int num_channels = static_cast<int>(channels.size());
-        append_chi0_progress_event("channels_ready",
-                                   0,
-                                   -1,
-                                   -1,
-                                   -1,
-                                   0,
-                                   nullptr,
-                                   -1.0,
-                                   elapsed_seconds_since(chi0_start_time),
-                                   "num_channels=" + std::to_string(num_channels));
+        if (output_mode.write_librpa)
+        {
+            append_chi0_progress_event("channels_ready",
+                                       0,
+                                       -1,
+                                       -1,
+                                       -1,
+                                       0,
+                                       nullptr,
+                                       -1.0,
+                                       elapsed_seconds_since(chi0_start_time),
+                                       "num_channels=" + std::to_string(num_channels));
+        }
 
         SIABPrimitiveExportData siab_primitives;
         if (write_siab)
@@ -1404,16 +1471,19 @@ void run_sternheimer_abacus_chi0_output_impl(const elecstate::Potential& potenti
                                                                *siab_structure_factor,
                                                                ucell,
                                                                grid_data.volume_element);
-            append_chi0_progress_event("siab_primitives_ready",
-                                       0,
-                                       -1,
-                                       -1,
-                                       -1,
-                                       0,
-                                       nullptr,
-                                       -1.0,
-                                       elapsed_seconds_since(chi0_start_time),
-                                       "nprimitive=" + std::to_string(siab_primitives.full_values.size()));
+            if (output_mode.write_librpa)
+            {
+                append_chi0_progress_event("siab_primitives_ready",
+                                           0,
+                                           -1,
+                                           -1,
+                                           -1,
+                                           0,
+                                           nullptr,
+                                           -1.0,
+                                           elapsed_seconds_since(chi0_start_time),
+                                           "nprimitive=" + std::to_string(siab_primitives.full_values.size()));
+            }
         }
         if (GlobalV::MY_RANK == 0)
         {
@@ -1434,9 +1504,6 @@ void run_sternheimer_abacus_chi0_output_impl(const elecstate::Potential& potenti
         }
 
         const std::vector<std::vector<double>> potentials = collect_channel_potentials(channels);
-        // ABFS Coulomb potentials are in Ha units; the FD Hamiltonian and omega are in Ry.
-        // Keep Ha potentials for M=V chi0 V output, but use Ry perturbations in the linear equation.
-        const std::vector<std::vector<double>> perturbations_ry = scale_potentials(potentials, kHartreeToRydberg);
 
         std::vector<SternheimerDeltaGridFunction> sampled_ao_functions;
         if (use_lcao_zero_order)
@@ -1447,6 +1514,48 @@ void run_sternheimer_abacus_chi0_output_impl(const elecstate::Potential& potenti
                 throw std::runtime_error("Sternheimer LCAO zero-order input found no sampled AO functions.");
             }
         }
+
+        std::string fixed_ao_path;
+        if (write_fixed_ao && GlobalV::MY_RANK == 0)
+        {
+            fixed_ao_path = write_sternheimer_fixed_ao_sidecar(output_dir,
+                                                               ucell,
+                                                               channels,
+                                                               frequency_grid,
+                                                               pca_threshold,
+                                                               grid_data,
+                                                               sampled_ao_functions,
+                                                               potentials,
+                                                               *fixed_ao_matrices);
+        }
+        if (output_mode.fixed_ao_only)
+        {
+            if (GlobalV::MY_RANK == 0)
+            {
+                out << "status success\n";
+                out << "format v1\n";
+                out << "fixed_ao_file " << fixed_ao_path << '\n';
+                out << "grid " << grid_data.grid.nx << ' ' << grid_data.grid.ny << ' ' << grid_data.grid.nz
+                    << " size " << grid_data.grid.size() << " dV " << grid_data.volume_element << '\n';
+                out << "nfreq " << nfreq << '\n';
+                out << "frequency_grid_source " << frequency_grid_source << '\n';
+                if (use_frequency_grid_file)
+                {
+                    out << "frequency_grid_file " << frequency_grid_file << '\n';
+                }
+                out << "pca_threshold " << pca_threshold << '\n';
+                out << "ccp_rmesh_times " << ccp_rmesh_times << '\n';
+                out << "abfs_channels " << num_channels << '\n';
+                out << "linear_solve skipped\n";
+                out << "solved_equations 0\n";
+                GlobalV::ofs_running << " Sternheimer Galerkin status: " << status_path << std::endl;
+            }
+            return;
+        }
+
+        // ABFS Coulomb potentials are in Ha units; the FD Hamiltonian and omega are in Ry.
+        // Keep Ha potentials for M=V chi0 V output, but use Ry perturbations in the linear equation.
+        const std::vector<std::vector<double>> perturbations_ry = scale_potentials(potentials, kHartreeToRydberg);
 
         SternheimerRPA::SolverOptions solver_options;
         solver_options.max_iter = solver_max_iter;
@@ -1853,38 +1962,6 @@ void run_sternheimer_abacus_chi0_output_impl(const elecstate::Potential& potenti
                                siab_primitives.overlap_s,
                                provenance);
                 GlobalV::ofs_running << " Sternheimer SIAB v1 output: " << siab_path << std::endl;
-
-                std::vector<siab::AuxiliaryChannelMetadata> auxiliary_metadata;
-                auxiliary_metadata.reserve(channels.size());
-                for (const SternheimerABFGridChannel& channel: channels)
-                {
-                    auxiliary_metadata.push_back(siab::AuxiliaryChannelMetadata{channel.channel_index,
-                                                                                 channel.atom_index,
-                                                                                 channel.angular_momentum,
-                                                                                 channel.radial_index,
-                                                                                 channel.magnetic_index,
-                                                                                 channel.label});
-                }
-                std::vector<std::vector<std::complex<double>>> basis_values;
-                basis_values.reserve(sampled_ao_functions.size());
-                for (const SternheimerDeltaGridFunction& function: sampled_ao_functions)
-                {
-                    basis_values.push_back(function.values);
-                }
-                const siab::FixedAOData fixed_ao_data
-                    = siab::build_fixed_ao_data(fixed_ao_matrices->n_basis,
-                                                fixed_ao_matrices->overlap_s,
-                                                fixed_ao_matrices->spins,
-                                                auxiliary_metadata,
-                                                basis_values,
-                                                potentials,
-                                                frequency_grid.omega_ha,
-                                                frequency_grid.weights_ha,
-                                                grid_data.volume_element);
-                const std::string fixed_ao_path
-                    = join_output_path(output_dir, "sternheimer_galerkin_fixed_ao.dat");
-                siab::write_fixed_ao_v1(fixed_ao_path, fixed_ao_data, provenance);
-                GlobalV::ofs_running << " Sternheimer SIAB fixed-AO v1 output: " << fixed_ao_path << std::endl;
             }
         }
 
@@ -2076,8 +2153,8 @@ void run_sternheimer_abacus_chi0_output_impl(const elecstate::Potential& potenti
             out << "status failed\n";
             out << "reason " << error.what() << '\n';
         }
-        GlobalV::ofs_running << " Sternheimer chi0 output failed: " << error.what() << std::endl;
-        GlobalV::ofs_running << " Sternheimer chi0 status: " << status_path << std::endl;
+        GlobalV::ofs_running << ' ' << output_label << " failed: " << error.what() << std::endl;
+        GlobalV::ofs_running << ' ' << output_label << " status: " << status_path << std::endl;
 #ifdef __MPI
         if (use_frequency_mpi && GlobalV::NPROC > 1)
         {

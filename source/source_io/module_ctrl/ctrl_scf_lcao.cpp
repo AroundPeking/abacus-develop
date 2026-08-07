@@ -137,7 +137,7 @@ ModuleRI::SternheimerLCAOFixedAOMatrices gather_sternheimer_lcao_fixed_ao_matric
     if (elec_state.ekb.nc != basis_size || elec_state.wg.nc != basis_size)
     {
         throw std::invalid_argument(
-            "out_sternheimer_siab fixed-AO output requires nbands=nlocal for the all-bands SOS gate.");
+            "Sternheimer fixed-AO output requires nbands=nlocal for the all-bands SOS gate.");
     }
 
     ModuleRI::SternheimerLCAOFixedAOMatrices result;
@@ -565,7 +565,11 @@ void ModuleIO::ctrl_scf_lcao(UnitCell& ucell,
         rpa_lri_double.postSCF(ucell, MPI_COMM_WORLD, *dm, pelec, kv, orb, pv, *psi);
     }
 
-    if (inp.out_sternheimer_librpa)
+    const ModuleRI::SternheimerOutputMode sternheimer_output_mode
+        = ModuleRI::select_sternheimer_output_mode(inp.out_sternheimer_librpa,
+                                                   inp.out_sternheimer_siab,
+                                                   inp.out_sternheimer_galerkin);
+    if (sternheimer_output_mode.run)
     {
         if (pelec == nullptr || pelec->pot == nullptr || pw_rho == nullptr || psi == nullptr)
         {
@@ -583,14 +587,14 @@ void ModuleIO::ctrl_scf_lcao(UnitCell& ucell,
                                                          reduced_kpoints);
         if (ModuleRI::sternheimer_uses_lcao_zero_order(inp.sternheimer_delta))
         {
-            if (inp.out_sternheimer_siab && pw_wfc == nullptr)
+            if (sternheimer_output_mode.write_siab_targets && pw_wfc == nullptr)
             {
                 ModuleBase::WARNING_QUIT("ctrl_scf_lcao", "Sternheimer SIAB output requires the PW FFT basis.");
             }
             const auto occupied_channels
                 = gather_sternheimer_lcao_occupied_channels(*pelec, pv, *psi);
             ModuleRI::SternheimerLCAOFixedAOMatrices fixed_ao_matrices;
-            if (inp.out_sternheimer_siab)
+            if (sternheimer_output_mode.write_fixed_ao)
             {
                 fixed_ao_matrices = gather_sternheimer_lcao_fixed_ao_matrices(*p_hamilt, *pelec, kv, pv);
             }
