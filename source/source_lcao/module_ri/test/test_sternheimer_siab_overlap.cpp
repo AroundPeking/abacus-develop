@@ -1,4 +1,5 @@
 #include "source_lcao/module_ri/sternheimer_siab_data.h"
+#include "source_lcao/module_ri/sternheimer_fd_hamiltonian.h"
 #include "source_lcao/module_ri/sternheimer_siab_overlap.h"
 
 #include <complex>
@@ -145,6 +146,60 @@ TEST(SternheimerSIABOverlap, BuildsComplexHermitianPerturbationMatricesWithGridV
     {
         EXPECT_EQ(value, Complex(0.0, 0.0));
     }
+}
+
+TEST(SternheimerSIABOverlap, BuildsPrimitiveHamiltonianMatrixWithGridVolume)
+{
+    ModuleRI::SternheimerFDHamiltonian::Grid grid;
+    grid.nx = 2;
+    grid.ny = 1;
+    grid.nz = 1;
+    grid.hx = 1.0;
+    grid.hy = 1.0;
+    grid.hz = 1.0;
+    const ModuleRI::SternheimerFDHamiltonian hamiltonian(
+        grid,
+        {2.0, -1.0},
+        0.0);
+    const PrimitiveGrid basis_functions = {
+        {{1.0, 0.0}, {0.0, 1.0}},
+        {{1.0, 1.0}, {2.0, 0.0}},
+    };
+
+    const auto matrix
+        = siab::hamiltonian_matrix(basis_functions, hamiltonian, 0.5);
+
+    ASSERT_EQ(matrix.size(), 4);
+    EXPECT_NEAR(matrix[0].real(), 0.5, 1.0e-14);
+    EXPECT_NEAR(matrix[0].imag(), 0.0, 1.0e-14);
+    EXPECT_NEAR(matrix[1].real(), 1.0, 1.0e-14);
+    EXPECT_NEAR(matrix[1].imag(), 2.0, 1.0e-14);
+    EXPECT_NEAR(matrix[2].real(), 1.0, 1.0e-14);
+    EXPECT_NEAR(matrix[2].imag(), -2.0, 1.0e-14);
+    EXPECT_NEAR(matrix[3].real(), 0.0, 1.0e-14);
+    EXPECT_NEAR(matrix[3].imag(), 0.0, 1.0e-14);
+}
+
+TEST(SternheimerSIABOverlap, RejectsPrimitiveHamiltonianGridMismatch)
+{
+    ModuleRI::SternheimerFDHamiltonian::Grid grid;
+    grid.nx = 2;
+    grid.ny = 1;
+    grid.nz = 1;
+    grid.hx = 1.0;
+    grid.hy = 1.0;
+    grid.hz = 1.0;
+    const ModuleRI::SternheimerFDHamiltonian hamiltonian(
+        grid,
+        {0.0, 0.0},
+        0.0);
+
+    EXPECT_THROW(
+        siab::hamiltonian_matrix({}, hamiltonian, 0.5),
+        std::invalid_argument);
+    EXPECT_THROW(
+        siab::hamiltonian_matrix(primitives, hamiltonian, 0.5),
+        std::invalid_argument);
 }
 
 TEST(SternheimerSIABOverlap, RejectsInvalidPerturbationMatrixInputs)

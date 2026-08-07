@@ -87,7 +87,10 @@ AddTest(
 AddTest(
   TARGET MODULE_RI_sternheimer_siab_overlap_test
   LIBS ${math_libs}
-  SOURCES test_sternheimer_siab_overlap.cpp ../sternheimer_siab_overlap.cpp
+  SOURCES test_sternheimer_siab_overlap.cpp
+          ../sternheimer_siab_overlap.cpp
+          ../sternheimer_fd_hamiltonian.cpp
+          ../sternheimer_fd_nonlocal_projector.cpp
 )
 AddTest(
   TARGET MODULE_RI_sternheimer_siab_fixed_ao_test

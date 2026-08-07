@@ -155,5 +155,37 @@ std::vector<std::vector<Complex>> perturbation_matrices(const PrimitiveGrid& bas
     return result;
 }
 
+std::vector<Complex> hamiltonian_matrix(
+    const PrimitiveGrid& basis_functions,
+    const ModuleRI::SternheimerFDHamiltonian& hamiltonian,
+    const double delta_omega)
+{
+    validate_delta_omega(delta_omega);
+    const std::size_t grid_size = validate_primitives(basis_functions);
+    if (grid_size != static_cast<std::size_t>(hamiltonian.grid().size()))
+    {
+        throw std::invalid_argument(
+            "Sternheimer SIAB Hamiltonian and basis grid sizes differ.");
+    }
+
+    const std::size_t n_basis = basis_functions.size();
+    std::vector<Complex> result(n_basis * n_basis, Complex(0.0, 0.0));
+    ModuleRI::SternheimerFDHamiltonian::Vector h_basis;
+    for (std::size_t column = 0; column != n_basis; ++column)
+    {
+        hamiltonian.apply(basis_functions[column], h_basis);
+        for (std::size_t row = 0; row <= column; ++row)
+        {
+            const Complex value = dot(basis_functions[row], h_basis, delta_omega);
+            result[row * n_basis + column] = value;
+            if (row != column)
+            {
+                result[column * n_basis + row] = std::conj(value);
+            }
+        }
+    }
+    return result;
+}
+
 } // namespace sternheimer_siab
 } // namespace module_ri
