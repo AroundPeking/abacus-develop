@@ -3,6 +3,7 @@
 #include "source_base/matrix.h"
 #include "source_base/matrix3.h"
 #include "source_basis/module_pw/pw_basis_k.h"
+#include "source_basis/module_pw/pw_basis_k_big.h"
 #include "source_cell/unitcell.h"
 #include "source_io/module_bessel/bessel_basis.h"
 #include "source_io/module_bessel/numerical_basis.h"
@@ -361,6 +362,43 @@ TEST_F(SternheimerSIABPrimitivesTest, FullComplexReciprocalBpsiMatchesGridOverla
     const double delta_omega = ucell.omega / static_cast<double>(full_pw.nxyz);
     const Complex grid_overlap = inner_product(odd_l_block.values[0], grid_psi, delta_omega);
     expect_complex_near(grid_overlap, reciprocal_overlap);
+}
+
+TEST_F(SternheimerSIABPrimitivesTest, BuildsCompleteGammaBasisForOddUniformGrid)
+{
+    ModulePW::PW_Basis_K_Big incomplete_grid;
+#ifdef __MPI
+    int rank = 0;
+    int size = 1;
+    MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+    MPI_Comm_size(MPI_COMM_WORLD, &size);
+    incomplete_grid.initmpi(size, rank, MPI_COMM_WORLD);
+#endif
+    incomplete_grid.setbxyz(0, 0, 0);
+    incomplete_grid.initgrids(ucell.lat0, ucell.latvec, 45, 45, 45);
+
+    const auto complete = Numerical_Basis::siab_complete_gamma_pw_basis(
+        incomplete_grid, ecut_ry);
+
+    ASSERT_NE(complete, nullptr);
+    EXPECT_TRUE(complete->gamma_only);
+    EXPECT_EQ(complete->nx, 45);
+    EXPECT_EQ(complete->ny, 45);
+    EXPECT_EQ(complete->nz, 45);
+    EXPECT_EQ(complete->nrxx, complete->nxy * complete->nplane);
+#ifdef __MPI
+    int covered_planes = complete->nplane;
+    MPI_Allreduce(MPI_IN_PLACE,
+                  &covered_planes,
+                  1,
+                  MPI_INT,
+                  MPI_SUM,
+                  MPI_COMM_WORLD);
+    EXPECT_EQ(covered_planes, complete->nz);
+#else
+    EXPECT_EQ(complete->startz_current, 0);
+    EXPECT_EQ(complete->nplane, complete->nz);
+#endif
 }
 
 TEST_F(SternheimerSIABPrimitivesTest, ReinitializesWhenParametersOrCellBasisShapeChange)

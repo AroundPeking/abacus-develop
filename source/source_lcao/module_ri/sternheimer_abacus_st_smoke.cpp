@@ -535,44 +535,48 @@ struct SIABPrimitiveExportData
 };
 
 SIABPrimitiveExportData build_siab_primitive_export_data(const ModulePW::PW_Basis& response_pw_basis,
-                                                         const ModulePW::PW_Basis_K& primitive_pw_basis,
                                                          const Structure_Factor& structure_factor,
                                                          const UnitCell& ucell,
                                                          const double volume_element)
 {
     siab::require_single_primitive_rcut(PARAM.inp.bessel_nao_rcuts);
-    if (primitive_pw_basis.nks <= 0)
+    const Numerical_Basis::SIABPrimitiveParameters parameters
+        = Numerical_Basis::siab_parameters_from_input(0);
+    std::unique_ptr<ModulePW::PW_Basis_K> primitive_pw_basis
+        = Numerical_Basis::siab_complete_gamma_pw_basis(
+            response_pw_basis, parameters.ecut_ry);
+    if (primitive_pw_basis->nks <= 0)
     {
         throw std::runtime_error("Sternheimer SIAB primitive output requires a Gamma-point PW basis.");
     }
-#ifdef __MPI
-    if (primitive_pw_basis.poolnproc != GlobalV::NPROC)
-    {
-        throw std::runtime_error(
-            "Sternheimer SIAB primitive assembly requires the PW FFT pool to contain every frequency MPI rank.");
-    }
-#endif
-    if (primitive_pw_basis.nx != response_pw_basis.nx || primitive_pw_basis.ny != response_pw_basis.ny
-        || primitive_pw_basis.nz != response_pw_basis.nz || primitive_pw_basis.nxy != response_pw_basis.nxy
-        || primitive_pw_basis.nxyz != response_pw_basis.nxyz)
+    if (primitive_pw_basis->nx != response_pw_basis.nx
+        || primitive_pw_basis->ny != response_pw_basis.ny
+        || primitive_pw_basis->nz != response_pw_basis.nz
+        || primitive_pw_basis->nxy != response_pw_basis.nxy
+        || primitive_pw_basis->nxyz != response_pw_basis.nxyz)
     {
         throw std::runtime_error(
             "Sternheimer SIAB primitive and response PW FFT grid dimensions must match exactly.");
     }
+    if (primitive_pw_basis->startz_current != 0
+        || primitive_pw_basis->nplane != primitive_pw_basis->nz
+        || primitive_pw_basis->nrxx != primitive_pw_basis->nxyz)
+    {
+        throw std::runtime_error(
+            "Single-rank Sternheimer SIAB primitive basis must cover the complete uniform grid.");
+    }
 
-    const Numerical_Basis::SIABPrimitiveParameters parameters
-        = Numerical_Basis::siab_parameters_from_input(0);
     Numerical_Basis numerical_basis;
-    const auto local_blocks
-        = numerical_basis.siab_primitive_grid_values(0, &primitive_pw_basis, structure_factor, ucell, parameters);
+    auto local_blocks
+        = numerical_basis.siab_primitive_grid_values(
+            0, primitive_pw_basis.get(), structure_factor, ucell, parameters);
     if (local_blocks.empty())
     {
         throw std::runtime_error("Sternheimer SIAB primitive construction returned no blocks.");
     }
 
     SIABPrimitiveExportData result;
-    std::vector<std::vector<std::complex<double>>> local_values;
-    for (const auto& block: local_blocks)
+    for (auto& block: local_blocks)
     {
         siab::PrimitiveBlock output_block;
         output_block.element = block.element;
@@ -582,34 +586,12 @@ SIABPrimitiveExportData build_siab_primitive_export_data(const ModulePW::PW_Basi
         output_block.n_primitive = block.n_primitive;
         output_block.offset = block.offset;
         result.blocks.push_back(std::move(output_block));
-        for (const auto& primitive: block.values)
+        for (auto& primitive: block.values)
         {
-            local_values.push_back(primitive);
+            result.full_values.push_back(std::move(primitive));
         }
     }
-
-    // Frequency-MPI replicates each complete response Y on its owner, while Task 2 FFT
-    // primitives remain PW-z slabs.  Gather the primitive slabs once, preserving
-    // [ixy][startz+iz] ordering.  Never Allreduce Y/B overlaps: doing so would multiply
-    // replicated full-grid rows, while integrating only the owner slab would omit planes.
-#ifdef __MPI
-    result.full_values = siab::allgather_full_primitive_grids(local_values,
-                                                              primitive_pw_basis.nxy,
-                                                              primitive_pw_basis.nz,
-                                                              primitive_pw_basis.startz_current,
-                                                              primitive_pw_basis.nplane,
-                                                              primitive_pw_basis.pool_world);
-#else
-    result.full_values = siab::allgather_full_primitive_grids(local_values,
-                                                              primitive_pw_basis.nxy,
-                                                              primitive_pw_basis.nz,
-                                                              primitive_pw_basis.startz_current,
-                                                              primitive_pw_basis.nplane);
-#endif
-    if (GlobalV::MY_RANK == 0)
-    {
-        result.overlap_s = siab::overlap_s(result.full_values, volume_element);
-    }
+    result.overlap_s = siab::overlap_s(result.full_values, volume_element);
     return result;
 }
 
@@ -1353,11 +1335,16 @@ void run_sternheimer_abacus_chi0_output_impl(const elecstate::Potential& potenti
         {
             throw std::runtime_error("Fixed-AO Sternheimer Galerkin output requires LCAO Delta-ST matrices.");
         }
-        if ((write_siab || write_primitive)
+        if (write_siab
             && (siab_pw_wfc == nullptr || siab_structure_factor == nullptr))
         {
             throw std::runtime_error(
-                "Sternheimer SIAB primitive output requires the PW FFT basis and the structure factor.");
+                "Sternheimer SIAB target output requires the PW FFT basis and the structure factor.");
+        }
+        if (write_primitive && siab_structure_factor == nullptr)
+        {
+            throw std::runtime_error(
+                "Sternheimer SIAB primitive output requires the structure factor.");
         }
         if (write_primitive && GlobalV::NPROC != 1)
         {
@@ -1529,7 +1516,6 @@ void run_sternheimer_abacus_chi0_output_impl(const elecstate::Potential& potenti
         if (write_siab || write_primitive)
         {
             siab_primitives = build_siab_primitive_export_data(pw_basis,
-                                                               *siab_pw_wfc,
                                                                *siab_structure_factor,
                                                                ucell,
                                                                grid_data.volume_element);

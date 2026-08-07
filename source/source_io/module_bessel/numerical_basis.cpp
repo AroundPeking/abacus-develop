@@ -52,6 +52,40 @@ Numerical_Basis::SIABPrimitiveParameters Numerical_Basis::siab_parameters_from_i
     };
 }
 
+std::unique_ptr<ModulePW::PW_Basis_K> Numerical_Basis::siab_complete_gamma_pw_basis(
+    const ModulePW::PW_Basis& grid_basis,
+    const double primitive_ecut_ry)
+{
+    if (grid_basis.nx <= 0 || grid_basis.ny <= 0 || grid_basis.nz <= 0
+        || !std::isfinite(primitive_ecut_ry) || primitive_ecut_ry <= 0.0)
+    {
+        throw std::invalid_argument(
+            "SIAB complete Gamma PW basis requires a positive grid and cutoff");
+    }
+
+    std::unique_ptr<ModulePW::PW_Basis_K> result(new ModulePW::PW_Basis_K());
+#ifdef __MPI
+    result->initmpi(grid_basis.poolnproc,
+                    grid_basis.poolrank,
+                    grid_basis.pool_world);
+#endif
+    result->initgrids(grid_basis.lat0,
+                      grid_basis.latvec,
+                      grid_basis.nx,
+                      grid_basis.ny,
+                      grid_basis.nz);
+    const ModuleBase::Vector3<double> gamma(0.0, 0.0, 0.0);
+    result->initparameters(true,
+                           primitive_ecut_ry,
+                           1,
+                           &gamma,
+                           2,
+                           true);
+    result->setuptransform();
+    result->collect_local_pw();
+    return result;
+}
+
 void Numerical_Basis::initialize_siab_basis(const UnitCell& ucell,
                                             const SIABPrimitiveParameters& parameters)
 {

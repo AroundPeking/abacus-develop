@@ -6,6 +6,7 @@
 #ifndef NUMERICAL_BASIS_H
 #define NUMERICAL_BASIS_H
 #include <complex>
+#include <memory>
 #include <string>
 #include <vector>
 
@@ -62,6 +63,11 @@ class Numerical_Basis
 
     /// Read the numerical-Bessel settings used by the existing spillage path.
     static SIABPrimitiveParameters siab_parameters_from_input(const int rcut_index);
+
+    /// Build a Gamma PW basis whose distributed slabs cover the complete uniform grid.
+    static std::unique_ptr<ModulePW::PW_Basis_K> siab_complete_gamma_pw_basis(
+        const ModulePW::PW_Basis& grid_basis,
+        double primitive_ecut_ry);
 
     /// Build rank-local, physically normalized SIAB primitives on the PW FFT grid.
     std::vector<SIABPrimitiveGridBlock> siab_primitive_grid_values(
