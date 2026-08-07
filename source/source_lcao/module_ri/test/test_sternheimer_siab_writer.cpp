@@ -707,6 +707,8 @@ TEST(SternheimerGalerkinInput, RegisteredCheckAllowsIndependentFixedAOOutput)
 
     Parameter parameter;
     Input_para& input = const_cast<Input_para&>(parameter.inp);
+    EXPECT_FALSE(input.out_sternheimer_galerkin);
+    input.out_sternheimer_galerkin = true;
     input.basis_type = "lcao";
     input.sternheimer_delta = true;
     input.out_sternheimer_librpa = false;

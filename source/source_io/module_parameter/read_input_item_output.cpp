@@ -864,6 +864,29 @@ If EXX(exact exchange) is calculated (i.e. dft_fuctional==hse/hf/pbe0/scan0 or r
         this->add_item(item);
     }
     {
+        Input_Item item("out_sternheimer_galerkin");
+        item.annotation = "true: output fixed-AO Sternheimer Galerkin matrices before response solves; false: default";
+        item.category = "Output information";
+        item.type = "Boolean";
+        item.description = "Write the fixed-AO H/S/V Sternheimer Galerkin sidecar without requiring LibRPA chi0 or "
+                           "SIAB first-order-wavefunction output. The fixed-only path returns before linear solves.";
+        item.default_value = "False";
+        item.unit = "";
+        item.availability = "basis_type=lcao with sternheimer_delta=True.";
+        read_sync_bool(input.out_sternheimer_galerkin);
+        item.check_value = [](const Input_Item& item, const Parameter& para) {
+            if (para.input.out_sternheimer_galerkin && para.input.basis_type != "lcao")
+            {
+                ModuleBase::WARNING_QUIT("ReadInput", item.label + " requires basis_type=lcao.");
+            }
+            if (para.input.out_sternheimer_galerkin && !para.input.sternheimer_delta)
+            {
+                ModuleBase::WARNING_QUIT("ReadInput", item.label + " currently requires sternheimer_delta True.");
+            }
+        };
+        this->add_item(item);
+    }
+    {
         Input_Item item("sternheimer_nfreq");
         item.annotation = "Number of minimax imaginary-frequency points for Sternheimer chi0 output";
         item.category = "Output information";
