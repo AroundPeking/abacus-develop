@@ -32,6 +32,35 @@ struct ReferenceRow
     int frequency_index;
 };
 
+struct AuxiliaryChannelMetadata
+{
+    int channel_index;
+    int atom_index;
+    int angular_momentum;
+    int radial_index;
+    int magnetic_index;
+    std::string label;
+};
+
+struct FixedAOSpinData
+{
+    int spin_index;
+    std::vector<double> eigenvalues_ha;
+    std::vector<double> occupations;
+    std::vector<std::complex<double>> hamiltonian_ha;
+};
+
+struct FixedAOData
+{
+    int n_basis;
+    std::vector<FixedAOSpinData> spins;
+    std::vector<AuxiliaryChannelMetadata> auxiliary_channels;
+    std::vector<std::complex<double>> overlap_s;
+    std::vector<std::vector<std::complex<double>>> perturbations_ha;
+    std::vector<double> frequency_ha;
+    std::vector<double> frequency_weights_ha;
+};
+
 // The eight fields below are required-core v1; Task 4 may append deterministic optional provenance fields.
 struct Provenance
 {

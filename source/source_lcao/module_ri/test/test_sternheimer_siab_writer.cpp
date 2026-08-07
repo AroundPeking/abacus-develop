@@ -187,6 +187,28 @@ siab::Provenance canonical_provenance()
     return provenance;
 }
 
+siab::FixedAOData canonical_fixed_ao_data()
+{
+    siab::FixedAOData data;
+    data.n_basis = 2;
+    data.spins = {
+        siab::FixedAOSpinData{0,
+                             {-0.6, 0.8},
+                             {1.0, 0.0},
+                             {{-0.5, 0.0}, {0.0, 0.02}, {0.0, -0.02}, {0.7, 0.0}}},
+        siab::FixedAOSpinData{1,
+                             {-0.55, 0.85},
+                             {1.0, 0.0},
+                             {{-0.45, 0.0}, {0.01, 0.0}, {0.01, 0.0}, {0.75, 0.0}}},
+    };
+    data.auxiliary_channels = {siab::AuxiliaryChannelMetadata{0, 0, 1, 2, -1, "H0_l1_n2_m-1"}};
+    data.overlap_s = {{1.0, 0.0}, {0.1, 0.2}, {0.1, -0.2}, {1.5, 0.0}};
+    data.perturbations_ha = {{{0.3, 0.0}, {0.1, 0.05}, {0.1, -0.05}, {-0.2, 0.0}}};
+    data.frequency_ha = {0.2, 0.8};
+    data.frequency_weights_ha = {0.3, 0.7};
+    return data;
+}
+
 void write_canonical(const std::string& path,
                      const std::vector<siab::ReferenceRow>& rows = canonical_rows_reversed(),
                      const std::vector<Complex>& overlap_s = canonical_overlap_s(),
@@ -535,6 +557,71 @@ TEST(SternheimerSIABWriter, AppendsCompleteTask4ProvenanceDeterministically)
                   "\"sternheimer_nfreq\":2}"),
               std::string::npos);
     std::remove(path.c_str());
+}
+
+TEST(SternheimerSIABFixedAOWriter, WritesVersionedDeterministicSidecar)
+{
+    const std::string path = test_path("fixed_ao_canonical");
+    std::remove(path.c_str());
+    std::remove((path + ".tmp").c_str());
+
+    siab::write_fixed_ao_v1(path, canonical_fixed_ao_data(), canonical_provenance());
+    const std::string text = read_text(path);
+
+    EXPECT_EQ(section_body(text, "STERNHEIMER_GALERKIN_HEADER"),
+              "format_version 1\nrepresentation fixed_lcao_gamma\nenergy_unit Ha\nn_basis 2\nn_spin 2\n"
+              "n_auxiliary 1\nn_frequency 2\n");
+    EXPECT_EQ(section_body(text, "AUXILIARY_CHANNELS"),
+              "# channel_index atom_index l radial_index m label\n0 0 1 2 -1 H0_l1_n2_m-1\n");
+    EXPECT_EQ(section_body(text, "SPIN_METADATA"),
+              "# spin_index state_index eigenvalue_ha occupation\n0 0 -0.6 1.0\n0 1 0.8 0.0\n"
+              "1 0 -0.55 1.0\n1 1 0.85 0.0\n");
+    EXPECT_EQ(data_line_count(section_body(text, "OVERLAP_S")), 4);
+    EXPECT_EQ(data_line_count(section_body(text, "HAMILTONIAN_H")), 8);
+    EXPECT_EQ(data_line_count(section_body(text, "PERTURBATION_V")), 4);
+    EXPECT_EQ(section_body(text, "FREQUENCY_GRID"),
+              "# frequency_index frequency_ha weight_ha\n0 0.2 0.3\n1 0.8 0.7\n");
+    EXPECT_EQ(count_occurrences(text, "<PROVENANCE_JSON>"), 1);
+
+    const std::string first = text;
+    siab::write_fixed_ao_v1(path, canonical_fixed_ao_data(), canonical_provenance());
+    EXPECT_EQ(read_text(path), first);
+    EXPECT_FALSE(std::ifstream((path + ".tmp").c_str()).good());
+    std::remove(path.c_str());
+}
+
+TEST(SternheimerSIABFixedAOWriter, RejectsIncompleteOrNonHermitianDataBeforeTouchingTmp)
+{
+    const std::string path = test_path("fixed_ao_invalid");
+    const std::string tmp = path + ".tmp";
+    write_text(tmp, "sentinel");
+
+    siab::FixedAOData data = canonical_fixed_ao_data();
+    data.spins[0].hamiltonian_ha.pop_back();
+    EXPECT_THROW(siab::write_fixed_ao_v1(path, data, canonical_provenance()), std::invalid_argument);
+    EXPECT_EQ(read_text(tmp), "sentinel");
+
+    data = canonical_fixed_ao_data();
+    data.overlap_s[1] += Complex(0.0, 0.1);
+    EXPECT_THROW(siab::write_fixed_ao_v1(path, data, canonical_provenance()), std::invalid_argument);
+    EXPECT_EQ(read_text(tmp), "sentinel");
+
+    data = canonical_fixed_ao_data();
+    data.perturbations_ha[0][0] = Complex(std::numeric_limits<double>::infinity(), 0.0);
+    EXPECT_THROW(siab::write_fixed_ao_v1(path, data, canonical_provenance()), std::invalid_argument);
+    EXPECT_EQ(read_text(tmp), "sentinel");
+
+    data = canonical_fixed_ao_data();
+    data.frequency_ha[0] = 0.0;
+    EXPECT_THROW(siab::write_fixed_ao_v1(path, data, canonical_provenance()), std::invalid_argument);
+    EXPECT_EQ(read_text(tmp), "sentinel");
+
+    data = canonical_fixed_ao_data();
+    data.auxiliary_channels[0].channel_index = 1;
+    EXPECT_THROW(siab::write_fixed_ao_v1(path, data, canonical_provenance()), std::invalid_argument);
+    EXPECT_EQ(read_text(tmp), "sentinel");
+
+    std::remove(tmp.c_str());
 }
 
 TEST(SternheimerSIABWriter, RejectsPartialTask4ProvenanceBeforeTouchingTmp)
