@@ -322,6 +322,133 @@ void validate_overlap_s(const std::vector<std::complex<double>>& overlap_s, cons
     }
 }
 
+void validate_hermitian_matrix(const std::vector<std::complex<double>>& matrix,
+                               const std::size_t dimension,
+                               const std::string& field)
+{
+    if (dimension != 0 && dimension > static_cast<std::size_t>(-1) / dimension)
+    {
+        throw std::invalid_argument("Sternheimer SIAB " + field + " dimensions overflow");
+    }
+    if (matrix.size() != dimension * dimension)
+    {
+        throw std::invalid_argument("Sternheimer SIAB " + field + " size does not match n_basis squared");
+    }
+    if (!std::all_of(matrix.begin(), matrix.end(), finite_complex))
+    {
+        throw std::invalid_argument("Sternheimer SIAB " + field + " contains a non-finite value");
+    }
+    for (std::size_t row = 0; row != dimension; ++row)
+    {
+        for (std::size_t column = 0; column != dimension; ++column)
+        {
+            if (std::abs(matrix[row * dimension + column] - std::conj(matrix[column * dimension + row]))
+                > hermitian_tolerance)
+            {
+                throw std::invalid_argument("Sternheimer SIAB " + field
+                                            + " must be Hermitian within absolute tolerance 1e-10");
+            }
+        }
+    }
+}
+
+struct ValidatedFixedAOData
+{
+    std::vector<const FixedAOSpinData*> spins;
+    std::vector<const AuxiliaryChannelMetadata*> channels;
+};
+
+ValidatedFixedAOData validate_fixed_ao_data(const FixedAOData& data)
+{
+    if (data.n_basis <= 0)
+    {
+        throw std::invalid_argument("Sternheimer SIAB fixed-AO n_basis must be positive");
+    }
+    const std::size_t dimension = static_cast<std::size_t>(data.n_basis);
+    validate_hermitian_matrix(data.overlap_s, dimension, "fixed-AO S");
+
+    if (data.spins.empty())
+    {
+        throw std::invalid_argument("Sternheimer SIAB fixed-AO data requires at least one spin channel");
+    }
+    ValidatedFixedAOData validated;
+    validated.spins.reserve(data.spins.size());
+    for (const FixedAOSpinData& spin: data.spins)
+    {
+        if (spin.spin_index < 0 || spin.eigenvalues_ha.size() != dimension || spin.occupations.size() != dimension)
+        {
+            throw std::invalid_argument("Sternheimer SIAB fixed-AO spin metadata dimensions are invalid");
+        }
+        for (std::size_t state = 0; state != dimension; ++state)
+        {
+            if (!std::isfinite(spin.eigenvalues_ha[state]) || !std::isfinite(spin.occupations[state])
+                || spin.occupations[state] < 0.0)
+            {
+                throw std::invalid_argument("Sternheimer SIAB fixed-AO eigenvalues and occupations are invalid");
+            }
+        }
+        validate_hermitian_matrix(spin.hamiltonian_ha, dimension, "fixed-AO H");
+        validated.spins.push_back(&spin);
+    }
+    std::sort(validated.spins.begin(), validated.spins.end(), [](const FixedAOSpinData* left, const FixedAOSpinData* right) {
+        return left->spin_index < right->spin_index;
+    });
+    for (std::size_t spin = 0; spin != validated.spins.size(); ++spin)
+    {
+        if (validated.spins[spin]->spin_index != static_cast<int>(spin))
+        {
+            throw std::invalid_argument("Sternheimer SIAB fixed-AO spin indices must be contiguous from zero");
+        }
+    }
+
+    if (data.auxiliary_channels.empty() || data.perturbations_ha.size() != data.auxiliary_channels.size())
+    {
+        throw std::invalid_argument("Sternheimer SIAB fixed-AO auxiliary dimensions are invalid");
+    }
+    validated.channels.reserve(data.auxiliary_channels.size());
+    for (const AuxiliaryChannelMetadata& channel: data.auxiliary_channels)
+    {
+        if (channel.channel_index < 0 || channel.atom_index < 0 || channel.angular_momentum < 0
+            || channel.radial_index < 0 || channel.magnetic_index < -channel.angular_momentum
+            || channel.magnetic_index > channel.angular_momentum || !valid_element_token(channel.label))
+        {
+            throw std::invalid_argument("Sternheimer SIAB fixed-AO auxiliary metadata is invalid");
+        }
+        validated.channels.push_back(&channel);
+    }
+    std::sort(validated.channels.begin(),
+              validated.channels.end(),
+              [](const AuxiliaryChannelMetadata* left, const AuxiliaryChannelMetadata* right) {
+                  return left->channel_index < right->channel_index;
+              });
+    for (std::size_t channel = 0; channel != validated.channels.size(); ++channel)
+    {
+        if (validated.channels[channel]->channel_index != static_cast<int>(channel))
+        {
+            throw std::invalid_argument("Sternheimer SIAB fixed-AO auxiliary indices must be contiguous from zero");
+        }
+        validate_hermitian_matrix(data.perturbations_ha[static_cast<std::size_t>(validated.channels[channel]->channel_index)],
+                                  dimension,
+                                  "fixed-AO V");
+    }
+
+    if (data.frequency_ha.empty() || data.frequency_ha.size() != data.frequency_weights_ha.size())
+    {
+        throw std::invalid_argument("Sternheimer SIAB fixed-AO frequency dimensions are invalid");
+    }
+    for (std::size_t frequency = 0; frequency != data.frequency_ha.size(); ++frequency)
+    {
+        if (!std::isfinite(data.frequency_ha[frequency]) || data.frequency_ha[frequency] <= 0.0
+            || !std::isfinite(data.frequency_weights_ha[frequency]) || data.frequency_weights_ha[frequency] < 0.0
+            || (frequency != 0 && data.frequency_ha[frequency] <= data.frequency_ha[frequency - 1]))
+        {
+            throw std::invalid_argument(
+                "Sternheimer SIAB fixed-AO frequencies must be positive, finite, and strictly increasing");
+        }
+    }
+    return validated;
+}
+
 bool round_trips_exactly(const std::string& text, const double value)
 {
     std::istringstream input(text);
@@ -758,6 +885,118 @@ void write_v1(const std::string& path,
     {
         const std::string reason = std::strerror(errno);
         throw std::runtime_error("Failed to replace Sternheimer SIAB output " + path + ": " + reason);
+    }
+    temporary_file.keep();
+}
+
+void write_fixed_ao_v1(const std::string& path, const FixedAOData& data, const Provenance& provenance)
+{
+    if (path.empty())
+    {
+        throw std::invalid_argument("Sternheimer SIAB fixed-AO output path must not be empty");
+    }
+    const ValidatedFixedAOData validated = validate_fixed_ao_data(data);
+    validate_provenance(provenance);
+    const std::string json = provenance_json(provenance);
+
+    const std::string temporary_path = path + ".tmp";
+    TemporaryFile temporary_file(temporary_path);
+    std::ofstream output(temporary_path.c_str(), std::ios::binary | std::ios::trunc);
+    output.imbue(std::locale::classic());
+    if (!output.is_open())
+    {
+        throw std::runtime_error("Failed to open Sternheimer SIAB fixed-AO temporary output: " + temporary_path);
+    }
+
+    output << "<STERNHEIMER_GALERKIN_HEADER>\n"
+           << "format_version 1\n"
+           << "representation fixed_lcao_gamma\n"
+           << "energy_unit Ha\n"
+           << "n_basis " << data.n_basis << "\n"
+           << "n_spin " << validated.spins.size() << "\n"
+           << "n_auxiliary " << validated.channels.size() << "\n"
+           << "n_frequency " << data.frequency_ha.size() << "\n"
+           << "</STERNHEIMER_GALERKIN_HEADER>\n"
+           << "<AUXILIARY_CHANNELS>\n"
+           << "# channel_index atom_index l radial_index m label\n";
+    for (const AuxiliaryChannelMetadata* channel: validated.channels)
+    {
+        output << channel->channel_index << " " << channel->atom_index << " " << channel->angular_momentum << " "
+               << channel->radial_index << " " << channel->magnetic_index << " " << channel->label << "\n";
+    }
+
+    output << "</AUXILIARY_CHANNELS>\n"
+           << "<SPIN_METADATA>\n"
+           << "# spin_index state_index eigenvalue_ha occupation\n";
+    for (const FixedAOSpinData* spin: validated.spins)
+    {
+        for (std::size_t state = 0; state != spin->eigenvalues_ha.size(); ++state)
+        {
+            output << spin->spin_index << " " << state << " " << format_double(spin->eigenvalues_ha[state]) << " "
+                   << format_double(spin->occupations[state]) << "\n";
+        }
+    }
+
+    output << "</SPIN_METADATA>\n"
+           << "<OVERLAP_S>\n"
+           << "# row-major <phi_a|phi_b>, real imag\n";
+    for (const std::complex<double>& value: data.overlap_s)
+    {
+        output << format_double(value.real()) << " " << format_double(value.imag()) << "\n";
+    }
+
+    output << "</OVERLAP_S>\n"
+           << "<HAMILTONIAN_H>\n"
+           << "# row-major H_ab in Ha; matrices follow spin_index order\n";
+    for (const FixedAOSpinData* spin: validated.spins)
+    {
+        output << "# spin_index " << spin->spin_index << "\n";
+        for (const std::complex<double>& value: spin->hamiltonian_ha)
+        {
+            output << format_double(value.real()) << " " << format_double(value.imag()) << "\n";
+        }
+    }
+
+    output << "</HAMILTONIAN_H>\n"
+           << "<PERTURBATION_V>\n"
+           << "# row-major V_ab in Ha; matrices follow channel_index order\n";
+    for (const AuxiliaryChannelMetadata* channel: validated.channels)
+    {
+        output << "# channel_index " << channel->channel_index << "\n";
+        const auto& matrix = data.perturbations_ha[static_cast<std::size_t>(channel->channel_index)];
+        for (const std::complex<double>& value: matrix)
+        {
+            output << format_double(value.real()) << " " << format_double(value.imag()) << "\n";
+        }
+    }
+
+    output << "</PERTURBATION_V>\n"
+           << "<FREQUENCY_GRID>\n"
+           << "# frequency_index frequency_ha weight_ha\n";
+    for (std::size_t frequency = 0; frequency != data.frequency_ha.size(); ++frequency)
+    {
+        output << frequency << " " << format_double(data.frequency_ha[frequency]) << " "
+               << format_double(data.frequency_weights_ha[frequency]) << "\n";
+    }
+    output << "</FREQUENCY_GRID>\n"
+           << "<PROVENANCE_JSON>\n"
+           << json << "\n"
+           << "</PROVENANCE_JSON>\n";
+
+    output.flush();
+    if (!output.good())
+    {
+        throw std::runtime_error("Failed to flush Sternheimer SIAB fixed-AO temporary output: " + temporary_path);
+    }
+    output.close();
+    if (output.fail())
+    {
+        throw std::runtime_error("Failed to close Sternheimer SIAB fixed-AO temporary output: " + temporary_path);
+    }
+    if (std::rename(temporary_path.c_str(), path.c_str()) != 0)
+    {
+        const std::string reason = std::strerror(errno);
+        throw std::runtime_error("Failed to replace Sternheimer SIAB fixed-AO output " + path + ": " + reason);
     }
     temporary_file.keep();
 }
