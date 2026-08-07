@@ -44,6 +44,19 @@ TEST(SternheimerABFSPerturbation, SamplesSChannelOnFDGrid)
     EXPECT_NEAR(channels[0].max_abs, 4.0 * y00, 1.0e-14);
 }
 
+TEST(SternheimerABFSPerturbation, MapsRealHarmonicIndexToPhysicalMagneticQuantumNumber)
+{
+    EXPECT_EQ(ModuleRI::sternheimer_physical_magnetic_index(0, 0), 0);
+    EXPECT_EQ(ModuleRI::sternheimer_physical_magnetic_index(1, 0), -1);
+    EXPECT_EQ(ModuleRI::sternheimer_physical_magnetic_index(1, 1), 0);
+    EXPECT_EQ(ModuleRI::sternheimer_physical_magnetic_index(1, 2), 1);
+    EXPECT_EQ(ModuleRI::sternheimer_physical_magnetic_index(2, 0), -2);
+    EXPECT_EQ(ModuleRI::sternheimer_physical_magnetic_index(2, 4), 2);
+    EXPECT_THROW(ModuleRI::sternheimer_physical_magnetic_index(-1, 0), std::invalid_argument);
+    EXPECT_THROW(ModuleRI::sternheimer_physical_magnetic_index(1, -1), std::invalid_argument);
+    EXPECT_THROW(ModuleRI::sternheimer_physical_magnetic_index(1, 3), std::invalid_argument);
+}
+
 TEST(SternheimerABFSPerturbation, ReadsABFSDiagnosticOnlyEnvironmentFlag)
 {
     unsetenv("ABACUS_STERNHEIMER_FD_ST_ABFS_DIAG_ONLY");
