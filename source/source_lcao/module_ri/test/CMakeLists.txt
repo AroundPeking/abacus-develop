@@ -92,7 +92,7 @@ AddTest(
 AddTest(
   TARGET MODULE_RI_sternheimer_siab_fixed_ao_test
   LIBS ${math_libs}
-  SOURCES test_sternheimer_siab_fixed_ao.cpp ../sternheimer_siab_overlap.cpp
+  SOURCES test_sternheimer_siab_fixed_ao.cpp ../sternheimer_siab_fixed_ao.cpp ../sternheimer_siab_overlap.cpp
 )
 AddTest(
   TARGET MODULE_RI_sternheimer_siab_writer_test

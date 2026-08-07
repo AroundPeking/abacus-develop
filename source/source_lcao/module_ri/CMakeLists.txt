@@ -28,6 +28,7 @@ if (ENABLE_LIBRI)
         sternheimer_rpa.cpp
         sternheimer_siab_mpi.cpp
         sternheimer_siab_overlap.cpp
+        sternheimer_siab_fixed_ao.cpp
         sternheimer_siab_provenance.cpp
         sternheimer_siab_writer.cpp
   )
