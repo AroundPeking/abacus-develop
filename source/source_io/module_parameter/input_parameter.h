@@ -573,6 +573,7 @@ struct Input_para
     bool out_sternheimer_librpa = false; ///< whether to output Sternheimer chi0 files for LibRPA
     bool out_sternheimer_siab = false; ///< whether to output Sternheimer first-order-wavefunction targets for SIAB
     bool out_sternheimer_galerkin = false; ///< whether to output fixed-AO Galerkin matrices before response solves
+    bool out_sternheimer_galerkin_primitive = false; ///< whether to output Bessel-primitive Galerkin matrices
     int sternheimer_nfreq = 6; ///< number of minimax imaginary-frequency points for Sternheimer chi0 output
     std::string sternheimer_frequency_grid_file = ""; ///< optional fixed omega/weight grid for Sternheimer chi0 output
     bool sternheimer_frequency_mpi = false; ///< whether to split Sternheimer chi0 frequencies over MPI ranks

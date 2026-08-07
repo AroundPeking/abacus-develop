@@ -813,3 +813,39 @@ TEST(SternheimerGalerkinInput, RegisteredCheckAllowsIndependentFixedAOOutput)
     input.sternheimer_delta = false;
     EXPECT_EXIT(item.check_value(item, parameter), ::testing::ExitedWithCode(1), "");
 }
+
+TEST(SternheimerPrimitiveGalerkinInput, RequiresExplicitBesselPrimitiveBasis)
+{
+    ModuleIO::ReadInput read_input(0);
+    const std::vector<std::pair<std::string, ModuleIO::Input_Item>>& items
+        = read_input.get_input_lists();
+    const auto found = std::find_if(items.begin(), items.end(), [](const auto& item) {
+        return item.first == "out_sternheimer_galerkin_primitive";
+    });
+    ASSERT_NE(found, items.end());
+    const ModuleIO::Input_Item& item = found->second;
+    ASSERT_TRUE(static_cast<bool>(item.check_value));
+    EXPECT_EQ(item.default_value, "False");
+    EXPECT_NE(item.description.find("Bessel"), std::string::npos);
+
+    Parameter parameter;
+    Input_para& input = const_cast<Input_para&>(parameter.inp);
+    EXPECT_FALSE(input.out_sternheimer_galerkin_primitive);
+    input.out_sternheimer_galerkin_primitive = true;
+    input.basis_type = "lcao";
+    input.sternheimer_delta = true;
+    input.bessel_nao_rcuts = {8.0};
+    item.check_value(item, parameter);
+
+    input.bessel_nao_rcuts.clear();
+    EXPECT_EXIT(item.check_value(item, parameter), ::testing::ExitedWithCode(1), "");
+    input.bessel_nao_rcuts = {8.0, 10.0};
+    EXPECT_EXIT(item.check_value(item, parameter), ::testing::ExitedWithCode(1), "");
+    input.bessel_nao_rcuts = {8.0};
+
+    input.basis_type = "pw";
+    EXPECT_EXIT(item.check_value(item, parameter), ::testing::ExitedWithCode(1), "");
+    input.basis_type = "lcao";
+    input.sternheimer_delta = false;
+    EXPECT_EXIT(item.check_value(item, parameter), ::testing::ExitedWithCode(1), "");
+}

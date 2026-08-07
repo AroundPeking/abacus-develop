@@ -887,6 +887,39 @@ If EXX(exact exchange) is calculated (i.e. dft_fuctional==hse/hf/pbe0/scan0 or r
         this->add_item(item);
     }
     {
+        Input_Item item("out_sternheimer_galerkin_primitive");
+        item.annotation = "true: output Bessel-primitive Sternheimer Galerkin matrices; false: default";
+        item.category = "Output information";
+        item.type = "Boolean";
+        item.description = "Write Bessel-primitive H/S/V matrices, primitive-to-fixed-AO overlaps, and matching "
+                           "uniform-grid fixed-AO diagnostics. This output-only path returns before linear solves.";
+        item.default_value = "False";
+        item.unit = "";
+        item.availability = "basis_type=lcao with sternheimer_delta=True and one explicit bessel_nao_rcut.";
+        read_sync_bool(input.out_sternheimer_galerkin_primitive);
+        item.check_value = [](const Input_Item& item, const Parameter& para) {
+            if (para.input.out_sternheimer_galerkin_primitive
+                && para.input.basis_type != "lcao")
+            {
+                ModuleBase::WARNING_QUIT("ReadInput", item.label + " requires basis_type=lcao.");
+            }
+            if (para.input.out_sternheimer_galerkin_primitive
+                && !para.input.sternheimer_delta)
+            {
+                ModuleBase::WARNING_QUIT(
+                    "ReadInput", item.label + " currently requires sternheimer_delta True.");
+            }
+            if (para.input.out_sternheimer_galerkin_primitive
+                && para.input.bessel_nao_rcuts.size() != 1)
+            {
+                ModuleBase::WARNING_QUIT(
+                    "ReadInput",
+                    item.label + " requires exactly one explicit bessel_nao_rcut.");
+            }
+        };
+        this->add_item(item);
+    }
+    {
         Input_Item item("sternheimer_nfreq");
         item.annotation = "Number of minimax imaginary-frequency points for Sternheimer chi0 output";
         item.category = "Output information";
