@@ -98,6 +98,15 @@ AddTest(
   SOURCES test_sternheimer_siab_fixed_ao.cpp ../sternheimer_siab_fixed_ao.cpp ../sternheimer_siab_overlap.cpp
 )
 AddTest(
+  TARGET MODULE_RI_sternheimer_siab_primitive_galerkin_test
+  LIBS ${math_libs}
+  SOURCES test_sternheimer_siab_primitive_galerkin.cpp
+          ../sternheimer_siab_primitive_galerkin.cpp
+          ../sternheimer_siab_overlap.cpp
+          ../sternheimer_fd_hamiltonian.cpp
+          ../sternheimer_fd_nonlocal_projector.cpp
+)
+AddTest(
   TARGET MODULE_RI_sternheimer_siab_writer_test
   LIBS parameter ${math_libs} base device io_input
   SOURCES test_sternheimer_siab_writer.cpp ../sternheimer_siab_writer.cpp
