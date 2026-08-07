@@ -1,5 +1,6 @@
 #include "sternheimer_siab_overlap.h"
 
+#include <algorithm>
 #include <cmath>
 #include <stdexcept>
 
@@ -99,6 +100,55 @@ std::vector<Complex> overlap_s(const PrimitiveGrid& primitives, const double del
             if (i != j)
             {
                 result[j * nprimitive + i] = std::conj(value);
+            }
+        }
+    }
+    return result;
+}
+
+std::vector<std::vector<Complex>> perturbation_matrices(const PrimitiveGrid& basis_functions,
+                                                        const std::vector<std::vector<double>>& potentials_ha,
+                                                        const double delta_omega)
+{
+    validate_delta_omega(delta_omega);
+    const std::size_t grid_size = validate_primitives(basis_functions);
+    if (potentials_ha.empty())
+    {
+        throw std::invalid_argument("Sternheimer SIAB perturbation matrices require at least one potential.");
+    }
+    for (const std::vector<double>& potential: potentials_ha)
+    {
+        if (potential.size() != grid_size)
+        {
+            throw std::invalid_argument("Sternheimer SIAB potential and basis grid sizes differ.");
+        }
+        if (!std::all_of(potential.begin(), potential.end(), [](const double value) { return std::isfinite(value); }))
+        {
+            throw std::invalid_argument("Sternheimer SIAB perturbation potential contains a non-finite value.");
+        }
+    }
+
+    const std::size_t n_basis = basis_functions.size();
+    std::vector<std::vector<Complex>> result(potentials_ha.size(),
+                                             std::vector<Complex>(n_basis * n_basis, Complex(0.0, 0.0)));
+    for (std::size_t channel = 0; channel != potentials_ha.size(); ++channel)
+    {
+        for (std::size_t row = 0; row != n_basis; ++row)
+        {
+            for (std::size_t column = row; column != n_basis; ++column)
+            {
+                Complex value(0.0, 0.0);
+                for (std::size_t grid = 0; grid != grid_size; ++grid)
+                {
+                    value += std::conj(basis_functions[row][grid]) * potentials_ha[channel][grid]
+                             * basis_functions[column][grid];
+                }
+                value *= delta_omega;
+                result[channel][row * n_basis + column] = value;
+                if (row != column)
+                {
+                    result[channel][column * n_basis + row] = std::conj(value);
+                }
             }
         }
     }
