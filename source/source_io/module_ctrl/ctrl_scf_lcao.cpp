@@ -95,6 +95,92 @@ std::vector<ModuleRI::SternheimerLCAOOccupiedChannel> gather_sternheimer_lcao_oc
     return channels;
 }
 
+template <typename TK>
+std::vector<std::complex<double>> gather_sternheimer_lcao_matrix(const TK* local_matrix,
+                                                                 const Parallel_Orbitals& parallel_orbitals,
+                                                                 const int basis_size)
+{
+    std::vector<std::complex<double>> full_matrix(
+        static_cast<std::size_t>(basis_size) * static_cast<std::size_t>(basis_size),
+        std::complex<double>(0.0, 0.0));
+    for (int local_row = 0; local_row != parallel_orbitals.get_row_size(); ++local_row)
+    {
+        const int global_row = parallel_orbitals.local2global_row(local_row);
+        for (int local_column = 0; local_column != parallel_orbitals.get_col_size(); ++local_column)
+        {
+            const int global_column = parallel_orbitals.local2global_col(local_column);
+            full_matrix[static_cast<std::size_t>(global_row) * static_cast<std::size_t>(basis_size)
+                        + static_cast<std::size_t>(global_column)]
+                = std::complex<double>(local_matrix[local_row * parallel_orbitals.get_col_size() + local_column]);
+        }
+    }
+#ifdef __MPI
+    MPI_Allreduce(MPI_IN_PLACE,
+                  full_matrix.data(),
+                  basis_size * basis_size,
+                  MPI_DOUBLE_COMPLEX,
+                  MPI_SUM,
+                  MPI_COMM_WORLD);
+#endif
+    return full_matrix;
+}
+
+template <typename TK, typename TR>
+ModuleRI::SternheimerLCAOFixedAOMatrices gather_sternheimer_lcao_fixed_ao_matrices(
+    hamilt::HamiltLCAO<TK, TR>& hamiltonian,
+    const elecstate::ElecState& elec_state,
+    const K_Vectors& kpoints,
+    const Parallel_Orbitals& parallel_orbitals)
+{
+    const int basis_size = PARAM.globalv.nlocal;
+    const int spin_channel_count = ModuleRI::sternheimer_lcao_physical_spin_channel_count(PARAM.inp.nspin);
+    if (elec_state.ekb.nc != basis_size || elec_state.wg.nc != basis_size)
+    {
+        throw std::invalid_argument(
+            "out_sternheimer_siab fixed-AO output requires nbands=nlocal for the all-bands SOS gate.");
+    }
+
+    ModuleRI::SternheimerLCAOFixedAOMatrices result;
+    result.n_basis = basis_size;
+    for (int ik = 0; ik != spin_channel_count; ++ik)
+    {
+        hamiltonian.updateHk(ik);
+        hamilt::MatrixBlock<TK> h_matrix;
+        hamilt::MatrixBlock<TK> s_matrix;
+        hamiltonian.matrix(h_matrix, s_matrix);
+        const std::vector<std::complex<double>> overlap
+            = gather_sternheimer_lcao_matrix(s_matrix.p, parallel_orbitals, basis_size);
+        if (result.overlap_s.empty())
+        {
+            result.overlap_s = overlap;
+        }
+        else
+        {
+            for (std::size_t index = 0; index != overlap.size(); ++index)
+            {
+                if (std::abs(result.overlap_s[index] - overlap[index]) > 1.0e-10)
+                {
+                    throw std::runtime_error("Sternheimer fixed-AO overlap differs between physical spin rows.");
+                }
+            }
+        }
+
+        module_ri::sternheimer_siab::FixedAOSpinInput spin;
+        spin.spin_index = kpoints.isk[ik];
+        spin.hamiltonian_ry = gather_sternheimer_lcao_matrix(h_matrix.p, parallel_orbitals, basis_size);
+        spin.eigenvalues_ry.resize(static_cast<std::size_t>(basis_size));
+        spin.occupations.resize(static_cast<std::size_t>(basis_size));
+        for (int band = 0; band != basis_size; ++band)
+        {
+            spin.eigenvalues_ry[static_cast<std::size_t>(band)] = elec_state.ekb(spin.spin_index, band);
+            spin.occupations[static_cast<std::size_t>(band)] = elec_state.wg(spin.spin_index, band);
+        }
+        result.spins.push_back(std::move(spin));
+    }
+    ModuleRI::validate_sternheimer_lcao_fixed_ao_matrices(result, spin_channel_count, basis_size);
+    return result;
+}
+
 } // namespace
 #endif
 
@@ -503,12 +589,18 @@ void ModuleIO::ctrl_scf_lcao(UnitCell& ucell,
             }
             const auto occupied_channels
                 = gather_sternheimer_lcao_occupied_channels(*pelec, pv, *psi);
+            ModuleRI::SternheimerLCAOFixedAOMatrices fixed_ao_matrices;
+            if (inp.out_sternheimer_siab)
+            {
+                fixed_ao_matrices = gather_sternheimer_lcao_fixed_ao_matrices(*p_hamilt, *pelec, kv, pv);
+            }
             ModuleRI::run_sternheimer_abacus_lcao_chi0_output(*(pelec->pot),
                                                               *pw_rho,
                                                               ucell,
                                                               *pelec,
                                                               orb,
                                                               occupied_channels,
+                                                              fixed_ao_matrices,
                                                               pw_wfc,
                                                               &sf,
                                                               global_out_dir);

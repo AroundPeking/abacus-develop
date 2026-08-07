@@ -17,6 +17,7 @@
 #include "source_lcao/module_ri/sternheimer_fd_solver.h"
 #include "source_lcao/module_ri/sternheimer_rpa.h"
 #include "source_lcao/module_ri/sternheimer_siab_mpi.h"
+#include "source_lcao/module_ri/sternheimer_siab_fixed_ao.h"
 #include "source_lcao/module_ri/sternheimer_siab_overlap.h"
 #include "source_lcao/module_ri/sternheimer_siab_provenance.h"
 #include "source_lcao/module_ri/sternheimer_siab_writer.h"
@@ -1159,6 +1160,7 @@ void run_sternheimer_abacus_chi0_output_impl(const elecstate::Potential& potenti
                                              const std::string& output_dir,
                                              const LCAO_Orbitals* lcao_orbitals,
                                              const std::vector<SternheimerLCAOOccupiedChannel>* lcao_occupied_channels,
+                                             const SternheimerLCAOFixedAOMatrices* fixed_ao_matrices,
                                              const ModulePW::PW_Basis_K* siab_pw_wfc,
                                              const Structure_Factor* siab_structure_factor)
 {
@@ -1233,10 +1235,12 @@ void run_sternheimer_abacus_chi0_output_impl(const elecstate::Potential& potenti
             throw std::runtime_error("Sternheimer LCAO zero-order input is incomplete.");
         }
         if (write_siab
-            && (!use_lcao_zero_order || siab_pw_wfc == nullptr || siab_structure_factor == nullptr))
+            && (!use_lcao_zero_order || fixed_ao_matrices == nullptr || siab_pw_wfc == nullptr
+                || siab_structure_factor == nullptr))
         {
             throw std::runtime_error(
-                "out_sternheimer_siab requires LCAO Delta-ST plus the PW FFT basis and structure factor.");
+                "out_sternheimer_siab requires LCAO Delta-ST, complete fixed-AO matrices, the PW FFT basis, and the "
+                "structure factor.");
         }
 
         std::vector<int> response_spin_indices;
@@ -1254,6 +1258,12 @@ void run_sternheimer_abacus_chi0_output_impl(const elecstate::Potential& potenti
             validate_sternheimer_lcao_occupied_channels(*lcao_occupied_channels,
                                                         physical_spin_channel_count,
                                                         PARAM.globalv.nlocal);
+            if (write_siab)
+            {
+                validate_sternheimer_lcao_fixed_ao_matrices(*fixed_ao_matrices,
+                                                            physical_spin_channel_count,
+                                                            PARAM.globalv.nlocal);
+            }
             if (lcao_occupied_channels->empty())
             {
                 throw std::runtime_error("Sternheimer LCAO output found no occupied spin channels.");
@@ -1843,6 +1853,38 @@ void run_sternheimer_abacus_chi0_output_impl(const elecstate::Potential& potenti
                                siab_primitives.overlap_s,
                                provenance);
                 GlobalV::ofs_running << " Sternheimer SIAB v1 output: " << siab_path << std::endl;
+
+                std::vector<siab::AuxiliaryChannelMetadata> auxiliary_metadata;
+                auxiliary_metadata.reserve(channels.size());
+                for (const SternheimerABFGridChannel& channel: channels)
+                {
+                    auxiliary_metadata.push_back(siab::AuxiliaryChannelMetadata{channel.channel_index,
+                                                                                 channel.atom_index,
+                                                                                 channel.angular_momentum,
+                                                                                 channel.radial_index,
+                                                                                 channel.magnetic_index,
+                                                                                 channel.label});
+                }
+                std::vector<std::vector<std::complex<double>>> basis_values;
+                basis_values.reserve(sampled_ao_functions.size());
+                for (const SternheimerDeltaGridFunction& function: sampled_ao_functions)
+                {
+                    basis_values.push_back(function.values);
+                }
+                const siab::FixedAOData fixed_ao_data
+                    = siab::build_fixed_ao_data(fixed_ao_matrices->n_basis,
+                                                fixed_ao_matrices->overlap_s,
+                                                fixed_ao_matrices->spins,
+                                                auxiliary_metadata,
+                                                basis_values,
+                                                potentials,
+                                                frequency_grid.omega_ha,
+                                                frequency_grid.weights_ha,
+                                                grid_data.volume_element);
+                const std::string fixed_ao_path
+                    = join_output_path(output_dir, "sternheimer_galerkin_fixed_ao.dat");
+                siab::write_fixed_ao_v1(fixed_ao_path, fixed_ao_data, provenance);
+                GlobalV::ofs_running << " Sternheimer SIAB fixed-AO v1 output: " << fixed_ao_path << std::endl;
             }
         }
 
@@ -2052,7 +2094,7 @@ void run_sternheimer_abacus_chi0_output(const elecstate::Potential& potential,
                                         const std::string& output_dir)
 {
     run_sternheimer_abacus_chi0_output_impl(
-        potential, pw_basis, ucell, elec_state, output_dir, nullptr, nullptr, nullptr, nullptr);
+        potential, pw_basis, ucell, elec_state, output_dir, nullptr, nullptr, nullptr, nullptr, nullptr);
 }
 
 void run_sternheimer_abacus_lcao_chi0_output(const elecstate::Potential& potential,
@@ -2061,6 +2103,7 @@ void run_sternheimer_abacus_lcao_chi0_output(const elecstate::Potential& potenti
                                              const elecstate::ElecState& elec_state,
                                              const LCAO_Orbitals& orbitals,
                                              const std::vector<SternheimerLCAOOccupiedChannel>& occupied_channels,
+                                             const SternheimerLCAOFixedAOMatrices& fixed_ao_matrices,
                                              const ModulePW::PW_Basis_K* pw_wfc,
                                              const Structure_Factor* structure_factor,
                                              const std::string& output_dir)
@@ -2072,6 +2115,7 @@ void run_sternheimer_abacus_lcao_chi0_output(const elecstate::Potential& potenti
                                             output_dir,
                                             &orbitals,
                                             &occupied_channels,
+                                            &fixed_ao_matrices,
                                             pw_wfc,
                                             structure_factor);
 }

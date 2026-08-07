@@ -97,6 +97,26 @@ TEST(SternheimerABACUSSTSmoke, AcceptsOnlyPhysicalGammaSpinRows)
     EXPECT_THROW(ModuleRI::validate_sternheimer_lcao_gamma_layout(1, 1, 1, non_gamma), std::invalid_argument);
 }
 
+TEST(SternheimerABACUSSTSmoke, RequiresCompleteFixedAOMatricesForEverySpin)
+{
+    ModuleRI::SternheimerLCAOFixedAOMatrices matrices;
+    matrices.n_basis = 2;
+    matrices.overlap_s = {{1.0, 0.0}, {0.0, 0.0}, {0.0, 0.0}, {1.0, 0.0}};
+    matrices.spins = {
+        module_ri::sternheimer_siab::FixedAOSpinInput{
+            0, {-1.0, 1.0}, {1.0, 0.0}, {{-1.0, 0.0}, {0.0, 0.0}, {0.0, 0.0}, {1.0, 0.0}}},
+        module_ri::sternheimer_siab::FixedAOSpinInput{
+            1, {-0.9, 1.1}, {1.0, 0.0}, {{-0.9, 0.0}, {0.0, 0.0}, {0.0, 0.0}, {1.1, 0.0}}},
+    };
+
+    EXPECT_NO_THROW(ModuleRI::validate_sternheimer_lcao_fixed_ao_matrices(matrices, 2, 2));
+
+    matrices.spins.pop_back();
+    EXPECT_THROW(ModuleRI::validate_sternheimer_lcao_fixed_ao_matrices(matrices, 2, 2), std::invalid_argument);
+    matrices.spins.push_back(matrices.spins.front());
+    EXPECT_THROW(ModuleRI::validate_sternheimer_lcao_fixed_ao_matrices(matrices, 2, 2), std::invalid_argument);
+}
+
 TEST(SternheimerABACUSSTSmoke, SelectsZeroOrderSourceByResponseMode)
 {
     EXPECT_FALSE(ModuleRI::sternheimer_uses_lcao_zero_order(false));

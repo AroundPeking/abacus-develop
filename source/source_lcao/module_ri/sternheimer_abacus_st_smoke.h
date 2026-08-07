@@ -2,6 +2,7 @@
 #define STERNHEIMER_ABACUS_ST_SMOKE_H
 
 #include "source_lcao/module_ri/sternheimer_abacus_fd_adapter.h"
+#include "source_lcao/module_ri/sternheimer_siab_fixed_ao.h"
 
 #include <algorithm>
 #include <array>
@@ -39,6 +40,39 @@ struct SternheimerLCAOOccupiedChannel
     int spin_index = -1;
     std::vector<std::vector<std::complex<double>>> coefficients;
 };
+
+struct SternheimerLCAOFixedAOMatrices
+{
+    int n_basis = 0;
+    std::vector<std::complex<double>> overlap_s;
+    std::vector<module_ri::sternheimer_siab::FixedAOSpinInput> spins;
+};
+
+inline void validate_sternheimer_lcao_fixed_ao_matrices(const SternheimerLCAOFixedAOMatrices& matrices,
+                                                        const int spin_channel_count,
+                                                        const int basis_size)
+{
+    if (basis_size <= 0 || matrices.n_basis != basis_size || spin_channel_count <= 0
+        || matrices.overlap_s.size() != static_cast<std::size_t>(basis_size) * static_cast<std::size_t>(basis_size)
+        || matrices.spins.size() != static_cast<std::size_t>(spin_channel_count))
+    {
+        throw std::invalid_argument("Sternheimer fixed-AO LCAO matrix dimensions are inconsistent.");
+    }
+    std::vector<bool> seen(static_cast<std::size_t>(spin_channel_count), false);
+    for (const auto& spin: matrices.spins)
+    {
+        if (spin.spin_index < 0 || spin.spin_index >= spin_channel_count
+            || seen[static_cast<std::size_t>(spin.spin_index)]
+            || spin.eigenvalues_ry.size() != static_cast<std::size_t>(basis_size)
+            || spin.occupations.size() != static_cast<std::size_t>(basis_size)
+            || spin.hamiltonian_ry.size()
+                   != static_cast<std::size_t>(basis_size) * static_cast<std::size_t>(basis_size))
+        {
+            throw std::invalid_argument("Sternheimer fixed-AO LCAO spin matrices are incomplete.");
+        }
+        seen[static_cast<std::size_t>(spin.spin_index)] = true;
+    }
+}
 
 inline bool sternheimer_uses_lcao_zero_order(const bool use_delta_sternheimer)
 {
@@ -252,6 +286,7 @@ void run_sternheimer_abacus_lcao_chi0_output(
     const elecstate::ElecState& elec_state,
     const LCAO_Orbitals& orbitals,
     const std::vector<SternheimerLCAOOccupiedChannel>& occupied_channels,
+    const SternheimerLCAOFixedAOMatrices& fixed_ao_matrices,
     const ModulePW::PW_Basis_K* pw_wfc,
     const Structure_Factor* structure_factor,
     const std::string& output_dir);
