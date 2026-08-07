@@ -5,11 +5,21 @@
 #include "source_basis/module_ao/ORB_atomic_lm.h"
 #include "source_lcao/module_ri/sternheimer_fd_hamiltonian.h"
 
+#include <stdexcept>
 #include <string>
 #include <vector>
 
 namespace ModuleRI
 {
+
+inline int sternheimer_physical_magnetic_index(const int angular_momentum, const int real_harmonic_index)
+{
+    if (angular_momentum < 0 || real_harmonic_index < 0 || real_harmonic_index > 2 * angular_momentum)
+    {
+        throw std::invalid_argument("Sternheimer real-harmonic index is outside [0, 2l].");
+    }
+    return real_harmonic_index - angular_momentum;
+}
 
 struct SternheimerRadialPerturbation
 {

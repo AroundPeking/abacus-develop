@@ -796,7 +796,9 @@ std::string write_sternheimer_fixed_ao_sidecar(
                                                                      channel.atom_index,
                                                                      channel.angular_momentum,
                                                                      channel.radial_index,
-                                                                     channel.magnetic_index,
+                                                                     sternheimer_physical_magnetic_index(
+                                                                         channel.angular_momentum,
+                                                                         channel.magnetic_index),
                                                                      channel.label});
     }
     std::vector<std::vector<std::complex<double>>> basis_values;
