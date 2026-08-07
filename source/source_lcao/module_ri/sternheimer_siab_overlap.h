@@ -20,6 +20,11 @@ std::vector<std::complex<double>> overlap_s(
     const std::vector<std::vector<std::complex<double>>>& primitives,
     double delta_omega);
 
+std::vector<std::vector<std::complex<double>>> perturbation_matrices(
+    const std::vector<std::vector<std::complex<double>>>& basis_functions,
+    const std::vector<std::vector<double>>& potentials_ha,
+    double delta_omega);
+
 } // namespace sternheimer_siab
 } // namespace module_ri
 

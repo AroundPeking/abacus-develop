@@ -121,6 +121,43 @@ TEST(SternheimerSIABOverlap, ProducesComplexHermitianPrimitiveOverlap)
     EXPECT_NEAR(s[3].imag(), 0.0, 1.0e-14);
 }
 
+TEST(SternheimerSIABOverlap, BuildsComplexHermitianPerturbationMatricesWithGridVolume)
+{
+    const PrimitiveGrid basis_functions = {
+        {{1.0, 0.0}, {0.0, 1.0}},
+        {{1.0, 1.0}, {2.0, 0.0}},
+    };
+    const std::vector<std::vector<double>> potentials = {{2.0, -1.0}, {0.0, 0.0}};
+
+    const auto matrices = siab::perturbation_matrices(basis_functions, potentials, 0.5);
+
+    ASSERT_EQ(matrices.size(), 2);
+    ASSERT_EQ(matrices[0].size(), 4);
+    EXPECT_NEAR(matrices[0][0].real(), 0.5, 1.0e-14);
+    EXPECT_NEAR(matrices[0][0].imag(), 0.0, 1.0e-14);
+    EXPECT_NEAR(matrices[0][1].real(), 1.0, 1.0e-14);
+    EXPECT_NEAR(matrices[0][1].imag(), 2.0, 1.0e-14);
+    EXPECT_NEAR(matrices[0][2].real(), 1.0, 1.0e-14);
+    EXPECT_NEAR(matrices[0][2].imag(), -2.0, 1.0e-14);
+    EXPECT_NEAR(matrices[0][3].real(), 0.0, 1.0e-14);
+    EXPECT_NEAR(matrices[0][3].imag(), 0.0, 1.0e-14);
+    for (const Complex& value: matrices[1])
+    {
+        EXPECT_EQ(value, Complex(0.0, 0.0));
+    }
+}
+
+TEST(SternheimerSIABOverlap, RejectsInvalidPerturbationMatrixInputs)
+{
+    EXPECT_THROW(siab::perturbation_matrices({}, {{1.0}}, 0.5), std::invalid_argument);
+    EXPECT_THROW(siab::perturbation_matrices(primitives, {}, 0.5), std::invalid_argument);
+    EXPECT_THROW(siab::perturbation_matrices(primitives, {{1.0}}, 0.5), std::invalid_argument);
+
+    std::vector<std::vector<double>> nonfinite = {{1.0, 2.0, 3.0, std::numeric_limits<double>::infinity()}};
+    EXPECT_THROW(siab::perturbation_matrices(primitives, nonfinite, 0.5), std::invalid_argument);
+    EXPECT_THROW(siab::perturbation_matrices(primitives, {{1.0, 2.0, 3.0, 4.0}}, 0.0), std::invalid_argument);
+}
+
 TEST(SternheimerSIABOverlap, RejectsInvalidGridVolume)
 {
     EXPECT_THROW(siab::norm(reference_wavefunction, 0.0), std::invalid_argument);
