@@ -690,3 +690,33 @@ TEST(SternheimerSIABInput, RegisteredCheckEnforcesLcaoDeltaCombination)
     input.sternheimer_delta = false;
     EXPECT_EXIT(item.check_value(item, parameter), ::testing::ExitedWithCode(1), "");
 }
+
+TEST(SternheimerGalerkinInput, RegisteredCheckAllowsIndependentFixedAOOutput)
+{
+    ModuleIO::ReadInput read_input(0);
+    const std::vector<std::pair<std::string, ModuleIO::Input_Item>>& items = read_input.get_input_lists();
+    const auto found = std::find_if(items.begin(), items.end(), [](const auto& item) {
+        return item.first == "out_sternheimer_galerkin";
+    });
+    ASSERT_NE(found, items.end());
+    const ModuleIO::Input_Item& item = found->second;
+    ASSERT_TRUE(static_cast<bool>(item.check_value));
+    EXPECT_EQ(item.default_value, "False");
+    EXPECT_NE(item.description.find("fixed-AO"), std::string::npos);
+    EXPECT_NE(item.availability.find("basis_type=lcao"), std::string::npos);
+
+    Parameter parameter;
+    Input_para& input = const_cast<Input_para&>(parameter.inp);
+    input.basis_type = "lcao";
+    input.sternheimer_delta = true;
+    input.out_sternheimer_librpa = false;
+    input.bessel_nao_rcuts.clear();
+    item.check_value(item, parameter);
+
+    input.basis_type = "pw";
+    EXPECT_EXIT(item.check_value(item, parameter), ::testing::ExitedWithCode(1), "");
+
+    input.basis_type = "lcao";
+    input.sternheimer_delta = false;
+    EXPECT_EXIT(item.check_value(item, parameter), ::testing::ExitedWithCode(1), "");
+}
