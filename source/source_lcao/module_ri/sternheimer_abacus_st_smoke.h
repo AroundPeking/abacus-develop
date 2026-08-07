@@ -48,6 +48,28 @@ struct SternheimerLCAOFixedAOMatrices
     std::vector<module_ri::sternheimer_siab::FixedAOSpinInput> spins;
 };
 
+struct SternheimerOutputMode
+{
+    bool run = false;
+    bool write_librpa = false;
+    bool write_siab_targets = false;
+    bool write_fixed_ao = false;
+    bool fixed_ao_only = false;
+};
+
+inline SternheimerOutputMode select_sternheimer_output_mode(const bool out_sternheimer_librpa,
+                                                             const bool out_sternheimer_siab,
+                                                             const bool out_sternheimer_galerkin)
+{
+    SternheimerOutputMode mode;
+    mode.run = out_sternheimer_librpa || out_sternheimer_galerkin;
+    mode.write_librpa = out_sternheimer_librpa;
+    mode.write_siab_targets = out_sternheimer_siab;
+    mode.write_fixed_ao = out_sternheimer_siab || out_sternheimer_galerkin;
+    mode.fixed_ao_only = out_sternheimer_galerkin && !out_sternheimer_librpa;
+    return mode;
+}
+
 inline void validate_sternheimer_lcao_fixed_ao_matrices(const SternheimerLCAOFixedAOMatrices& matrices,
                                                         const int spin_channel_count,
                                                         const int basis_size)
