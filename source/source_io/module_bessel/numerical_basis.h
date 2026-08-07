@@ -43,6 +43,7 @@ class Numerical_Basis
         bool smooth;
         double sigma;
         double tolerance;
+        int lmax = -1;
     };
 
     struct SIABPrimitiveGridBlock
@@ -58,11 +59,24 @@ class Numerical_Basis
         std::vector<std::vector<std::complex<double>>> values;
     };
 
+    struct SIABPrimitiveReciprocalBlock
+    {
+        int type_index;
+        std::string element;
+        int atom_index;
+        int l;
+        int m;
+        int n_primitive;
+        int offset;
+        /// Physically normalized PW coefficients ordered by primitive index.
+        std::vector<std::vector<std::complex<double>>> values;
+    };
+
     /// Return the ABACUS real-spherical-harmonic index for a conventional m.
     static int siab_abacus_m(const int conventional_m);
 
     /// Read the numerical-Bessel settings used by the existing spillage path.
-    static SIABPrimitiveParameters siab_parameters_from_input(const int rcut_index);
+    static SIABPrimitiveParameters siab_parameters_from_input(const int rcut_index, const int lmax = -1);
 
     /// Build a Gamma PW basis whose distributed slabs cover the complete uniform grid.
     static std::unique_ptr<ModulePW::PW_Basis_K> siab_complete_gamma_pw_basis(
@@ -72,6 +86,13 @@ class Numerical_Basis
     /// Build rank-local, physically normalized SIAB primitives on the PW FFT grid.
     std::vector<SIABPrimitiveGridBlock> siab_primitive_grid_values(
         const int ik,
+        const ModulePW::PW_Basis_K* wfcpw,
+        const Structure_Factor& sf,
+        const UnitCell& ucell,
+        const SIABPrimitiveParameters& parameters);
+
+    std::vector<SIABPrimitiveReciprocalBlock> siab_primitive_reciprocal_values(
+        int ik,
         const ModulePW::PW_Basis_K* wfcpw,
         const Structure_Factor& sf,
         const UnitCell& ucell,
@@ -87,7 +108,7 @@ class Numerical_Basis
 
   private:
     bool init_label = false;
-    SIABPrimitiveParameters initialized_siab_parameters = {0.0, 0.0, false, 0.0, 0.0};
+    SIABPrimitiveParameters initialized_siab_parameters = {0.0, 0.0, false, 0.0, 0.0, -1};
     int initialized_siab_ntype = 0;
     int initialized_siab_lmax = 0;
     int initialized_siab_nmax = 0;

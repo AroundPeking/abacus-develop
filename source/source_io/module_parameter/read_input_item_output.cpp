@@ -2,6 +2,11 @@
 #include "source_base/tool_quit.h"
 #include "read_input.h"
 #include "read_input_tool.h"
+
+#include <algorithm>
+#include <cctype>
+#include <cmath>
+
 namespace ModuleIO
 {
 void ReadInput::item_output()
@@ -832,12 +837,12 @@ If EXX(exact exchange) is calculated (i.e. dft_fuctional==hse/hf/pbe0/scan0 or r
         item.type = "Boolean";
         item.description = "Write deterministic Sternheimer-SIAB v1 targets to "
                            "OUT.ABACUS/sternheimer_matrix.dat for basis_type=lcao. Delta-ST requires the loaded "
-                           "LCAO orbitals and exactly one explicit bessel_nao_rcut. This output-only switch is "
-                           "independent of rpa.";
+                           "LCAO orbitals, exactly one explicit bessel_nao_rcut, and a globally Coulomb-orthonormal "
+                           "perturbation space. This output-only switch is independent of rpa and mutually exclusive "
+                           "with out_sternheimer_librpa.";
         item.default_value = "False";
         item.unit = "";
-        item.availability
-            = "basis_type=lcao with out_sternheimer_librpa=True and sternheimer_delta=True.";
+        item.availability = "basis_type=lcao with sternheimer_delta=True and out_sternheimer_librpa=False.";
         read_sync_bool(input.out_sternheimer_siab);
         item.check_value = [](const Input_Item& item, const Parameter& para) {
             if (para.input.out_sternheimer_siab && para.input.basis_type != "lcao")
@@ -846,13 +851,16 @@ If EXX(exact exchange) is calculated (i.e. dft_fuctional==hse/hf/pbe0/scan0 or r
                     "ReadInput",
                     item.label + " requires basis_type=lcao so Delta-ST can use the loaded LCAO orbitals.");
             }
-            if (para.input.out_sternheimer_siab
-                && (!para.input.out_sternheimer_librpa || !para.input.sternheimer_delta))
+            if (para.input.out_sternheimer_siab && para.input.out_sternheimer_librpa)
             {
                 ModuleBase::WARNING_QUIT(
                     "ReadInput",
-                    item.label + " currently requires out_sternheimer_librpa True and sternheimer_delta True; "
-                                 "enable both inputs.");
+                    item.label + " cannot be combined with out_sternheimer_librpa because global Coulomb whitening "
+                                 "removes the raw atom-block auxiliary-channel meaning.");
+            }
+            if (para.input.out_sternheimer_siab && !para.input.sternheimer_delta)
+            {
+                ModuleBase::WARNING_QUIT("ReadInput", item.label + " requires sternheimer_delta True.");
             }
             if (para.input.out_sternheimer_siab && para.input.bessel_nao_rcuts.size() != 1)
             {
@@ -887,6 +895,27 @@ If EXX(exact exchange) is calculated (i.e. dft_fuctional==hse/hf/pbe0/scan0 or r
         this->add_item(item);
     }
     {
+        Input_Item item("sternheimer_siab_lmax");
+        item.annotation = "Maximum angular momentum of Sternheimer-SIAB target primitives";
+        item.category = "Output information";
+        item.type = "Integer";
+        item.description = "Set an output-only angular cutoff for the spherical-Bessel primitive blocks in "
+                           "sternheimer_matrix.dat and primitive Galerkin sidecars. The default -1 follows the "
+                           "loaded orbital lmax; use 2 to include complete d blocks without adding d orbitals "
+                           "to the Delta-ST fixed subspace.";
+        item.default_value = "-1";
+        item.unit = "";
+        item.availability = "out_sternheimer_siab=True or out_sternheimer_galerkin_primitive=True.";
+        read_sync_int(input.sternheimer_siab_lmax);
+        item.check_value = [](const Input_Item& item, const Parameter& para) {
+            if (para.input.sternheimer_siab_lmax < -1)
+            {
+                ModuleBase::WARNING_QUIT("ReadInput", item.label + " must be -1 or a non-negative integer.");
+            }
+        };
+        this->add_item(item);
+    }
+    {
         Input_Item item("out_sternheimer_galerkin_primitive");
         item.annotation = "true: output Bessel-primitive Sternheimer Galerkin matrices; false: default";
         item.category = "Output information";
@@ -915,6 +944,27 @@ If EXX(exact exchange) is calculated (i.e. dft_fuctional==hse/hf/pbe0/scan0 or r
                 ModuleBase::WARNING_QUIT(
                     "ReadInput",
                     item.label + " requires exactly one explicit bessel_nao_rcut.");
+            }
+        };
+        this->add_item(item);
+    }
+    {
+        Input_Item item("sternheimer_siab_coulomb_threshold");
+        item.annotation = "Relative eigenvalue threshold for global Coulomb whitening of Sternheimer-SIAB targets";
+        item.category = "Output information";
+        item.type = "Real";
+        item.description = "Retain full-molecule auxiliary Coulomb eigenvectors with lambda greater than this value "
+                           "times the largest eigenvalue. The retained perturbations satisfy W^T V W=I.";
+        item.default_value = "1e-10";
+        item.unit = "";
+        item.availability = "out_sternheimer_siab=True.";
+        read_sync_double(input.sternheimer_siab_coulomb_threshold);
+        item.check_value = [](const Input_Item& item, const Parameter& para) {
+            if (!std::isfinite(para.input.sternheimer_siab_coulomb_threshold)
+                || para.input.sternheimer_siab_coulomb_threshold <= 0.0
+                || para.input.sternheimer_siab_coulomb_threshold >= 1.0)
+            {
+                ModuleBase::WARNING_QUIT("ReadInput", item.label + " must be finite and strictly between zero and one.");
             }
         };
         this->add_item(item);
@@ -957,17 +1007,54 @@ If EXX(exact exchange) is calculated (i.e. dft_fuctional==hse/hf/pbe0/scan0 or r
     }
     {
         Input_Item item("sternheimer_frequency_mpi");
-        item.annotation = "true: split Sternheimer chi0 frequency points over MPI ranks; false: default";
+        item.annotation = "true: split Sternheimer frequency points over MPI ranks; false: default";
         item.category = "Output information";
         item.type = "Boolean";
-        item.description = "When out_sternheimer_librpa is enabled in a PW calculation, distribute independent "
+        item.description = "When Sternheimer output is enabled, distribute independent "
                            "imaginary-frequency Sternheimer solves over MPI ranks. The zero-order FD states are "
-                           "solved once on rank 0 and broadcast; each rank then writes the chi0 files for its "
-                           "assigned frequency points.";
+                           "solved once on rank 0 and broadcast; each rank then processes its assigned frequency "
+                           "points.";
         item.default_value = "False";
         item.unit = "";
-        item.availability = "PW calculation with out_sternheimer_librpa=True.";
+        item.availability = "PW calculation with Sternheimer output enabled.";
         read_sync_bool(input.sternheimer_frequency_mpi);
+        this->add_item(item);
+    }
+    {
+        Input_Item item("sternheimer_channel_mpi");
+        item.annotation = "true: split each Sternheimer frequency over MPI ranks; false: default";
+        item.category = "Output information";
+        item.type = "Boolean";
+        item.description = "With sternheimer_frequency_mpi enabled, distribute occupied-state/auxiliary-channel "
+                           "equations within each frequency group or across all ranks in global_equation mode. "
+                           "LibRPA partial chi0 columns are reduced before reader-v1 output.";
+        item.default_value = "False";
+        item.unit = "";
+        item.availability = "PW calculation with Sternheimer output enabled.";
+        read_sync_bool(input.sternheimer_channel_mpi);
+        this->add_item(item);
+    }
+    {
+        Input_Item item("sternheimer_mpi_layout");
+        item.annotation = "MPI ownership layout for Sternheimer response equations";
+        item.category = "Output information";
+        item.type = "String";
+        item.description = "Use frequency_grouped to assign a fixed MPI rank group to each imaginary frequency, "
+                           "or global_equation to distribute occupied-state/frequency/auxiliary-channel equations "
+                           "over all MPI ranks. The global_equation layout requires Sternheimer frequency MPI and "
+                           "channel MPI, and supports SIAB or LibRPA output.";
+        item.default_value = "frequency_grouped";
+        item.unit = "";
+        item.availability = "PW calculation with Sternheimer output enabled.";
+        read_sync_string(input.sternheimer_mpi_layout);
+        item.check_value = [](const Input_Item& item, const Parameter& para) {
+            if (para.input.sternheimer_mpi_layout != "frequency_grouped"
+                && para.input.sternheimer_mpi_layout != "global_equation")
+            {
+                ModuleBase::WARNING_QUIT("ReadInput",
+                                         item.label + " must be frequency_grouped or global_equation.");
+            }
+        };
         this->add_item(item);
     }
     {
@@ -982,6 +1069,34 @@ If EXX(exact exchange) is calculated (i.e. dft_fuctional==hse/hf/pbe0/scan0 or r
         item.unit = "";
         item.availability = "PW calculation with out_sternheimer_librpa=True.";
         read_sync_bool(input.sternheimer_delta);
+        this->add_item(item);
+    }
+    {
+        Input_Item item("sternheimer_delta_virtual_source");
+        item.annotation = "ks_bands: complete LCAO KS virtual space; projected_ao: diagnostic AO projection";
+        item.category = "Output information";
+        item.type = "String";
+        item.description = "Select the fixed LCAO virtual candidates used by Delta-Sternheimer. ks_bands uses every "
+                           "unoccupied LCAO KS eigenvector and requires nbands=nlocal. projected_ao is retained for "
+                           "diagnostic comparison with the earlier projected-AO construction.";
+        item.default_value = "ks_bands";
+        item.unit = "";
+        item.availability = "LCAO calculation with Sternheimer output and sternheimer_delta=True.";
+        read_sync_string(input.sternheimer_delta_virtual_source);
+        item.reset_value = [](const Input_Item& item, Parameter& para) {
+            std::transform(para.input.sternheimer_delta_virtual_source.begin(),
+                           para.input.sternheimer_delta_virtual_source.end(),
+                           para.input.sternheimer_delta_virtual_source.begin(),
+                           [](const unsigned char character) { return static_cast<char>(std::tolower(character)); });
+        };
+        item.check_value = [](const Input_Item& item, const Parameter& para) {
+            const std::vector<std::string> sources = {"ks_bands", "projected_ao"};
+            if (std::find(sources.begin(), sources.end(), para.input.sternheimer_delta_virtual_source)
+                == sources.end())
+            {
+                ModuleBase::WARNING_QUIT("ReadInput", nofound_str(sources, item.label));
+            }
+        };
         this->add_item(item);
     }
     {

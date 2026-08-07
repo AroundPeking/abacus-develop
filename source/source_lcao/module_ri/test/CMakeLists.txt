@@ -28,7 +28,7 @@ AddTest(
 )
 AddTest(
   TARGET MODULE_RI_sternheimer_fd_solver_test
-  LIBS ${math_libs}
+  LIBS ${STERNHEIMER_RPA_TEST_LIBS}
   SOURCES sternheimer_fd_solver_test.cpp ../sternheimer_fd_solver.cpp ../sternheimer_fd_hamiltonian.cpp ../sternheimer_fd_nonlocal_projector.cpp ../sternheimer_rpa.cpp
 )
 AddTest(
@@ -38,7 +38,7 @@ AddTest(
 )
 AddTest(
   TARGET MODULE_RI_sternheimer_dft_zero_order_test
-  LIBS ${math_libs}
+  LIBS ${STERNHEIMER_RPA_TEST_LIBS}
   SOURCES sternheimer_dft_zero_order_test.cpp ../sternheimer_dft_zero_order.cpp ../sternheimer_fd_solver.cpp ../sternheimer_fd_hamiltonian.cpp ../sternheimer_fd_nonlocal_projector.cpp ../sternheimer_rpa.cpp
 )
 AddTest(
@@ -82,7 +82,12 @@ AddTest(
 AddTest(
   TARGET MODULE_RI_sternheimer_abacus_st_smoke_test
   LIBS ${math_libs}
-  SOURCES sternheimer_abacus_st_smoke_test.cpp
+  SOURCES sternheimer_abacus_st_smoke_test.cpp ../sternheimer_siab_memory.cpp
+)
+AddTest(
+  TARGET MODULE_RI_sternheimer_coulomb_whitening_test
+  LIBS ${math_libs}
+  SOURCES sternheimer_coulomb_whitening_test.cpp ../sternheimer_coulomb_whitening.cpp
 )
 AddTest(
   TARGET MODULE_RI_sternheimer_siab_overlap_test
@@ -91,6 +96,7 @@ AddTest(
           ../sternheimer_siab_overlap.cpp
           ../sternheimer_fd_hamiltonian.cpp
           ../sternheimer_fd_nonlocal_projector.cpp
+          ../../../source_base/module_external/blas_connector_matrix.cpp
 )
 AddTest(
   TARGET MODULE_RI_sternheimer_siab_fixed_ao_test
@@ -100,6 +106,7 @@ AddTest(
           ../sternheimer_siab_overlap.cpp
           ../sternheimer_fd_hamiltonian.cpp
           ../sternheimer_fd_nonlocal_projector.cpp
+          ../../../source_base/module_external/blas_connector_matrix.cpp
 )
 AddTest(
   TARGET MODULE_RI_sternheimer_siab_primitive_galerkin_test
@@ -109,6 +116,7 @@ AddTest(
           ../sternheimer_siab_overlap.cpp
           ../sternheimer_fd_hamiltonian.cpp
           ../sternheimer_fd_nonlocal_projector.cpp
+          ../../../source_base/module_external/blas_connector_matrix.cpp
 )
 AddTest(
   TARGET MODULE_RI_sternheimer_siab_writer_test
@@ -124,13 +132,21 @@ if(ENABLE_MPI)
   add_executable(
     MODULE_RI_sternheimer_siab_mpi_test
     test_sternheimer_siab_mpi.cpp
+    ../sternheimer_chi0_mpi.cpp
+    ../sternheimer_fd_hamiltonian.cpp
+    ../sternheimer_fd_nonlocal_projector.cpp
+    ../sternheimer_rpa.cpp
     ../sternheimer_siab_mpi.cpp
     ../sternheimer_siab_overlap.cpp
     ../sternheimer_siab_writer.cpp
   )
   target_link_libraries(
     MODULE_RI_sternheimer_siab_mpi_test
-    ${math_libs}
+    parameter
+    base
+    device
+    io_input
+    ${STERNHEIMER_RPA_TEST_LIBS}
     Threads::Threads
     GTest::gtest
   )
@@ -165,5 +181,10 @@ add_test(
   NAME MODULE_RI_sternheimer_siab_primitives_test_mpi2
   COMMAND mpirun -np 2 ./MODULE_RI_sternheimer_siab_primitives_test
   WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+)
+AddTest(
+  TARGET MODULE_RI_sternheimer_channel_resources_test
+  LIBS ${math_libs}
+  SOURCES sternheimer_channel_resources_test.cpp ../sternheimer_channel_resources.cpp
 )
 install(DIRECTORY support DESTINATION ${CMAKE_CURRENT_BINARY_DIR})

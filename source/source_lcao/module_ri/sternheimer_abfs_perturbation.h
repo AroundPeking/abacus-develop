@@ -21,6 +21,8 @@ inline int sternheimer_physical_magnetic_index(const int angular_momentum, const
     return real_harmonic_index - angular_momentum;
 }
 
+constexpr int sternheimer_abfs_transform_grid_chunk = 1024;
+
 struct SternheimerRadialPerturbation
 {
     int type_index = -1;
@@ -48,12 +50,27 @@ struct SternheimerABFGridChannel
 std::vector<std::vector<SternheimerRadialPerturbation>> make_sternheimer_radial_perturbations_from_orbitals(
     const std::vector<std::vector<std::vector<Numerical_Orbital_Lm>>>& orbitals);
 
+std::vector<SternheimerABFGridChannel> describe_sternheimer_abf_grid_channels(
+    const std::vector<std::vector<SternheimerRadialPerturbation>>& radials_by_type,
+    const std::vector<int>& atom_types,
+    const std::vector<ModuleBase::Vector3<double>>& atom_positions,
+    int max_channels = -1);
+
 std::vector<SternheimerABFGridChannel> sample_sternheimer_abf_grid_channels(
     const std::vector<std::vector<SternheimerRadialPerturbation>>& radials_by_type,
     const std::vector<int>& atom_types,
     const std::vector<ModuleBase::Vector3<double>>& atom_positions,
     const SternheimerFDHamiltonian::Grid& grid,
     int max_channels = -1);
+
+std::vector<std::vector<double>> sample_sternheimer_abf_grid_channel_transform(
+    const std::vector<std::vector<SternheimerRadialPerturbation>>& radials_by_type,
+    const std::vector<int>& atom_types,
+    const std::vector<ModuleBase::Vector3<double>>& atom_positions,
+    const SternheimerFDHamiltonian::Grid& grid,
+    std::vector<SternheimerABFGridChannel>& raw_channels,
+    const std::vector<double>& raw_to_output,
+    int output_channels);
 
 } // namespace ModuleRI
 

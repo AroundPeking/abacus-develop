@@ -3,6 +3,7 @@
 
 #include "source_lcao/module_ri/sternheimer_abacus_fd_adapter.h"
 #include "source_lcao/module_ri/sternheimer_siab_fixed_ao.h"
+#include "source_lcao/module_ri/sternheimer_siab_memory.h"
 
 #include <algorithm>
 #include <array>
@@ -35,10 +36,16 @@ class Potential;
 namespace ModuleRI
 {
 
+inline constexpr double default_sternheimer_solver_tolerance() noexcept
+{
+    return 1.0e-6;
+}
+
 struct SternheimerLCAOOccupiedChannel
 {
     int spin_index = -1;
     std::vector<std::vector<std::complex<double>>> coefficients;
+    std::vector<std::vector<std::complex<double>>> unoccupied_coefficients;
 };
 
 struct SternheimerLCAOFixedAOMatrices
@@ -64,12 +71,11 @@ inline SternheimerOutputMode select_sternheimer_output_mode(const bool out_stern
                                                              const bool out_sternheimer_galerkin_primitive)
 {
     SternheimerOutputMode mode;
-    mode.run = out_sternheimer_librpa || out_sternheimer_galerkin
+    mode.run = out_sternheimer_librpa || out_sternheimer_siab || out_sternheimer_galerkin
                || out_sternheimer_galerkin_primitive;
     mode.write_librpa = out_sternheimer_librpa;
     mode.write_siab_targets = out_sternheimer_siab;
-    mode.write_fixed_ao = out_sternheimer_siab || out_sternheimer_galerkin
-                          || out_sternheimer_galerkin_primitive;
+    mode.write_fixed_ao = out_sternheimer_galerkin || out_sternheimer_galerkin_primitive;
     mode.write_primitive = out_sternheimer_galerkin_primitive;
     mode.fixed_ao_only = (out_sternheimer_galerkin
                           || out_sternheimer_galerkin_primitive)
@@ -103,9 +109,81 @@ inline void validate_sternheimer_lcao_fixed_ao_matrices(const SternheimerLCAOFix
     }
 }
 
+enum class SternheimerLCAOVirtualSource
+{
+    ProjectedAO,
+    KSBands
+};
+
+inline SternheimerLCAOVirtualSource parse_sternheimer_lcao_virtual_source(std::string value)
+{
+    std::transform(value.begin(), value.end(), value.begin(), [](const unsigned char character) {
+        return static_cast<char>(std::tolower(character));
+    });
+    if (value.empty() || value == "ks_bands")
+    {
+        return SternheimerLCAOVirtualSource::KSBands;
+    }
+    if (value == "projected_ao")
+    {
+        return SternheimerLCAOVirtualSource::ProjectedAO;
+    }
+    throw std::invalid_argument(
+        "Sternheimer LCAO virtual source must be projected_ao or ks_bands.");
+}
+
+inline int expected_sternheimer_ks_virtual_states(const int unoccupied_bands, const int max_virtual_states)
+{
+    if (unoccupied_bands <= 0 || max_virtual_states < 0)
+    {
+        throw std::invalid_argument("Sternheimer KS virtual-state dimensions must be positive and non-negative.");
+    }
+    return max_virtual_states > 0 ? std::min(unoccupied_bands, max_virtual_states) : unoccupied_bands;
+}
+
+inline void validate_sternheimer_ks_virtual_subspace(const int spin_index_one_based,
+                                                      const int expected_states,
+                                                      const int accepted_candidates,
+                                                      const int virtual_states)
+{
+    if (expected_states <= 0 || accepted_candidates != expected_states || virtual_states != expected_states)
+    {
+        std::ostringstream message;
+        message << "Sternheimer ks_bands virtual subspace dimension mismatch for spin " << spin_index_one_based
+                << ": expected " << expected_states << ", accepted " << accepted_candidates << ", built "
+                << virtual_states << ". Refusing to continue with a silently incomplete or overcomplete subspace.";
+        throw std::runtime_error(message.str());
+    }
+}
+
+inline std::string sternheimer_lcao_virtual_source_name(const SternheimerLCAOVirtualSource source)
+{
+    switch (source)
+    {
+    case SternheimerLCAOVirtualSource::ProjectedAO:
+        return "projected_ao";
+    case SternheimerLCAOVirtualSource::KSBands:
+        return "ks_bands";
+    }
+    throw std::invalid_argument("Unknown Sternheimer LCAO virtual source.");
+}
+
 inline bool sternheimer_uses_lcao_zero_order(const bool use_delta_sternheimer)
 {
     return use_delta_sternheimer;
+}
+
+inline bool sternheimer_builds_product_pca_auxiliary_basis(
+    const std::vector<std::string>& explicit_abfs_files)
+{
+    return explicit_abfs_files.empty();
+}
+
+inline std::string sternheimer_abfs_perturbation_source(
+    const std::vector<std::string>& explicit_abfs_files)
+{
+    return sternheimer_builds_product_pca_auxiliary_basis(explicit_abfs_files) ? "product_pca"
+                                                                               : "explicit_abfs";
 }
 
 inline int sternheimer_lcao_physical_spin_channel_count(const int nspin)
@@ -183,7 +261,25 @@ inline void validate_sternheimer_lcao_occupied_channels(
                 throw std::invalid_argument("Sternheimer LCAO coefficient basis size is inconsistent.");
             }
         }
+        for (const auto& band_coefficients: channel.unoccupied_coefficients)
+        {
+            if (band_coefficients.size() != static_cast<std::size_t>(basis_size))
+            {
+                throw std::invalid_argument("Sternheimer LCAO unoccupied coefficient basis size is inconsistent.");
+            }
+        }
     }
+}
+
+inline int sternheimer_lcao_total_unoccupied_bands(
+    const std::vector<SternheimerLCAOOccupiedChannel>& channels)
+{
+    int count = 0;
+    for (const SternheimerLCAOOccupiedChannel& channel: channels)
+    {
+        count += static_cast<int>(channel.unoccupied_coefficients.size());
+    }
+    return count;
 }
 
 inline int sternheimer_lcao_total_occupied_bands(
@@ -217,6 +313,18 @@ inline std::vector<int> sternheimer_lcao_occupied_bands_per_spin(
     for (const SternheimerLCAOOccupiedChannel& channel: channels)
     {
         counts.push_back(static_cast<int>(channel.coefficients.size()));
+    }
+    return counts;
+}
+
+inline std::vector<int> sternheimer_lcao_unoccupied_bands_per_spin(
+    const std::vector<SternheimerLCAOOccupiedChannel>& channels)
+{
+    std::vector<int> counts;
+    counts.reserve(channels.size());
+    for (const SternheimerLCAOOccupiedChannel& channel: channels)
+    {
+        counts.push_back(static_cast<int>(channel.unoccupied_coefficients.size()));
     }
     return counts;
 }

@@ -1,8 +1,178 @@
 #include "source_lcao/module_ri/sternheimer_abacus_st_smoke.h"
 
+#include "source_lcao/module_ri/sternheimer_channel_parallel.h"
+
 #include <array>
+#include <atomic>
+#include <chrono>
 #include <complex>
 #include <gtest/gtest.h>
+#include <stdexcept>
+#include <string>
+#include <thread>
+#include <vector>
+
+#ifdef _OPENMP
+#include <omp.h>
+#endif
+
+TEST(SternheimerABACUSSTSmoke, UsesProductionDefaults)
+{
+    EXPECT_DOUBLE_EQ(ModuleRI::default_sternheimer_solver_tolerance(), 1.0e-6);
+    EXPECT_EQ(ModuleRI::parse_sternheimer_lcao_virtual_source(""),
+              ModuleRI::SternheimerLCAOVirtualSource::KSBands);
+}
+
+TEST(SternheimerChannelParallel, ExecutesConcurrentlyAndReturnsChannelOrder)
+{
+#ifdef _OPENMP
+    const int previous_threads = omp_get_max_threads();
+    const int previous_dynamic = omp_get_dynamic();
+    omp_set_dynamic(0);
+    omp_set_num_threads(4);
+#endif
+
+    std::atomic<int> active_workers{0};
+    std::atomic<int> peak_workers{0};
+    const std::vector<int> results
+        = ModuleRI::run_sternheimer_channel_tasks<int>(32, [&active_workers, &peak_workers](const int channel_index) {
+              const int active = active_workers.fetch_add(1) + 1;
+              int observed_peak = peak_workers.load();
+              while (active > observed_peak && !peak_workers.compare_exchange_weak(observed_peak, active))
+              {
+              }
+              std::this_thread::sleep_for(std::chrono::milliseconds(2));
+              active_workers.fetch_sub(1);
+              return channel_index * channel_index;
+          });
+
+#ifdef _OPENMP
+    omp_set_num_threads(previous_threads);
+    omp_set_dynamic(previous_dynamic);
+#endif
+    ASSERT_EQ(results.size(), 32U);
+    for (int channel_index = 0; channel_index != 32; ++channel_index)
+    {
+        EXPECT_EQ(results[static_cast<std::size_t>(channel_index)], channel_index * channel_index);
+    }
+#ifdef _OPENMP
+    EXPECT_GT(peak_workers.load(), 1);
+#else
+    EXPECT_EQ(peak_workers.load(), 1);
+#endif
+}
+
+TEST(SternheimerChannelParallel, HonorsExplicitMaximumWorkerCount)
+{
+#ifdef _OPENMP
+    const int previous_threads = omp_get_max_threads();
+    const int previous_dynamic = omp_get_dynamic();
+    omp_set_dynamic(0);
+    omp_set_num_threads(4);
+#endif
+
+    std::atomic<int> active_workers{0};
+    std::atomic<int> peak_workers{0};
+    const std::vector<int> results
+        = ModuleRI::run_sternheimer_channel_tasks<int>(
+            32,
+            [&active_workers, &peak_workers](const int channel_index) {
+                const int active = active_workers.fetch_add(1) + 1;
+                int observed_peak = peak_workers.load();
+                while (active > observed_peak && !peak_workers.compare_exchange_weak(observed_peak, active))
+                {
+                }
+                std::this_thread::sleep_for(std::chrono::milliseconds(2));
+                active_workers.fetch_sub(1);
+                return channel_index;
+            },
+            2);
+
+#ifdef _OPENMP
+    omp_set_num_threads(previous_threads);
+    omp_set_dynamic(previous_dynamic);
+#endif
+    ASSERT_EQ(results.size(), 32U);
+    for (int channel_index = 0; channel_index != 32; ++channel_index)
+    {
+        EXPECT_EQ(results[static_cast<std::size_t>(channel_index)], channel_index);
+    }
+#ifdef _OPENMP
+    EXPECT_EQ(peak_workers.load(), 2);
+#else
+    EXPECT_EQ(peak_workers.load(), 1);
+#endif
+}
+
+TEST(SternheimerChannelParallel, SingleWorkerPreservesNestedGridTeam)
+{
+#ifdef _OPENMP
+    const int previous_threads = omp_get_max_threads();
+    const int previous_dynamic = omp_get_dynamic();
+    const int previous_active_levels = omp_get_max_active_levels();
+    omp_set_dynamic(0);
+    omp_set_num_threads(4);
+    omp_set_max_active_levels(1);
+#endif
+
+    const std::vector<int> nested_team_sizes = ModuleRI::run_sternheimer_channel_tasks<int>(
+        4,
+        [](const int) {
+#ifdef _OPENMP
+            int nested_team_size = 0;
+#pragma omp parallel
+            {
+#pragma omp single
+                nested_team_size = omp_get_num_threads();
+            }
+            return nested_team_size;
+#else
+            return 1;
+#endif
+        },
+        1);
+
+#ifdef _OPENMP
+    omp_set_num_threads(previous_threads);
+    omp_set_dynamic(previous_dynamic);
+    omp_set_max_active_levels(previous_active_levels);
+#endif
+    ASSERT_EQ(nested_team_sizes.size(), 4U);
+    for (const int nested_team_size: nested_team_sizes)
+    {
+#ifdef _OPENMP
+        EXPECT_EQ(nested_team_size, 4);
+#else
+        EXPECT_EQ(nested_team_size, 1);
+#endif
+    }
+}
+
+TEST(SternheimerChannelParallel, RethrowsFirstIndexedExceptionAfterAllTasksFinish)
+{
+    std::atomic<int> completed_tasks{0};
+    try
+    {
+        static_cast<void>(ModuleRI::run_sternheimer_channel_tasks<int>(16, [&completed_tasks](const int channel_index) {
+            completed_tasks.fetch_add(1);
+            if (channel_index == 3 || channel_index == 9)
+            {
+                throw std::runtime_error("channel " + std::to_string(channel_index));
+            }
+            return channel_index;
+        }));
+        FAIL() << "Expected a channel task exception.";
+    }
+    catch (const std::runtime_error& error)
+    {
+        EXPECT_STREQ(error.what(), "channel 3");
+    }
+    EXPECT_EQ(completed_tasks.load(), 16);
+
+    EXPECT_THROW(ModuleRI::run_sternheimer_channel_tasks<int>(-1, [](const int) { return 0; }), std::invalid_argument);
+    EXPECT_THROW(ModuleRI::run_sternheimer_channel_tasks<int>(1, [](const int) { return 0; }, -1),
+                 std::invalid_argument);
+}
 
 TEST(SternheimerABACUSSTSmoke, FormatsLinearResponseReport)
 {
@@ -83,6 +253,46 @@ TEST(SternheimerABACUSSTSmoke, ValidatesSpinResolvedLCAOOccupiedChannels)
                  std::invalid_argument);
 }
 
+TEST(SternheimerABACUSSTSmoke, SelectsExplicitKSVirtualBandsFromOccupations)
+{
+    ModuleRI::SternheimerLCAOOccupiedChannel spin_up;
+    spin_up.spin_index = 0;
+    spin_up.coefficients = {{std::complex<double>(1.0, 0.0),
+                             std::complex<double>(0.0, 0.0),
+                             std::complex<double>(0.0, 0.0)}};
+    spin_up.unoccupied_coefficients = {
+        {std::complex<double>(0.0, 0.0), std::complex<double>(1.0, 0.0), std::complex<double>(0.0, 0.0)},
+        {std::complex<double>(0.0, 0.0), std::complex<double>(0.0, 0.0), std::complex<double>(1.0, 0.0)}};
+
+    const std::vector<ModuleRI::SternheimerLCAOOccupiedChannel> channels = {spin_up};
+    EXPECT_NO_THROW(ModuleRI::validate_sternheimer_lcao_occupied_channels(channels, 1, 3));
+    EXPECT_EQ(ModuleRI::sternheimer_lcao_unoccupied_bands_per_spin(channels), (std::vector<int>{2}));
+    EXPECT_EQ(ModuleRI::sternheimer_lcao_total_unoccupied_bands(channels), 2);
+
+    EXPECT_EQ(ModuleRI::parse_sternheimer_lcao_virtual_source("projected_ao"),
+              ModuleRI::SternheimerLCAOVirtualSource::ProjectedAO);
+    EXPECT_EQ(ModuleRI::parse_sternheimer_lcao_virtual_source("ks_bands"),
+              ModuleRI::SternheimerLCAOVirtualSource::KSBands);
+    EXPECT_EQ(ModuleRI::sternheimer_lcao_virtual_source_name(ModuleRI::SternheimerLCAOVirtualSource::KSBands),
+              "ks_bands");
+    EXPECT_THROW(ModuleRI::parse_sternheimer_lcao_virtual_source("svd_guess"), std::invalid_argument);
+
+    auto invalid = channels;
+    invalid.front().unoccupied_coefficients.front().pop_back();
+    EXPECT_THROW(ModuleRI::validate_sternheimer_lcao_occupied_channels(invalid, 1, 3), std::invalid_argument);
+}
+
+TEST(SternheimerABACUSSTSmoke, RequiresCompleteKSVirtualSubspace)
+{
+    EXPECT_EQ(ModuleRI::expected_sternheimer_ks_virtual_states(21, 0), 21);
+    EXPECT_EQ(ModuleRI::expected_sternheimer_ks_virtual_states(21, 16), 16);
+    EXPECT_NO_THROW(ModuleRI::validate_sternheimer_ks_virtual_subspace(1, 21, 21, 21));
+    EXPECT_THROW(ModuleRI::validate_sternheimer_ks_virtual_subspace(2, 21, 20, 20),
+                 std::runtime_error);
+    EXPECT_THROW(ModuleRI::validate_sternheimer_ks_virtual_subspace(2, 21, 21, 20),
+                 std::runtime_error);
+}
+
 TEST(SternheimerABACUSSTSmoke, AcceptsOnlyPhysicalGammaSpinRows)
 {
     const std::vector<std::array<double, 3>> one_gamma = {{{0.0, 0.0, 0.0}}};
@@ -149,12 +359,12 @@ TEST(SternheimerABACUSSTSmoke, SelectsIndependentFixedAOGalerkinOutputMode)
     EXPECT_TRUE(librpa_with_fixed.write_fixed_ao);
     EXPECT_FALSE(librpa_with_fixed.fixed_ao_only);
 
-    const auto full_siab = ModuleRI::select_sternheimer_output_mode(true, true, false, false);
-    EXPECT_TRUE(full_siab.run);
-    EXPECT_TRUE(full_siab.write_librpa);
-    EXPECT_TRUE(full_siab.write_siab_targets);
-    EXPECT_TRUE(full_siab.write_fixed_ao);
-    EXPECT_FALSE(full_siab.fixed_ao_only);
+    const auto siab_only = ModuleRI::select_sternheimer_output_mode(false, true, false, false);
+    EXPECT_TRUE(siab_only.run);
+    EXPECT_FALSE(siab_only.write_librpa);
+    EXPECT_TRUE(siab_only.write_siab_targets);
+    EXPECT_FALSE(siab_only.write_fixed_ao);
+    EXPECT_FALSE(siab_only.fixed_ao_only);
 
     const auto primitive_only
         = ModuleRI::select_sternheimer_output_mode(false, false, false, true);
@@ -164,4 +374,30 @@ TEST(SternheimerABACUSSTSmoke, SelectsIndependentFixedAOGalerkinOutputMode)
     EXPECT_TRUE(primitive_only.write_fixed_ao);
     EXPECT_TRUE(primitive_only.write_primitive);
     EXPECT_TRUE(primitive_only.fixed_ao_only);
+}
+
+TEST(SternheimerABACUSSTSmoke, SelectsExplicitABFSForPerturbationChannels)
+{
+    EXPECT_EQ(ModuleRI::sternheimer_abfs_perturbation_source({}), "product_pca");
+    EXPECT_EQ(ModuleRI::sternheimer_abfs_perturbation_source({"H-fixed.abfs"}), "explicit_abfs");
+    EXPECT_TRUE(ModuleRI::sternheimer_builds_product_pca_auxiliary_basis({}));
+    EXPECT_FALSE(ModuleRI::sternheimer_builds_product_pca_auxiliary_basis({"H-fixed.abfs"}));
+}
+
+TEST(SternheimerABACUSSTSmoke, EstimatesSIABDenseMemoryWithoutRawGridChannels)
+{
+    const auto estimate = ModuleRI::estimate_sternheimer_siab_dense_memory(100, 4, 3, 5, 7, 2, 6);
+    EXPECT_EQ(estimate.coulomb_metric_bytes, 4U * 4U * sizeof(double));
+    EXPECT_EQ(estimate.transformed_potential_bytes, 100U * 3U * sizeof(double));
+    EXPECT_EQ(estimate.channel_transform_workspace_bytes,
+              1024U * (4U + 3U) * sizeof(double) + 1024U * sizeof(std::size_t));
+    EXPECT_EQ(estimate.reciprocal_primitive_bytes, 5U * 7U * sizeof(std::complex<double>));
+    EXPECT_EQ(estimate.primitive_overlap_bytes, 5U * 5U * sizeof(std::complex<double>));
+    const std::uint64_t row_bytes = 7U * sizeof(double) + 5U * sizeof(std::complex<double>);
+    EXPECT_EQ(estimate.gathered_reference_row_bytes, 3U * 2U * 3U * 6U * row_bytes);
+    EXPECT_EQ(estimate.total_bytes,
+              estimate.coulomb_metric_bytes + estimate.transformed_potential_bytes
+                  + estimate.channel_transform_workspace_bytes
+                  + estimate.reciprocal_primitive_bytes + estimate.primitive_overlap_bytes
+                  + estimate.gathered_reference_row_bytes);
 }
