@@ -79,10 +79,17 @@ TEST(SternheimerSIABPrimitiveGalerkin, AssemblesGridMatricesWithCorrectConjugati
     EXPECT_EQ(data.spins[0].fixed_ao_grid_hamiltonian_ha,
               (std::vector<Complex>{{0.125, 0.0}, {0.0, 0.0},
                                     {0.0, 0.0}, {-1.0, 0.0}}));
+    EXPECT_EQ(data.spins[0].primitive_ao_hamiltonian_ha,
+              (std::vector<Complex>{{0.25, 0.0}, {0.0, 0.0},
+                                    {0.0, 0.0}, {-0.5, 0.0}}));
     ASSERT_EQ(data.perturbations_ha.size(), 1);
     EXPECT_EQ(data.perturbations_ha[0],
               (std::vector<Complex>{{1.5, 0.0}, {0.0, 0.0},
                                     {0.0, 0.0}, {2.0, 0.0}}));
+    ASSERT_EQ(data.primitive_ao_perturbations_ha.size(), 1);
+    EXPECT_EQ(data.primitive_ao_perturbations_ha[0],
+              (std::vector<Complex>{{0.75, 0.0}, {0.0, 0.0},
+                                    {0.0, 0.0}, {4.0, 0.0}}));
 }
 
 TEST(SternheimerSIABPrimitiveGalerkin, RejectsMismatchedSpinHamiltonians)

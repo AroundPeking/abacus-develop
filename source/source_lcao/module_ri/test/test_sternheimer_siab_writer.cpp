@@ -227,11 +227,17 @@ siab::PrimitiveGalerkinData canonical_primitive_galerkin_data()
             {{-0.35, 0.0}, {0.03, 0.0}, {0.03, 0.0}, {0.95, 0.0}},
             {{-0.45, 0.0}, {0.01, 0.0}, {0.01, 0.0}, {0.75, 0.0}}},
     };
+    data.spins[0].primitive_ao_hamiltonian_ha = {
+        {-0.2, 0.0}, {0.01, 0.02}, {0.03, -0.01}, {0.4, 0.0}};
+    data.spins[1].primitive_ao_hamiltonian_ha = {
+        {-0.18, 0.0}, {0.02, 0.0}, {0.01, 0.0}, {0.42, 0.0}};
     data.auxiliary_channels = {
         siab::AuxiliaryChannelMetadata{0, 0, 1, 2, -1, "H0_l1_n2_m-1"}};
     data.overlap_s = {{1.0, 0.0}, {0.1, 0.2}, {0.1, -0.2}, {1.5, 0.0}};
     data.perturbations_ha = {
         {{0.3, 0.0}, {0.1, 0.05}, {0.1, -0.05}, {-0.2, 0.0}}};
+    data.primitive_ao_perturbations_ha = {
+        {{0.15, 0.0}, {0.04, 0.01}, {0.02, -0.01}, {-0.08, 0.0}}};
     data.primitive_ao_overlap = {
         {1.0, 0.0}, {0.2, 0.1}, {0.1, -0.1}, {0.9, 0.0}};
     data.fixed_ao_grid_overlap = {
@@ -610,7 +616,13 @@ TEST(SternheimerSIABFixedAOWriter, WritesVersionedDeterministicSidecar)
               "1 0 -0.55 1.0\n1 1 0.85 0.0\n");
     EXPECT_EQ(data_line_count(section_body(text, "OVERLAP_S")), 4);
     EXPECT_EQ(data_line_count(section_body(text, "HAMILTONIAN_H")), 8);
+    EXPECT_EQ(
+        data_line_count(section_body(text, "PRIMITIVE_AO_HAMILTONIAN")),
+        8);
     EXPECT_EQ(data_line_count(section_body(text, "PERTURBATION_V")), 4);
+    EXPECT_EQ(
+        data_line_count(section_body(text, "PRIMITIVE_AO_PERTURBATION")),
+        4);
     EXPECT_EQ(section_body(text, "FREQUENCY_GRID"),
               "# frequency_index frequency_ha weight_ha\n0 0.2 0.3\n1 0.8 0.7\n");
     EXPECT_EQ(count_occurrences(text, "<PROVENANCE_JSON>"), 1);
