@@ -1015,6 +1015,19 @@ If EXX(exact exchange) is calculated (i.e. dft_fuctional==hse/hf/pbe0/scan0 or r
         this->add_item(item);
     }
     {
+        Input_Item item("sternheimer_grid_diagnostics");
+        item.annotation = "write Delta-Sternheimer grid component diagnostics";
+        item.category = "Output information";
+        item.type = "Boolean";
+        item.description = "Write frequency-independent grid operator matrices and frequency-dependent response "
+                           "components for diagnosing Sternheimer real-space-grid convergence.";
+        item.default_value = "False";
+        item.unit = "";
+        item.availability = "LCAO calculation with out_sternheimer_librpa=True and sternheimer_delta=True.";
+        read_sync_bool(input.sternheimer_grid_diagnostics);
+        this->add_item(item);
+    }
+    {
         Input_Item item("sternheimer_delta_virtual_source");
         item.annotation = "ks_bands: complete LCAO KS virtual space; projected_ao: diagnostic AO projection";
         item.category = "Output information";
