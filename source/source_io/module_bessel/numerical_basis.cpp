@@ -48,6 +48,10 @@ Numerical_Basis::SIABPrimitiveParameters Numerical_Basis::siab_parameters_from_i
     {
         throw std::invalid_argument("SIAB primitive lmax must be -1 or non-negative");
     }
+    if (PARAM.inp.sternheimer_siab_radial_count < 0)
+    {
+        throw std::invalid_argument("SIAB primitive radial count must be non-negative");
+    }
     return SIABPrimitiveParameters{
         primitive_ecut_ry,
         PARAM.inp.bessel_nao_rcuts[rcut_index],
@@ -55,6 +59,7 @@ Numerical_Basis::SIABPrimitiveParameters Numerical_Basis::siab_parameters_from_i
         PARAM.inp.bessel_nao_sigma,
         PARAM.inp.bessel_nao_tolerence,
         lmax,
+        PARAM.inp.sternheimer_siab_radial_count,
     };
 }
 
@@ -98,7 +103,8 @@ void Numerical_Basis::initialize_siab_basis(const UnitCell& ucell,
     if (!std::isfinite(parameters.ecut_ry) || !std::isfinite(parameters.rcut_bohr)
         || !std::isfinite(parameters.sigma) || !std::isfinite(parameters.tolerance)
         || !(parameters.ecut_ry > 0.0) || !(parameters.rcut_bohr > 0.0)
-        || (parameters.smooth && !(parameters.sigma > 0.0)) || !(parameters.tolerance > 0.0))
+        || (parameters.smooth && !(parameters.sigma > 0.0)) || !(parameters.tolerance > 0.0)
+        || parameters.radial_count < 0)
     {
         throw std::invalid_argument("SIAB primitive parameters are invalid");
     }
@@ -213,7 +219,12 @@ std::vector<Numerical_Basis::SIABPrimitiveReciprocalBlock> Numerical_Basis::siab
         gpow.assign(npw, 1.0);
     }
     const double normalization = 4.0 * ModuleBase::PI / std::sqrt(ucell.omega);
-    const int nprimitive = this->bessel_basis.get_ecut_number();
+    const int available_primitives = this->bessel_basis.get_ecut_number();
+    if (parameters.radial_count > available_primitives)
+    {
+        throw std::invalid_argument("SIAB primitive radial count exceeds the available Bessel roots");
+    }
+    const int nprimitive = parameters.radial_count == 0 ? available_primitives : parameters.radial_count;
 
     std::vector<SIABPrimitiveReciprocalBlock> blocks;
     int offset = 0;

@@ -575,6 +575,7 @@ struct Input_para
     bool out_sternheimer_galerkin = false; ///< whether to output fixed-AO Galerkin matrices before response solves
     bool out_sternheimer_galerkin_primitive = false; ///< whether to output Bessel-primitive Galerkin matrices
     int sternheimer_siab_lmax = -1; ///< maximum angular momentum of SIAB target primitives; -1 uses orbital lmax
+    int sternheimer_siab_radial_count = 0; ///< radial primitives per (atom,l,m) block; 0 uses all available roots
     double sternheimer_siab_coulomb_threshold
         = 1.0e-10; ///< relative eigenvalue cutoff for global SIAB Coulomb whitening
     int sternheimer_nfreq = 6; ///< number of minimax imaginary-frequency points for Sternheimer chi0 output

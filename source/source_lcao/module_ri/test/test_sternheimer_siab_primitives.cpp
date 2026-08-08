@@ -38,20 +38,24 @@ TEST(SternheimerSIABPrimitives, DefaultPrimitiveEcutInheritsWavefunctionCutoff)
     const double old_ecutwfc = input.ecutwfc;
     const std::vector<double> old_rcuts = input.bessel_nao_rcuts;
     const int old_siab_lmax = input.sternheimer_siab_lmax;
+    const int old_radial_count = input.sternheimer_siab_radial_count;
     input.bessel_nao_ecut = "default";
     input.ecutwfc = 37.5;
     input.bessel_nao_rcuts = {8.0};
     input.sternheimer_siab_lmax = 2;
+    input.sternheimer_siab_radial_count = 15;
 
     const auto parameters = Numerical_Basis::siab_parameters_from_input(0, input.sternheimer_siab_lmax);
     EXPECT_DOUBLE_EQ(parameters.ecut_ry, 37.5);
     EXPECT_DOUBLE_EQ(parameters.rcut_bohr, 8.0);
     EXPECT_EQ(parameters.lmax, 2);
+    EXPECT_EQ(parameters.radial_count, 15);
 
     input.bessel_nao_ecut = old_bessel_ecut;
     input.ecutwfc = old_ecutwfc;
     input.bessel_nao_rcuts = old_rcuts;
     input.sternheimer_siab_lmax = old_siab_lmax;
+    input.sternheimer_siab_radial_count = old_radial_count;
 }
 
 void expect_complex_near(const Complex& actual, const Complex& expected)
@@ -468,6 +472,23 @@ TEST_F(SternheimerSIABPrimitivesTest, ExplicitRadialCountCapsEveryAngularBlock)
         EXPECT_EQ(blocks[block_index].values.size(), 2);
         EXPECT_EQ(blocks[block_index].offset, static_cast<int>(2 * block_index));
     }
+}
+
+TEST_F(SternheimerSIABPrimitivesTest, RejectsRadialCountBeyondAvailableRoots)
+{
+    const Numerical_Basis::SIABPrimitiveParameters parameters{
+        ecut_ry,
+        rcut_bohr,
+        false,
+        0.1,
+        tolerance,
+        2,
+        4,
+    };
+    Numerical_Basis numerical_basis;
+    EXPECT_THROW(numerical_basis.siab_primitive_reciprocal_values(
+                     ik, &full_pw, structure_factor, ucell, parameters),
+                 std::invalid_argument);
 }
 
 TEST_F(SternheimerSIABPrimitivesTest, GammaCompressedOddLMatchesIndependentFullComplexGrid)

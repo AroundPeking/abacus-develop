@@ -44,6 +44,7 @@ class Numerical_Basis
         double sigma;
         double tolerance;
         int lmax = -1;
+        int radial_count = 0;
     };
 
     struct SIABPrimitiveGridBlock
@@ -108,7 +109,7 @@ class Numerical_Basis
 
   private:
     bool init_label = false;
-    SIABPrimitiveParameters initialized_siab_parameters = {0.0, 0.0, false, 0.0, 0.0, -1};
+    SIABPrimitiveParameters initialized_siab_parameters = {0.0, 0.0, false, 0.0, 0.0, -1, 0};
     int initialized_siab_ntype = 0;
     int initialized_siab_lmax = 0;
     int initialized_siab_nmax = 0;

@@ -916,6 +916,26 @@ If EXX(exact exchange) is calculated (i.e. dft_fuctional==hse/hf/pbe0/scan0 or r
         this->add_item(item);
     }
     {
+        Input_Item item("sternheimer_siab_radial_count");
+        item.annotation = "Number of radial Sternheimer-SIAB primitives in each angular block";
+        item.category = "Output information";
+        item.type = "Integer";
+        item.description = "Write only the first N spherical-Bessel radial roots in each (atom,l,m) primitive "
+                           "block while retaining the full bessel_nao_ecut interpolation table. Zero writes all "
+                           "available roots.";
+        item.default_value = "0";
+        item.unit = "";
+        item.availability = "out_sternheimer_siab=True or out_sternheimer_galerkin_primitive=True.";
+        read_sync_int(input.sternheimer_siab_radial_count);
+        item.check_value = [](const Input_Item& item, const Parameter& para) {
+            if (para.input.sternheimer_siab_radial_count < 0)
+            {
+                ModuleBase::WARNING_QUIT("ReadInput", item.label + " must be non-negative.");
+            }
+        };
+        this->add_item(item);
+    }
+    {
         Input_Item item("out_sternheimer_galerkin_primitive");
         item.annotation = "true: output Bessel-primitive Sternheimer Galerkin matrices; false: default";
         item.category = "Output information";
