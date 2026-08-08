@@ -573,6 +573,15 @@ ValidatedPrimitiveGalerkinData validate_primitive_galerkin_data(
             spin.fixed_ao_grid_hamiltonian_ha,
             n_fixed_ao,
             "primitive Galerkin fixed-AO grid H");
+        if (spin.primitive_ao_hamiltonian_ha.size()
+                != n_primitive * n_fixed_ao
+            || !std::all_of(spin.primitive_ao_hamiltonian_ha.begin(),
+                            spin.primitive_ao_hamiltonian_ha.end(),
+                            finite_complex))
+        {
+            throw std::invalid_argument(
+                "Sternheimer SIAB primitive-to-AO Hamiltonian dimensions are invalid");
+        }
         validated.spins.push_back(&spin);
     }
     std::sort(
@@ -592,7 +601,9 @@ ValidatedPrimitiveGalerkinData validate_primitive_galerkin_data(
     }
 
     if (data.auxiliary_channels.empty()
-        || data.perturbations_ha.size() != data.auxiliary_channels.size())
+        || data.perturbations_ha.size() != data.auxiliary_channels.size()
+        || data.primitive_ao_perturbations_ha.size()
+               != data.auxiliary_channels.size())
     {
         throw std::invalid_argument(
             "Sternheimer SIAB primitive Galerkin auxiliary dimensions are invalid");
@@ -630,6 +641,16 @@ ValidatedPrimitiveGalerkinData validate_primitive_galerkin_data(
             data.perturbations_ha[channel],
             n_primitive,
             "primitive Galerkin V");
+        if (data.primitive_ao_perturbations_ha[channel].size()
+                != n_primitive * n_fixed_ao
+            || !std::all_of(
+                data.primitive_ao_perturbations_ha[channel].begin(),
+                data.primitive_ao_perturbations_ha[channel].end(),
+                finite_complex))
+        {
+            throw std::invalid_argument(
+                "Sternheimer SIAB primitive-to-AO perturbation dimensions are invalid");
+        }
     }
 
     if (data.frequency_ha.empty()
@@ -1332,6 +1353,20 @@ void write_primitive_galerkin_v1(const std::string& path,
     }
 
     output << "</HAMILTONIAN_H>\n"
+           << "<PRIMITIVE_AO_HAMILTONIAN>\n"
+           << "# row-major <p_a|H|phi_b> in Ha; matrices follow spin_index order\n";
+    for (const PrimitiveGalerkinSpinData* spin: validated.spins)
+    {
+        output << "# spin_index " << spin->spin_index << "\n";
+        for (const std::complex<double>& value:
+             spin->primitive_ao_hamiltonian_ha)
+        {
+            output << format_double(value.real()) << " "
+                   << format_double(value.imag()) << "\n";
+        }
+    }
+
+    output << "</PRIMITIVE_AO_HAMILTONIAN>\n"
            << "<PERTURBATION_V>\n"
            << "# row-major primitive V_ab in Ha; matrices follow channel_index order\n";
     for (const AuxiliaryChannelMetadata* channel: validated.channels)
@@ -1347,6 +1382,21 @@ void write_primitive_galerkin_v1(const std::string& path,
     }
 
     output << "</PERTURBATION_V>\n"
+           << "<PRIMITIVE_AO_PERTURBATION>\n"
+           << "# row-major <p_a|v_mu|phi_b> in Ha; matrices follow channel_index order\n";
+    for (const AuxiliaryChannelMetadata* channel: validated.channels)
+    {
+        output << "# channel_index " << channel->channel_index << "\n";
+        for (const std::complex<double>& value:
+             data.primitive_ao_perturbations_ha[static_cast<std::size_t>(
+                 channel->channel_index)])
+        {
+            output << format_double(value.real()) << " "
+                   << format_double(value.imag()) << "\n";
+        }
+    }
+
+    output << "</PRIMITIVE_AO_PERTURBATION>\n"
            << "<PRIMITIVE_AO_OVERLAP>\n"
            << "# row-major <p_a|phi_b>, real imag\n";
     for (const std::complex<double>& value: data.primitive_ao_overlap)

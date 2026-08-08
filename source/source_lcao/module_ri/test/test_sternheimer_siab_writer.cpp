@@ -616,13 +616,7 @@ TEST(SternheimerSIABFixedAOWriter, WritesVersionedDeterministicSidecar)
               "1 0 -0.55 1.0\n1 1 0.85 0.0\n");
     EXPECT_EQ(data_line_count(section_body(text, "OVERLAP_S")), 4);
     EXPECT_EQ(data_line_count(section_body(text, "HAMILTONIAN_H")), 8);
-    EXPECT_EQ(
-        data_line_count(section_body(text, "PRIMITIVE_AO_HAMILTONIAN")),
-        8);
     EXPECT_EQ(data_line_count(section_body(text, "PERTURBATION_V")), 4);
-    EXPECT_EQ(
-        data_line_count(section_body(text, "PRIMITIVE_AO_PERTURBATION")),
-        4);
     EXPECT_EQ(section_body(text, "FREQUENCY_GRID"),
               "# frequency_index frequency_ha weight_ha\n0 0.2 0.3\n1 0.8 0.7\n");
     EXPECT_EQ(count_occurrences(text, "<PROVENANCE_JSON>"), 1);
@@ -690,7 +684,13 @@ TEST(SternheimerSIABPrimitiveGalerkinWriter, WritesCompleteVersionedSidecar)
     EXPECT_EQ(data_line_count(section_body(text, "FIXED_AO_OCCUPATIONS")), 4);
     EXPECT_EQ(data_line_count(section_body(text, "OVERLAP_S")), 4);
     EXPECT_EQ(data_line_count(section_body(text, "HAMILTONIAN_H")), 8);
+    EXPECT_EQ(
+        data_line_count(section_body(text, "PRIMITIVE_AO_HAMILTONIAN")),
+        8);
     EXPECT_EQ(data_line_count(section_body(text, "PERTURBATION_V")), 4);
+    EXPECT_EQ(
+        data_line_count(section_body(text, "PRIMITIVE_AO_PERTURBATION")),
+        4);
     EXPECT_EQ(data_line_count(section_body(text, "PRIMITIVE_AO_OVERLAP")), 4);
     EXPECT_EQ(data_line_count(section_body(text, "FIXED_AO_GRID_OVERLAP")), 4);
     EXPECT_EQ(

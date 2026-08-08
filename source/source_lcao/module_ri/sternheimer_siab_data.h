@@ -67,6 +67,7 @@ struct PrimitiveGalerkinSpinData
     std::vector<double> fixed_ao_occupations;
     std::vector<std::complex<double>> hamiltonian_ha;
     std::vector<std::complex<double>> fixed_ao_grid_hamiltonian_ha;
+    std::vector<std::complex<double>> primitive_ao_hamiltonian_ha;
 };
 
 struct PrimitiveGalerkinData
@@ -80,6 +81,7 @@ struct PrimitiveGalerkinData
     std::vector<std::vector<std::complex<double>>> perturbations_ha;
     std::vector<std::complex<double>> primitive_ao_overlap;
     std::vector<std::complex<double>> fixed_ao_grid_overlap;
+    std::vector<std::vector<std::complex<double>>> primitive_ao_perturbations_ha;
     std::vector<double> frequency_ha;
     std::vector<double> frequency_weights_ha;
 };

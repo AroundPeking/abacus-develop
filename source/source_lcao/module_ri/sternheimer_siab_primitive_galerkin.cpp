@@ -1,7 +1,10 @@
 #include "sternheimer_siab_primitive_galerkin.h"
 
+#include <algorithm>
+#include <complex>
 #include <stdexcept>
 #include <utility>
+#include <vector>
 
 namespace module_ri
 {
@@ -20,6 +23,34 @@ std::vector<std::complex<double>> scale_to_hartree(
         value *= rydberg_to_hartree;
     }
     return matrix_ry;
+}
+
+std::vector<std::complex<double>> rectangular_block(
+    const std::vector<std::complex<double>>& square_matrix,
+    const std::size_t dimension,
+    const std::size_t row_begin,
+    const std::size_t row_count,
+    const std::size_t column_begin,
+    const std::size_t column_count)
+{
+    if (dimension == 0 || square_matrix.size() != dimension * dimension
+        || row_begin > dimension || row_count > dimension - row_begin
+        || column_begin > dimension || column_count > dimension - column_begin)
+    {
+        throw std::invalid_argument(
+            "Sternheimer primitive Galerkin matrix block dimensions are inconsistent.");
+    }
+    std::vector<std::complex<double>> result(row_count * column_count);
+    for (std::size_t row = 0; row != row_count; ++row)
+    {
+        const std::size_t source_offset
+            = (row_begin + row) * dimension + column_begin;
+        const std::size_t target_offset = row * column_count;
+        std::copy_n(square_matrix.begin() + source_offset,
+                    column_count,
+                    result.begin() + target_offset);
+    }
+    return result;
 }
 
 } // namespace
@@ -59,6 +90,7 @@ PrimitiveGalerkinData build_primitive_galerkin_data(
 
     const std::size_t n_primitive = primitive_basis_functions.size();
     const std::size_t n_fixed_ao = fixed_ao_basis_functions.size();
+    const std::size_t combined_dimension = n_primitive + n_fixed_ao;
     std::size_t covered_primitives = 0;
     for (const PrimitiveBlock& block: blocks)
     {
@@ -86,10 +118,41 @@ PrimitiveGalerkinData build_primitive_galerkin_data(
     result.overlap_s = overlap_s(primitive_basis_functions, delta_omega);
     result.fixed_ao_grid_overlap
         = overlap_s(fixed_ao_basis_functions, delta_omega);
-    result.perturbations_ha
-        = perturbation_matrices(primitive_basis_functions,
+
+    std::vector<std::vector<std::complex<double>>> combined_basis_functions;
+    combined_basis_functions.reserve(combined_dimension);
+    combined_basis_functions.insert(combined_basis_functions.end(),
+                                    primitive_basis_functions.begin(),
+                                    primitive_basis_functions.end());
+    combined_basis_functions.insert(combined_basis_functions.end(),
+                                    fixed_ao_basis_functions.begin(),
+                                    fixed_ao_basis_functions.end());
+
+    const std::vector<std::vector<std::complex<double>>>
+        combined_perturbations_ha
+        = perturbation_matrices(combined_basis_functions,
                                 potentials_ha,
                                 delta_omega);
+    result.perturbations_ha.reserve(combined_perturbations_ha.size());
+    result.primitive_ao_perturbations_ha.reserve(
+        combined_perturbations_ha.size());
+    for (const std::vector<std::complex<double>>& matrix:
+         combined_perturbations_ha)
+    {
+        result.perturbations_ha.push_back(rectangular_block(matrix,
+                                                            combined_dimension,
+                                                            0,
+                                                            n_primitive,
+                                                            0,
+                                                            n_primitive));
+        result.primitive_ao_perturbations_ha.push_back(
+            rectangular_block(matrix,
+                              combined_dimension,
+                              0,
+                              n_primitive,
+                              n_primitive,
+                              n_fixed_ao));
+    }
 
     result.primitive_ao_overlap.assign(
         n_primitive * n_fixed_ao, std::complex<double>(0.0, 0.0));
@@ -119,14 +182,31 @@ PrimitiveGalerkinData build_primitive_galerkin_data(
         PrimitiveGalerkinSpinData output;
         output.spin_index = input.spin_index;
         output.fixed_ao_occupations = input.occupations;
-        output.hamiltonian_ha = scale_to_hartree(
-            hamiltonian_matrix(primitive_basis_functions,
-                               hamiltonians_ry[spin],
-                               delta_omega));
-        output.fixed_ao_grid_hamiltonian_ha = scale_to_hartree(
-            hamiltonian_matrix(fixed_ao_basis_functions,
-                               hamiltonians_ry[spin],
-                               delta_omega));
+        const std::vector<std::complex<double>> combined_hamiltonian_ry
+            = hamiltonian_matrix(combined_basis_functions,
+                                 hamiltonians_ry[spin],
+                                 delta_omega);
+        output.hamiltonian_ha = scale_to_hartree(rectangular_block(
+            combined_hamiltonian_ry,
+            combined_dimension,
+            0,
+            n_primitive,
+            0,
+            n_primitive));
+        output.fixed_ao_grid_hamiltonian_ha
+            = scale_to_hartree(rectangular_block(combined_hamiltonian_ry,
+                                                  combined_dimension,
+                                                  n_primitive,
+                                                  n_fixed_ao,
+                                                  n_primitive,
+                                                  n_fixed_ao));
+        output.primitive_ao_hamiltonian_ha
+            = scale_to_hartree(rectangular_block(combined_hamiltonian_ry,
+                                                  combined_dimension,
+                                                  0,
+                                                  n_primitive,
+                                                  n_primitive,
+                                                  n_fixed_ao));
         result.spins.push_back(std::move(output));
     }
     return result;
