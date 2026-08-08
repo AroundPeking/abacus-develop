@@ -1492,6 +1492,21 @@ TEST_F(InputTest, Item_test2)
         output = testing::internal::GetCapturedStdout();
         EXPECT_THAT(output, testing::HasSubstr("NOTICE"));
     }
+    { // sternheimer_siab_radial_count
+        auto it = find_label("sternheimer_siab_radial_count", readinput.input_lists);
+        ASSERT_NE(it, readinput.input_lists.end());
+        EXPECT_EQ(param.input.sternheimer_siab_radial_count, 0);
+
+        it->second.str_values = {"15"};
+        it->second.read_value(it->second, param);
+        EXPECT_EQ(param.input.sternheimer_siab_radial_count, 15);
+
+        param.input.sternheimer_siab_radial_count = -1;
+        testing::internal::CaptureStdout();
+        EXPECT_EXIT(it->second.check_value(it->second, param), ::testing::ExitedWithCode(1), "");
+        output = testing::internal::GetCapturedStdout();
+        EXPECT_THAT(output, testing::HasSubstr("NOTICE"));
+    }
     { // sternheimer_frequency_grid_file
         auto it = find_label("sternheimer_frequency_grid_file", readinput.input_lists);
         ASSERT_NE(it, readinput.input_lists.end());

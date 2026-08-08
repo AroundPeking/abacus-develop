@@ -446,6 +446,30 @@ TEST_F(SternheimerSIABPrimitivesTest, ExplicitLmaxExtendsPrimitivesBeyondInputOr
     }
 }
 
+TEST_F(SternheimerSIABPrimitivesTest, ExplicitRadialCountCapsEveryAngularBlock)
+{
+    const Numerical_Basis::SIABPrimitiveParameters parameters{
+        ecut_ry,
+        rcut_bohr,
+        false,
+        0.1,
+        tolerance,
+        2,
+        2,
+    };
+    Numerical_Basis numerical_basis;
+    const auto blocks
+        = numerical_basis.siab_primitive_reciprocal_values(ik, &full_pw, structure_factor, ucell, parameters);
+
+    ASSERT_EQ(blocks.size(), 9);
+    for (std::size_t block_index = 0; block_index != blocks.size(); ++block_index)
+    {
+        EXPECT_EQ(blocks[block_index].n_primitive, 2);
+        EXPECT_EQ(blocks[block_index].values.size(), 2);
+        EXPECT_EQ(blocks[block_index].offset, static_cast<int>(2 * block_index));
+    }
+}
+
 TEST_F(SternheimerSIABPrimitivesTest, GammaCompressedOddLMatchesIndependentFullComplexGrid)
 {
     const Numerical_Basis::SIABPrimitiveParameters parameters{
