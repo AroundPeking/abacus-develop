@@ -1028,6 +1028,25 @@ If EXX(exact exchange) is calculated (i.e. dft_fuctional==hse/hf/pbe0/scan0 or r
         this->add_item(item);
     }
     {
+        Input_Item item("sternheimer_fd_order");
+        item.annotation = "finite-difference Laplacian order for Sternheimer grid equations";
+        item.category = "Output information";
+        item.type = "Integer";
+        item.description = "Use the second- or fourth-order centered Cartesian finite-difference Laplacian in the "
+                           "Sternheimer real-space Hamiltonian. The default remains second order.";
+        item.default_value = "2";
+        item.unit = "";
+        item.availability = "Calculation with Sternheimer output enabled.";
+        read_sync_int(input.sternheimer_fd_order);
+        item.check_value = [](const Input_Item& item, const Parameter& para) {
+            if (para.input.sternheimer_fd_order != 2 && para.input.sternheimer_fd_order != 4)
+            {
+                ModuleBase::WARNING_QUIT("ReadInput", item.label + " must be 2 or 4.");
+            }
+        };
+        this->add_item(item);
+    }
+    {
         Input_Item item("sternheimer_delta_virtual_source");
         item.annotation = "ks_bands: complete LCAO KS virtual space; projected_ao: diagnostic AO projection";
         item.category = "Output information";

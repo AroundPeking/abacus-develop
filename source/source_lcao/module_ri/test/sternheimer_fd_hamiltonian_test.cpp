@@ -259,3 +259,52 @@ TEST(SternheimerFDHamiltonian, KineticPrefactorScalesFiniteDifferenceLaplacian)
         EXPECT_NEAR(eigenpairs.eigenvalues[ib], expected_eigenvalues[ib], 1.0e-12);
     }
 }
+
+TEST(SternheimerFDHamiltonian, FourthOrderPeriodicLaplacianReducesPlaneWaveError)
+{
+    constexpr int nx = 32;
+    constexpr int mode = 3;
+    const double length = 2.0 * std::acos(-1.0);
+    const double spacing = length / nx;
+    Hamiltonian::Grid grid{nx, 1, 1, spacing, 1.0, 1.0, true};
+    const std::vector<double> potential(grid.size(), 0.0);
+    Hamiltonian second_order(grid, potential, 1.0, nullptr, 2);
+    Hamiltonian fourth_order(grid, potential, 1.0, nullptr, 4);
+
+    Hamiltonian::Vector plane_wave(grid.size());
+    for (int ix = 0; ix != nx; ++ix)
+    {
+        const double phase = static_cast<double>(mode) * spacing * ix;
+        plane_wave[static_cast<std::size_t>(ix)] = Complex(std::cos(phase), std::sin(phase));
+    }
+    Hamiltonian::Vector second_action;
+    Hamiltonian::Vector fourth_action;
+    second_order.apply(plane_wave, second_action);
+    fourth_order.apply(plane_wave, fourth_action);
+
+    Complex second_rayleigh(0.0, 0.0);
+    Complex fourth_rayleigh(0.0, 0.0);
+    for (int ix = 0; ix != nx; ++ix)
+    {
+        second_rayleigh += std::conj(plane_wave[static_cast<std::size_t>(ix)])
+                           * second_action[static_cast<std::size_t>(ix)];
+        fourth_rayleigh += std::conj(plane_wave[static_cast<std::size_t>(ix)])
+                           * fourth_action[static_cast<std::size_t>(ix)];
+    }
+    second_rayleigh /= static_cast<double>(nx);
+    fourth_rayleigh /= static_cast<double>(nx);
+    const double exact = static_cast<double>(mode * mode);
+
+    EXPECT_EQ(second_order.finite_difference_order(), 2);
+    EXPECT_EQ(fourth_order.finite_difference_order(), 4);
+    EXPECT_LT(std::abs(fourth_rayleigh.real() - exact), 0.1 * std::abs(second_rayleigh.real() - exact));
+    EXPECT_NEAR(second_rayleigh.imag(), 0.0, 1.0e-12);
+    EXPECT_NEAR(fourth_rayleigh.imag(), 0.0, 1.0e-12);
+}
+
+TEST(SternheimerFDHamiltonian, RejectsUnsupportedFiniteDifferenceOrder)
+{
+    Hamiltonian::Grid grid{4, 1, 1, 1.0, 1.0, 1.0, true};
+    EXPECT_THROW(Hamiltonian(grid, std::vector<double>(grid.size(), 0.0), 1.0, nullptr, 6),
+                 std::invalid_argument);
+}
