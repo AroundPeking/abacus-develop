@@ -180,6 +180,40 @@ TEST(SternheimerSIABOverlap, BuildsPrimitiveHamiltonianMatrixWithGridVolume)
     EXPECT_NEAR(matrix[3].imag(), 0.0, 1.0e-14);
 }
 
+TEST(SternheimerSIABOverlap, BatchesPrimitiveHamiltonianColumnsWithoutChangingMatrix)
+{
+    ModuleRI::SternheimerFDHamiltonian::Grid grid;
+    grid.nx = 2;
+    grid.ny = 2;
+    grid.nz = 1;
+    grid.hx = 0.7;
+    grid.hy = 0.9;
+    grid.hz = 1.1;
+    const ModuleRI::SternheimerFDHamiltonian hamiltonian(
+        grid,
+        {0.3, -0.4, 0.8, -0.2},
+        1.0);
+    const PrimitiveGrid basis_functions = {
+        {{1.0, 0.2}, {0.0, -0.1}, {0.3, 0.4}, {-0.2, 0.5}},
+        {{0.1, -0.3}, {0.7, 0.0}, {-0.4, 0.2}, {0.6, -0.1}},
+        {{-0.2, 0.0}, {0.5, 0.6}, {0.1, -0.7}, {0.4, 0.3}},
+    };
+
+    const auto unbatched
+        = siab::hamiltonian_matrix(basis_functions, hamiltonian, 0.25, 3);
+    const auto one_column
+        = siab::hamiltonian_matrix(basis_functions, hamiltonian, 0.25, 1);
+    ASSERT_EQ(one_column.size(), unbatched.size());
+    for (std::size_t index = 0; index != unbatched.size(); ++index)
+    {
+        EXPECT_NEAR(one_column[index].real(), unbatched[index].real(), 1.0e-13);
+        EXPECT_NEAR(one_column[index].imag(), unbatched[index].imag(), 1.0e-13);
+    }
+    EXPECT_THROW(
+        siab::hamiltonian_matrix(basis_functions, hamiltonian, 0.25, 0),
+        std::invalid_argument);
+}
+
 TEST(SternheimerSIABOverlap, RejectsPrimitiveHamiltonianGridMismatch)
 {
     ModuleRI::SternheimerFDHamiltonian::Grid grid;
