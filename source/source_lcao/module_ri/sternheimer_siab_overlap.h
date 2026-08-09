@@ -30,7 +30,8 @@ std::vector<std::vector<std::complex<double>>> perturbation_matrices(
 std::vector<std::complex<double>> hamiltonian_matrix(
     const std::vector<std::vector<std::complex<double>>>& basis_functions,
     const ModuleRI::SternheimerFDHamiltonian& hamiltonian,
-    double delta_omega);
+    double delta_omega,
+    int column_batch_size = 64);
 
 std::vector<std::complex<double>> overlap_q_reciprocal(
     const std::vector<std::complex<double>>& response_coefficients,

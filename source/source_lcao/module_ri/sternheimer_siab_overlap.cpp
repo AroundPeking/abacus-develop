@@ -293,7 +293,8 @@ std::vector<std::vector<Complex>> perturbation_matrices(const PrimitiveGrid& bas
 std::vector<Complex> hamiltonian_matrix(
     const PrimitiveGrid& basis_functions,
     const ModuleRI::SternheimerFDHamiltonian& hamiltonian,
-    const double delta_omega)
+    const double delta_omega,
+    const int column_batch_size)
 {
     validate_delta_omega(delta_omega);
     const std::size_t grid_size = validate_primitives(basis_functions);
@@ -302,17 +303,42 @@ std::vector<Complex> hamiltonian_matrix(
         throw std::invalid_argument(
             "Sternheimer SIAB Hamiltonian and basis grid sizes differ.");
     }
+    if (column_batch_size <= 0)
+    {
+        throw std::invalid_argument(
+            "Sternheimer SIAB Hamiltonian column batch size must be positive.");
+    }
 
     const std::size_t n_basis = basis_functions.size();
-    PrimitiveGrid h_basis(n_basis);
-#pragma omp parallel for schedule(dynamic)
-    for (int column = 0; column < static_cast<int>(n_basis); ++column)
+    std::vector<Complex> result(n_basis * n_basis, Complex(0.0, 0.0));
+    for (std::size_t first_column = 0; first_column < n_basis;
+         first_column += static_cast<std::size_t>(column_batch_size))
     {
-        hamiltonian.apply(basis_functions[static_cast<std::size_t>(column)],
-                          h_basis[static_cast<std::size_t>(column)]);
+        const std::size_t batch_size
+            = std::min(static_cast<std::size_t>(column_batch_size),
+                       n_basis - first_column);
+        PrimitiveGrid h_basis(batch_size);
+#pragma omp parallel for schedule(dynamic)
+        for (int local_column = 0;
+             local_column < static_cast<int>(batch_size);
+             ++local_column)
+        {
+            hamiltonian.apply(
+                basis_functions[first_column
+                                + static_cast<std::size_t>(local_column)],
+                h_basis[static_cast<std::size_t>(local_column)]);
+        }
+        const std::vector<Complex> batch_matrix
+            = row_major_matrix_elements(basis_functions,
+                                        h_basis,
+                                        delta_omega);
+        for (std::size_t row = 0; row != n_basis; ++row)
+        {
+            std::copy_n(batch_matrix.begin() + row * batch_size,
+                        batch_size,
+                        result.begin() + row * n_basis + first_column);
+        }
     }
-    std::vector<Complex> result
-        = row_major_matrix_elements(basis_functions, h_basis, delta_omega);
     for (std::size_t row = 0; row != n_basis; ++row)
     {
         result[row * n_basis + row]
