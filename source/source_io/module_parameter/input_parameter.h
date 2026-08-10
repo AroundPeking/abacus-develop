@@ -574,6 +574,8 @@ struct Input_para
     bool out_sternheimer_siab = false; ///< whether to output Sternheimer first-order-wavefunction targets for SIAB
     bool out_sternheimer_galerkin = false; ///< whether to output fixed-AO Galerkin matrices before response solves
     bool out_sternheimer_galerkin_primitive = false; ///< whether to output Bessel-primitive Galerkin matrices
+    bool out_sternheimer_galerkin_response = false; ///< whether to output independent response-orbital Galerkin matrices
+    std::vector<std::string> sternheimer_response_orbital_files = {}; ///< one response-only orbital file per atom type
     int sternheimer_siab_lmax = -1; ///< maximum angular momentum of SIAB target primitives; -1 uses orbital lmax
     int sternheimer_siab_radial_count = 0; ///< radial primitives per (atom,l,m) block; 0 uses all available roots
     std::vector<int> sternheimer_siab_radial_counts = {}; ///< optional radial primitive counts indexed by l

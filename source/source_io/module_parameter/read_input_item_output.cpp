@@ -895,6 +895,67 @@ If EXX(exact exchange) is calculated (i.e. dft_fuctional==hse/hf/pbe0/scan0 or r
         this->add_item(item);
     }
     {
+        Input_Item item("out_sternheimer_galerkin_response");
+        item.annotation = "true: output independent response-orbital Sternheimer Galerkin matrices; false: default";
+        item.category = "Output information";
+        item.type = "Boolean";
+        item.description = "Keep the SCF, occupied states, and auxiliary perturbations in their original LCAO "
+                           "spaces, then sample a separate response-only orbital set on the same uniform grid and "
+                           "write the resulting union H/S/V Galerkin matrices. This output-only path returns before "
+                           "linear solves.";
+        item.default_value = "False";
+        item.unit = "";
+        item.availability = "basis_type=lcao with sternheimer_delta=True and one response orbital file per atom type.";
+        read_sync_bool(input.out_sternheimer_galerkin_response);
+        item.check_value = [](const Input_Item& item, const Parameter& para) {
+            if (!para.input.out_sternheimer_galerkin_response)
+            {
+                return;
+            }
+            if (para.input.basis_type != "lcao")
+            {
+                ModuleBase::WARNING_QUIT("ReadInput", item.label + " requires basis_type=lcao.");
+            }
+            if (!para.input.sternheimer_delta)
+            {
+                ModuleBase::WARNING_QUIT("ReadInput", item.label + " currently requires sternheimer_delta True.");
+            }
+            if (para.input.out_sternheimer_galerkin_primitive)
+            {
+                ModuleBase::WARNING_QUIT(
+                    "ReadInput", item.label + " is mutually exclusive with out_sternheimer_galerkin_primitive.");
+            }
+            const std::vector<std::string>& files = para.input.sternheimer_response_orbital_files;
+            if (files.size() != static_cast<std::size_t>(para.input.ntype)
+                || std::any_of(files.begin(), files.end(), [](const std::string& file) { return file.empty(); }))
+            {
+                ModuleBase::WARNING_QUIT(
+                    "ReadInput", item.label + " requires exactly one non-empty sternheimer_response_orbital_files "
+                                              "entry per atom type.");
+            }
+        };
+        this->add_item(item);
+    }
+    {
+        Input_Item item("sternheimer_response_orbital_files");
+        item.annotation = "Independent response-only numerical atomic orbital files";
+        item.category = "Output information";
+        item.type = "Vector of String (ntype values)";
+        item.description = "List one numerical atomic orbital file per STRU atom type. These orbitals are sampled "
+                           "only after SCF to enlarge the Sternheimer response space; they do not replace the DFT "
+                           "orbital basis or the auxiliary basis.";
+        item.default_value = "{}";
+        item.unit = "";
+        item.availability = "out_sternheimer_galerkin_response=True.";
+        item.read_value = [](const Input_Item& item, Parameter& para) {
+            para.input.sternheimer_response_orbital_files = item.str_values;
+        };
+        sync_stringvec(input.sternheimer_response_orbital_files,
+                       para.input.sternheimer_response_orbital_files.size(),
+                       "");
+        this->add_item(item);
+    }
+    {
         Input_Item item("sternheimer_siab_lmax");
         item.annotation = "Maximum angular momentum of Sternheimer-SIAB target primitives";
         item.category = "Output information";

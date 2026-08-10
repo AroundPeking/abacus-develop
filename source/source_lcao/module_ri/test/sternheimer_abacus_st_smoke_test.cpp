@@ -335,31 +335,31 @@ TEST(SternheimerABACUSSTSmoke, SelectsZeroOrderSourceByResponseMode)
 
 TEST(SternheimerABACUSSTSmoke, SelectsIndependentFixedAOGalerkinOutputMode)
 {
-    const auto disabled = ModuleRI::select_sternheimer_output_mode(false, false, false, false);
+    const auto disabled = ModuleRI::select_sternheimer_output_mode(false, false, false, false, false);
     EXPECT_FALSE(disabled.run);
     EXPECT_FALSE(disabled.write_fixed_ao);
     EXPECT_FALSE(disabled.fixed_ao_only);
 
-    const auto fixed_only = ModuleRI::select_sternheimer_output_mode(false, false, true, false);
+    const auto fixed_only = ModuleRI::select_sternheimer_output_mode(false, false, true, false, false);
     EXPECT_TRUE(fixed_only.run);
     EXPECT_FALSE(fixed_only.write_librpa);
     EXPECT_FALSE(fixed_only.write_siab_targets);
     EXPECT_TRUE(fixed_only.write_fixed_ao);
     EXPECT_TRUE(fixed_only.fixed_ao_only);
 
-    const auto librpa_only = ModuleRI::select_sternheimer_output_mode(true, false, false, false);
+    const auto librpa_only = ModuleRI::select_sternheimer_output_mode(true, false, false, false, false);
     EXPECT_TRUE(librpa_only.run);
     EXPECT_TRUE(librpa_only.write_librpa);
     EXPECT_FALSE(librpa_only.write_fixed_ao);
     EXPECT_FALSE(librpa_only.fixed_ao_only);
 
-    const auto librpa_with_fixed = ModuleRI::select_sternheimer_output_mode(true, false, true, false);
+    const auto librpa_with_fixed = ModuleRI::select_sternheimer_output_mode(true, false, true, false, false);
     EXPECT_TRUE(librpa_with_fixed.run);
     EXPECT_TRUE(librpa_with_fixed.write_librpa);
     EXPECT_TRUE(librpa_with_fixed.write_fixed_ao);
     EXPECT_FALSE(librpa_with_fixed.fixed_ao_only);
 
-    const auto siab_only = ModuleRI::select_sternheimer_output_mode(false, true, false, false);
+    const auto siab_only = ModuleRI::select_sternheimer_output_mode(false, true, false, false, false);
     EXPECT_TRUE(siab_only.run);
     EXPECT_FALSE(siab_only.write_librpa);
     EXPECT_TRUE(siab_only.write_siab_targets);
@@ -367,13 +367,23 @@ TEST(SternheimerABACUSSTSmoke, SelectsIndependentFixedAOGalerkinOutputMode)
     EXPECT_FALSE(siab_only.fixed_ao_only);
 
     const auto primitive_only
-        = ModuleRI::select_sternheimer_output_mode(false, false, false, true);
+        = ModuleRI::select_sternheimer_output_mode(false, false, false, true, false);
     EXPECT_TRUE(primitive_only.run);
     EXPECT_FALSE(primitive_only.write_librpa);
     EXPECT_FALSE(primitive_only.write_siab_targets);
     EXPECT_TRUE(primitive_only.write_fixed_ao);
     EXPECT_TRUE(primitive_only.write_primitive);
     EXPECT_TRUE(primitive_only.fixed_ao_only);
+
+    const auto response_only
+        = ModuleRI::select_sternheimer_output_mode(false, false, false, false, true);
+    EXPECT_TRUE(response_only.run);
+    EXPECT_FALSE(response_only.write_librpa);
+    EXPECT_FALSE(response_only.write_siab_targets);
+    EXPECT_TRUE(response_only.write_fixed_ao);
+    EXPECT_FALSE(response_only.write_primitive);
+    EXPECT_TRUE(response_only.write_response_orbitals);
+    EXPECT_TRUE(response_only.fixed_ao_only);
 }
 
 TEST(SternheimerABACUSSTSmoke, SelectsExplicitABFSForPerturbationChannels)

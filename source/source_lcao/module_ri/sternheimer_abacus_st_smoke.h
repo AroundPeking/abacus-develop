@@ -62,23 +62,28 @@ struct SternheimerOutputMode
     bool write_siab_targets = false;
     bool write_fixed_ao = false;
     bool write_primitive = false;
+    bool write_response_orbitals = false;
     bool fixed_ao_only = false;
 };
 
 inline SternheimerOutputMode select_sternheimer_output_mode(const bool out_sternheimer_librpa,
                                                              const bool out_sternheimer_siab,
                                                              const bool out_sternheimer_galerkin,
-                                                             const bool out_sternheimer_galerkin_primitive)
+                                                             const bool out_sternheimer_galerkin_primitive,
+                                                             const bool out_sternheimer_galerkin_response)
 {
     SternheimerOutputMode mode;
     mode.run = out_sternheimer_librpa || out_sternheimer_siab || out_sternheimer_galerkin
-               || out_sternheimer_galerkin_primitive;
+               || out_sternheimer_galerkin_primitive || out_sternheimer_galerkin_response;
     mode.write_librpa = out_sternheimer_librpa;
     mode.write_siab_targets = out_sternheimer_siab;
-    mode.write_fixed_ao = out_sternheimer_galerkin || out_sternheimer_galerkin_primitive;
+    mode.write_fixed_ao
+        = out_sternheimer_galerkin || out_sternheimer_galerkin_primitive || out_sternheimer_galerkin_response;
     mode.write_primitive = out_sternheimer_galerkin_primitive;
+    mode.write_response_orbitals = out_sternheimer_galerkin_response;
     mode.fixed_ao_only = (out_sternheimer_galerkin
-                          || out_sternheimer_galerkin_primitive)
+                          || out_sternheimer_galerkin_primitive
+                          || out_sternheimer_galerkin_response)
                          && !out_sternheimer_librpa;
     return mode;
 }

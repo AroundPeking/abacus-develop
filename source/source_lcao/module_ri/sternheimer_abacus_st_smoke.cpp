@@ -1658,7 +1658,8 @@ void run_sternheimer_abacus_chi0_output_impl(const elecstate::Potential& potenti
         = select_sternheimer_output_mode(PARAM.inp.out_sternheimer_librpa,
                                          PARAM.inp.out_sternheimer_siab,
                                          PARAM.inp.out_sternheimer_galerkin,
-                                         PARAM.inp.out_sternheimer_galerkin_primitive);
+                                         PARAM.inp.out_sternheimer_galerkin_primitive,
+                                         PARAM.inp.out_sternheimer_galerkin_response);
     if (!output_mode.run)
     {
         return;

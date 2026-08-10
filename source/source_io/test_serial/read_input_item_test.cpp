@@ -64,6 +64,7 @@ TEST_F(InputTest, Item_test)
         EXPECT_EXIT(it->second.check_value(it->second, param), ::testing::ExitedWithCode(1), "");
         output = testing::internal::GetCapturedStdout();
         EXPECT_THAT(output, testing::HasSubstr("NOTICE"));
+
     }
 
     { // esolver_type
@@ -1522,6 +1523,39 @@ TEST_F(InputTest, Item_test2)
         EXPECT_EXIT(it->second.check_value(it->second, param), ::testing::ExitedWithCode(1), "");
         output = testing::internal::GetCapturedStdout();
         EXPECT_THAT(output, testing::HasSubstr("NOTICE"));
+    }
+    { // out_sternheimer_galerkin_response
+        auto it = find_label("out_sternheimer_galerkin_response", readinput.input_lists);
+        ASSERT_NE(it, readinput.input_lists.end());
+        EXPECT_FALSE(param.input.out_sternheimer_galerkin_response);
+
+        param.input.out_sternheimer_galerkin_response = true;
+        param.input.basis_type = "lcao";
+        param.input.sternheimer_delta = true;
+        param.input.sternheimer_response_orbital_files = {"H_response.orb"};
+        param.input.ntype = 1;
+        it->second.check_value(it->second, param);
+
+        param.input.sternheimer_response_orbital_files.clear();
+        testing::internal::CaptureStdout();
+        EXPECT_EXIT(it->second.check_value(it->second, param), ::testing::ExitedWithCode(1), "");
+        output = testing::internal::GetCapturedStdout();
+        EXPECT_THAT(output, testing::HasSubstr("NOTICE"));
+
+        param.input.out_sternheimer_galerkin_response = false;
+        param.input.sternheimer_delta = false;
+        param.input.ntype = 0;
+    }
+    { // sternheimer_response_orbital_files
+        auto it = find_label("sternheimer_response_orbital_files", readinput.input_lists);
+        ASSERT_NE(it, readinput.input_lists.end());
+        EXPECT_TRUE(param.input.sternheimer_response_orbital_files.empty());
+
+        it->second.str_values = {"H_response.orb", "O_response.orb"};
+        it->second.read_value(it->second, param);
+        EXPECT_EQ(param.input.sternheimer_response_orbital_files,
+                  (std::vector<std::string>{"H_response.orb", "O_response.orb"}));
+        param.input.sternheimer_response_orbital_files.clear();
     }
     { // sternheimer_frequency_grid_file
         auto it = find_label("sternheimer_frequency_grid_file", readinput.input_lists);

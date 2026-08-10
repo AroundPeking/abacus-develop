@@ -561,7 +561,8 @@ void ModuleIO::ctrl_scf_lcao(UnitCell& ucell,
         = ModuleRI::select_sternheimer_output_mode(inp.out_sternheimer_librpa,
                                                    inp.out_sternheimer_siab,
                                                    inp.out_sternheimer_galerkin,
-                                                   inp.out_sternheimer_galerkin_primitive);
+                                                   inp.out_sternheimer_galerkin_primitive,
+                                                   inp.out_sternheimer_galerkin_response);
     if (sternheimer_output_mode.run)
     {
         if (pelec == nullptr || pelec->pot == nullptr || pw_rho == nullptr || psi == nullptr)
