@@ -1,3 +1,4 @@
+import errno
 import json
 import os
 from pathlib import Path
@@ -971,6 +972,109 @@ class SupercellGateCommandTest(unittest.TestCase):
 
         self.assertEqual(link.call_count, 2)
         self.assertGreaterEqual(fsync.call_count, 2)
+        self.assert_no_outputs()
+
+    def test_joint_publication_retries_empty_nfs_stage_cleanup_race(self):
+        key = BlockKey(0, 0, (0, 0, 0))
+        snapshot = _snapshot({key: np.ones((1, 1), dtype=np.float64)}, scalar="real64")
+        real_rmtree = shutil.rmtree
+        cleanup_attempts = []
+
+        def fail_once_after_removing_stage_contents(path, *arguments, **keywords):
+            cleanup_attempts.append(Path(path))
+            if len(cleanup_attempts) == 1:
+                for child in Path(path).iterdir():
+                    child.unlink()
+                raise OSError(
+                    errno.ENOTEMPTY,
+                    os.strerror(errno.ENOTEMPTY),
+                    str(path),
+                )
+            return real_rmtree(path, *arguments, **keywords)
+
+        with mock.patch.object(
+            shutil,
+            "rmtree",
+            side_effect=fail_once_after_removing_stage_contents,
+        ):
+            try:
+                cli._publish_snapshots_together(
+                    self.h_dense_out,
+                    snapshot,
+                    self.h_occ_out,
+                    snapshot,
+                )
+            except OSError as error:
+                self.fail("empty NFS cleanup race was not retried: {}".format(error))
+
+        self.assertEqual(len(cleanup_attempts), 2)
+        for output in (self.h_dense_out, self.h_occ_out):
+            published = read_snapshot(output)
+            np.testing.assert_array_equal(published.blocks[key], np.ones((1, 1)))
+
+    def test_joint_publication_does_not_retry_nonempty_enotempty(self):
+        key = BlockKey(0, 0, (0, 0, 0))
+        snapshot = _snapshot({key: np.ones((1, 1), dtype=np.float64)}, scalar="real64")
+        real_rmtree = shutil.rmtree
+        cleanup_attempts = []
+
+        def fail_once_while_stage_is_nonempty(path, *arguments, **keywords):
+            cleanup_attempts.append(Path(path))
+            if len(cleanup_attempts) == 1:
+                self.assertTrue(any(Path(path).iterdir()))
+                raise OSError(
+                    errno.ENOTEMPTY,
+                    os.strerror(errno.ENOTEMPTY),
+                    str(path),
+                )
+            return real_rmtree(path, *arguments, **keywords)
+
+        with mock.patch.object(
+            shutil,
+            "rmtree",
+            side_effect=fail_once_while_stage_is_nonempty,
+        ):
+            with self.assertRaisesRegex(OSError, os.strerror(errno.ENOTEMPTY)):
+                cli._publish_snapshots_together(
+                    self.h_dense_out,
+                    snapshot,
+                    self.h_occ_out,
+                    snapshot,
+                )
+
+        self.assertEqual(len(cleanup_attempts), 2)
+        self.assert_no_outputs()
+
+    def test_joint_publication_bounds_repeated_empty_enotempty_retries(self):
+        key = BlockKey(0, 0, (0, 0, 0))
+        snapshot = _snapshot({key: np.ones((1, 1), dtype=np.float64)}, scalar="real64")
+        cleanup_attempts = []
+
+        def keep_reporting_enotempty_after_emptying(path, *arguments, **keywords):
+            cleanup_attempts.append(Path(path))
+            for child in Path(path).iterdir():
+                child.unlink()
+            raise OSError(
+                errno.ENOTEMPTY,
+                os.strerror(errno.ENOTEMPTY),
+                str(path),
+            )
+
+        with mock.patch.object(
+            shutil,
+            "rmtree",
+            side_effect=keep_reporting_enotempty_after_emptying,
+        ):
+            with self.assertRaisesRegex(OSError, os.strerror(errno.ENOTEMPTY)):
+                cli._publish_snapshots_together(
+                    self.h_dense_out,
+                    snapshot,
+                    self.h_occ_out,
+                    snapshot,
+                )
+
+        self.assertGreaterEqual(len(cleanup_attempts), 3)
+        self.assertLessEqual(len(cleanup_attempts), 6)
         self.assert_no_outputs()
 
     def test_outputs_in_different_parents_are_rejected(self):

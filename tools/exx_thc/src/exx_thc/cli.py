@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import errno
 import json
 import math
 import os
@@ -10,6 +11,7 @@ from pathlib import Path
 import shutil
 import sys
 import tempfile
+import time
 from typing import Dict, Mapping, Optional, Sequence, Tuple
 
 import numpy as np
@@ -573,6 +575,27 @@ def _close_descriptors(descriptors: Sequence[int]) -> None:
             pass
 
 
+def _remove_stage_directory(directory: Path) -> None:
+    """Retry only the empty-directory ENOTEMPTY race observed on NFS."""
+
+    for delay in (0.01, 0.02, 0.04):
+        try:
+            shutil.rmtree(directory)
+            return
+        except OSError as error:
+            if error.errno != errno.ENOTEMPTY:
+                raise
+            try:
+                with os.scandir(str(directory)) as entries:
+                    empty = next(entries, None) is None
+            except OSError:
+                raise error
+            if not empty:
+                raise error
+            time.sleep(delay)
+    shutil.rmtree(directory)
+
+
 def _publish_snapshots_together(
     dense_path: Path,
     dense_snapshot: Snapshot,
@@ -602,7 +625,7 @@ def _publish_snapshots_together(
         for stage, final in stages:
             os.link(str(stage), str(final))
         _fsync_directory(parent)
-        shutil.rmtree(stage_directory)
+        _remove_stage_directory(stage_directory)
     except BaseException:
         for descriptor, final in owned_publications:
             try:
