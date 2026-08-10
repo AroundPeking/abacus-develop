@@ -5,8 +5,11 @@ from __future__ import annotations
 import argparse
 import json
 import math
+import os
 from pathlib import Path
+import shutil
 import sys
+import tempfile
 from typing import Dict, Mapping, Optional, Sequence, Tuple
 
 import numpy as np
@@ -14,6 +17,15 @@ import numpy as np
 from .bvk import from_k, k_sector, to_k
 from .io import BlockKey, Snapshot, TensorMap, read_snapshot, write_snapshot
 from .occupied import OccupiedFactor, occupied_factor
+from .supercell import (
+    assemble_pair_coefficient,
+    assemble_translation_matrix,
+    direct_exchange,
+    extract_reference_cell_blocks,
+    infer_supercell_layout,
+    map_dotc,
+    occupied_exchange,
+)
 
 
 Period = Tuple[int, int, int]
@@ -390,6 +402,497 @@ def project_snapshot(arguments: argparse.Namespace) -> dict:
     }
 
 
+def _positive_integer(value: str) -> int:
+    try:
+        result = int(value)
+    except ValueError as error:
+        raise argparse.ArgumentTypeError("must be a positive integer") from error
+    if result <= 0:
+        raise argparse.ArgumentTypeError("must be a positive integer")
+    return result
+
+
+def _normalized_sumsq(values: np.ndarray) -> Tuple[float, float]:
+    """Represent one real-array Frobenius norm as ``scale * sqrt(sumsq)``."""
+
+    if not np.isfinite(values).all():
+        raise ValueError("Frobenius norm input must contain only finite values")
+    scale = float(np.max(np.abs(values))) if values.size else 0.0
+    if scale == 0.0:
+        return 0.0, 0.0
+    normalized = values / scale
+    sumsq = float(np.sum(normalized * normalized, dtype=np.float64))
+    if not math.isfinite(sumsq):
+        raise ValueError("Frobenius norm must be finite")
+    return scale, sumsq
+
+
+def _combine_sumsq(
+    total: Tuple[float, float], contribution: Tuple[float, float]
+) -> Tuple[float, float]:
+    total_scale, total_sumsq = total
+    scale, sumsq = contribution
+    if scale == 0.0 or sumsq == 0.0:
+        return total
+    if total_scale == 0.0 or total_sumsq == 0.0:
+        return scale, sumsq
+    if total_scale < scale:
+        ratio = total_scale / scale
+        return scale, sumsq + total_sumsq * ratio * ratio
+    ratio = scale / total_scale
+    return total_scale, total_sumsq + sumsq * ratio * ratio
+
+
+def _complex_norm_pair(array: np.ndarray) -> Tuple[float, float]:
+    total = (0.0, 0.0)
+    total = _combine_sumsq(total, _normalized_sumsq(array.real))
+    total = _combine_sumsq(total, _normalized_sumsq(array.imag))
+    return total
+
+
+def _complex_difference_norm_pair(
+    reference: np.ndarray, candidate: np.ndarray
+) -> Tuple[float, float]:
+    total = (0.0, 0.0)
+    for reference_part, candidate_part in (
+        (reference.real, candidate.real),
+        (reference.imag, candidate.imag),
+    ):
+        if not np.isfinite(reference_part).all() or not np.isfinite(candidate_part).all():
+            raise ValueError("Frobenius difference input must contain only finite values")
+        reference_scale = float(np.max(np.abs(reference_part))) if reference_part.size else 0.0
+        candidate_scale = float(np.max(np.abs(candidate_part))) if candidate_part.size else 0.0
+        scale = max(reference_scale, candidate_scale)
+        if scale == 0.0:
+            continue
+        normalized_difference = candidate_part / scale - reference_part / scale
+        sumsq = float(
+            np.sum(normalized_difference * normalized_difference, dtype=np.float64)
+        )
+        if not math.isfinite(sumsq):
+            raise ValueError("Frobenius difference norm must be finite")
+        total = _combine_sumsq(total, (scale, sumsq))
+    return total
+
+
+def _norm_ratio(
+    numerator: Tuple[float, float], denominator: Tuple[float, float]
+) -> Optional[float]:
+    numerator_scale, numerator_sumsq = numerator
+    denominator_scale, denominator_sumsq = denominator
+    if denominator_scale == 0.0 or denominator_sumsq == 0.0:
+        return 0.0 if numerator_scale == 0.0 or numerator_sumsq == 0.0 else None
+    if numerator_scale == 0.0 or numerator_sumsq == 0.0:
+        return 0.0
+    ratio = (numerator_scale / denominator_scale) * math.sqrt(
+        numerator_sumsq / denominator_sumsq
+    )
+    if not math.isfinite(ratio):
+        raise ValueError("relative Frobenius norm must be finite")
+    return ratio
+
+
+def _relative_frobenius_arrays(reference: np.ndarray, candidate: np.ndarray) -> Optional[float]:
+    if reference.shape != candidate.shape:
+        raise ValueError("Frobenius comparison arrays must have identical shapes")
+    return _norm_ratio(
+        _complex_difference_norm_pair(reference, candidate),
+        _complex_norm_pair(reference),
+    )
+
+
+def _relative_frobenius_union(
+    reference: Mapping[BlockKey, np.ndarray], candidate: Mapping[BlockKey, np.ndarray]
+) -> Optional[float]:
+    reference_norm = (0.0, 0.0)
+    difference_norm = (0.0, 0.0)
+    keys = sorted(
+        set(reference).union(candidate),
+        key=lambda key: (key.ia1, key.ia2, key.R),
+    )
+    for key in keys:
+        reference_block = reference.get(key)
+        candidate_block = candidate.get(key)
+        if reference_block is not None and candidate_block is not None:
+            if reference_block.shape != candidate_block.shape:
+                raise ValueError("H snapshot union contains incompatible matching shapes")
+        elif reference_block is None:
+            reference_block = np.zeros_like(candidate_block)
+        else:
+            candidate_block = np.zeros_like(reference_block)
+        reference_norm = _combine_sumsq(
+            reference_norm, _complex_norm_pair(reference_block)
+        )
+        difference_norm = _combine_sumsq(
+            difference_norm,
+            _complex_difference_norm_pair(reference_block, candidate_block),
+        )
+    return _norm_ratio(difference_norm, reference_norm)
+
+
+def _validate_output_paths(dense_path: Path, occupied_path: Path) -> Path:
+    dense = Path(dense_path)
+    occupied = Path(occupied_path)
+    dense_parent = dense.parent.resolve()
+    occupied_parent = occupied.parent.resolve()
+    if dense_parent != occupied_parent:
+        raise ValueError("H outputs must have the same parent directory")
+    if dense.resolve() == occupied.resolve():
+        raise ValueError("H outputs must be distinct paths")
+    for output in (dense, occupied):
+        if os.path.lexists(str(output)):
+            raise ValueError("output already exists: {}".format(output))
+    return dense_parent
+
+
+def _fsync_directory(directory: Path) -> None:
+    descriptor = os.open(str(directory), os.O_RDONLY)
+    try:
+        os.fsync(descriptor)
+    finally:
+        os.close(descriptor)
+
+
+def _same_inode_as_descriptor(descriptor: int, path: Path) -> bool:
+    try:
+        owner_stat = os.fstat(descriptor)
+        path_stat = os.stat(str(path), follow_symlinks=False)
+    except FileNotFoundError:
+        return False
+    return (owner_stat.st_dev, owner_stat.st_ino) == (
+        path_stat.st_dev,
+        path_stat.st_ino,
+    )
+
+
+def _close_descriptors(descriptors: Sequence[int]) -> None:
+    for descriptor in descriptors:
+        try:
+            os.close(descriptor)
+        except OSError:
+            pass
+
+
+def _publish_snapshots_together(
+    dense_path: Path,
+    dense_snapshot: Snapshot,
+    occupied_path: Path,
+    occupied_snapshot: Snapshot,
+) -> None:
+    """Publish two snapshots exclusively, rolling back only our own hard links."""
+
+    dense = Path(dense_path)
+    occupied = Path(occupied_path)
+    parent = _validate_output_paths(dense, occupied)
+    stage_directory = Path(
+        tempfile.mkdtemp(prefix=".supercell-gate.", dir=str(parent))
+    )
+    descriptors = []
+    owned_publications = []
+    try:
+        dense_stage = stage_directory / "H.dense.stage.exxcmp"
+        occupied_stage = stage_directory / "H.occ.stage.exxcmp"
+        write_snapshot(dense_stage, dense_snapshot)
+        write_snapshot(occupied_stage, occupied_snapshot)
+        stages = ((dense_stage, dense), (occupied_stage, occupied))
+        for stage, final in stages:
+            descriptor = os.open(str(stage), os.O_RDONLY)
+            descriptors.append(descriptor)
+            owned_publications.append((descriptor, final))
+        for stage, final in stages:
+            os.link(str(stage), str(final))
+        _fsync_directory(parent)
+        shutil.rmtree(stage_directory)
+    except BaseException:
+        for descriptor, final in owned_publications:
+            try:
+                if _same_inode_as_descriptor(descriptor, final):
+                    final.unlink()
+            except OSError:
+                pass
+        try:
+            _fsync_directory(parent)
+        except OSError:
+            pass
+        try:
+            shutil.rmtree(stage_directory)
+        except OSError:
+            pass
+        _close_descriptors(descriptors)
+        raise
+    _close_descriptors(descriptors)
+
+
+def _supercell_report(
+    max_elements: int, live_elements: int, snapshot_elements: int, nat: int
+) -> dict:
+    return {
+        "dense_H_rel_fro": None,
+        "occupied_H_rel_fro": None,
+        "dense_occ_H_rel_fro": None,
+        "dense_E_abs_Ry_atom": None,
+        "occupied_E_abs_Ry_atom": None,
+        "occupied_ranks_by_supercell": [],
+        "discarded_trace": None,
+        "D_hermiticity_rel_fro": None,
+        "D_min_eigenvalue": None,
+        "D_min_eigenvalue_scaled": None,
+        "density_factor_rel_fro": None,
+        "dense_bytes": 0,
+        "occupied_bytes": 0,
+        "live_elements_upper_bound": live_elements,
+        "snapshot_elements_upper_bound": snapshot_elements,
+        "max_elements": max_elements,
+        "nat": nat,
+        "pass": False,
+    }
+
+
+def _real_map_energy(density_blocks: TensorMap, h_blocks: TensorMap) -> float:
+    energy = map_dotc(density_blocks, h_blocks)
+    if abs(energy.imag) >= 1.0e-13:
+        raise ValueError("exchange energy imaginary part must have magnitude below 1e-13")
+    if not math.isfinite(energy.real):
+        raise ValueError("exchange energy must be finite")
+    return float(energy.real)
+
+
+def _absolute_energy_error_per_atom(candidate: float, reference: float, nat: int) -> float:
+    difference = abs(candidate - reference) / nat
+    if not math.isfinite(difference):
+        raise ValueError("exchange energy error per atom must be finite")
+    return difference
+
+
+def _snapshot_elements_upper_bound(paths: Sequence[Path]) -> int:
+    return sum((Path(path).stat().st_size + 15) // 16 for path in paths)
+
+
+def _validate_ao_blocks_against_layout(
+    blocks: Mapping[BlockKey, np.ndarray], layout, name: str
+) -> None:
+    layout_atoms = set(layout.atoms)
+    block_atoms = set()
+    for key, block in blocks.items():
+        if key.ia1 not in layout_atoms or key.ia2 not in layout_atoms:
+            raise ValueError(
+                "{} atom universe must match the supercell layout".format(name)
+            )
+        expected_shape = (
+            layout.ao_dimensions[key.ia1],
+            layout.ao_dimensions[key.ia2],
+        )
+        if block.shape != expected_shape:
+            raise ValueError(
+                "{} block shape is incompatible with the supercell layout".format(name)
+            )
+        block_atoms.update((key.ia1, key.ia2))
+    if block_atoms != layout_atoms:
+        raise ValueError(
+            "{} atom universe must match the supercell layout".format(name)
+        )
+
+
+def supercell_gate(arguments: argparse.Namespace) -> dict:
+    dense_output = Path(arguments.H_dense_out)
+    occupied_output = Path(arguments.H_occ_out)
+    _validate_output_paths(dense_output, occupied_output)
+
+    period = tuple(int(value) for value in arguments.period)
+    if any(value <= 0 for value in period):
+        raise ValueError("period must contain three positive integers")
+    max_elements = int(arguments.max_elements)
+    nk = math.prod(period)
+    if nk * nk > max_elements:
+        raise ValueError("supercell cell-pair count exceeds max_elements")
+
+    snapshot_paths = (
+        arguments.C,
+        arguments.V,
+        arguments.D_full,
+        arguments.D_post,
+        arguments.H_reference,
+    )
+    snapshot_elements = _snapshot_elements_upper_bound(snapshot_paths)
+    if snapshot_elements > max_elements:
+        raise ValueError("dense supercell live allocation exceeds max_elements")
+
+    coefficient = _serial_numeric_snapshot(arguments.C, "C")
+    metric = _serial_numeric_snapshot(arguments.V, "V")
+    density = _serial_numeric_snapshot(arguments.D_full, "D.full")
+    density_post = _serial_numeric_snapshot(arguments.D_post, "D.post")
+    h_reference = _serial_numeric_snapshot(arguments.H_reference, "reference H")
+    snapshots = (coefficient, metric, density, density_post, h_reference)
+    scalar = coefficient.scalar
+    if any(snapshot.scalar != scalar for snapshot in snapshots[1:]):
+        raise ValueError("all supercell-gate snapshots must use the same scalar type")
+    energy_reference = read_real_scalar(arguments.energy_reference)
+
+    layout = infer_supercell_layout(
+        coefficient.blocks, metric.blocks, density.blocks, period
+    )
+    _validate_ao_blocks_against_layout(
+        h_reference.blocks, layout, "reference H"
+    )
+    _validate_ao_blocks_against_layout(
+        density_post.blocks, layout, "D.post"
+    )
+    nat = len(layout.atoms)
+    nP = int(layout.naux_supercell)
+    nA = int(layout.nao_supercell)
+    coefficient_elements = nP * nA * nA
+    metric_elements = nP * nP
+    density_elements = nA * nA
+    factor_peak = coefficient_elements + metric_elements + 10 * density_elements
+    if scalar == "real64":
+        direct_peak = (
+            4 * coefficient_elements + 2 * metric_elements + 4 * density_elements
+        )
+        occupied_peak = (
+            4 * coefficient_elements + 2 * metric_elements + 4 * density_elements
+        )
+    else:
+        direct_peak = (
+            3 * coefficient_elements + metric_elements + 3 * density_elements
+        )
+        occupied_peak = (
+            3 * coefficient_elements + metric_elements + 4 * density_elements
+        )
+    # This is a complex128-equivalent element bound, not total Python RSS.  It
+    # includes the five snapshot file payloads; factor_peak also reserves
+    # 4 * D elements for eigensolver/workspace needs.
+    core_elements = max(factor_peak, direct_peak, occupied_peak)
+    live_elements = snapshot_elements + core_elements
+    if live_elements > max_elements:
+        raise ValueError("dense supercell live allocation exceeds max_elements")
+    report = _supercell_report(
+        max_elements, live_elements, snapshot_elements, nat
+    )
+
+    dense_coefficient = assemble_pair_coefficient(
+        coefficient.blocks, layout, max_elements
+    )
+    dense_metric = assemble_translation_matrix(
+        metric.blocks, layout, "auxiliary", max_elements
+    )
+    dense_density = assemble_translation_matrix(
+        density.blocks, layout, "ao", max_elements
+    )
+    del coefficient, metric, density
+
+    hermiticity = _relative_frobenius_arrays(
+        dense_density, dense_density.conj().T
+    )
+    if hermiticity is None:
+        raise ValueError("D Hermiticity residual is undefined")
+    report["D_hermiticity_rel_fro"] = hermiticity
+    if hermiticity > 1.0e-12:
+        return report
+
+    with np.errstate(over="ignore", invalid="ignore"):
+        hermitian_density = 0.5 * dense_density + 0.5 * dense_density.conj().T
+    del dense_density
+    if not np.isfinite(hermitian_density).all():
+        raise ValueError("Hermitian D matrix must contain only finite values")
+    try:
+        eigenvalues = np.linalg.eigvalsh(hermitian_density)
+    except np.linalg.LinAlgError as error:
+        raise ValueError("Hermitian D eigensolver failed") from error
+    if not np.isfinite(eigenvalues).all():
+        raise ValueError("D eigenvalues must contain only finite values")
+    minimum = float(np.min(eigenvalues))
+    maximum = float(np.max(eigenvalues))
+    report["D_min_eigenvalue"] = minimum
+    if maximum > 0.0:
+        scaled_minimum = minimum / maximum
+        if not math.isfinite(scaled_minimum):
+            scaled_minimum = math.copysign(sys.float_info.max, minimum)
+        report["D_min_eigenvalue_scaled"] = scaled_minimum
+        psd_pass = minimum >= -1.0e-10 * maximum
+    elif minimum < 0.0:
+        report["D_min_eigenvalue_scaled"] = None
+        psd_pass = False
+    else:
+        report["D_min_eigenvalue_scaled"] = 0.0
+        psd_pass = True
+    del eigenvalues
+    if not psd_pass:
+        return report
+
+    factor = occupied_factor(hermitian_density, 0.0)
+    occupied_orbitals = factor.O
+    report["occupied_ranks_by_supercell"] = [int(occupied_orbitals.shape[1])]
+    report["discarded_trace"] = float(factor.discarded_trace)
+    del factor
+    with np.errstate(over="ignore", invalid="ignore"):
+        factored_density = occupied_orbitals @ occupied_orbitals.conj().T
+    if not np.isfinite(factored_density).all():
+        raise ValueError("occupied density factor product must contain only finite values")
+    density_factor_relative = _relative_frobenius_arrays(
+        hermitian_density, factored_density
+    )
+    del factored_density
+    if density_factor_relative is None:
+        raise ValueError("density factor relative Frobenius residual is undefined")
+    report["density_factor_rel_fro"] = density_factor_relative
+    if density_factor_relative > 1.0e-12:
+        return report
+
+    direct = direct_exchange(dense_coefficient, dense_metric, hermitian_density)
+    report["dense_bytes"] = 16 * int(direct.temporary_elements)
+    dense_matrix = direct.matrix
+    del direct
+
+    occupied = occupied_exchange(
+        dense_coefficient, dense_metric, occupied_orbitals
+    )
+    report["occupied_bytes"] = 16 * int(occupied.temporary_elements)
+    occupied_matrix = occupied.matrix
+    del occupied, occupied_orbitals, dense_coefficient, dense_metric, hermitian_density
+
+    dense_blocks = extract_reference_cell_blocks(dense_matrix, layout, scalar)
+    occupied_blocks = extract_reference_cell_blocks(occupied_matrix, layout, scalar)
+    del dense_matrix, occupied_matrix
+    dense_h_relative = _relative_frobenius_union(h_reference.blocks, dense_blocks)
+    occupied_h_relative = _relative_frobenius_union(
+        h_reference.blocks, occupied_blocks
+    )
+    dense_occupied_relative = _relative_frobenius_union(
+        dense_blocks, occupied_blocks
+    )
+    report["dense_H_rel_fro"] = dense_h_relative
+    report["occupied_H_rel_fro"] = occupied_h_relative
+    report["dense_occ_H_rel_fro"] = dense_occupied_relative
+
+    dense_energy = _real_map_energy(density_post.blocks, dense_blocks)
+    occupied_energy = _real_map_energy(density_post.blocks, occupied_blocks)
+    report["dense_E_abs_Ry_atom"] = _absolute_energy_error_per_atom(
+        dense_energy, energy_reference, nat
+    )
+    report["occupied_E_abs_Ry_atom"] = _absolute_energy_error_per_atom(
+        occupied_energy, energy_reference, nat
+    )
+    passed = (
+        dense_h_relative is not None
+        and dense_h_relative <= 1.0e-10
+        and occupied_h_relative is not None
+        and occupied_h_relative <= 1.0e-10
+        and dense_occupied_relative is not None
+        and dense_occupied_relative <= 1.0e-12
+        and report["dense_E_abs_Ry_atom"] <= 1.0e-10
+        and report["occupied_E_abs_Ry_atom"] <= 1.0e-10
+    )
+    report["pass"] = passed
+    if passed:
+        _publish_snapshots_together(
+            dense_output,
+            Snapshot(1, scalar, 0, 1, dense_blocks),
+            occupied_output,
+            Snapshot(1, scalar, 0, 1, occupied_blocks),
+        )
+    return report
+
+
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="python -m exx_thc.cli")
     commands = parser.add_subparsers(dest="command", required=True)
@@ -409,6 +912,30 @@ def _parser() -> argparse.ArgumentParser:
     project.add_argument("--period", type=int, nargs=3, metavar=("PX", "PY", "PZ"), required=True)
     project.add_argument("--output", type=Path, required=True)
     project.add_argument("--eigenvalue-tol", type=float, default=0.0)
+
+    supercell = commands.add_parser(
+        "supercell-gate", help="gate dense and occupied finite-supercell EXX"
+    )
+    supercell.add_argument("--C", type=Path, required=True)
+    supercell.add_argument("--V", type=Path, required=True)
+    supercell.add_argument("--D-full", dest="D_full", type=Path, required=True)
+    supercell.add_argument("--D-post", dest="D_post", type=Path, required=True)
+    supercell.add_argument(
+        "--H-reference", dest="H_reference", type=Path, required=True
+    )
+    supercell.add_argument(
+        "--energy-reference", dest="energy_reference", type=Path, required=True
+    )
+    supercell.add_argument(
+        "--period", type=int, nargs=3, metavar=("PX", "PY", "PZ"), required=True
+    )
+    supercell.add_argument(
+        "--H-dense-out", dest="H_dense_out", type=Path, required=True
+    )
+    supercell.add_argument(
+        "--H-occ-out", dest="H_occ_out", type=Path, required=True
+    )
+    supercell.add_argument("--max-elements", type=_positive_integer, required=True)
     return parser
 
 
@@ -421,8 +948,10 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
                 arguments.energy_abs_tol, "energy absolute tolerance"
             )
             report = compare_snapshots(arguments)
-        else:
+        elif arguments.command == "project":
             report = project_snapshot(arguments)
+        else:
+            report = supercell_gate(arguments)
         print(json.dumps(report, sort_keys=True, allow_nan=False))
         return 0 if report["pass"] else 1
     except (OSError, TypeError, ValueError) as error:
