@@ -102,6 +102,7 @@ struct SternheimerOutputMode
     bool write_fixed_ao = false;
     bool write_primitive = false;
     bool write_response_orbitals = false;
+    bool response_spectral_librpa = false;
     bool fixed_ao_only = false;
 };
 
@@ -120,6 +121,7 @@ inline SternheimerOutputMode select_sternheimer_output_mode(const bool out_stern
         = out_sternheimer_galerkin || out_sternheimer_galerkin_primitive || out_sternheimer_galerkin_response;
     mode.write_primitive = out_sternheimer_galerkin_primitive;
     mode.write_response_orbitals = out_sternheimer_galerkin_response;
+    mode.response_spectral_librpa = out_sternheimer_librpa && out_sternheimer_galerkin_response;
     mode.fixed_ao_only = (out_sternheimer_galerkin
                           || out_sternheimer_galerkin_primitive
                           || out_sternheimer_galerkin_response)

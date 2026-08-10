@@ -121,6 +121,12 @@ AddTest(
           ../../../source_base/module_external/blas_connector_matrix.cpp
 )
 AddTest(
+  TARGET MODULE_RI_sternheimer_response_spectral_test
+  LIBS ${math_libs}
+  SOURCES test_sternheimer_response_spectral.cpp
+          ../sternheimer_response_spectral.cpp
+)
+AddTest(
   TARGET MODULE_RI_sternheimer_siab_writer_test
   LIBS parameter ${math_libs} base device io_input
   SOURCES test_sternheimer_siab_writer.cpp ../sternheimer_siab_writer.cpp

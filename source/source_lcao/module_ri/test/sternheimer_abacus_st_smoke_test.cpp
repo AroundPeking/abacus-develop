@@ -440,6 +440,15 @@ TEST(SternheimerABACUSSTSmoke, SelectsIndependentFixedAOGalerkinOutputMode)
     EXPECT_FALSE(response_only.write_primitive);
     EXPECT_TRUE(response_only.write_response_orbitals);
     EXPECT_TRUE(response_only.fixed_ao_only);
+
+    const auto response_librpa
+        = ModuleRI::select_sternheimer_output_mode(true, false, false, false, true);
+    EXPECT_TRUE(response_librpa.run);
+    EXPECT_TRUE(response_librpa.write_librpa);
+    EXPECT_TRUE(response_librpa.write_fixed_ao);
+    EXPECT_TRUE(response_librpa.write_response_orbitals);
+    EXPECT_TRUE(response_librpa.response_spectral_librpa);
+    EXPECT_FALSE(response_librpa.fixed_ao_only);
 }
 
 TEST(SternheimerABACUSSTSmoke, ReordersResponseOrbitalsFromLNMToLMNBlocks)

@@ -23,6 +23,7 @@
 #include "source_lcao/module_ri/sternheimer_delta.h"
 #include "source_lcao/module_ri/sternheimer_fd_solver.h"
 #include "source_lcao/module_ri/sternheimer_rpa.h"
+#include "source_lcao/module_ri/sternheimer_response_spectral.h"
 #include "source_lcao/module_ri/sternheimer_siab_mpi.h"
 #include "source_lcao/module_ri/sternheimer_siab_fixed_ao.h"
 #include "source_lcao/module_ri/sternheimer_siab_overlap.h"
@@ -1202,7 +1203,19 @@ std::vector<siab::AuxiliaryChannelMetadata> make_siab_auxiliary_metadata(
     return metadata;
 }
 
-std::string write_sternheimer_fixed_ao_sidecar(
+struct FixedAOSidecarOutput
+{
+    std::string path;
+    siab::FixedAOData data;
+};
+
+struct ResponseGalerkinSidecarOutput
+{
+    std::string path;
+    siab::PrimitiveGalerkinData data;
+};
+
+FixedAOSidecarOutput write_sternheimer_fixed_ao_sidecar(
     const std::string& output_dir,
     const UnitCell& ucell,
     const std::vector<SternheimerABFGridChannel>& channels,
@@ -1221,7 +1234,7 @@ std::string write_sternheimer_fixed_ao_sidecar(
     {
         basis_values.push_back(function.values);
     }
-    const siab::FixedAOData fixed_ao_data
+    siab::FixedAOData fixed_ao_data
         = siab::build_fixed_ao_data(fixed_ao_matrices.n_basis,
                                     fixed_ao_matrices.overlap_s,
                                     fixed_ao_matrices.spins,
@@ -1236,7 +1249,7 @@ std::string write_sternheimer_fixed_ao_sidecar(
     const std::string path = join_output_path(output_dir, "sternheimer_galerkin_fixed_ao.dat");
     siab::write_fixed_ao_v1(path, fixed_ao_data, provenance);
     GlobalV::ofs_running << " Sternheimer SIAB fixed-AO v1 output: " << path << std::endl;
-    return path;
+    return FixedAOSidecarOutput{path, std::move(fixed_ao_data)};
 }
 
 std::string write_sternheimer_primitive_galerkin_sidecar(
@@ -1282,7 +1295,7 @@ std::string write_sternheimer_primitive_galerkin_sidecar(
     return path;
 }
 
-std::string write_sternheimer_response_galerkin_sidecar(
+ResponseGalerkinSidecarOutput write_sternheimer_response_galerkin_sidecar(
     const std::string& output_dir,
     const UnitCell& ucell,
     const std::vector<SternheimerABFGridChannel>& channels,
@@ -1313,7 +1326,7 @@ std::string write_sternheimer_response_galerkin_sidecar(
         }
     }
 
-    const siab::PrimitiveGalerkinData data = siab::build_primitive_galerkin_data(
+    siab::PrimitiveGalerkinData data = siab::build_primitive_galerkin_data(
         response_blocks,
         make_siab_auxiliary_metadata(channels),
         std::move(response_values),
@@ -1333,7 +1346,7 @@ std::string write_sternheimer_response_galerkin_sidecar(
     siab::write_response_galerkin_v1(path, data, provenance);
     GlobalV::ofs_running << " Sternheimer response-orbital Galerkin v1 output: "
                          << path << std::endl;
-    return path;
+    return ResponseGalerkinSidecarOutput{path, std::move(data)};
 }
 
 std::vector<std::vector<double>> transform_channel_potentials(
@@ -1499,6 +1512,34 @@ void write_chi0_index_file(const std::string& filename,
         const SternheimerRPA::Chi0V1Metadata& metadata = entry.second;
         out << metadata.iq << ' ' << metadata.ifrequency << ' ' << metadata.omega << ' ' << metadata.weight << ' '
             << entry.first << '\n';
+    }
+}
+
+void write_response_spectral_diagnostic(const std::string& filename,
+                                        const siab::ResponseSpectralResult& result)
+{
+    std::ofstream out(filename.c_str(), std::ios::out | std::ios::trunc);
+    if (!out)
+    {
+        throw std::runtime_error("Failed to open Sternheimer response spectral diagnostic: " + filename);
+    }
+    out << std::setprecision(16);
+    out << "# ABACUS response-orbital projected spectral Sternheimer diagnostics\n";
+    out << "spin_channels " << result.spin_diagnostics.size() << '\n';
+    out << "spin retained_virtual_rank dropped_trial_rank fixed_eigenvalue_error_Ha "
+           "occupied_grid_norm projected_overlap_condition occupied_orthonormality_error "
+           "occupied_virtual_overlap virtual_orthonormality_error min_virtual_energy_Ha "
+           "max_virtual_energy_Ha\n";
+    for (const siab::ResponseSpectralSpinDiagnostics& spin: result.spin_diagnostics)
+    {
+        out << spin.spin_index + 1 << ' ' << spin.retained_virtual_rank << ' '
+            << spin.dropped_trial_rank << ' ' << spin.fixed_ao_eigenvalue_max_abs_error_ha << ' '
+            << spin.occupied_grid_norm_before_normalization << ' '
+            << spin.projected_overlap_condition << ' '
+            << spin.occupied_orthonormality_max_abs_error << ' '
+            << spin.occupied_virtual_max_abs_overlap << ' '
+            << spin.virtual_orthonormality_max_abs_error << ' '
+            << spin.minimum_virtual_energy_ha << ' ' << spin.maximum_virtual_energy_ha << '\n';
     }
 }
 
@@ -1797,8 +1838,10 @@ void run_sternheimer_abacus_chi0_output_impl(const elecstate::Potential& potenti
     const bool write_fixed_ao = output_mode.write_fixed_ao;
     const bool write_primitive = output_mode.write_primitive;
     const bool write_response_orbitals = output_mode.write_response_orbitals;
-    const bool use_frequency_mpi = !output_mode.fixed_ao_only && PARAM.inp.sternheimer_frequency_mpi;
-    const bool use_channel_mpi = !output_mode.fixed_ao_only && PARAM.inp.sternheimer_channel_mpi;
+    const bool response_spectral_librpa = output_mode.response_spectral_librpa;
+    const bool skip_iterative_solve = output_mode.fixed_ao_only || response_spectral_librpa;
+    const bool use_frequency_mpi = !skip_iterative_solve && PARAM.inp.sternheimer_frequency_mpi;
+    const bool use_channel_mpi = !skip_iterative_solve && PARAM.inp.sternheimer_channel_mpi;
     const std::string mpi_layout = PARAM.inp.sternheimer_mpi_layout;
     const bool use_global_equation_mpi = mpi_layout == "global_equation";
     const bool use_distributed_mpi = use_frequency_mpi || use_channel_mpi;
@@ -1854,7 +1897,7 @@ void run_sternheimer_abacus_chi0_output_impl(const elecstate::Potential& potenti
         {
             throw std::runtime_error("out_sternheimer_librpa requires out_librpa_reader_version=1.");
         }
-        if (!output_mode.fixed_ao_only)
+        if (!skip_iterative_solve)
         {
             SternheimerRPA::validate_mpi_layout(mpi_layout,
                                                 use_frequency_mpi,
@@ -1864,7 +1907,7 @@ void run_sternheimer_abacus_chi0_output_impl(const elecstate::Potential& potenti
                                                 nfreq,
                                                 GlobalV::NPROC);
         }
-        if (!output_mode.fixed_ao_only && GlobalV::NPROC != 1 && !use_frequency_mpi)
+        if (!skip_iterative_solve && GlobalV::NPROC != 1 && !use_frequency_mpi)
         {
             throw std::runtime_error(
                 "Sternheimer chi0 output with multiple MPI ranks requires sternheimer_frequency_mpi=true.");
@@ -2264,7 +2307,7 @@ void run_sternheimer_abacus_chi0_output_impl(const elecstate::Potential& potenti
         if (!write_siab)
         {
             potentials = take_sternheimer_channel_potentials(channels);
-            if (!output_mode.fixed_ao_only)
+            if (!skip_iterative_solve)
             {
                 // Raw ABFS Coulomb potentials are retained in Ha for M=V chi0 V output.
                 perturbations_ry = scale_potentials(potentials, kHartreeToRydberg);
@@ -2315,17 +2358,21 @@ void run_sternheimer_abacus_chi0_output_impl(const elecstate::Potential& potenti
         }
 
         std::string fixed_ao_path;
+        siab::FixedAOData fixed_ao_data;
         if (write_fixed_ao && GlobalV::MY_RANK == 0)
         {
-            fixed_ao_path = write_sternheimer_fixed_ao_sidecar(output_dir,
-                                                               ucell,
-                                                               channels,
-                                                               frequency_grid,
-                                                               pca_threshold,
-                                                               grid_data,
-                                                               sampled_ao_functions,
-                                                               potentials,
-                                                               *fixed_ao_matrices);
+            FixedAOSidecarOutput fixed_output
+                = write_sternheimer_fixed_ao_sidecar(output_dir,
+                                                     ucell,
+                                                     channels,
+                                                     frequency_grid,
+                                                     pca_threshold,
+                                                     grid_data,
+                                                     sampled_ao_functions,
+                                                     potentials,
+                                                     *fixed_ao_matrices);
+            fixed_ao_path = std::move(fixed_output.path);
+            fixed_ao_data = std::move(fixed_output.data);
         }
         std::vector<SternheimerFDHamiltonian> hamiltonians_ry;
         if ((write_primitive || write_response_orbitals) && GlobalV::MY_RANK == 0)
@@ -2354,29 +2401,94 @@ void run_sternheimer_abacus_chi0_output_impl(const elecstate::Potential& potenti
                 hamiltonians_ry);
         }
         std::string response_path;
+        siab::PrimitiveGalerkinData response_galerkin_data;
         if (write_response_orbitals && GlobalV::MY_RANK == 0)
         {
-            response_path = write_sternheimer_response_galerkin_sidecar(
-                output_dir,
-                ucell,
-                channels,
-                frequency_grid,
-                pca_threshold,
-                grid_data,
-                response_layout.blocks,
-                std::move(response_orbital_functions),
-                sampled_ao_functions,
-                output_mode.fixed_ao_only,
-                potentials,
-                *fixed_ao_matrices,
-                hamiltonians_ry);
+            ResponseGalerkinSidecarOutput response_output
+                = write_sternheimer_response_galerkin_sidecar(
+                    output_dir,
+                    ucell,
+                    channels,
+                    frequency_grid,
+                    pca_threshold,
+                    grid_data,
+                    response_layout.blocks,
+                    std::move(response_orbital_functions),
+                    sampled_ao_functions,
+                    skip_iterative_solve,
+                    potentials,
+                    *fixed_ao_matrices,
+                    hamiltonians_ry);
+            response_path = std::move(response_output.path);
+            response_galerkin_data = std::move(response_output.data);
         }
-        if (output_mode.fixed_ao_only)
+        if (skip_iterative_solve)
         {
             if (GlobalV::MY_RANK == 0)
             {
+                std::vector<std::pair<std::string, SternheimerRPA::Chi0V1Metadata>> spectral_index_entries;
+                siab::ResponseSpectralResult spectral_result;
+                if (response_spectral_librpa)
+                {
+                    append_chi0_progress_event("response_spectral_start",
+                                               0,
+                                               0,
+                                               -1,
+                                               -1,
+                                               0,
+                                               nullptr,
+                                               -1.0,
+                                               elapsed_seconds_since(chi0_start_time),
+                                               "projected_response_orbital_sos");
+                    spectral_result = siab::evaluate_response_orbital_spectral_response(
+                        response_galerkin_data,
+                        fixed_ao_data);
+                    const std::vector<SternheimerRPA::AuxiliaryChannel> auxiliary_channels
+                        = make_chi0_auxiliary_channels(channels);
+                    spectral_index_entries.reserve(static_cast<std::size_t>(nfreq));
+                    for (int ifrequency = 0; ifrequency != nfreq; ++ifrequency)
+                    {
+                        const SternheimerRPA::Chi0V1Metadata metadata
+                            = make_chi0_v1_metadata(
+                                ucell,
+                                channels,
+                                ifrequency + 1,
+                                frequency_grid.omega_ha[static_cast<std::size_t>(ifrequency)],
+                                frequency_grid.weights_ha[static_cast<std::size_t>(ifrequency)]);
+                        const std::string data_file
+                            = chi0_v1_filename(metadata.iq, metadata.ifrequency, 0);
+                        SternheimerRPA::write_chi0_v1_file(
+                            data_file,
+                            metadata,
+                            auxiliary_channels,
+                            spectral_result.response_m[static_cast<std::size_t>(ifrequency)]);
+                        spectral_index_entries.push_back({data_file, metadata});
+                        GlobalV::ofs_running
+                            << " Sternheimer response-spectral M v1 output: " << data_file << std::endl;
+                    }
+                    write_chi0_index_file("v1_sternheimer_chi0_index.dat", spectral_index_entries);
+                    write_response_spectral_diagnostic("STERNHEIMER_RESPONSE_SPECTRAL.dat",
+                                                       spectral_result);
+                    append_chi0_progress_event("response_spectral_finish",
+                                               nfreq,
+                                               0,
+                                               -1,
+                                               -1,
+                                               0,
+                                               nullptr,
+                                               -1.0,
+                                               elapsed_seconds_since(chi0_start_time),
+                                               "retained_spin_channels="
+                                                   + std::to_string(spectral_result.spin_diagnostics.size()));
+                }
+
                 out << "status success\n";
-                out << "format v1\n";
+                out << "format "
+                    << (response_spectral_librpa ? "librpa_v1_response_spectral" : "galerkin_v1")
+                    << '\n';
+                out << "data_files " << spectral_index_entries.size() << '\n';
+                out << "index_file "
+                    << (response_spectral_librpa ? "v1_sternheimer_chi0_index.dat" : "none") << '\n';
                 out << "fixed_ao_file " << fixed_ao_path << '\n';
                 if (write_primitive)
                 {
@@ -2397,9 +2509,25 @@ void run_sternheimer_abacus_chi0_output_impl(const elecstate::Potential& potenti
                 out << "pca_threshold " << pca_threshold << '\n';
                 out << "ccp_rmesh_times " << ccp_rmesh_times << '\n';
                 out << "abfs_channels " << num_channels << '\n';
-                out << "linear_solve skipped\n";
+                out << "linear_solve "
+                    << (response_spectral_librpa ? "projected_response_orbital_spectral_sos" : "skipped")
+                    << '\n';
+                if (response_spectral_librpa)
+                {
+                    out << "response_matrix M_equals_V_full_chi0_V_full\n";
+                    out << "rpa_postprocess LibRPA_sternheimer_rpa\n";
+                    out << "spectral_diagnostic STERNHEIMER_RESPONSE_SPECTRAL.dat\n";
+                    out << "ifrequency omega_Ha weight_Ha data_file\n";
+                    for (const auto& entry: spectral_index_entries)
+                    {
+                        out << entry.second.ifrequency << ' ' << entry.second.omega << ' '
+                            << entry.second.weight << ' ' << entry.first << '\n';
+                    }
+                }
                 out << "solved_equations 0\n";
-                GlobalV::ofs_running << " Sternheimer Galerkin status: " << status_path << std::endl;
+                GlobalV::ofs_running << " Sternheimer "
+                                     << (response_spectral_librpa ? "response-spectral LibRPA" : "Galerkin")
+                                     << " status: " << status_path << std::endl;
             }
             return;
         }
