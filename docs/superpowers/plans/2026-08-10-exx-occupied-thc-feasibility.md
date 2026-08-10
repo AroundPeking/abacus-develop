@@ -617,11 +617,11 @@ git commit -m "feat: add occupied-space EXX analysis core"
 
 - [ ] **Step 1: 写 replay 的合成失败测试**
 
-构造 period `(2,1,1)`、1 原子、复数 Hermitian (D(R))、Hermitian (V(R)) 和随机 (C(R))，先直接调用 `RI::Exx` 得到 (H,E)，写快照后再由 replay 读取并计算。要求 map key、shape、(H) 元素和 (E) 在 `1e-13` 内相同。
+构造 period `(2,1,1)`、1 原子、复数 Hermitian (D(R))、Hermitian (V(R)) 和随机 (C(R))，先直接调用 `RI::Exx` 得到 (H,E)，写快照后再由 replay 读取并计算。active 测试必须令用于收缩的 `D.active` 与用于 `post_2D` 能量的原始 `D.raw` 不同，避免 replay 与测试共同重复同一个错误。要求 map key、shape、(H) 元素和 (E) 在 `1e-13` 内相同。
 
 - [ ] **Step 2: 实现 replay 工具**
 
-主流程固定为 active (C,V) 原样装载。`cfg.D_state=="active"` 时 (D) 也原样装载；`cfg.D_state=="raw"` 时只设 `flag_period=true`，仍保持 `flag_comm=false, flag_filter=false`：
+主流程固定为 active (C,V) 原样装载。`cfg.D_state=="active"` 时，`D_path` 的 active (D) 原样装载、只负责 `cal_Hs` 收缩，另要求 `D_post_path` 指向生产 `set_Ds` 收到的 raw (D)，只负责 `post_2D` 能量；`cfg.D_state=="raw"` 时，`D_path` 同时作为原始 `post_2D` 密度，并只为 `cal_Hs` 设置 `flag_period=true`，仍保持 `flag_comm=false, flag_filter=false`。这是因为固定 LibRI 版本的 `Exx::set_Ds` 用 periodized/filtered data pool 计算 (H)，但用原始传入 (D) 计算 (E)：
 
 ```cpp
 MPI_Init(&argc, &argv);
@@ -646,14 +646,17 @@ exx.lri.set_tensors_map2(
     cfg.D_state == "raw" ? raw_d_flags : active_flags, "Ds_");
 exx.flag_finish.Cs = exx.flag_finish.Vs = exx.flag_finish.Ds = true;
 const auto& Ds_loaded = exx.lri.data_pool.at("Ds_").Ds_ab;
-exx.post_2D.saves["Ds_"] = exx.post_2D.set_tensors_map2(Ds_loaded);
+const auto Ds_post = cfg.D_state == "raw"
+    ? Ds
+    : read_map<std::complex<double>>(cfg.D_post_path);
+exx.post_2D.saves["Ds_"] = exx.post_2D.set_tensors_map2(Ds_post);
 exx.cal_Hs();
 write_map(cfg.H_out, exx.Hs, 0, 1);
 write_scalar(cfg.E_out, exx.energy);
 MPI_Finalize();
 ```
 
-只支持 `nranks=1`；输入快照的 `nranks!=1` 时明确退出，避免把不完整分布式 map 当成全量数据。raw-(D) 重放产生的 periodized `Ds_loaded` 另写为 `D.full.exxcmp`，后续 Python 只对这个严格参考执行 (D=OO^\dagger)。
+只支持 `nranks=1`；输入快照的 `nranks!=1` 时明确退出，避免把不完整分布式 map 当成全量数据。active 模式强制要求 `D_post_path`，raw 模式强制禁止它。raw-(D) 重放产生的 periodized `Ds_loaded` 另写为 `D.full.exxcmp`，后续 Python 只对这个严格参考执行 (D=OO^\dagger)。所有输出不得覆盖已有文件，先写同目录临时文件，最后独占发布 (E) 作为完成标志；消费者只有在 (H,E) 以及 raw 模式的 `D.full` 全部存在时才接受结果。
 
 - [ ] **Step 3: 注册 replay target 并通过合成测试**
 
@@ -682,7 +685,7 @@ Expected: `100% tests passed`。
 C: set_tensors_map2 labels a,b; raw block shape [naux(ia1), nao(ia1), nao(ia2)]
 V: label a0b0; raw block shape [naux(ia1), naux(ia2)]
 D: labels a1b1,a1b2,a2b1,a2b2; raw block shape [nao(ia1), nao(ia2)]
-H: RI::Exx::cal_Hs result map; energy from Exx_Post_2D::cal_energy(D,H)
+H: RI::Exx::cal_Hs result map; energy from Exx_Post_2D::cal_energy(D_post,H), where D_post is the original pre-filter D passed to set_Ds
 period: RI::Exx::lri.period; R is interpreted modulo this period after set_tensors_map2
 ```
 
@@ -700,11 +703,11 @@ PYTHONPATH=tools/exx_thc/src python3 -m exx_thc.cli compare \
   --energy-candidate replay/E.lri.spin0.full.txt
 ```
 
-Expected: active (C,V,D) 的 `H_rel_fro <= 1e-12`、`E_abs_Ry_atom <= 1e-12`，命令退出 0。这一步只证明快照/重放忠实，不对 active (D) 做 PSD 假设。
+active replay 配置使用 `D_path=D.active...` 和 `D_post_path=D.raw...`。Expected: active (C,V,D) 的 `H_rel_fro <= 1e-12`、`E_abs_Ry_atom <= 1e-12`，命令退出 0。这一步只证明快照/重放忠实，不对 active (D) 做 PSD 假设。
 
 - [ ] **Step 6: 做零误差 occupied projection 重放**
 
-先用 raw-(D) replay 生成 `D.full.exxcmp` 及对应 (H_{\rm full},E_{\rm full})。`cli project` 对 `D.full` 的所有 BvK (k) 扇区执行 (D(k)=OO^\dagger)、(C_{\rm occ}(k)=C(k)P_{\rm occ}(k))，逆变换回 `C_occ.active.exxcmp`。首先要求 Fourier 往返误差 `<1e-13`、每个 (D(k)) Hermiticity `<1e-12`、负本征值不低于 `-1e-10*lambda_max`；再把 `C_occ` 与同一个 `D.full` 作为 active map 交给 replay。
+先用 raw-(D) replay 生成 `D.full.exxcmp` 及对应 (H_{\rm full},E_{\rm full})。`cli project` 对 `D.full` 的所有 BvK (k) 扇区执行 (D(k)=OO^\dagger)、(C_{\rm occ}(k)=C(k)P_{\rm occ}(k))，逆变换回 `C_occ.active.exxcmp`。首先要求 (C,D) 各自的 Fourier 往返误差 `<1e-13`、每个 (D(k)) Hermiticity `<1e-12`、负本征值不低于 `-1e-10*lambda_max`；再把 `C_occ` 与同一个 `D.full` 作为 active map 交给 replay，同时仍以原始 `D.raw` 作为 `D_post_path` 计算能量。
 
 Expected: 小 Si 相对于 raw-(D) full reference 的 `H_rel_fro <= 1e-10`、`E_abs_Ry_atom <= 1e-10`。另报告生产 active-(D) 与 full-(D) 的差，但不把这部分既有 DM screening 误差归因于 occupied projection。若零误差投影失败，停止 GaAs 和 THC 工作，保留快照，并把问题定位为 Fourier/LibRI map 语义不一致；不得调宽门槛掩盖。
 
@@ -1037,7 +1040,7 @@ factor_seconds,seed_min_residual,seed_max_residual
 
 - [ ] **Step 2: 先做 GaAs raw-(D) full reference 与零误差 occupied projection replay**
 
-先把 `D.raw` 通过 replay 只做 periodization，得到 `D.full` 与 full-(D) (H,E) reference；再运行完整 k444 Fourier 往返、PSD 和 projector 检查，把 `C_occ` 与 `D.full` 交给 `RI::Exx` replay。硬门槛仍为 `H_rel_fro <= 1e-10`、`E_abs_Ry_atom <= 1e-10`。同时单列 active-(D) 生产结果与 full-(D) 的差。零误差门槛失败即停止，不能继续用局部 block 残差代替物理等价性。
+先把 `D.raw` 通过 replay 只做 periodization，得到 `D.full` 与 full-(D) (H,E) reference；再运行完整 k444 Fourier 往返、PSD 和 projector 检查，把 `C_occ` 与 `D.full` 作为收缩输入交给 `RI::Exx` replay，并继续把同一份原始 `D.raw` 作为 `D_post_path` 计算能量。硬门槛仍为 `H_rel_fro <=1e-10`、`E_abs_Ry_atom <=1e-10`。同时单列 active-(D) 生产结果与 full-(D) 的差。零误差门槛失败即停止，不能继续用局部 block 残差代替物理等价性。
 
 - [ ] **Step 3: 扫描 TT 阈值**
 
@@ -1055,7 +1058,7 @@ factor_seconds,seed_min_residual,seed_max_residual
 
 - [ ] **Step 5: 用原始 LibRI 重放检查 (H_x,E_x)**
 
-对候选因子仅为精度验证而重构 `cbar_hat`，计算 `C_occ_hat=cbar_hat@O_pinv`，逆 Fourier 写 `C_candidate.active.exxcmp`，然后用 active-map replay 得到 LibRI 原始 (H,E)。相对 (H) 误差在统一乘 (-2) 后不变；能量差先按现有 `post_process_Eexx` 乘自旋因子（`nspin=1` 时为 2），再换算：
+对候选因子仅为精度验证而重构 `cbar_hat`，计算 `C_occ_hat=cbar_hat@O_pinv`，逆 Fourier 写 `C_candidate.active.exxcmp`，然后用 active-map replay 得到 LibRI 原始 (H,E)：`D_path` 使用与 reference 相同的 `D.full`，`D_post_path` 使用原始 `D.raw`。相对 (H) 误差在统一乘 (-2) 后不变；能量差先按现有 `post_process_Eexx` 乘自旋因子（`nspin=1` 时为 2），再换算：
 
 ```python
 spin_factor = {1: 2.0, 2: 1.0, 4: 1.0}[nspin]
