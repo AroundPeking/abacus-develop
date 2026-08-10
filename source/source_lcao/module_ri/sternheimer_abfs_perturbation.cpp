@@ -15,11 +15,6 @@ int grid_size(const ModuleRI::SternheimerFDHamiltonian::Grid& grid)
     return grid.nx * grid.ny * grid.nz;
 }
 
-int grid_index(const ModuleRI::SternheimerFDHamiltonian::Grid& grid, const int ix, const int iy, const int iz)
-{
-    return (ix * grid.ny + iy) * grid.nz + iz;
-}
-
 void validate_grid(const ModuleRI::SternheimerFDHamiltonian::Grid& grid)
 {
     if (grid.nx <= 0 || grid.ny <= 0 || grid.nz <= 0)
@@ -189,77 +184,87 @@ std::vector<SternheimerABFGridChannel> sample_sternheimer_abf_grid_channels(
     const int max_channels)
 {
     validate_grid(grid);
-    if (atom_types.size() != atom_positions.size())
+    std::vector<SternheimerABFGridChannel> channels
+        = describe_sternheimer_abf_grid_channels(radials_by_type,
+                                                 atom_types,
+                                                 atom_positions,
+                                                 max_channels);
+    if (channels.empty())
     {
-        throw std::invalid_argument("Sternheimer ABFS perturbation atom type/position count mismatch.");
+        return channels;
     }
 
-    std::vector<SternheimerABFGridChannel> channels;
     const int size = grid_size(grid);
     const double lx = grid.nx * grid.hx;
     const double ly = grid.ny * grid.hy;
     const double lz = grid.nz * grid.hz;
-    int channel_index = 0;
-
-    for (std::size_t iat = 0; iat != atom_types.size(); ++iat)
+    for (SternheimerABFGridChannel& channel: channels)
     {
-        const int type = atom_types[iat];
-        if (type < 0 || type >= static_cast<int>(radials_by_type.size()))
+        channel.potential_r.assign(static_cast<std::size_t>(size), 0.0);
+    }
+
+#ifdef _OPENMP
+#pragma omp parallel
+#endif
+    {
+        std::vector<double> ylm;
+#ifdef _OPENMP
+#pragma omp for schedule(static)
+#endif
+        for (int linear = 0; linear < size; ++linear)
         {
-            throw std::invalid_argument("Sternheimer ABFS perturbation atom type is out of range.");
-        }
-        int atom_local_index = 0;
-        for (const SternheimerRadialPerturbation& radial: radials_by_type[type])
-        {
-            validate_radial(radial);
-            std::vector<double> ylm;
-            evaluate_real_spherical_harmonics(radial.angular_momentum, 0.0, 0.0, 0.0, ylm);
-            for (int m_index = 0; m_index != 2 * radial.angular_momentum + 1; ++m_index)
+            const int ix = linear / (grid.ny * grid.nz);
+            const int remainder = linear % (grid.ny * grid.nz);
+            const int iy = remainder / grid.nz;
+            const int iz = remainder % grid.nz;
+            std::size_t channel_index = 0;
+            for (std::size_t iat = 0;
+                 iat != atom_types.size() && channel_index != channels.size();
+                 ++iat)
             {
-                if (max_channels > 0 && static_cast<int>(channels.size()) >= max_channels)
+                const int type = atom_types[iat];
+                double dx = ix * grid.hx - atom_positions[iat].x;
+                double dy = iy * grid.hy - atom_positions[iat].y;
+                double dz = iz * grid.hz - atom_positions[iat].z;
+                if (grid.periodic)
                 {
-                    return channels;
+                    dx = minimum_image_displacement(dx, lx);
+                    dy = minimum_image_displacement(dy, ly);
+                    dz = minimum_image_displacement(dz, lz);
                 }
-
-                SternheimerABFGridChannel channel;
-                channel.channel_index = channel_index++;
-                channel.atom_index = static_cast<int>(iat);
-                channel.atom_local_index = atom_local_index++;
-                channel.type_index = type;
-                channel.angular_momentum = radial.angular_momentum;
-                channel.radial_index = radial.radial_index;
-                channel.magnetic_index = m_index;
-                channel.label = radial.label;
-                channel.potential_r.assign(size, 0.0);
-
-                const int ylm_index = radial.angular_momentum * radial.angular_momentum + m_index;
-                for (int iz = 0; iz != grid.nz; ++iz)
+                const double radius = std::sqrt(dx * dx + dy * dy + dz * dz);
+                for (const SternheimerRadialPerturbation& radial:
+                     radials_by_type[static_cast<std::size_t>(type)])
                 {
-                    for (int iy = 0; iy != grid.ny; ++iy)
+                    const double radial_value
+                        = interpolate_radial(radial.radial_grid, radial.radial_values, radius);
+                    evaluate_real_spherical_harmonics(radial.angular_momentum, dx, dy, dz, ylm);
+                    for (int m_index = 0;
+                         m_index != 2 * radial.angular_momentum + 1 && channel_index != channels.size();
+                         ++m_index)
                     {
-                        for (int ix = 0; ix != grid.nx; ++ix)
-                        {
-                            double dx = ix * grid.hx - atom_positions[iat].x;
-                            double dy = iy * grid.hy - atom_positions[iat].y;
-                            double dz = iz * grid.hz - atom_positions[iat].z;
-                            if (grid.periodic)
-                            {
-                                dx = minimum_image_displacement(dx, lx);
-                                dy = minimum_image_displacement(dy, ly);
-                                dz = minimum_image_displacement(dz, lz);
-                            }
-                            const double radius = std::sqrt(dx * dx + dy * dy + dz * dz);
-                            evaluate_real_spherical_harmonics(radial.angular_momentum, dx, dy, dz, ylm);
-                            const double value
-                                = interpolate_radial(radial.radial_grid, radial.radial_values, radius) * ylm[ylm_index];
-                            const int ir = grid_index(grid, ix, iy, iz);
-                            channel.potential_r[ir] = value;
-                            channel.max_abs = std::max(channel.max_abs, std::abs(value));
-                        }
+                        const int ylm_index
+                            = radial.angular_momentum * radial.angular_momentum + m_index;
+                        channels[channel_index].potential_r[static_cast<std::size_t>(linear)]
+                            = radial_value * ylm[static_cast<std::size_t>(ylm_index)];
+                        ++channel_index;
                     }
                 }
-                channels.push_back(std::move(channel));
             }
+        }
+    }
+
+#ifdef _OPENMP
+#pragma omp parallel for schedule(static)
+#endif
+    for (int channel_index = 0;
+         channel_index < static_cast<int>(channels.size());
+         ++channel_index)
+    {
+        SternheimerABFGridChannel& channel = channels[static_cast<std::size_t>(channel_index)];
+        for (const double value: channel.potential_r)
+        {
+            channel.max_abs = std::max(channel.max_abs, std::abs(value));
         }
     }
     return channels;
