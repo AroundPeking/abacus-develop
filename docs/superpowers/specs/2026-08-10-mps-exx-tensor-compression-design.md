@@ -1,7 +1,7 @@
-# GaAs k444 EXX 张量压缩可行性研究设计
+# GaAs k444 EXX 占据乘积空间张量压缩设计
 
 日期：2026-08-10
-状态：待用户审阅
+状态：用户已批准，待实施计划
 ABACUS 基线：`master_ghj@31ad8d2db354853249969e50a377881929eaf2fa`
 开发分支：`codex/mps-exx-k444`
 执行服务器：`159.226.208.66:62030`
@@ -9,185 +9,258 @@ ABACUS 基线：`master_ghj@31ad8d2db354853249969e50a377881929eaf2fa`
 
 ## 1. 研究问题与边界
 
-本研究评估是否能把局域 RI 系数
+本研究不再把“对每个三阶 \(C_{\mu ij}\) 块机械地做 MPS”作为主路线。DMRG 的有效类比是根据 Schmidt 谱和 discarded weight 压缩对物理量真正有用的状态空间。对 EXX，这个空间是占据轨道参与的轨道乘积空间，而不是 KS 波函数的原始 NAO 空间。
+
+主路线固定为：
 
 \[
-C_{\mu i j}
+D\text{ 的占据分解}
+\;\longrightarrow\;
+\text{Coulomb 度量化}
+\;\longrightarrow\;
+\text{局域 occupied-THC/ISDF}.
 \]
 
-表示成低秩矩阵乘积态（MPS，也称 tensor train，TT）或其他三阶张量低秩形式，并在 ABACUS + LibRI 的精确交换计算中同时获得：
+逐块 TT/MPS 保留为对照，用来测量 Schmidt 谱、秩与截断阈值的关系，但不预设它是最终生产表示。
 
-1. 可控的 EXX 能量和交换矩阵误差；
-2. 至少两倍的系数存储压缩；
-3. 可测量的 `CVCD` 核心收缩加速；
-4. 不降低端到端计算的稳定性和可复现性。
+首轮只研究固定 PBE 密度矩阵上的一次 EXX 构造，不研究完整 PBE0 自洽、力、应力、\(\chi^0\) 或 GW。继续开发的最低目标为：
 
-首轮只研究固定 PBE 密度矩阵上的一次 EXX 构造，不研究完整 PBE0 自洽、力、应力、\(\chi^0\) 或 GW。后续扩展必须以首轮门槛通过为前提。
+1. 轨道乘积表示或存储至少压缩 \(10\times\)；
+2. 不解压的 `CVCD` 等价核心收缩至少加速 \(5\times\)；
+3. ABACUS `cal_exx_elec` 至少加速 \(2\times\)；
+4. 仍满足 EXX 能量、交换矩阵和带边精度门槛。
 
-这里的“加速”必须分成三类分别报告：
+只减少文件大小、只减少内存，或先解压成稠密张量再调用原收缩，都不计为核心加速。
 
-- 单个张量块的压缩与收缩；
-- LibRI `cal_Hs` / ABACUS `cal_exx_elec` 核心阶段；
-- 包括积分生成、通信和 I/O 的端到端阶段。
+## 2. 从 `CVCD` 到占据乘积空间
 
-只减少文件大小、只减少内存，或先解压成稠密张量再调用原收缩，都不能称为核心收缩加速。
-
-## 2. 当前实现与压缩位置
-
-ABACUS 按原子对和晶格矢量保存局域 RI 张量块：
+ABACUS 按原子对和晶格矢量保存局域 RI 块
 
 \[
-C^{I,J\mathbf R}_{\mu i j},
+C^{I,J\mathbf R}_{\mu ij}.
 \]
 
-其中辅助指标 \(\mu\) 位于原子 \(I\)，\(i\) 和 \(j\) 是原子 \(I\)、\(J\) 上的数值原子轨道。块外层已经由原子局域性、实空间截断和稀疏映射处理，因此本研究不把所有原子、晶格矢量和轨道合成一个全局稠密张量。
-
-省略原子、晶格和平移求和后，EXX 的代表性形式为
+块外层已经由原子局域性、实空间截断和稀疏映射处理，因此新表示必须保留这些块结构，不建立全局稠密张量。省略块标记后，EXX 的代表式为
 
 \[
 K_{ik}
 =-
-\sum_{jl}D_{jl}
-\sum_{\mu\nu}
-C_{\mu i j}V_{\mu\nu}C_{\nu k l}.
+\sum_{jl\mu\nu}
+C_{\mu ij}V_{\mu\nu}C_{\nu kl}^{*}D_{jl}.
 \]
 
-ABACUS 在 `Exx_LRI::cal_exx_elec` 中把密度矩阵传给 LibRI，LibRI 的 `cal_loop3` 执行对应的块稀疏 `C-V-C-D` 收缩。真实的核心加速最终需要修改 LibRI 的因子化收缩；ABACUS worktree 主要负责：
-
-- 生成并保存具有明确来源的 \(C,V,D\) 和参考 EXX；
-- 在相同密度矩阵上比较压缩近似；
-- 提供输入控制、计时和物理误差检查。
-
-因此首轮工作分成 ABACUS 数据/物理验证和独立压缩原型两部分。只有压缩秩和物理误差通过门槛后，才建立配套 LibRI worktree 并修改主收缩路径。
-
-## 3. 候选分解
-
-### 3.1 逐块 MPS/TT
-
-对指标顺序 \((\mu,i,j)\)，三阶 TT 表示为
+首先对密度矩阵做占据分解：
 
 \[
-C_{\mu i j}
-\approx
-\sum_{\alpha=1}^{r_1}
-\sum_{\beta=1}^{r_2}
-G^{(1)}_{\mu\alpha}
-G^{(2)}_{\alpha i\beta}
-G^{(3)}_{\beta j}.
+D_{jl}=\sum_{v=1}^{N_{\rm occ}}O_{jv}O_{lv}^{*},
+\qquad
+O_{jv}=\sqrt{f_v}\,U_{jv}.
 \]
 
-稠密存储量为
+定义
 
 \[
-N_{\rm dense}=n_\mu n_i n_j,
+\overline C_{\mu iv}
+=
+\sum_j C_{\mu ij}O_{jv},
 \]
 
-TT 存储量为
+则有零近似误差的重写
 
 \[
-N_{\rm TT}=n_\mu r_1+r_1n_ir_2+r_2n_j.
-\]
-
-定义压缩比
-
-\[
-R_{\rm comp}=\frac{N_{\rm dense}}{N_{\rm TT}}.
-\]
-
-三阶张量的 TT-SVD 只需要两次截断 SVD。它是稳定、可复现的第一实现，不需要使用面向长 MPS 链的 DMRG sweeping。首轮比较以下指标顺序：
-
-- \((\mu,i,j)\)：辅助指标优先；
-- \((i,\mu,j)\)：把两个 AO 指标分置在两端；
-- \((i,j,\mu)\)：与第一种互为反向次序，用来检查数值实现的一致性。
-
-### 3.2 矩阵化 SVD
-
-把 \((i,j)\) 合成一个指标：
-
-\[
-C_{\mu,(ij)}\approx
-\sum_{a=1}^{r}
-U_{\mu a}s_aW_{a,(ij)}.
-\]
-
-这是三阶张量最直接的低秩基线。由于 ABACUS 已经通过 ABF-PCA 缩减辅助空间，本测试必须回答矩阵化 SVD 是否仍能在 `exx_pca_threshold=10^{-4}` 之后提供额外压缩，而不能把 ABF-PCA 已经获得的收益重复计入新方法。
-
-### 3.3 Tucker/HOSVD
-
-\[
-C_{\mu i j}
-\approx
-\sum_{abc}
-\mathcal G_{abc}
-U^{(\mu)}_{\mu a}
-U^{(i)}_{ib}
-U^{(j)}_{jc}.
-\]
-
-Tucker 用来判断三个模式是否分别低秩。它的核心张量可能抵消存储收益，因此只保留达到同一误差时存储量不高于 TT 的结果。
-
-### 3.4 Coulomb 度量压缩
-
-若 \(V=LL^\dagger\)，定义
-
-\[
-B_{Pij}=\sum_\mu L^\dagger_{P\mu}C_{\mu ij}.
-\]
-
-则四中心积分由 \(B^\dagger B\) 构造。对 \(B\) 压缩比直接对裸 \(C\) 压缩更贴近 EXX 误差，但需要处理跨原子辅助块和 Coulomb 度量。该路线只在裸 \(C\) 的 TT 或矩阵 SVD 至少有一种通过首轮门槛后实施。
-
-## 4. 误差传播与判据
-
-记 \(\widehat C=C+\delta C\)。对单个简化块，交换核差可写成
-
-\[
-\Delta K
+K_{ik}
 =-
-\mathcal C_D\left[
-(\delta C)^\dagger VC
-+C^\dagger V\delta C
-+(\delta C)^\dagger V\delta C
-\right],
+\sum_{\mu\nu v}
+\overline C_{\mu iv}V_{\mu\nu}
+\overline C_{\nu kv}^{*}.
 \]
 
-其中 \(\mathcal C_D\) 表示与密度矩阵收缩。由次乘性可得保守界
+对零温绝缘体，这把第二个 AO 指标从 \(N_{\rm AO}\) 精确换成 \(N_{\rm occ}\)。对分数占据，根据密度矩阵本征值截断并单独报告占据截断误差。实施前必须检查 LibRI 当前收缩顺序是否已经等价利用了 \(D\) 的低秩。
+
+对周期体系，占据分解必须在每个自旋和 \(\mathbf k\) 点的厄米非负 \(D^\sigma(\mathbf k)\) 上进行。不得对单个实空间 \(D(\mathbf R)\) 块独立做“占据分解”，因为该块未必是非负矩阵。投影完成后再映射回 LibRI 的原子对/晶格块布局。
+
+ABACUS worktree 负责产生有来源的 \(C,V,D\)、占据轨道和参考 EXX；真正的不解压收缩最终位于 LibRI。只有秩谱、物理误差和理论浮点数同时通过门槛，才建立配套 LibRI worktree。
+
+## 3. 压缩表示与直接收缩
+
+### 3.1 Coulomb 度量下的 Schmidt/TT 对照
+
+对 \(V=LL^\dagger\) 定义白化张量
 
 \[
-\|\Delta K\|_F
-\le
-\|D\|_2\|V\|_2
-\left(
-2\|C\|_F\|\delta C\|_F
-+\|\delta C\|_F^2
-\right),
+B_{Piv}
+=
+\sum_\mu L^\dagger_{P\mu}\overline C_{\mu iv}.
 \]
 
-而交换能误差满足
+上式中的白化必须对具有完整物理意义的 Coulomb 度量进行；不对任意的非对角 \(V^{IJ}\) 块分别 Cholesky。若 \(q=0\) 处存在零模或奇异校正，则在与基线相同的子空间内用本征分解或枢轴 Cholesky 定义 \(L\)。
+
+对 \(B\) 做三阶 TT：
 
 \[
-|\Delta E_x|
-\le
-\frac12\|D\|_F\|\Delta K\|_F.
+B_{Piv}
+\approx
+\sum_{\alpha\beta}
+G^{(1)}_{P\alpha}
+G^{(2)}_{\alpha i\beta}
+G^{(3)}_{\beta v}.
 \]
 
-实际代码含多个原子和晶格块，上式用于解释误差趋势，不作为数值验收的替代。最终采用直接物理量门槛：
+对每个 TT 切分 \(p\)，定义 DMRG 式 discarded weight
+
+\[
+w_p(r_p)
+=
+\frac{\sum_{a>r_p}\sigma_{p,a}^{2}}
+{\sum_a\sigma_{p,a}^{2}}.
+\]
+
+TT-SVD 的全局误差满足
+
+\[
+\|B-\widehat B\|_F^2
+\le
+\sum_p\sum_{a>r_p}\sigma_{p,a}^{2}.
+\]
+
+因此 TT 用于回答“真实数据的 Schmidt 秩是多少”。三阶张量只有两条键；若键秩不小，不得用 DMRG 的长链优势推断它会自然获得数量级收益。
+
+### 3.2 主路线：local occupied-THC/ISDF
+
+直接对占据投影后的张量建立可分离表示：
+
+\[
+\overline C_{\mu iv}
+\approx
+\sum_{x=1}^{R}
+T_{\mu x}^{*}X_{ix}Y_{vx}.
+\]
+
+这里显式采用 \(T^*\) 的因子约定，使后续 Coulomb 内核在复数 \(k\) 点情况下仍是标准的 \(Z=T^\dagger VT\)。
+
+在 ISDF 中，\(x\) 对应局域插值点 \(\mathbf r_x\)，并有
+
+\[
+X_{ix}=\phi_i(\mathbf r_x),
+\qquad
+Y_{vx}=\psi_v(\mathbf r_x),
+\]
+
+\[
+\phi_i^*(\mathbf r)\psi_v(\mathbf r)
+\approx
+\sum_x
+\phi_i^*(\mathbf r_x)\psi_v(\mathbf r_x)
+\zeta_x(\mathbf r).
+\]
+
+定义
+
+\[
+Z_{xy}
+=
+\sum_{\mu\nu}
+T_{\mu x}^{*}V_{\mu\nu}T_{\nu y},
+\qquad
+S_{xy}
+=
+\sum_vY_{vx}Y_{vy}^{*},
+\]
+
+则交换矩阵直接由
+
+\[
+\boxed{
+K=-X\left[Z\odot S\right]X^\dagger
+}
+\]
+
+构造，其中 \(\odot\) 是逐元素乘积。这个公式不恢复 \(\overline C\) 或 \(C\)，因此才是性能测试的生产候选。
+
+对原子对块，\(T,X,Y,Z,S\) 都带原子和晶格块标记，插值点只从轨道支撑区交集中选取。不允许为方便原型而丢掉 LibRI 已有的局域性。
+
+### 3.3 周期 \(k\) 点形式
+
+对 \(\mathbf q=\mathbf k'-\mathbf k\)，使用晶体轨道的周期部分：
+
+\[
+u_i^{\mathbf k}(\mathbf r)^*
+u_v^{\mathbf k+\mathbf q}(\mathbf r)
+\approx
+\sum_x
+u_i^{\mathbf k}(\mathbf r_x)^*
+u_v^{\mathbf k+\mathbf q}(\mathbf r_x)
+\zeta_x^{\mathbf q}(\mathbf r).
+\]
+
+对应的 Coulomb 内核 \(Z^{\mathbf q}_{xy}\) 只依赖 \(\mathbf q\)，而不是独立依赖 \(\mathbf k,\mathbf k'\)。原型首先保持 LibRI 实空间块结构；只在数据证明 \(k\) 点卷积是瓶颈时，才考虑以 FFT 把 \(N_k^2\) 收缩变成近似 \(N_k\log N_k\)。
+
+### 3.4 能量与算符两条压缩线
+
+- `occupied-occupied` ISDF 只作为 EXX 能量的最大可压缩性上限，不单独通过交换矩阵验收。
+- `AO-occupied` ISDF 是首个生产候选，它必须构造完整 \(H_x\) 并通过带边门槛。
+- 后续若只需要特定带窗口，可研究 `occupied-target` 乘积空间，但它不代替首轮完整交换矩阵验证。
+
+## 4. 阈值、误差传播与性能判据
+
+压缩秩 \(R\) 由 Coulomb 度量下的残差而不是裸 \(C\) 的元素误差选择：
+
+\[
+\epsilon_R
+=
+\frac{\|B-\widehat B_R\|_F}{\|B\|_F}.
+\]
+
+对 \(G=B^\dagger B\) 有
+
+\[
+\|G-\widehat G\|_2
+\le
+\left(2\|B\|_2+\|\delta B\|_2\right)
+\|\delta B\|_2,
+\]
+
+所以 Coulomb 白化残差比裸 \(C\) 残差更直接控制四中心积分和 EXX 误差。该界只用于解释趋势，最终仍以直接物理量验收：
 
 \[
 \frac{\|\widehat H_x-H_x\|_F}{\|H_x\|_F}\le10^{-4},
-\]
-
-\[
+\qquad
 |\widehat E_x-E_x|\le1\ {\rm meV/atom},
 \]
 
 并要求价带顶、导带底及带隙误差均不超过 \(10\) meV。
 
-所有截断同时报告：
+在简化全局维度 \(N=N_{\rm AO}\)、\(N_X=N_{\rm aux}\) 下，传统 RI 收缩约为
 
-- 每个 \(C\) 块和全体块加权的相对 Frobenius 误差；
-- 最大绝对元素误差；
-- TT 秩或 Tucker 多线性秩的分布；
-- 稠密与因子存储字节数；
+\[
+O(N_XN^3),
+\]
+
+THC 直接收缩约为
+
+\[
+O(N^2R+NR^2),
+\]
+
+其理想浮点数比为
+
+\[
+S_{\rm ideal}
+\sim
+\frac{N_XN^2}{R(N+R)}.
+\]
+
+该式只是继续开发前的理论筛选；LibRI 的原子块稀疏、通信和因子构建成本必须进入实测。
+
+压缩比必须统计全部 \(T,X,Y\)、所有 \(\mathbf q\) 的 \(Z^{\mathbf q}\)、索引和必要工作区；不允许只用某个因子的字节数声称 \(10\times\) 压缩。
+
+所有截断点同时报告：
+
+- 密度矩阵本征值和可选占据截断误差；
+- TT 的 discarded weight、键秩与指标顺序；
+- Coulomb 白化残差 \(\epsilon_R\) 与 ISDF 秩 \(R\)；
+- 稠密、占据投影和 THC 表示的存储字节数；
+- 理想浮点数、实测核心时间和因子构建时间；
 - \(H_x\)、\(E_x\) 和带边误差。
 
 ## 5. 物理测试体系
@@ -197,7 +270,7 @@ B_{Pij}=\sum_\mu L^\dagger_{P\mu}C_{\mu ij}.
 - 轨道：Ga/As `8au_100Ry_3s3p3d2f`，每个原子 41 个 NAO，总计 82 个；
 - \(k\) 点：Gamma-centered \(4\times4\times4\)；
 - 辅助基：由相同 NAO 乘积和 `exx_pca_threshold=1e-4` 生成；
-- 数据类型：双精度实数；
+- 数据类型：实空间系数使用基线双精度类型，\(k\) 空间占据投影和收缩必须支持双精度复数；
 - 参考路线：先完成同 PP/NAO 的 PBE 收敛门槛，再在固定 PBE 密度矩阵上构造一次 EXX；
 - 对称性、Coulomb 方案、截断阈值和实空间范围在所有比较中保持不变。
 
@@ -211,29 +284,30 @@ B_{Pij}=\sum_\mu L^\dagger_{P\mu}C_{\mu ij}.
 
 ## 6. 实验阶段
 
-### 阶段 A：参考数据和秩谱
+### 阶段 A：零误差占据投影与秩谱
 
 1. 在未修改物理算法的基线 ABACUS 上完成 PBE 门槛。
-2. 生成一次参考 EXX，并保存精确来源的 \(C,V,D,H_x,E_x\) 诊断数据。
-3. 逐块计算三个指标顺序的 TT-SVD 谱、矩阵化 SVD 谱和 Tucker 模式谱。
-4. 扫描相对截断阈值
-   \(10^{-8},10^{-7},10^{-6},10^{-5},10^{-4},10^{-3}\)。
-5. 对每个阈值报告压缩比、重构误差和秩的中位数、90% 分位及最大值。
+2. 生成一次参考 EXX，并保存精确来源的 \(C,V,D,H_x,E_x\) 和占据轨道。
+3. 验证 \(D=OO^\dagger\) 以及用 \(\overline C_{\mu iv}=\sum_jC_{\mu ij}O_{jv}\) 重建的 \(H_x,E_x\) 与原始 `CVCD` 在浮点精度内一致。
+4. 检查 LibRI 现有收缩是否已经使用等价的占据低秩路径，防止重复计算收益。
+5. 对 Coulomb 白化的 \(B_{Piv}\) 计算矩阵 SVD 上界、三阶 TT 的两组 Schmidt 谱和 discarded weight。
+6. 扫描 \(10^{-8},10^{-7},10^{-6},10^{-5},10^{-4},10^{-3}\) 的白化残差或 discarded-weight 阈值。
 
-阶段 A 的通过条件是：至少一种方法在 \(C\) 的全局相对 Frobenius 误差不高于 \(10^{-5}\) 时达到 \(R_{\rm comp}\ge2\)。未达到时仍完成物理误差测试，但不进入因子化 LibRI 收缩开发。
+阶段 A 的结果是“最佳无结构低秩上界”。若在预期物理误差区间内，连理想 SVD/TT 都无法达到 \(10\times\) 存储压缩或理论 \(5\times\) 收缩减量，则直接停止 THC 实现。
 
-### 阶段 B：固定密度矩阵 EXX 精度
+### 阶段 B：local occupied-THC/ISDF 精度
 
-1. 对每个压缩点构造 \(\widehat C\)。
-2. 使用完全相同的 \(V,D\) 和原始 LibRI 稠密收缩计算 \(\widehat H_x,\widehat E_x\)。
-3. 检查第 4 节的能量、矩阵和带边门槛。
-4. 明确标注这一阶段包含解压，因此只验证精度，不报告核心加速。
+1. 从原子轨道支撑区交集中选择插值点，建立 `occupied-occupied` 和 `AO-occupied` 两条原型。
+2. 以 Coulomb 白化残差为目标求解 \(T,X,Y\)，扫描直接秩 \(R\) 和相对阈值。
+3. `occupied-occupied` 只报告 \(E_x\) 精度与最大可压缩性；`AO-occupied` 必须构造完整 \(H_x\)。
+4. 允许先解压进入原始收缩来验证布局和精度，但该时间不计为加速。
+5. 检查第 4 节的能量、矩阵和带边门槛。
 
-阶段 B 的通过条件是：至少一种方法同时满足全部物理门槛和 \(R_{\rm comp}\ge2\)。
+阶段 B 的通过条件是：`AO-occupied` 表示同时满足全部物理门槛和至少 \(10\times\) 存储压缩。
 
 ### 阶段 C：因子化收缩微基准
 
-1. 为通过阶段 B 的表示实现不解压的因子化 `CVCD` 收缩。
+1. 为通过阶段 B 的 `AO-occupied` 表示实现 \(K=-X[Z\odot S]X^\dagger\) 的不解压收缩。
 2. 与原始 LibRI 稠密收缩逐元素比较输出。
 3. 固定同一节点、线程绑定和输入，进行 2 次预热和至少 5 次计时。
 4. 分别报告因子生成时间、单次收缩时间和包含因子生成的摊销时间。
@@ -241,9 +315,9 @@ B_{Pij}=\sum_\mu L^\dagger_{P\mu}C_{\mu ij}.
 
 阶段 C 的通过条件是：
 
-- 核心收缩加速至少 \(1.5\times\)；
+- 核心收缩加速至少 \(5\times\)；
 - 因子生成成本在 5 次 EXX 更新内摊销；
-- 峰值内存不高于稠密基线；
+- 因子存储至少比稠密 \(C\) 小 \(10\times\)，且峰值内存不高于稠密基线；
 - 数值结果仍满足阶段 B 门槛。
 
 ### 阶段 D：ABACUS 端到端 EXX
@@ -257,7 +331,7 @@ B_{Pij}=\sum_\mu L^\dagger_{P\mu}C_{\mu ij}.
 - MPI 通信和序列化字节数；
 - 参考物理量。
 
-端到端成功门槛是 `cal_exx_elec` 至少加速 \(1.2\times\)。若核心加速通过但端到端未通过，结论必须定位为“内核可行但被积分、通信或 I/O 掩盖”。
+端到端成功门槛是 `cal_exx_elec` 至少加速 \(2\times\)。若核心达到 \(5\times\) 但 `cal_exx_elec` 低于 \(2\times\)，结论必须定位为“内核可行但当前 ABACUS/LibRI 端到端不值得集成”，并停止生产接入。
 
 ## 7. 性能测量协议
 
@@ -274,14 +348,14 @@ B_{Pij}=\sum_\mu L^\dagger_{P\mu}C_{\mu ij}.
 
 ## 8. 软件边界
 
-第一阶段在 ABACUS 分支中只加入诊断、数据导出和测试入口。压缩数学实现放入独立、无 MPI 假设的模块，避免直接嵌入 `Exx_LRI.hpp` 的控制流程。
+第一阶段在 ABACUS 分支中只加入诊断、数据导出和测试入口。密度矩阵占据分解、Coulomb 白化、TT 谱和 THC/ISDF 原型放入独立、无 MPI 假设的模块，避免直接嵌入 `Exx_LRI.hpp` 的控制流程。
 
 计划中的职责边界为：
 
-- ABACUS `source/source_lcao/module_ri/`：真实 \(C,V,D\) 获取、物理结果和计时接入；
-- ABACUS 单元测试：张量布局、重构精度、阈值边界和确定性；
-- 独立分析脚本：秩谱、误差表、压缩比和绘图；
-- LibRI 后续 worktree：不解压的因子化 `cal_loop3` 收缩；
+- ABACUS `source/source_lcao/module_ri/`：真实 \(C,V,D,O\) 获取、物理结果和计时接入；
+- ABACUS 单元测试：占据投影、原子块布局、重构精度、阈值边界和确定性；
+- 独立分析脚本：Schmidt 谱、discarded weight、ISDF 秩、误差表、压缩比和理论浮点数；
+- LibRI 后续 worktree：占据低秩路径和不解压的 \(K=-X[Z\odot S]X^\dagger\) 收缩；
 - 研究文档：理论推导、版本证据、测试表格、图和负面结果。
 
 原型不得修改公共输入接口或默认计算路径。任何实验开关默认关闭，并在未进入生产实现前保持为明确的开发选项。
@@ -290,19 +364,21 @@ B_{Pij}=\sum_\mu L^\dagger_{P\mu}C_{\mu ij}.
 
 ### 数学单元测试
 
-- 人工构造已知 TT 秩为 \((r_1,r_2)\) 的张量，验证恢复秩和重构误差；
+- 人工构造幂等和分数占据密度矩阵，验证 \(D=OO^\dagger\) 及本征值截断；
+- 人工构造已知 TT 秩为 \((r_1,r_2)\) 的 Coulomb 白化张量，验证 Schmidt 秩、discarded weight 和误差界；
+- 人工构造已知 CP/THC 秩 \(R\) 的 \(\overline C_{\mu iv}\)，验证因子恢复和相位/尺度不定性；
 - 零张量、秩一张量、满秩随机张量；
-- 三种指标顺序的往返排列；
+- 原子块和晶格块的往返布局；
 - 固定阈值下结果可重复；
 - 实数与后续复数接口的类型边界明确。
 
 ### 收缩单元测试
 
-- 小尺寸随机正定 \(V\) 和厄米 \(D\)；
-- 稠密和压缩收缩逐元素比较；
+- 小尺寸随机正定 \(V\) 和厄米非负 \(D\)；
+- 原始 `CVCD`、占据投影精确式和 THC 直接式逐元素比较；
 - \(C=0\)、\(D=0\)、秩一 \(C\)；
-- 不同收缩顺序给出一致结果；
-- 压缩表示不产生隐式稠密临时量。
+- 相同因子的 \(K=-X[Z\odot S]X^\dagger\) 与显式 \(\widehat C\) 收缩一致；
+- 性能路径不产生与原始 \(C\) 或 \(\overline C\) 同量级的隐式稠密临时量。
 
 ### 物理回归
 
@@ -315,33 +391,44 @@ B_{Pij}=\sum_\mu L^\dagger_{P\mu}C_{\mu ij}.
 
 出现以下任一情况时，不继续主路径集成：
 
-- 在物理门槛下所有方法的压缩比都低于 2；
-- 因子化核心收缩不比稠密 BLAS 快；
+- 理想 SVD/TT 上界在物理门槛下都无法达到 \(10\times\) 存储压缩或理论 \(5\times\) 收缩减量；
+- `AO-occupied` THC/ISDF 在物理门槛下压缩比低于 \(10\times\)；
+- 因子化核心收缩实测加速低于 \(5\times\)；
+- `cal_exx_elec` 实测加速低于 \(2\times\)；
 - 压缩需要产生与原始 \(C\) 同量级的稠密临时量；
 - 误差对不同原子对或晶格块表现出不可控长尾；
 - 结果依赖非确定性 SVD 或线程顺序，无法稳定复现。
 
 最终结论按以下方式分类：
 
-1. **MPS 可行**：TT 同时通过精度、压缩和性能门槛；
-2. **低秩可行但 MPS 无优势**：矩阵 SVD/Tucker 通过而 TT 不优；
-3. **只适合节省存储**：精度和压缩通过，但核心或端到端不加速；
-4. **当前表示不可行**：物理门槛下无有效压缩；
-5. **需要 Coulomb 度量压缩**：裸 \(C\) 低秩不足，但误差分析支持转向 \(V^{1/2}C\)。
+1. **occupied-THC/ISDF 可行**：同时通过精度、\(10\times\) 压缩、\(5\times\) 核心和 \(2\times\) `cal_exx_elec` 门槛；
+2. **TT 可压缩但 THC 不经济**：Schmidt 谱低秩，但可分离因子秩或因子构建代价过高；
+3. **只适合节省存储**：精度和 \(10\times\) 压缩通过，但性能门槛未通过；
+4. **局部内核可行但不值得集成**：核心达到 \(5\times\)，但 `cal_exx_elec` 低于 \(2\times\)；
+5. **占据乘积表示不可行**：物理门槛下无法达到有意义的秩和性能。
 
 ## 11. 交付物
 
 本研究完成后提供：
 
 - 固定版本和输入的 GaAs \(4^3\) 参考数据；
-- TT、矩阵 SVD、Tucker 的秩谱和误差数据；
+- 密度矩阵占据分解的零误差对照；
+- Coulomb 白化矩阵 SVD、TT Schmidt/discarded-weight 谱和 local occupied-THC/ISDF 秩谱；
 - 核心与端到端性能表；
 - 压缩比、误差和加速比图；
 - 包含理论推导、实现边界、测试方法、正负结果的 TeX/PDF 研究文档；
 - 若门槛通过，提供 ABACUS 与 LibRI 后续生产接入计划；
 - 若门槛失败，保留全部输入、日志、诊断数据和失败原因，不删除结果。
 
-## 12. 当前资源与版本记录
+## 12. 方法参考
+
+- I. V. Oseledets, *Tensor-Train Decomposition*, SIAM J. Sci. Comput. 33, 2295 (2011), DOI: `10.1137/090752286`.
+- J. Lu and L. Ying, *Compression of the electron repulsion integral tensor in tensor hypercontraction format with cubic scaling cost*, J. Comput. Phys. 302, 329 (2015), DOI: `10.1016/j.jcp.2015.09.014`.
+- J. Lee, L. Lin, and M. Head-Gordon, *Systematically Improvable Tensor Hypercontraction: Interpolative Separable Density-Fitting for Molecules Applied to Exact Exchange, Second- and Third-Order Møller–Plesset Perturbation Theory*, J. Chem. Theory Comput. 16, 243 (2020), DOI: `10.1021/acs.jctc.9b00820`.
+- X. Qin et al., *Interpolative Separable Density Fitting Decomposition for Accelerating Hartree–Fock Exchange Calculations within Numerical Atomic Orbitals*, J. Phys. Chem. A 124, 5664 (2020), DOI: `10.1021/acs.jpca.0c02826`.
+- A. Rettig, J. Lee, and M. Head-Gordon, *Even Faster Exact Exchange for Solids via Tensor Hypercontraction*, J. Chem. Theory Comput. 19, 5773 (2023), DOI: `10.1021/acs.jctc.3c00407`.
+
+## 13. 当前资源与版本记录
 
 本设计建立时：
 
@@ -354,5 +441,6 @@ Remote sync repository: /home/ghj/git/abacus-develop-mps-exx.git
 Server Git: 1.8.3.1, using bundled git-new-workdir shared-workdir helper
 Scheduler snapshot: partition 640 has 3 idle nodes; partition 740 has 5 idle nodes
 Version verdict: source branch matches the recorded local master_ghj commit
-Next action: user reviews this design before implementation planning
+Design verdict: approved by user for implementation planning
+Next action: write a file-by-file implementation plan; do not start compute before plan review
 ```
