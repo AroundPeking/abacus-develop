@@ -1,0 +1,20 @@
+INPUT_PARAMETERS
+suffix             GAAS_TZDP_K444_PBE
+calculation        scf
+ntype              2
+symmetry           0
+gamma_only         0
+nspin              1
+basis_type         lcao
+ks_solver          genelpa
+ecutwfc            100
+scf_thr            1e-9
+scf_nmax           100
+smearing_method    fixed
+mixing_type        broyden
+mixing_beta        0.4
+dft_functional     pbe
+out_chg            1
+out_wfc_lcao       1
+pseudo_dir         ./
+orbital_dir        ./
