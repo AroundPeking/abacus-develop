@@ -386,6 +386,34 @@ TEST(SternheimerABACUSSTSmoke, SelectsIndependentFixedAOGalerkinOutputMode)
     EXPECT_TRUE(response_only.fixed_ao_only);
 }
 
+TEST(SternheimerABACUSSTSmoke, ReordersResponseOrbitalsFromLNMToLMNBlocks)
+{
+    const std::vector<ModuleRI::SternheimerResponseOrbitalAtomSpec> atoms{
+        {"H", 0, {2, 2}},
+        {"H", 1, {2, 2}},
+    };
+    const ModuleRI::SternheimerResponseOrbitalLayout layout
+        = ModuleRI::build_sternheimer_response_orbital_layout(atoms);
+
+    EXPECT_EQ(layout.sampled_indices,
+              (std::vector<std::size_t>{0, 1, 2, 5, 3, 6, 4, 7,
+                                        8, 9, 10, 13, 11, 14, 12, 15}));
+    ASSERT_EQ(layout.blocks.size(), 8);
+    EXPECT_EQ(layout.blocks[0].atom_index, 0);
+    EXPECT_EQ(layout.blocks[0].l, 0);
+    EXPECT_EQ(layout.blocks[0].m, 0);
+    EXPECT_EQ(layout.blocks[0].n_primitive, 2);
+    EXPECT_EQ(layout.blocks[0].offset, 0);
+    EXPECT_EQ(layout.blocks[1].m, -1);
+    EXPECT_EQ(layout.blocks[1].offset, 2);
+    EXPECT_EQ(layout.blocks[3].m, 1);
+    EXPECT_EQ(layout.blocks[3].offset, 6);
+    EXPECT_EQ(layout.blocks[4].atom_index, 1);
+    EXPECT_EQ(layout.blocks[4].offset, 8);
+    EXPECT_EQ(layout.blocks[7].m, 1);
+    EXPECT_EQ(layout.blocks[7].offset, 14);
+}
+
 TEST(SternheimerABACUSSTSmoke, SelectsExplicitABFSForPerturbationChannels)
 {
     EXPECT_EQ(ModuleRI::sternheimer_abfs_perturbation_source({}), "product_pca");

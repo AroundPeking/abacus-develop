@@ -550,6 +550,42 @@ void read_sternheimer_orbitals(const UnitCell& ucell, LCAO_Orbitals& orb)
              GlobalV::MY_RANK);
 }
 
+std::vector<std::string> resolved_sternheimer_response_orbital_files(const UnitCell& ucell)
+{
+    if (PARAM.inp.sternheimer_response_orbital_files.size()
+        != static_cast<std::size_t>(ucell.ntype))
+    {
+        throw std::runtime_error("Sternheimer response space requires one numerical orbital file per atom type.");
+    }
+    return siab::resolve_required_input_files(PARAM.inp.orbital_dir,
+                                               PARAM.inp.sternheimer_response_orbital_files,
+                                               "response orbital");
+}
+
+void read_sternheimer_response_orbitals(const UnitCell& ucell, LCAO_Orbitals& orb)
+{
+    std::vector<std::string> orbital_files = resolved_sternheimer_response_orbital_files(ucell);
+    const double lcao_ecut = PARAM.inp.lcao_ecut > 0.0 ? PARAM.inp.lcao_ecut : PARAM.inp.ecutwfc;
+    if (lcao_ecut <= 0.0)
+    {
+        throw std::runtime_error("Sternheimer response orbitals require positive lcao_ecut or ecutwfc.");
+    }
+    orb.init(GlobalV::ofs_running,
+             ucell.ntype,
+             "",
+             orbital_files.data(),
+             ucell.descriptor_file,
+             PARAM.inp.lmaxmax,
+             lcao_ecut,
+             PARAM.inp.lcao_dk,
+             PARAM.inp.lcao_dr,
+             PARAM.inp.lcao_rmax,
+             PARAM.globalv.deepks_setorb,
+             PARAM.inp.out_mat_r,
+             PARAM.inp.cal_force,
+             GlobalV::MY_RANK);
+}
+
 std::map<Conv_Coulomb_Pot_K::Coulomb_Type, std::vector<std::map<std::string, std::string>>>
     make_fock_hartree_coulomb_param()
 {
@@ -1099,6 +1135,53 @@ std::vector<SternheimerDeltaGridFunction> build_lcao_candidate_grid_functions(
     return candidates;
 }
 
+std::vector<SternheimerResponseOrbitalAtomSpec> make_response_orbital_atom_specs(
+    const UnitCell& ucell,
+    const LCAO_Orbitals& response_orbitals)
+{
+    std::vector<SternheimerResponseOrbitalAtomSpec> atoms;
+    atoms.reserve(static_cast<std::size_t>(ucell.nat));
+    int atom_index = 0;
+    for (int type = 0; type != ucell.ntype; ++type)
+    {
+        const Numerical_Orbital& type_orbitals = response_orbitals.Phi[type];
+        std::vector<int> radial_counts(static_cast<std::size_t>(type_orbitals.getLmax() + 1), 0);
+        for (int l = 0; l <= type_orbitals.getLmax(); ++l)
+        {
+            radial_counts[static_cast<std::size_t>(l)] = type_orbitals.getNchi(l);
+        }
+        for (int atom_local = 0; atom_local != ucell.atoms[type].na; ++atom_local, ++atom_index)
+        {
+            atoms.push_back(SternheimerResponseOrbitalAtomSpec{
+                ucell.atoms[type].label,
+                atom_index,
+                radial_counts});
+        }
+    }
+    return atoms;
+}
+
+std::vector<SternheimerDeltaGridFunction> reorder_response_orbital_grid_functions(
+    std::vector<SternheimerDeltaGridFunction> sampled_functions,
+    const SternheimerResponseOrbitalLayout& layout)
+{
+    if (sampled_functions.size() != layout.sampled_indices.size())
+    {
+        throw std::runtime_error("Sternheimer response-orbital layout does not match sampled AO count.");
+    }
+    std::vector<SternheimerDeltaGridFunction> ordered;
+    ordered.reserve(sampled_functions.size());
+    for (const std::size_t sampled_index: layout.sampled_indices)
+    {
+        if (sampled_index >= sampled_functions.size())
+        {
+            throw std::runtime_error("Sternheimer response-orbital layout contains an invalid sampled AO index.");
+        }
+        ordered.push_back(std::move(sampled_functions[sampled_index]));
+    }
+    return ordered;
+}
+
 std::vector<std::vector<double>> collect_channel_potentials(const std::vector<SternheimerABFGridChannel>& channels)
 {
     std::vector<std::vector<double>> potentials;
@@ -1205,6 +1288,56 @@ std::string write_sternheimer_primitive_galerkin_sidecar(
         = join_output_path(output_dir, "sternheimer_galerkin_primitive.dat");
     siab::write_primitive_galerkin_v1(path, data, provenance);
     GlobalV::ofs_running << " Sternheimer SIAB primitive Galerkin v1 output: "
+                         << path << std::endl;
+    return path;
+}
+
+std::string write_sternheimer_response_galerkin_sidecar(
+    const std::string& output_dir,
+    const UnitCell& ucell,
+    const std::vector<SternheimerABFGridChannel>& channels,
+    const SternheimerRPA::FrequencyGrid& frequency_grid,
+    const double pca_threshold,
+    const SternheimerABACUSFDGridData& grid_data,
+    const std::vector<siab::PrimitiveBlock>& response_blocks,
+    const std::vector<SternheimerDeltaGridFunction>& response_functions,
+    const std::vector<SternheimerDeltaGridFunction>& sampled_ao_functions,
+    const std::vector<std::vector<double>>& potentials,
+    const SternheimerLCAOFixedAOMatrices& fixed_ao_matrices,
+    const std::vector<SternheimerFDHamiltonian>& hamiltonians_ry)
+{
+    std::vector<std::vector<std::complex<double>>> response_values;
+    response_values.reserve(response_functions.size());
+    for (const SternheimerDeltaGridFunction& function: response_functions)
+    {
+        response_values.push_back(function.values);
+    }
+    std::vector<std::vector<std::complex<double>>> fixed_ao_values;
+    fixed_ao_values.reserve(sampled_ao_functions.size());
+    for (const SternheimerDeltaGridFunction& function: sampled_ao_functions)
+    {
+        fixed_ao_values.push_back(function.values);
+    }
+
+    const siab::PrimitiveGalerkinData data = siab::build_primitive_galerkin_data(
+        response_blocks,
+        make_siab_auxiliary_metadata(channels),
+        response_values,
+        fixed_ao_values,
+        fixed_ao_matrices.spins,
+        hamiltonians_ry,
+        potentials,
+        frequency_grid.omega_ha,
+        frequency_grid.weights_ha,
+        grid_data.volume_element);
+    siab::Provenance provenance
+        = make_siab_production_provenance(ucell, channels, frequency_grid, pca_threshold);
+    provenance.response_orbital_sha256
+        = siab::sha256_file_manifest(resolved_sternheimer_response_orbital_files(ucell));
+    const std::string path
+        = join_output_path(output_dir, "sternheimer_galerkin_response.dat");
+    siab::write_response_galerkin_v1(path, data, provenance);
+    GlobalV::ofs_running << " Sternheimer response-orbital Galerkin v1 output: "
                          << path << std::endl;
     return path;
 }
@@ -1669,6 +1802,7 @@ void run_sternheimer_abacus_chi0_output_impl(const elecstate::Potential& potenti
     const bool write_siab = output_mode.write_siab_targets;
     const bool write_fixed_ao = output_mode.write_fixed_ao;
     const bool write_primitive = output_mode.write_primitive;
+    const bool write_response_orbitals = output_mode.write_response_orbitals;
     const bool use_frequency_mpi = !output_mode.fixed_ao_only && PARAM.inp.sternheimer_frequency_mpi;
     const bool use_channel_mpi = !output_mode.fixed_ao_only && PARAM.inp.sternheimer_channel_mpi;
     const std::string mpi_layout = PARAM.inp.sternheimer_mpi_layout;
@@ -1775,6 +1909,11 @@ void run_sternheimer_abacus_chi0_output_impl(const elecstate::Potential& potenti
         {
             throw std::runtime_error(
                 "out_sternheimer_galerkin_primitive currently requires one MPI rank; use OpenMP within one node.");
+        }
+        if (write_response_orbitals && GlobalV::NPROC != 1)
+        {
+            throw std::runtime_error(
+                "out_sternheimer_galerkin_response currently requires one MPI rank; use OpenMP within one node.");
         }
 
         std::vector<int> response_spin_indices;
@@ -2159,6 +2298,19 @@ void run_sternheimer_abacus_chi0_output_impl(const elecstate::Potential& potenti
             }
         }
 
+        SternheimerResponseOrbitalLayout response_layout;
+        std::vector<SternheimerDeltaGridFunction> response_orbital_functions;
+        if (write_response_orbitals)
+        {
+            LCAO_Orbitals response_orbitals;
+            read_sternheimer_response_orbitals(ucell, response_orbitals);
+            response_layout = build_sternheimer_response_orbital_layout(
+                make_response_orbital_atom_specs(ucell, response_orbitals));
+            response_orbital_functions = reorder_response_orbital_grid_functions(
+                build_lcao_candidate_grid_functions(ucell, grid_data.grid, &response_orbitals),
+                response_layout);
+        }
+
         std::string fixed_ao_path;
         if (write_fixed_ao && GlobalV::MY_RANK == 0)
         {
@@ -2172,16 +2324,19 @@ void run_sternheimer_abacus_chi0_output_impl(const elecstate::Potential& potenti
                                                                potentials,
                                                                *fixed_ao_matrices);
         }
-        std::string primitive_path;
-        if (write_primitive && GlobalV::MY_RANK == 0)
+        std::vector<SternheimerFDHamiltonian> hamiltonians_ry;
+        if ((write_primitive || write_response_orbitals) && GlobalV::MY_RANK == 0)
         {
-            std::vector<SternheimerFDHamiltonian> hamiltonians_ry;
             hamiltonians_ry.reserve(fixed_ao_matrices->spins.size());
             for (const siab::FixedAOSpinInput& spin: fixed_ao_matrices->spins)
             {
                 hamiltonians_ry.push_back(make_sternheimer_fd_hamiltonian(
                     potential, pw_basis, ucell, spin.spin_index, 1.0));
             }
+        }
+        std::string primitive_path;
+        if (write_primitive && GlobalV::MY_RANK == 0)
+        {
             primitive_path = write_sternheimer_primitive_galerkin_sidecar(
                 output_dir,
                 ucell,
@@ -2190,6 +2345,23 @@ void run_sternheimer_abacus_chi0_output_impl(const elecstate::Potential& potenti
                 pca_threshold,
                 grid_data,
                 siab_primitives,
+                sampled_ao_functions,
+                potentials,
+                *fixed_ao_matrices,
+                hamiltonians_ry);
+        }
+        std::string response_path;
+        if (write_response_orbitals && GlobalV::MY_RANK == 0)
+        {
+            response_path = write_sternheimer_response_galerkin_sidecar(
+                output_dir,
+                ucell,
+                channels,
+                frequency_grid,
+                pca_threshold,
+                grid_data,
+                response_layout.blocks,
+                response_orbital_functions,
                 sampled_ao_functions,
                 potentials,
                 *fixed_ao_matrices,
@@ -2205,6 +2377,10 @@ void run_sternheimer_abacus_chi0_output_impl(const elecstate::Potential& potenti
                 if (write_primitive)
                 {
                     out << "primitive_file " << primitive_path << '\n';
+                }
+                if (write_response_orbitals)
+                {
+                    out << "response_file " << response_path << '\n';
                 }
                 out << "grid " << grid_data.grid.nx << ' ' << grid_data.grid.ny << ' ' << grid_data.grid.nz
                     << " size " << grid_data.grid.size() << " dV " << grid_data.volume_element << '\n';

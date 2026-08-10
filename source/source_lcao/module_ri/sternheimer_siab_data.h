@@ -95,6 +95,7 @@ struct Provenance
     double ecut_ry;
     std::string kernel;
     std::string orbital_sha256;
+    std::string response_orbital_sha256;
     std::string pseudopotential_sha256;
     std::string spin_convention;
 

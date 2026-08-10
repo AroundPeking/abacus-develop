@@ -169,6 +169,7 @@ void validate_provenance(const Provenance& provenance)
     validate_utf8_field(provenance.auxiliary_basis_sha256, "auxiliary_basis_sha256");
     validate_utf8_field(provenance.kernel, "kernel");
     validate_utf8_field(provenance.orbital_sha256, "orbital_sha256");
+    validate_utf8_field(provenance.response_orbital_sha256, "response_orbital_sha256");
     validate_utf8_field(provenance.pseudopotential_sha256, "pseudopotential_sha256");
     validate_utf8_field(provenance.spin_convention, "spin_convention");
     validate_utf8_field(provenance.executable_sha256, "executable_sha256");
@@ -179,7 +180,9 @@ void validate_provenance(const Provenance& provenance)
         throw std::invalid_argument("Sternheimer SIAB provenance requires a 40- or 64-digit hexadecimal ABACUS commit");
     }
     if (!valid_hex(provenance.auxiliary_basis_sha256, 64) || !valid_hex(provenance.orbital_sha256, 64)
-        || !valid_hex(provenance.pseudopotential_sha256, 64))
+        || !valid_hex(provenance.pseudopotential_sha256, 64)
+        || (!provenance.response_orbital_sha256.empty()
+            && !valid_hex(provenance.response_orbital_sha256, 64)))
     {
         throw std::invalid_argument("Sternheimer SIAB provenance hashes must be 64-digit hexadecimal SHA256 values");
     }
@@ -960,6 +963,10 @@ std::string provenance_json(const Provenance& provenance)
            << ",\"orbital_sha256\":" << json_string(provenance.orbital_sha256)
            << ",\"pseudopotential_sha256\":" << json_string(provenance.pseudopotential_sha256)
            << ",\"spin_convention\":" << json_string(provenance.spin_convention);
+    if (!provenance.response_orbital_sha256.empty())
+    {
+        output << ",\"response_orbital_sha256\":" << json_string(provenance.response_orbital_sha256);
+    }
     if (!provenance.executable_sha256.empty())
     {
         output << ",\"executable_sha256\":" << json_string(provenance.executable_sha256)
@@ -1259,9 +1266,10 @@ void write_fixed_ao_v1(const std::string& path, const FixedAOData& data, const P
     temporary_file.keep();
 }
 
-void write_primitive_galerkin_v1(const std::string& path,
-                                 const PrimitiveGalerkinData& data,
-                                 const Provenance& provenance)
+void write_galerkin_v1_impl(const std::string& path,
+                            const PrimitiveGalerkinData& data,
+                            const Provenance& provenance,
+                            const char* representation)
 {
     if (path.empty())
     {
@@ -1287,7 +1295,7 @@ void write_primitive_galerkin_v1(const std::string& path,
 
     output << "<STERNHEIMER_GALERKIN_PRIMITIVE_HEADER>\n"
            << "format_version 1\n"
-           << "representation bessel_primitive_uniform_grid_gamma\n"
+           << "representation " << representation << "\n"
            << "energy_unit Ha\n"
            << "n_primitive " << data.n_primitive << "\n"
            << "n_fixed_ao " << data.n_fixed_ao << "\n"
@@ -1466,6 +1474,20 @@ void write_primitive_galerkin_v1(const std::string& path,
             + ": " + reason);
     }
     temporary_file.keep();
+}
+
+void write_primitive_galerkin_v1(const std::string& path,
+                                 const PrimitiveGalerkinData& data,
+                                 const Provenance& provenance)
+{
+    write_galerkin_v1_impl(path, data, provenance, "bessel_primitive_uniform_grid_gamma");
+}
+
+void write_response_galerkin_v1(const std::string& path,
+                                const PrimitiveGalerkinData& data,
+                                const Provenance& provenance)
+{
+    write_galerkin_v1_impl(path, data, provenance, "response_orbital_uniform_grid_gamma");
 }
 
 } // namespace sternheimer_siab

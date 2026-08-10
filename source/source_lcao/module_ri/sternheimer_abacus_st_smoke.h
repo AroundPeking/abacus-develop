@@ -2,6 +2,7 @@
 #define STERNHEIMER_ABACUS_ST_SMOKE_H
 
 #include "source_lcao/module_ri/sternheimer_abacus_fd_adapter.h"
+#include "source_lcao/module_ri/sternheimer_response_orbital_layout.h"
 #include "source_lcao/module_ri/sternheimer_siab_fixed_ao.h"
 #include "source_lcao/module_ri/sternheimer_siab_memory.h"
 

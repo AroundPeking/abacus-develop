@@ -704,6 +704,30 @@ TEST(SternheimerSIABPrimitiveGalerkinWriter, WritesCompleteVersionedSidecar)
     std::remove(path.c_str());
 }
 
+TEST(SternheimerSIABPrimitiveGalerkinWriter, WritesResponseOrbitalRepresentationAndProvenance)
+{
+    const std::string path = test_path("response_galerkin_canonical");
+    std::remove(path.c_str());
+    std::remove((path + ".tmp").c_str());
+
+    siab::Provenance provenance = canonical_provenance();
+    provenance.response_orbital_sha256
+        = "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd";
+    siab::write_response_galerkin_v1(path,
+                                     canonical_primitive_galerkin_data(),
+                                     provenance);
+    const std::string text = read_text(path);
+
+    EXPECT_NE(text.find("representation response_orbital_uniform_grid_gamma\n"),
+              std::string::npos);
+    EXPECT_NE(text.find("\"response_orbital_sha256\":\""
+                        "dddddddddddddddddddddddddddddddd"
+                        "dddddddddddddddddddddddddddddddd\""),
+              std::string::npos);
+
+    std::remove(path.c_str());
+}
+
 TEST(SternheimerSIABPrimitiveGalerkinWriter, RejectsBadPrimitiveDimensions)
 {
     const std::string path = test_path("primitive_galerkin_invalid");

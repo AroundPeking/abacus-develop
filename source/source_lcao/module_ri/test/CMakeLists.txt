@@ -82,7 +82,9 @@ AddTest(
 AddTest(
   TARGET MODULE_RI_sternheimer_abacus_st_smoke_test
   LIBS ${math_libs}
-  SOURCES sternheimer_abacus_st_smoke_test.cpp ../sternheimer_siab_memory.cpp
+  SOURCES sternheimer_abacus_st_smoke_test.cpp
+          ../sternheimer_response_orbital_layout.cpp
+          ../sternheimer_siab_memory.cpp
 )
 AddTest(
   TARGET MODULE_RI_sternheimer_coulomb_whitening_test
