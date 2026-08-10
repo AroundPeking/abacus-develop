@@ -63,6 +63,17 @@ class CompareCommandTest(unittest.TestCase):
         self.assertEqual(report["E_abs_Ry_atom"], 0.0)
         self.assertTrue(report["pass"])
 
+    def test_identical_real_snapshots_pass(self):
+        block = np.asarray([[1.0, -0.25]], dtype=np.float64)
+        blocks = {BlockKey(0, 0, (0, 0, 0)): block}
+        write_snapshot(self.reference, _snapshot(blocks, scalar="real64"))
+        write_snapshot(self.candidate, _snapshot(blocks, scalar="real64"))
+
+        result = self.compare()
+
+        self.assertEqual(result.returncode, 0, msg=result.stderr)
+        self.assertTrue(json.loads(result.stdout)["pass"])
+
     def test_tolerance_failure_returns_nonzero_json(self):
         changed = read_snapshot(self.candidate).blocks
         changed[BlockKey(0, 0, (0, 0, 0))][0, 0] += 1.0e-5
@@ -252,6 +263,28 @@ class ProjectCommandTest(unittest.TestCase):
         for key in original.blocks:
             np.testing.assert_allclose(projected.blocks[key], original.blocks[key], rtol=0.0, atol=1.0e-13)
 
+    def test_real_snapshots_produce_real_projected_snapshot(self):
+        self.period = (1, 1, 1)
+        coefficient = {
+            BlockKey(0, 0, (0, 0, 0)): np.asarray(
+                [[[1.0, 0.2], [0.3, -0.4]]], dtype=np.float64
+            )
+        }
+        density = {
+            BlockKey(0, 0, (0, 0, 0)): np.asarray(
+                [[1.0, 0.0], [0.0, 0.0]], dtype=np.float64
+            )
+        }
+        write_snapshot(self.c_path, _snapshot(coefficient, scalar="real64"))
+        write_snapshot(self.d_path, _snapshot(density, scalar="real64"))
+
+        result = self.run_project()
+
+        self.assertEqual(result.returncode, 0, msg=result.stderr)
+        projected = read_snapshot(self.output)
+        self.assertEqual(projected.scalar, "real64")
+        self.assertTrue(all(block.dtype == np.float64 for block in projected.blocks.values()))
+
     def test_projection_emits_cross_atom_pairs_created_by_global_projector(self):
         c_k, d_k = self.write_sparse_two_atom_case()
         result = self.run_project()
@@ -346,7 +379,7 @@ class ProjectCommandTest(unittest.TestCase):
         self.assertIn("finite", result.stderr)
         self.assertFalse(self.output.exists())
 
-    def test_rejects_distributed_or_real_snapshots(self):
+    def test_rejects_distributed_snapshots(self):
         self.write_valid_case()
         snapshot = read_snapshot(self.c_path)
         write_snapshot(
@@ -356,14 +389,6 @@ class ProjectCommandTest(unittest.TestCase):
         result = self.run_project()
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("rank 0 of 1", result.stderr)
-
-        write_snapshot(
-            self.c_path,
-            Snapshot(1, "real64", 0, 1, {key: value.real.astype(np.float64) for key, value in snapshot.blocks.items()}),
-        )
-        result = self.run_project()
-        self.assertNotEqual(result.returncode, 0)
-        self.assertIn("complex128", result.stderr)
 
     def test_rejects_malformed_c_dimensions_without_output(self):
         self.write_valid_case()

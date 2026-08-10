@@ -18,10 +18,14 @@ This is verified behavior for that exact local dependency revision, not a claim 
 All four objects use the nested map
 
 ```text
-map<ia1, map<(ia2, R), Tensor<complex<double>>>>
+map<ia1, map<(ia2, R), Tensor<Scalar>>>
 ```
 
 where `R` has three integer components.
+
+`Scalar` is `double` for the nspin=1 real path and `complex<double>` for the
+complex path. A replay requires C, V, D, and, when present, D.post to use the
+same EXXCMP1 scalar tag; it dispatches to the matching `RI::Exx` template.
 
 | Object | LibRI labels | Block shape |
 | --- | --- | --- |
@@ -32,7 +36,7 @@ where `R` has three integer components.
 
 The label assignments are explicit in the fixed-revision LibRI [`Exx::set_Cs`, `set_Vs`, and `set_Ds` definitions](https://github.com/AroundPeking/LibRI/blob/21f92f943bf2f284fee9128bcd3e1a9f197916e1/include/RI/physics/Exx.hpp#L54-L108). ABACUS writes the loaded active pools in `Exx_LRI.hpp`: [`V.active`, lines 1601-1615](https://github.com/AroundPeking/abacus-develop/blob/ab177743bedd833ee74a28ffecf94763d302c61e/source/source_lcao/module_ri/Exx_LRI.hpp#L1601-L1615), [`C.active`, lines 1694-1722](https://github.com/AroundPeking/abacus-develop/blob/ab177743bedd833ee74a28ffecf94763d302c61e/source/source_lcao/module_ri/Exx_LRI.hpp#L1694-L1722), and [`D.raw`/`D.active` plus `cal_Hs`, lines 2287-2308](https://github.com/AroundPeking/abacus-develop/blob/ab177743bedd833ee74a28ffecf94763d302c61e/source/source_lcao/module_ri/Exx_LRI.hpp#L2287-L2308).
 
-`H` in the replay is exactly the un-postprocessed `RI::Exx::cal_Hs` map. Its complex scalar energy is the value computed by `Exx_Post_2D::cal_energy(D,H)`: see fixed-revision [`Exx::cal_Hs`, lines 297-326](https://github.com/AroundPeking/LibRI/blob/21f92f943bf2f284fee9128bcd3e1a9f197916e1/include/RI/physics/Exx.hpp#L297-L326) and [`Exx_Post_2D::cal_energy`, lines 53-81](https://github.com/AroundPeking/LibRI/blob/21f92f943bf2f284fee9128bcd3e1a9f197916e1/include/RI/physics/Exx_Post_2D.hpp#L53-L81). A critical detail is visible in [`Exx::set_Ds`, lines 94-108](https://github.com/AroundPeking/LibRI/blob/21f92f943bf2f284fee9128bcd3e1a9f197916e1/include/RI/physics/Exx.hpp#L94-L108): the density passed into `lri.set_tensors_map2` becomes the active contraction map used for `H`, while `post_2D.saves["Ds_"]` is made from the original incoming density and is later used for energy. Production energy therefore does **not** use the loaded active density map.
+`H` in the replay is exactly the un-postprocessed `RI::Exx::cal_Hs` map. Its scalar energy is the value computed by `Exx_Post_2D::cal_energy(D,H)`: see fixed-revision [`Exx::cal_Hs`, lines 297-326](https://github.com/AroundPeking/LibRI/blob/21f92f943bf2f284fee9128bcd3e1a9f197916e1/include/RI/physics/Exx.hpp#L297-L326) and [`Exx_Post_2D::cal_energy`, lines 53-81](https://github.com/AroundPeking/LibRI/blob/21f92f943bf2f284fee9128bcd3e1a9f197916e1/include/RI/physics/Exx_Post_2D.hpp#L53-L81). The text output always records `real imag`; the imaginary field is zero on the real path. A critical detail is visible in [`Exx::set_Ds`, lines 94-108](https://github.com/AroundPeking/LibRI/blob/21f92f943bf2f284fee9128bcd3e1a9f197916e1/include/RI/physics/Exx.hpp#L94-L108): the density passed into `lri.set_tensors_map2` becomes the active contraction map used for `H`, while `post_2D.saves["Ds_"]` is made from the original incoming density and is later used for energy. Production energy therefore does **not** use the loaded active density map.
 
 ## Period and loaded-map state
 
@@ -88,6 +92,6 @@ D_state raw
 D_full_out /path/to/D.full.exxcmp
 ```
 
-`atom` may occur once for each distinct integer atom id. `D_state` is exactly `active` or `raw`; `D_post_path` is required only for active, and `D_full_out` is required only for raw. All configured input and output paths must be distinct. Every input must be a complete serial EXXCMP1 complex128 snapshot (`rank=0`, `nranks=1`) with finite tensor values. The executable also requires MPI world size one, so distributed shard files cannot accidentally be treated as a complete map.
+`atom` may occur once for each distinct integer atom id. `D_state` is exactly `active` or `raw`; `D_post_path` is required only for active, and `D_full_out` is required only for raw. All configured input and output paths must be distinct. Every input must be a complete serial EXXCMP1 real64 or complex128 snapshot (`rank=0`, `nranks=1`) with finite tensor values, and all inputs in one replay must have the same scalar type. The executable also requires MPI world size one, so distributed shard files cannot accidentally be treated as a complete map. Python comparison accepts either scalar type but requires reference and candidate to match. Occupied projection likewise requires matching C/D.full types and preserves that type; for real64 it rejects a non-negligible inverse-transform imaginary component before writing the real output.
 
 Final output paths are never overwritten. Replay creates every temporary with same-directory `mkstemp`, so concurrent processes or shared-filesystem nodes cannot truncate one another's temporary files. It publishes each final through an exclusive POSIX link and publishes `E_out` last as the completion marker. The temporary hardlinks remain present until the whole final set has been linked; if a caught failure occurs during publication, replay compares the live temp/final inode identities, removes only finals published by that process, and then cleans its temporary files. A process crash can leave an incomplete set without `E_out`; a later replay rejects every existing final rather than mixing new files with that set. Consumers must therefore require both `H_out` and `E_out`, plus `D_full_out` for raw replay, before treating a replay as complete.

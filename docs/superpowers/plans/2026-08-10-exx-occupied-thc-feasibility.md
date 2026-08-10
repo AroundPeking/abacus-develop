@@ -1004,6 +1004,8 @@ Expected: 构建成功并生成 `build/abacus_3p`；`CMakeCache.txt` 的 MPI/LCA
 
 在 `si_kp_pbe0` 副本中使用 1 rank、48 threads 和 dump 开关。要求 ABACUS 正常结束、快照齐全、Task 5 的原始 replay 和 occupied projection replay 都通过。未通过时停止，不提交 GaAs。
 
+2026-08-11 的首次生产快照作业 `407502` 暴露了一个接口门槛：nspin=1 的 C/V/D/H 文件使用 EXXCMP1 `real64`，而最初的 replay/project 原型只接受 `complex128`。原始作业正常结束且 manifest 为 `session_state=complete`；不得通过改成复数算例绕过。新增回归要求 replay 按统一的输入标量 tag 分派到 `RI::Exx<double>` 或 `RI::Exx<complex<double>>`，Python compare/project 同样接受两种同型输入并保持输出类型。先在真实 server-66 LibRI 上通过 real64 直接结果测试，再继续本步骤的 raw/occupied replay。
+
 - [ ] **Step 4: 运行 GaAs PBE 门槛**
 
 在 GaAs run 目录复制 `INPUT_pbe` 为 `INPUT`，不设置 dump 开关，提交 1 MPI × 48 OMP。验收：SCF 正常收敛、最终 `drho < 1e-9`、无 `NaN/Inf`、82 NAO 和 64 k 点与预期一致。记录总时间、峰值内存、能量和作业号；PBE 只作为同 PP/NAO 的低成本输入门槛。

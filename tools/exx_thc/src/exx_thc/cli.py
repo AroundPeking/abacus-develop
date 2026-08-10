@@ -42,12 +42,12 @@ def read_real_scalar(path: Path) -> float:
     return real
 
 
-def _serial_complex_snapshot(path: Path, name: str) -> Snapshot:
+def _serial_numeric_snapshot(path: Path, name: str) -> Snapshot:
     snapshot = read_snapshot(path)
     if (snapshot.rank, snapshot.nranks) != (0, 1):
         raise ValueError("{} snapshot must be rank 0 of 1".format(name))
-    if snapshot.scalar != "complex128":
-        raise ValueError("{} snapshot must use complex128 scalars".format(name))
+    if snapshot.scalar not in ("real64", "complex128"):
+        raise ValueError("{} snapshot must use real64 or complex128 scalars".format(name))
     _require_finite_blocks(snapshot.blocks, "{} snapshot".format(name))
     return snapshot
 
@@ -75,8 +75,10 @@ def _relative_frobenius(
 
 
 def compare_snapshots(arguments: argparse.Namespace) -> dict:
-    reference = _serial_complex_snapshot(arguments.reference, "reference H")
-    candidate = _serial_complex_snapshot(arguments.candidate, "candidate H")
+    reference = _serial_numeric_snapshot(arguments.reference, "reference H")
+    candidate = _serial_numeric_snapshot(arguments.candidate, "candidate H")
+    if reference.scalar != candidate.scalar:
+        raise ValueError("reference and candidate H snapshots have different scalar types")
     if set(reference.blocks) != set(candidate.blocks):
         raise ValueError("reference and candidate H snapshots have different key sets")
     for key, reference_block in reference.blocks.items():
@@ -229,7 +231,18 @@ def _disassemble_coefficient(
 
 
 def _snapshot_byte_estimate(blocks: Mapping[BlockKey, np.ndarray]) -> int:
-    return 32 + sum(24 + 8 * block.ndim + 8 + 16 * block.size for block in blocks.values())
+    return 32 + sum(24 + 8 * block.ndim + 8 + block.nbytes for block in blocks.values())
+
+
+def _real_projected_blocks(blocks: TensorMap) -> TensorMap:
+    result = {}
+    for key, block in blocks.items():
+        real_scale = max(float(np.max(np.abs(block.real))) if block.size else 0.0, 1.0)
+        imaginary_maximum = float(np.max(np.abs(block.imag))) if block.size else 0.0
+        if imaginary_maximum > 1.0e-12 * real_scale:
+            raise ValueError("real64 projected C has a non-negligible imaginary component")
+        result[key] = np.asarray(block.real, dtype=np.float64, order="C")
+    return result
 
 
 def project_snapshot(arguments: argparse.Namespace) -> dict:
@@ -237,8 +250,11 @@ def project_snapshot(arguments: argparse.Namespace) -> dict:
     if any(value <= 0 for value in period):
         raise ValueError("period must contain three positive integers")
     eigenvalue_tol = _validate_tolerance(arguments.eigenvalue_tol, "eigenvalue tolerance")
-    coefficient = _serial_complex_snapshot(arguments.C, "C")
-    density = _serial_complex_snapshot(arguments.D_full, "D.full")
+    coefficient = _serial_numeric_snapshot(arguments.C, "C")
+    density = _serial_numeric_snapshot(arguments.D_full, "D.full")
+    if coefficient.scalar != density.scalar:
+        raise ValueError("C and D.full snapshots must use the same scalar type")
+    output_scalar = coefficient.scalar
 
     with np.errstate(over="ignore", invalid="ignore"):
         coefficient_k = to_k(coefficient.blocks, period)
@@ -355,7 +371,9 @@ def project_snapshot(arguments: argparse.Namespace) -> dict:
         with np.errstate(over="ignore", invalid="ignore"):
             projected_blocks = from_k(projected_k, period)
         _require_finite_blocks(projected_blocks, "projected C snapshot")
-        write_snapshot(arguments.output, Snapshot(1, "complex128", 0, 1, projected_blocks))
+        if output_scalar == "real64":
+            projected_blocks = _real_projected_blocks(projected_blocks)
+        write_snapshot(arguments.output, Snapshot(1, output_scalar, 0, 1, projected_blocks))
 
     return {
         "fourier_roundtrip_max": fourier_roundtrip_max,

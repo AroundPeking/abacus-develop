@@ -36,10 +36,6 @@ bool replay_mode(int argc, char** argv);
 namespace
 {
 
-using Scalar = std::complex<double>;
-using TensorMap = ExxCompressionIO::TensorMap<Scalar>;
-using Exx = RI::Exx<int, int, 3, Scalar>;
-
 struct ReplayConfig
 {
     std::array<int, 3> period{};
@@ -270,7 +266,7 @@ std::uint32_t read_uint32_le(const std::array<unsigned char, 32>& bytes, const s
     return value;
 }
 
-void validate_snapshot_header(const std::string& path, const std::string& name)
+unsigned char validate_snapshot_header(const std::string& path, const std::string& name)
 {
     std::ifstream input(path, std::ios::binary);
     if (!input)
@@ -288,9 +284,9 @@ void validate_snapshot_header(const std::string& path, const std::string& name)
     {
         throw std::runtime_error(name + " snapshot is not EXXCMP1 version 1");
     }
-    if (header[12] != 2)
+    if (header[12] != 1 && header[12] != 2)
     {
-        throw std::runtime_error(name + " snapshot must use complex128 scalars");
+        throw std::runtime_error(name + " snapshot must use real64 or complex128 scalars");
     }
     if (header[13] != 0 || header[14] != 0 || header[15] != 0)
     {
@@ -300,6 +296,7 @@ void validate_snapshot_header(const std::string& path, const std::string& name)
     {
         throw std::runtime_error(name + " snapshot must be the complete rank 0 of 1, not a distributed shard");
     }
+    return header[12];
 }
 
 class TemporaryOutputs
@@ -436,18 +433,20 @@ class TemporaryOutputs
     std::vector<PublishedFinal> published_finals_;
 };
 
-void require_finite_map(const TensorMap& tensors, const std::string& name)
+template <class Scalar>
+void require_finite_map(const ExxCompressionIO::TensorMap<Scalar>& tensors, const std::string& name)
 {
     for (const auto& outer: tensors)
         for (const auto& inner: outer.second)
             for (std::size_t index = 0; index != inner.second.get_shape_all(); ++index)
             {
                 const Scalar value = inner.second.ptr()[index];
-                if (!std::isfinite(value.real()) || !std::isfinite(value.imag()))
+                if (!std::isfinite(std::real(value)) || !std::isfinite(std::imag(value)))
                     throw std::runtime_error(name + " snapshot contains a non-finite tensor value");
             }
 }
 
+template <class Scalar>
 void write_energy(const std::string& path, const Scalar& energy)
 {
     std::ofstream output(path, std::ios::trunc);
@@ -455,7 +454,7 @@ void write_energy(const std::string& path, const Scalar& energy)
     {
         throw std::runtime_error("cannot open temporary replay energy output: " + path);
     }
-    output << std::setprecision(17) << energy.real() << ' ' << energy.imag() << '\n';
+    output << std::setprecision(17) << std::real(energy) << ' ' << std::imag(energy) << '\n';
     output.flush();
     if (!output)
     {
@@ -463,8 +462,11 @@ void write_energy(const std::string& path, const Scalar& energy)
     }
 }
 
+template <class Scalar>
 void replay(const ReplayConfig& config, MPI_Comm communicator)
 {
+    using TensorMap = ExxCompressionIO::TensorMap<Scalar>;
+    using Exx = RI::Exx<int, int, 3, Scalar>;
     int world_size = 0;
     if (MPI_Comm_size(communicator, &world_size) != MPI_SUCCESS)
     {
@@ -474,12 +476,6 @@ void replay(const ReplayConfig& config, MPI_Comm communicator)
     {
         throw std::runtime_error("EXX compression replay requires MPI world size 1");
     }
-    validate_snapshot_header(config.C_path, "C");
-    validate_snapshot_header(config.V_path, "V");
-    validate_snapshot_header(config.D_path, "D");
-    if (!config.D_raw)
-        validate_snapshot_header(config.D_post_path, "D.post");
-
     Exx exx;
     exx.set_parallel(communicator, config.atoms, config.lattice, config.period);
     exx.set_symmetry(false, {});
@@ -529,7 +525,7 @@ void replay(const ReplayConfig& config, MPI_Comm communicator)
     exx.cal_Hs({"", "", ""});
     const Scalar energy = exx.energy;
     require_finite_map(exx.Hs, "calculated H");
-    if (!std::isfinite(energy.real()) || !std::isfinite(energy.imag()))
+    if (!std::isfinite(std::real(energy)) || !std::isfinite(std::imag(energy)))
         throw std::runtime_error("calculated energy is non-finite");
     ExxCompressionIO::write_map(outputs.H_temporary, exx.Hs, 0, 1);
     write_energy(outputs.E_temporary, energy);
@@ -540,7 +536,18 @@ void replay(const ReplayConfig& config, MPI_Comm communicator)
 
 void replay_file(const std::string& path, MPI_Comm communicator)
 {
-    replay(parse_config(path), communicator);
+    const ReplayConfig config = parse_config(path);
+    const unsigned char scalar_type = validate_snapshot_header(config.C_path, "C");
+    if (validate_snapshot_header(config.V_path, "V") != scalar_type
+        || validate_snapshot_header(config.D_path, "D") != scalar_type
+        || (!config.D_raw && validate_snapshot_header(config.D_post_path, "D.post") != scalar_type))
+    {
+        throw std::runtime_error("C, V, D, and D.post snapshots must use the same scalar type");
+    }
+    if (scalar_type == 1)
+        replay<double>(config, communicator);
+    else
+        replay<std::complex<double>>(config, communicator);
 }
 
 bool replay_mode(const int argc, char** argv)
@@ -647,6 +654,24 @@ TensorMap make_D_post()
     return result;
 }
 
+using RealScalar = double;
+using RealTensorMap = ExxCompressionIO::TensorMap<RealScalar>;
+using RealExx = RI::Exx<int, int, 3, RealScalar>;
+
+RealTensorMap real_part(const TensorMap& source)
+{
+    RealTensorMap result;
+    for (const auto& outer: source)
+        for (const auto& inner: outer.second)
+        {
+            RI::Tensor<RealScalar> value(inner.second.shape);
+            for (std::size_t index = 0; index != value.get_shape_all(); ++index)
+                value.ptr()[index] = inner.second.ptr()[index].real();
+            result[outer.first][inner.first] = std::move(value);
+        }
+    return result;
+}
+
 void initialize_exx(Exx& exx)
 {
     const std::map<int, std::array<double, 3>> atoms{{0, {{0.0, 0.0, 0.0}}}};
@@ -743,6 +768,26 @@ void expect_maps_near(const TensorMap& actual, const TensorMap& expected, const 
     }
 }
 
+void expect_real_maps_near(const RealTensorMap& actual, const RealTensorMap& expected, const double tolerance)
+{
+    ASSERT_EQ(actual.size(), expected.size());
+    for (const auto& outer: expected)
+    {
+        ASSERT_TRUE(actual.count(outer.first));
+        ASSERT_EQ(actual.at(outer.first).size(), outer.second.size());
+        for (const auto& inner: outer.second)
+        {
+            ASSERT_TRUE(actual.at(outer.first).count(inner.first));
+            const auto& value = actual.at(outer.first).at(inner.first);
+            ASSERT_EQ(value.shape.size(), inner.second.shape.size());
+            for (std::size_t dimension = 0; dimension != value.shape.size(); ++dimension)
+                ASSERT_EQ(value.shape[dimension], inner.second.shape[dimension]);
+            for (std::size_t index = 0; index != value.get_shape_all(); ++index)
+                EXPECT_LE(std::abs(value.ptr()[index] - inner.second.ptr()[index]), tolerance);
+        }
+    }
+}
+
 TEST(ExxCompressionReplayTest, ActiveSnapshotsMatchDirectLibRI)
 {
     TemporaryDirectory directory;
@@ -780,6 +825,48 @@ TEST(ExxCompressionReplayTest, RawDensityWritesActuallyPeriodizedMapAndMatchesDi
     expect_maps_near(full_density, RI::RI_Tools::cal_period(density, std::array<int, 3>{{2, 1, 1}}), 1.0e-13);
     expect_maps_near(ExxCompressionIO::read_map<Scalar>(directory.file("H.exxcmp")), expected.first, 1.0e-13);
     EXPECT_LE(std::abs(read_energy(directory.file("E.scalar")) - expected.second), 1.0e-13);
+}
+
+TEST(ExxCompressionReplayTest, RealRawSnapshotsMatchDirectLibRI)
+{
+    TemporaryDirectory directory;
+    const RealTensorMap coefficient = real_part(make_C());
+    const RealTensorMap metric = real_part(make_V());
+    const RealTensorMap density = real_part(make_D_raw());
+    ExxCompressionIO::write_map(directory.file("C.exxcmp"), coefficient, 0, 1);
+    ExxCompressionIO::write_map(directory.file("V.exxcmp"), metric, 0, 1);
+    ExxCompressionIO::write_map(directory.file("D.exxcmp"), density, 0, 1);
+    write_config(directory, "raw");
+
+    RealExx exx;
+    const std::map<int, std::array<double, 3>> atoms{{0, {{0.0, 0.0, 0.0}}}};
+    const std::array<std::array<double, 3>, 3> lattice{{{{1.0, 0.0, 0.0}}, {{0.0, 1.0, 0.0}}, {{0.0, 0.0, 1.0}}}};
+    exx.set_parallel(MPI_COMM_WORLD, atoms, lattice, {{2, 1, 1}});
+    exx.set_symmetry(false, {});
+    const std::map<std::string, double> inactive_flags{{"flag_period", false},
+                                                       {"flag_comm", false},
+                                                       {"flag_filter", false}};
+    exx.lri.set_tensors_map2(coefficient, {RI::Label::ab::a, RI::Label::ab::b}, inactive_flags, "Cs_");
+    exx.lri.set_tensors_map2(metric, {RI::Label::ab::a0b0}, inactive_flags, "Vs_");
+    auto density_flags = inactive_flags;
+    density_flags["flag_period"] = true;
+    exx.lri.set_tensors_map2(density,
+                             {RI::Label::ab::a1b1, RI::Label::ab::a1b2, RI::Label::ab::a2b1, RI::Label::ab::a2b2},
+                             density_flags,
+                             "Ds_");
+    exx.flag_finish.Cs = exx.flag_finish.Vs = exx.flag_finish.Ds = true;
+    exx.flag_finish.Ds_delta = false;
+    exx.post_2D.saves["Ds_"] = exx.post_2D.set_tensors_map2(density);
+    const RealTensorMap expected_density = exx.lri.data_pool.at("Ds_").Ds_ab;
+    exx.cal_Hs({"", "", ""});
+
+    ExxCompressionReplay::replay_file(directory.file("replay.conf"), MPI_COMM_WORLD);
+
+    expect_real_maps_near(ExxCompressionIO::read_map<RealScalar>(directory.file("D.full.exxcmp")),
+                          expected_density,
+                          1.0e-13);
+    expect_real_maps_near(ExxCompressionIO::read_map<RealScalar>(directory.file("H.exxcmp")), exx.Hs, 1.0e-13);
+    EXPECT_LE(std::abs(read_energy(directory.file("E.scalar")).real() - exx.energy), 1.0e-13);
 }
 
 TEST(ExxCompressionReplayTest, ConfigRejectsDuplicateUnknownAndMissingKeys)
