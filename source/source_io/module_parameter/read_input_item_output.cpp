@@ -1032,7 +1032,7 @@ If EXX(exact exchange) is calculated (i.e. dft_fuctional==hse/hf/pbe0/scan0 or r
         item.annotation = "finite-difference Laplacian order for Sternheimer grid equations";
         item.category = "Output information";
         item.type = "Integer";
-        item.description = "Use the second-, fourth-, or sixth-order centered Cartesian finite-difference Laplacian in the "
+        item.description = "Use the second-, fourth-, sixth-, or eighth-order centered Cartesian finite-difference Laplacian in the "
                            "Sternheimer real-space Hamiltonian. The default remains second order.";
         item.default_value = "2";
         item.unit = "";
@@ -1040,9 +1040,9 @@ If EXX(exact exchange) is calculated (i.e. dft_fuctional==hse/hf/pbe0/scan0 or r
         read_sync_int(input.sternheimer_fd_order);
         item.check_value = [](const Input_Item& item, const Parameter& para) {
             if (para.input.sternheimer_fd_order != 2 && para.input.sternheimer_fd_order != 4
-                && para.input.sternheimer_fd_order != 6)
+                && para.input.sternheimer_fd_order != 6 && para.input.sternheimer_fd_order != 8)
             {
-                ModuleBase::WARNING_QUIT("ReadInput", item.label + " must be 2, 4, or 6.");
+                ModuleBase::WARNING_QUIT("ReadInput", item.label + " must be 2, 4, 6, or 8.");
             }
         };
         this->add_item(item);
