@@ -57,6 +57,30 @@ At LibRI commit `21f92f943bf2f284fee9128bcd3e1a9f197916e1`, the public `RI::Exx`
 
 Consequently, `exx_thc.cli project` is an offline diagnostic: it builds `C_occ(k) = C(k) O(k) O(k)^+`, writes a new canonical full-period `C` snapshot, and verifies the density-contracted product. It does not claim that current LibRI can consume `O` directly. This conclusion is revision-specific and must be re-audited if the dependency changes.
 
+It also is not a zero-error replacement for the complete LibRI `cal_Hs`. The
+four EXX labels connect D to `a1` or `a2` on each C tensor. A fixed projection
+of the stored third tensor dimension therefore projects a contracted leg in
+some labels and a free H leg in others. The server-66 small-Si gate recorded in
+[`si_real64_gate_2026-08-11.md`](si_real64_gate_2026-08-11.md) preserves the
+energy to rounding but changes H by a relative Frobenius norm of about 0.156.
+The diagnostic remains useful for Fourier, PSD, occupied-rank, and
+single-orientation algebra checks; full-H validation requires a label-aware or
+two-momentum AO--occupied kernel.
+
+The four fixed-revision contraction bodies are
+[`a0b0_a1b1`](https://github.com/AroundPeking/LibRI/blob/21f92f943bf2f284fee9128bcd3e1a9f197916e1/include/RI/ri/LRI-cal_loop3.hpp#L181-L279),
+[`a0b0_a1b2`](https://github.com/AroundPeking/LibRI/blob/21f92f943bf2f284fee9128bcd3e1a9f197916e1/include/RI/ri/LRI-cal_loop3.hpp#L347-L445),
+[`a0b0_a2b1`](https://github.com/AroundPeking/LibRI/blob/21f92f943bf2f284fee9128bcd3e1a9f197916e1/include/RI/ri/LRI-cal_loop3.hpp#L641-L742),
+and
+[`a0b0_a2b2`](https://github.com/AroundPeking/LibRI/blob/21f92f943bf2f284fee9128bcd3e1a9f197916e1/include/RI/ri/LRI-cal_loop3.hpp#L941-L1047).
+For a dense finite-supercell oracle, each anchored C block must populate both
+AO orders. The apparent on-site double addition is source-defined:
+[`LRI_CV<Tdata>::DPcal_C_dC`](https://github.com/AroundPeking/abacus-develop/blob/ab177743bedd833ee74a28ffecf94763d302c61e/source/source_lcao/module_ri/LRI_CV.hpp#L329-L421)
+stores the same-atom/same-cell coefficient with an explicit factor `0.5` and
+stores the two off-site auxiliary-anchor coefficients in reversed map records.
+The oracle must therefore use that normalization unchanged, not fit a factor to
+the production H result.
+
 The global projector can create a block that was absent from the input `C` map. The projected output therefore contains every auxiliary-row atom present in `C` paired with every AO-column atom present in `D`. Missing input pairs enter global `C(k)` as zero blocks, but their projected output blocks are retained (including blocks that remain zero) for every canonical BvK translation. Dropping those pairs after the global matrix multiplication would not in general preserve `C D C^dagger`.
 
 The PSD gate is relative to the largest positive density eigenvalue in each k sector: `lambda_min >= -1e-10 * lambda_max`. If `lambda_max` is zero, the zero matrix passes and any negative eigenvalue fails; the scaled-minimum JSON diagnostic is `null` when no positive scale exists for a negative eigenvalue. This gate is applied before the separate numerical floor inside `occupied_factor`.

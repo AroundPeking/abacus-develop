@@ -1006,6 +1006,10 @@ Expected: 构建成功并生成 `build/abacus_3p`；`CMakeCache.txt` 的 MPI/LCA
 
 2026-08-11 的首次生产快照作业 `407502` 暴露了一个接口门槛：nspin=1 的 C/V/D/H 文件使用 EXXCMP1 `real64`，而最初的 replay/project 原型只接受 `complex128`。原始作业正常结束且 manifest 为 `session_state=complete`；不得通过改成复数算例绕过。新增回归要求 replay 按统一的输入标量 tag 分派到 `RI::Exx<double>` 或 `RI::Exx<complex<double>>`，Python compare/project 同样接受两种同型输入并保持输出类型。先在真实 server-66 LibRI 上通过 real64 直接结果测试，再继续本步骤的 raw/occupied replay。
 
+real64 修复提交 `09c0261dfe395d31886330b6c5dd8b952f00f26a` 后，作业 `407507` 的 raw replay 通过（`H_rel_fro=1.8855667797518556e-16`，`E_abs_Ry_atom=0`）。固定投影 C 的同号 k 方案虽通过 Fourier/PSD gate，且能量差仅 `6.661338147750939e-16 Ry/atom`，但完整 `H_rel_fro=0.1560547995868126`；作业因此按硬门槛 exit 1。独立作业 `407508` 排除了简单的负 k 修正：`H_rel_fro=0.509626683296597`，`E_abs_Ry_atom=0.4780034108435367 Ry/atom`。
+
+源码审计给出根因：`cal_Hs` 同时执行 `a0b0_a1b1`、`a0b0_a1b2`、`a0b0_a2b1`、`a0b0_a2b2`，密度矩阵连接的 C 张量 AO 腿随标签在 `a1` 和 `a2` 之间变化。一份固定投影 `a2` 的标准 C-map 在部分路径投影了自由输出腿，因此可能保能量却不能保完整 H。这里停止 GaAs 提交；下一步改为标签感知或双动量 AO--occupied 直接收缩的零误差 Si 门槛。
+
 - [ ] **Step 4: 运行 GaAs PBE 门槛**
 
 在 GaAs run 目录复制 `INPUT_pbe` 为 `INPUT`，不设置 dump 开关，提交 1 MPI × 48 OMP。验收：SCF 正常收敛、最终 `drho < 1e-9`、无 `NaN/Inf`、82 NAO 和 64 k 点与预期一致。记录总时间、峰值内存、能量和作业号；PBE 只作为同 PP/NAO 的低成本输入门槛。
@@ -1040,9 +1044,9 @@ factor_seconds,seed_min_residual,seed_max_residual
 
 测试要求缺任一列时 `validate_scan_table` 抛出异常。
 
-- [ ] **Step 2: 先做 GaAs raw-(D) full reference 与零误差 occupied projection replay**
+- [ ] **Step 2: 先做标签感知 AO--occupied 零误差 reference**
 
-先把 `D.raw` 通过 replay 只做 periodization，得到 `D.full` 与 full-(D) (H,E) reference；再运行完整 k444 Fourier 往返、PSD 和 projector 检查，把 `C_occ` 与 `D.full` 作为收缩输入交给 `RI::Exx` replay，并继续把同一份原始 `D.raw` 作为 `D_post_path` 计算能量。硬门槛仍为 `H_rel_fro <=1e-10`、`E_abs_Ry_atom <=1e-10`。同时单列 active-(D) 生产结果与 full-(D) 的差。零误差门槛失败即停止，不能继续用局部 block 残差代替物理等价性。
+先把 `D.raw` 通过 replay 只做 periodization，得到 `D.full` 与 full-(D) (H,E) reference。随后不得再把固定投影一个 AO 腿的 `C_occ` 交给原始 `cal_Hs`。新 reference 必须逐项覆盖四个 LibRI 标签，在每个路径只把当次与 D 相连的 AO 腿写成占据因子，并保留另一条自由 AO 腿；周期实现显式携带电子 k 与转移动量 q。先在小 Si 达到 `H_rel_fro <=1e-10`、`E_abs_Ry_atom <=1e-10`，再对 GaAs 运行同一内核。同时单列 active-(D) 生产结果与 full-(D) 的差。零误差门槛失败即停止，不能继续用局部 block 残差或仅能量相等代替物理等价性。
 
 - [ ] **Step 3: 扫描 TT 阈值**
 
