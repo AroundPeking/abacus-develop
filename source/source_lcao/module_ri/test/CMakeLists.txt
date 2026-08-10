@@ -40,7 +40,7 @@ add_test(
 if(ENABLE_MPI)
   AddTest(
     TARGET MODULE_RI_exx_compression_replay
-    LIBS ri base parameter ${math_libs} device MPI::MPI_CXX
+    LIBS ${math_libs} MPI::MPI_CXX
     SOURCES exx_compression_replay.cpp
   )
   add_executable(MODULE_RI_ewald_mpi_distribution_test ewald_mpi_distribution_test.cpp)
