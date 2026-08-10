@@ -1,6 +1,6 @@
 #!/bin/bash
 #SBATCH --job-name=gaas_k444_exxcmp
-#SBATCH --partition=740
+#SBATCH --partition=640
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=48

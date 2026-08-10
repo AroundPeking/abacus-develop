@@ -127,10 +127,12 @@ launch, `run_snapshot.slurm` installs its colocated `INPUT_exx_snapshot` as
 ## Scheduler preflight
 
 `run_snapshot.slurm` requests one node, one task, 48 CPUs, and 175000 MB on
-partition 740. Live-check the partition before submission:
+partition 640. The `ghj` account was verified on 2026-08-11 to be ineligible
+for partition 740 even when that partition had idle nodes. Live-check the
+permitted partition before submission:
 
 ```bash
-sinfo -p 740 -o '%P %a %D %c %m %N'
+sinfo -p 640 -o '%P %a %D %c %m %N'
 ```
 
 Adjust the explicit `--mem` request if the live node inventory requires it.

@@ -241,7 +241,7 @@ Expected: EXX 输入先完成半局域内循环，只保存第一次固定密度
 ```bash
 #!/bin/bash
 #SBATCH --job-name=gaas_k444_exxcmp
-#SBATCH --partition=740
+#SBATCH --partition=640
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=48
@@ -265,7 +265,7 @@ printf 'OMP_NUM_THREADS=%s\n' "$OMP_NUM_THREADS"
 date
 ```
 
-提交前用 `sinfo -p 740 -o '%P %a %D %c %m %N'` 重查资源；如果节点内存不再是约 180000 MB，调整 `--mem` 为不超过实时值的明确数字。
+提交前用 `sinfo -p 640 -o '%P %a %D %c %m %N'` 重查资源；如果节点内存不再是约 180000 MB，调整 `--mem` 为不超过实时值的明确数字。2026-08-11 实测 `ghj` 账户不允许使用 740，因此不能根据 740 的空闲节点状态提交。
 
 - [ ] **Step 5: 固定四个大文件的来源与哈希**
 
@@ -1093,7 +1093,9 @@ git commit -m "feat: scan GaAs occupied-product compression ranks"
 
 - [ ] **Step 2: 固定 66 的线程与节点**
 
-在与参考 EXX 相同的 740 节点类型上运行 1 process × 48 BLAS/OpenMP threads：
+在与参考 EXX 相同的 48-core、180000 MB 节点类型上运行 1 process × 48
+BLAS/OpenMP threads。2026-08-11 的实际调度门槛要求 `ghj` 账户使用 640；
+740 即使有空闲节点也不接受该账户：
 
 ```bash
 export OMP_NUM_THREADS=48
