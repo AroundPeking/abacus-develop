@@ -1,13 +1,21 @@
 #include "../exx_compression_io.h"
 
+#include "../exx_compression_dump.h"
+
 #include <array>
 #include <atomic>
 #include <complex>
 #include <cstdio>
+#include <cstdlib>
+#include <dirent.h>
 #include <fstream>
 #include <gtest/gtest.h>
 #include <iterator>
+#include <limits>
+#include <sstream>
 #include <string>
+#include <sys/stat.h>
+#include <unistd.h>
 #include <vector>
 
 namespace
@@ -38,6 +46,79 @@ class TemporarySnapshot
   private:
     std::string path_;
 };
+
+class TemporaryDumpRoot
+{
+  public:
+    TemporaryDumpRoot()
+    {
+        static std::atomic<unsigned long> next_id{0};
+        path_ = testing::TempDir() + "exx_compression_dump_" + std::to_string(next_id++);
+        std::remove(path_.c_str());
+        setenv("ABACUS_EXX_COMPRESSION_DUMP", path_.c_str(), 1);
+    }
+
+    ~TemporaryDumpRoot()
+    {
+        DIR* directory = opendir(path_.c_str());
+        if (directory != nullptr)
+        {
+            while (dirent* entry = readdir(directory))
+            {
+                const std::string name = entry->d_name;
+                if (name != "." && name != "..")
+                {
+                    std::remove((path_ + "/" + name).c_str());
+                }
+            }
+            closedir(directory);
+        }
+        rmdir(path_.c_str());
+        unsetenv("ABACUS_EXX_COMPRESSION_DUMP");
+    }
+
+    TemporaryDumpRoot(const TemporaryDumpRoot&) = delete;
+    TemporaryDumpRoot& operator=(const TemporaryDumpRoot&) = delete;
+
+    const std::string& path() const
+    {
+        return path_;
+    }
+
+  private:
+    std::string path_;
+};
+
+ExxCompressionDump::ManifestContext make_manifest_context()
+{
+    ExxCompressionDump::ManifestContext context;
+    context.scalar_type = "real64";
+    context.period = {{2, 2, 1}};
+    context.lattice_vectors = {{{{3.0, 0.0, 0.0}}, {{0.0, 3.0, 0.0}}, {{0.0, 0.0, 8.0}}}};
+    context.atom_positions[0] = {{0.0, 0.0, 0.0}};
+    context.c_threshold = 1.0e-4;
+    context.v_threshold = 2.0e-4;
+    context.v_threshold_long = 3.0e-4;
+    context.d_threshold = 4.0e-4;
+    return context;
+}
+
+std::string read_text(const std::string& path)
+{
+    std::ifstream input(path);
+    return {std::istreambuf_iterator<char>(input), std::istreambuf_iterator<char>()};
+}
+
+void write_required_snapshot_entries()
+{
+    const ExxCompressionIO::TensorMap<double> empty_map;
+    for (const std::string& object: {"C.active", "V.raw", "V.active", "D.raw", "D.active", "H.lri", "H.final"})
+    {
+        ExxCompressionDump::write_if_enabled(object, empty_map, 0, "full", MPI_COMM_WORLD);
+    }
+    ExxCompressionDump::write_scalar_if_enabled("E.lri", 1.0, 0, "full", MPI_COMM_WORLD);
+    ExxCompressionDump::write_scalar_if_enabled("E.final", -2.0, -1, "total", MPI_COMM_WORLD);
+}
 
 std::vector<unsigned char> read_bytes(const std::string& path)
 {
@@ -245,4 +326,142 @@ TEST(ExxCompressionIOTest, TrailingGarbageThrows)
     EXPECT_THROW(ExxCompressionIO::read_map<double>(snapshot.path()), std::runtime_error);
 }
 
+TEST(ExxCompressionIOTest, Int32ExtremaRoundTrip)
+{
+    ExxCompressionIO::TensorMap<double> original;
+    RI::Tensor<double> tensor({1});
+    tensor.ptr()[0] = 7.0;
+    original[std::numeric_limits<std::int32_t>::min()]
+            [{std::numeric_limits<std::int32_t>::max(),
+              {std::numeric_limits<std::int32_t>::min(), 0, std::numeric_limits<std::int32_t>::max()}}]
+        = tensor;
+
+    TemporarySnapshot snapshot;
+    ExxCompressionIO::write_map(snapshot.path(), original, 0, 1);
+    const auto restored = ExxCompressionIO::read_map<double>(snapshot.path());
+
+    EXPECT_EQ(restored.begin()->first, std::numeric_limits<std::int32_t>::min());
+    const auto& key = restored.begin()->second.begin()->first;
+    EXPECT_EQ(key.first, std::numeric_limits<std::int32_t>::max());
+    EXPECT_EQ(key.second,
+              (ExxCompressionIO::TC{
+                  {std::numeric_limits<std::int32_t>::min(), 0, std::numeric_limits<std::int32_t>::max()}}));
+}
+
+TEST(ExxCompressionDumpTest, EnvironmentAndPaths)
+{
+    EXPECT_FALSE(ExxCompressionDump::enabled(nullptr));
+    EXPECT_FALSE(ExxCompressionDump::enabled(""));
+    EXPECT_FALSE(ExxCompressionDump::enabled("0"));
+    EXPECT_TRUE(ExxCompressionDump::enabled("/tmp/snap"));
+    EXPECT_EQ(ExxCompressionDump::map_path("/tmp/snap", "D", 1, "short", 3),
+              "/tmp/snap/D.spin1.short.rank000003.exxcmp");
+    EXPECT_EQ(ExxCompressionDump::scalar_path("/tmp/snap", "E.lri", 0, "full", 12),
+              "/tmp/snap/E.lri.spin0.full.rank000012.scalar");
+}
+
+TEST(ExxCompressionDumpTest, MapPublishDoesNotOverwriteFinalFile)
+{
+    TemporaryDumpRoot dump_root;
+    ExxCompressionDump::initialize(make_manifest_context(), MPI_COMM_WORLD);
+
+    ExxCompressionIO::TensorMap<double> tensor_map;
+    RI::Tensor<double> tensor({1});
+    tensor.ptr()[0] = 2.5;
+    tensor_map[0][{0, {0, 0, 0}}] = tensor;
+    ExxCompressionDump::write_if_enabled("D.raw", tensor_map, 1, "short", MPI_COMM_WORLD);
+    const std::string final_path = ExxCompressionDump::map_path(dump_root.path(), "D.raw", 1, "short", 0);
+    EXPECT_EQ(ExxCompressionIO::read_map<double>(final_path).at(0).at({0, {0, 0, 0}}).ptr()[0], 2.5);
+
+    EXPECT_THROW(ExxCompressionDump::write_if_enabled("D.raw", tensor_map, 1, "short", MPI_COMM_WORLD),
+                 std::runtime_error);
+    EXPECT_EQ(ExxCompressionIO::read_map<double>(final_path).at(0).at({0, {0, 0, 0}}).ptr()[0], 2.5);
+}
+
+TEST(ExxCompressionDumpTest, ScalarUsesRealImaginaryColumns)
+{
+    TemporaryDumpRoot dump_root;
+    ExxCompressionDump::initialize(make_manifest_context(), MPI_COMM_WORLD);
+    ExxCompressionDump::write_scalar_if_enabled("E.lri", 1.25, 0, "full", MPI_COMM_WORLD);
+
+    std::ifstream input(ExxCompressionDump::scalar_path(dump_root.path(), "E.lri", 0, "full", 0));
+    double real = 0.0;
+    double imag = 1.0;
+    input >> real >> imag;
+    EXPECT_TRUE(input.good() || input.eof());
+    EXPECT_DOUBLE_EQ(real, 1.25);
+    EXPECT_DOUBLE_EQ(imag, 0.0);
+}
+
+TEST(ExxCompressionDumpTest, MalformedManifestTailIsRejected)
+{
+    TemporaryDumpRoot dump_root;
+    ASSERT_EQ(mkdir(dump_root.path().c_str(), 0755), 0);
+    {
+        std::ofstream manifest(dump_root.path() + "/manifest.txt");
+        manifest << "EXX_COMPRESSION_MANIFEST 1\nENTRY\nobject=D.active\n";
+    }
+
+    EXPECT_THROW(ExxCompressionDump::initialize(make_manifest_context(), MPI_COMM_WORLD), std::runtime_error);
+}
+
+TEST(ExxCompressionDumpTest, FirstElectronicSnapshotGateClosesOnlyAfterCompletion)
+{
+    TemporaryDumpRoot dump_root;
+    ExxCompressionDump::initialize(make_manifest_context(), MPI_COMM_WORLD);
+
+    EXPECT_TRUE(ExxCompressionDump::begin_first_electronic_snapshot(MPI_COMM_WORLD));
+    EXPECT_THROW(ExxCompressionDump::mark_complete(MPI_COMM_WORLD), std::runtime_error);
+    EXPECT_TRUE(ExxCompressionDump::begin_first_electronic_snapshot(MPI_COMM_WORLD));
+
+    write_required_snapshot_entries();
+    ExxCompressionDump::mark_complete(MPI_COMM_WORLD);
+
+    EXPECT_FALSE(ExxCompressionDump::begin_first_electronic_snapshot(MPI_COMM_WORLD));
+    EXPECT_NE(read_text(dump_root.path() + "/manifest.txt").find("session_state=complete\n"), std::string::npos);
+    EXPECT_FALSE(std::ifstream(dump_root.path() + "/snapshot.complete").good());
+}
+
+TEST(ExxCompressionDumpTest, SameProcessSkipsRepeatedInitializationButRejectsUnrelatedRoot)
+{
+    TemporaryDumpRoot dump_root;
+    EXPECT_TRUE(ExxCompressionDump::initialize(make_manifest_context(), MPI_COMM_WORLD));
+    const std::string manifest_path = dump_root.path() + "/manifest.txt";
+    const std::string original = read_text(manifest_path);
+
+    EXPECT_FALSE(ExxCompressionDump::initialize(make_manifest_context(), MPI_COMM_WORLD));
+    EXPECT_EQ(read_text(manifest_path), original);
+    EXPECT_NE(original.find("session_state=incomplete\n"), std::string::npos);
+
+    TemporaryDumpRoot unrelated_root;
+    ASSERT_EQ(mkdir(unrelated_root.path().c_str(), 0755), 0);
+    {
+        std::ofstream manifest(unrelated_root.path() + "/manifest.txt");
+        manifest << original;
+    }
+    EXPECT_THROW(ExxCompressionDump::initialize(make_manifest_context(), MPI_COMM_WORLD), std::runtime_error);
+    EXPECT_EQ(read_text(unrelated_root.path() + "/manifest.txt"), original);
+}
+
+TEST(ExxCompressionDumpTest, ManifestEntryUpdatesRemainStructurallyComplete)
+{
+    TemporaryDumpRoot dump_root;
+    ExxCompressionDump::initialize(make_manifest_context(), MPI_COMM_WORLD);
+    const ExxCompressionIO::TensorMap<double> empty_map;
+    ExxCompressionDump::write_if_enabled("C.active", empty_map, -1, "full", MPI_COMM_WORLD);
+
+    const std::string manifest = read_text(dump_root.path() + "/manifest.txt");
+    EXPECT_EQ(manifest.rfind("END_ENTRY\n"), manifest.size() - std::string("END_ENTRY\n").size());
+    EXPECT_EQ(manifest.find("\nENTRY\n"), manifest.rfind("\nENTRY\n"));
+}
+
 } // namespace
+
+int main(int argc, char** argv)
+{
+    MPI_Init(&argc, &argv);
+    testing::InitGoogleTest(&argc, argv);
+    const int result = RUN_ALL_TESTS();
+    MPI_Finalize();
+    return result;
+}

@@ -10,6 +10,7 @@
 #include "Exx_LRI.h"
 #include "RI_2D_Comm.h"
 #include "RI_Util.h"
+#include "source_lcao/module_ri/exx_compression_dump.h"
 #include "source_lcao/module_ri/exx_rotate_abfs.h"
 #include "source_lcao/module_ri/exx_abfs-construct_orbs.h"
 #include "source_lcao/module_ri/exx_abfs-io.h"
@@ -1365,6 +1366,7 @@ void Exx_LRI<Tdata>::cal_exx_ions(const UnitCell& ucell,
 {
 	ModuleBase::TITLE("Exx_LRI","cal_exx_ions");
 	ModuleBase::timer::tick("Exx_LRI", "cal_exx_ions");
+	const bool dump_requested = ExxCompressionDump::enabled(std::getenv("ABACUS_EXX_COMPRESSION_DUMP"));
 
 	// init_radial_table_ions( cal_atom_centres_core(atom_pairs_core_origin), atom_pairs_core_origin );
 
@@ -1389,6 +1391,20 @@ void Exx_LRI<Tdata>::cal_exx_ions(const UnitCell& ucell,
 		   RI_Util::Vector3_to_array3(ucell.a2),
 		   RI_Util::Vector3_to_array3(ucell.a3)};
 	const std::array<Tcell,Ndim> period = {this->p_kv->nmp[0], this->p_kv->nmp[1], this->p_kv->nmp[2]};
+	bool dump_this_ionic_step = false;
+	if (dump_requested)
+	{
+		ExxCompressionDump::ManifestContext dump_context;
+		dump_context.scalar_type = ExxCompressionDump::scalar_type_name<Tdata>();
+		dump_context.period = period;
+		dump_context.lattice_vectors = latvec;
+		dump_context.atom_positions = atoms_pos;
+		dump_context.c_threshold = this->info.C_threshold;
+		dump_context.v_threshold = this->info.V_threshold;
+		dump_context.v_threshold_long = this->info.V_threshold_long;
+		dump_context.d_threshold = this->info.dm_threshold;
+		dump_this_ionic_step = ExxCompressionDump::initialize(dump_context, this->mpi_comm);
+	}
 
 	this->exx_lri.set_parallel(this->mpi_comm, atoms_pos, latvec, period);
 
@@ -1583,10 +1599,36 @@ void Exx_LRI<Tdata>::cal_exx_ions(const UnitCell& ucell,
 			Vs_long);
 	}
 	const double V_threshold_short = this->info.V_threshold;
+	const std::string short_file_channel = this->use_rotated_n0_long_range ? "short" : "full";
+	const std::string short_pool_suffix = this->use_rotated_n0_long_range ? "short" : "";
+	if (dump_this_ionic_step)
+	{
+		ExxCompressionDump::write_if_enabled("V.raw", Vs, -1, short_file_channel, this->mpi_comm);
+	}
 	this->exx_lri.set_Vs(std::move(Vs), V_threshold_short, this->use_rotated_n0_long_range ? "short" : "");
+	if (dump_this_ionic_step)
+	{
+		ExxCompressionDump::write_if_enabled("V.active",
+		                                         this->exx_lri.lri.data_pool.at("Vs_" + short_pool_suffix).Ds_ab,
+		                                         -1,
+		                                         short_file_channel,
+		                                         this->mpi_comm);
+	}
 	if (this->use_rotated_n0_long_range)
 	{
+		if (dump_this_ionic_step)
+		{
+			ExxCompressionDump::write_if_enabled("V.raw", Vs_long, -1, "long", this->mpi_comm);
+		}
 		this->exx_lri.set_Vs(std::move(Vs_long), this->info.V_threshold_long, "long");
+		if (dump_this_ionic_step)
+		{
+			ExxCompressionDump::write_if_enabled("V.active",
+			                                         this->exx_lri.lri.data_pool.at("Vs_long").Ds_ab,
+			                                         -1,
+			                                         "long",
+			                                         this->mpi_comm);
+		}
 	}
 	if(PARAM.inp.cal_force || PARAM.inp.cal_stress)
 	{
@@ -1661,8 +1703,24 @@ void Exx_LRI<Tdata>::cal_exx_ions(const UnitCell& ucell,
 			{{"flag_period", false}, {"flag_comm", false}, {"flag_filter", false}},
 			"Cs_long");
 		this->exx_lri.flag_finish.Cs = true;
+		if (dump_this_ionic_step)
+		{
+			ExxCompressionDump::write_if_enabled("C.active",
+			                                         this->exx_lri.lri.data_pool.at("Cs_long").Ds_ab,
+			                                         -1,
+			                                         "long",
+			                                         this->mpi_comm);
+		}
 	}
 	this->exx_lri.set_Cs(std::move(Cs), this->info.C_threshold, this->use_rotated_n0_long_range ? "short" : "");
+	if (dump_this_ionic_step)
+	{
+		ExxCompressionDump::write_if_enabled("C.active",
+		                                         this->exx_lri.lri.data_pool.at("Cs_" + short_pool_suffix).Ds_ab,
+		                                         -1,
+		                                         short_file_channel,
+		                                         this->mpi_comm);
+	}
     ExxLriDetail::maybe_set_weighted_short_config(this->exx_lri, this->info);
 
 	if(PARAM.inp.cal_force || PARAM.inp.cal_stress)
@@ -2198,6 +2256,8 @@ void Exx_LRI<Tdata>::cal_exx_elec(const std::vector<std::map<TA, std::map<TAC, R
 {
 	ModuleBase::TITLE("Exx_LRI","cal_exx_elec");
 	ModuleBase::timer::tick("Exx_LRI", "cal_exx_elec");
+	const bool dump_enabled = ExxCompressionDump::enabled(std::getenv("ABACUS_EXX_COMPRESSION_DUMP"));
+	const bool dump_this_update = dump_enabled && ExxCompressionDump::begin_first_electronic_snapshot(this->mpi_comm);
 
 	const std::vector<std::tuple<std::set<TA>, std::set<TA>>> judge = RI_2D_Comm::get_2D_judge(ucell,pv);
 
@@ -2221,12 +2281,32 @@ void Exx_LRI<Tdata>::cal_exx_elec(const std::vector<std::map<TA, std::map<TAC, R
 			const std::string& ds_suffix,
 			const std::string& c_suffix,
 		    const std::string& v_suffix,
+		    const std::string& file_channel,
 		    double& cal_hs_time_acc) -> std::pair<std::map<TA, std::map<TAC, RI::Tensor<Tdata>>>, double>
 	{
+		if (dump_this_update)
+		{
+			ExxCompressionDump::write_if_enabled("D.raw", D_in, spin_index, file_channel, this->mpi_comm);
+		}
 		exx_channel.set_Ds(D_in, this->info.dm_threshold, ds_suffix);
+		if (dump_this_update)
+		{
+			ExxCompressionDump::write_if_enabled("D.active",
+			                                         exx_channel.lri.data_pool.at("Ds_" + ds_suffix).Ds_ab,
+			                                         spin_index,
+			                                         file_channel,
+			                                         this->mpi_comm);
+		}
 		const auto cal_hs_t0 = std::chrono::steady_clock::now();
 		exx_channel.cal_Hs({c_suffix, v_suffix, ds_suffix});
 		const auto cal_hs_t1 = std::chrono::steady_clock::now();
+		if (dump_this_update)
+		{
+			ExxCompressionDump::write_if_enabled(
+				"H.lri", exx_channel.Hs, spin_index, file_channel, this->mpi_comm);
+			ExxCompressionDump::write_scalar_if_enabled(
+				"E.lri", exx_channel.energy, spin_index, file_channel, this->mpi_comm);
+		}
         cal_hs_time_acc += std::chrono::duration<double>(cal_hs_t1 - cal_hs_t0).count();
         ExxLriDetail::maybe_print_weighted_short_stats(exx_channel, this->info, ds_suffix, v_suffix);
 
@@ -2265,6 +2345,7 @@ void Exx_LRI<Tdata>::cal_exx_elec(const std::vector<std::map<TA, std::map<TAC, R
                                              suffix,
                                              this->use_rotated_n0_long_range ? "short" : "",
                                              this->use_rotated_n0_long_range ? "short" : "",
+                                             this->use_rotated_n0_long_range ? "short" : "full",
                                              this->use_rotated_n0_long_range ? short_cal_hs_time : full_cal_hs_time);
         if (this->use_rotated_n0_long_range)
         {
@@ -2272,6 +2353,7 @@ void Exx_LRI<Tdata>::cal_exx_elec(const std::vector<std::map<TA, std::map<TAC, R
                                                 Ds[is],
                                                 is,
                                                 suffix + "_lr",
+                                                "long",
                                                 "long",
                                                 "long",
                                                 long_cal_hs_time);
@@ -2284,8 +2366,17 @@ void Exx_LRI<Tdata>::cal_exx_elec(const std::vector<std::map<TA, std::map<TAC, R
             this->Eexx += short_channel.second;
         }
 		post_process_Hexx(this->Hexxs[is]);
+		if (dump_this_update)
+		{
+			ExxCompressionDump::write_if_enabled("H.final", this->Hexxs[is], is, "combined", this->mpi_comm);
+		}
 	}
 	this->Eexx = post_process_Eexx(this->Eexx);
+	if (dump_this_update)
+	{
+		ExxCompressionDump::write_scalar_if_enabled("E.final", this->Eexx, -1, "total", this->mpi_comm);
+		ExxCompressionDump::mark_complete(this->mpi_comm);
+	}
 	this->exx_lri.set_symmetry(false, {});
     if (GlobalV::MY_RANK == 0)
     {
