@@ -6,6 +6,7 @@ from unittest import mock
 
 import numpy as np
 
+import exx_thc.supercell as supercell
 from exx_thc.io import BlockKey
 from exx_thc.supercell import (
     ExchangeResult,
@@ -394,6 +395,329 @@ class SupercellAssemblyTest(unittest.TestCase):
                     space="orbital",
                     max_elements=16,
                 )
+
+
+class BlockExtractionTest(unittest.TestCase):
+    def _layout(self, period=(1, 1, 1), dimensions=(1,)):
+        coefficient_blocks = {
+            BlockKey(atom, atom, (0, 0, 0)): np.ones(
+                (1, dimension, dimension), dtype=np.float64
+            )
+            for atom, dimension in enumerate(dimensions)
+        }
+        metric_blocks = {
+            BlockKey(atom, atom, (0, 0, 0)): np.ones(
+                (1, 1), dtype=np.float64
+            )
+            for atom, _dimension in enumerate(dimensions)
+        }
+        density_blocks = {
+            BlockKey(atom, atom, (0, 0, 0)): np.eye(
+                dimension, dtype=np.float64
+            )
+            for atom, dimension in enumerate(dimensions)
+        }
+        return infer_supercell_layout(
+            coefficient_blocks, metric_blocks, density_blocks, period
+        )
+
+    def _extract(self):
+        self.assertIn("extract_reference_cell_blocks", supercell.__all__)
+        function = getattr(supercell, "extract_reference_cell_blocks", None)
+        self.assertIsNotNone(function)
+        return function
+
+    def _dotc(self):
+        self.assertIn("map_dotc", supercell.__all__)
+        function = getattr(supercell, "map_dotc", None)
+        self.assertIsNotNone(function)
+        return function
+
+    @staticmethod
+    def _canonical_cell(cell, period):
+        return tuple(
+            residue if residue <= (extent - 1) // 2 else residue - extent
+            for residue, extent in zip(cell, period)
+        )
+
+    def test_extracts_all_ordered_pair_translation_blocks_and_roundtrips(self):
+        extract = self._extract()
+        layout = self._layout(period=(3, 2, 1), dimensions=(2, 1))
+        expected_blocks = {}
+        expected_keys = []
+        for ia1 in layout.atoms:
+            for ia2 in layout.atoms:
+                shape = (
+                    layout.ao_dimensions[ia1],
+                    layout.ao_dimensions[ia2],
+                )
+                for cell_index, residue in enumerate(layout.cells):
+                    cell = self._canonical_cell(residue, layout.period)
+                    key = BlockKey(ia1, ia2, cell)
+                    expected_keys.append(key)
+                    base = 100 * ia1 + 20 * ia2 + cell_index + 1
+                    values = np.arange(np.prod(shape), dtype=np.float64).reshape(
+                        shape
+                    )
+                    block = values + base + 1j * (0.25 * values - base)
+                    if ia1 == 1 and ia2 == 0 and cell == (-1, -1, 0):
+                        block = np.zeros(shape, dtype=np.complex128)
+                    expected_blocks[key] = np.asarray(
+                        block, dtype=np.complex128, order="C"
+                    )
+        dense = assemble_translation_matrix(
+            expected_blocks,
+            layout,
+            space="ao",
+            max_elements=layout.nao_supercell**2,
+        )
+        dense_before = dense.copy()
+
+        extracted = extract(dense, layout, "complex128")
+
+        self.assertEqual(list(extracted), expected_keys)
+        self.assertIn(BlockKey(0, 0, (0, -1, 0)), extracted)
+        self.assertNotIn(BlockKey(0, 0, (0, 1, 0)), extracted)
+        for key, expected in expected_blocks.items():
+            with self.subTest(key=key):
+                np.testing.assert_array_equal(extracted[key], expected)
+        reassembled = assemble_translation_matrix(
+            extracted,
+            layout,
+            space="ao",
+            max_elements=layout.nao_supercell**2,
+        )
+        np.testing.assert_array_equal(reassembled, dense)
+        np.testing.assert_array_equal(dense, dense_before)
+
+    def test_complex_output_preserves_phase_dtype_contiguity_and_copies(self):
+        extract = self._extract()
+        layout = self._layout(dimensions=(2,))
+        matrix = np.asfortranarray(
+            np.asarray(
+                [[1.0 + 2.0j, 3.0 - 4.0j], [-5.0 + 6.0j, 7.0 + 0.5j]],
+                dtype=np.complex128,
+            )
+        )
+        before = matrix.copy()
+
+        blocks = extract(matrix, layout, "complex128")
+        block = blocks[BlockKey(0, 0, (0, 0, 0))]
+
+        np.testing.assert_array_equal(block, matrix)
+        self.assertEqual(block.dtype, np.dtype(np.complex128))
+        self.assertTrue(block.flags.c_contiguous)
+        self.assertFalse(np.shares_memory(block, matrix))
+        np.testing.assert_array_equal(matrix, before)
+
+    def test_real_output_accepts_only_globally_negligible_imaginary_part(self):
+        extract = self._extract()
+        layout = self._layout(dimensions=(2,))
+        within = np.asarray(
+            [[2.0 + 1.9e-12j, -1.0], [0.5, -2.0 - 1.9e-12j]],
+            dtype=np.complex128,
+        )
+        before = within.copy()
+
+        block = extract(within, layout, "real64")[
+            BlockKey(0, 0, (0, 0, 0))
+        ]
+
+        np.testing.assert_array_equal(block, within.real)
+        self.assertEqual(block.dtype, np.dtype(np.float64))
+        self.assertTrue(block.flags.c_contiguous)
+        self.assertFalse(np.shares_memory(block, within))
+        np.testing.assert_array_equal(within, before)
+
+        outside = within.copy()
+        outside[0, 0] = 2.0 + 2.1e-12j
+        with self.assertRaisesRegex(ValueError, "imaginary|real64"):
+            extract(outside, layout, "real64")
+
+    def test_extract_rejects_invalid_scalar_layout_shape_and_nonfinite_matrix(self):
+        extract = self._extract()
+        layout = self._layout(dimensions=(2,))
+        matrix = np.eye(2, dtype=np.complex128)
+
+        invalid_scalars = (
+            "float64",
+            "complex64",
+            "",
+            None,
+            np.asarray(["real64"]),
+            np.asarray(["complex128"]),
+            b"real64",
+            ["real64"],
+        )
+        for scalar in invalid_scalars:
+            with self.subTest(scalar=scalar), self.assertRaises(
+                (TypeError, ValueError)
+            ):
+                extract(matrix, layout, scalar)
+        for invalid_layout in (None, object(), (1, 1, 1)):
+            with self.subTest(layout=invalid_layout), self.assertRaises(TypeError):
+                extract(matrix, invalid_layout, "complex128")
+        for shape in ((2,), (2, 2, 1), (3, 3), (1, 2)):
+            with self.subTest(shape=shape), self.assertRaisesRegex(
+                ValueError, "shape"
+            ):
+                extract(np.ones(shape), layout, "complex128")
+        for value in (np.nan, np.inf, -np.inf):
+            nonfinite = matrix.copy()
+            nonfinite[0, 0] = value
+            with self.subTest(value=value), self.assertRaisesRegex(
+                ValueError, "finite"
+            ):
+                extract(nonfinite, layout, "complex128")
+
+    def test_map_dotc_conjugates_density_and_ignores_unmatched_keys(self):
+        dotc = self._dotc()
+        matching = BlockKey(0, 1, (0, -1, 0))
+        density_only = BlockKey(1, 0, (0, 0, 0))
+        h_only = BlockKey(1, 1, (0, 0, 0))
+        density = {
+            matching: np.asarray(
+                [[1.0 + 2.0j, -3.0 + 0.5j]], dtype=np.complex128
+            ),
+            density_only: np.asarray([[1.0e200]], dtype=np.float64),
+        }
+        h_blocks = {
+            matching: np.asarray(
+                [[2.0 - 1.0j, 0.25 + 4.0j]], dtype=np.complex128
+            ),
+            h_only: np.asarray([[1.0e200]], dtype=np.float64),
+        }
+        density_before = {key: value.copy() for key, value in density.items()}
+        h_before = {key: value.copy() for key, value in h_blocks.items()}
+        expected = sum(
+            left.conjugate() * right
+            for left, right in zip(
+                density[matching].flat, h_blocks[matching].flat
+            )
+        )
+
+        result = dotc(density, h_blocks)
+
+        self.assertIs(type(result), complex)
+        self.assertAlmostEqual(result, expected)
+        for original, snapshot in (
+            (density, density_before),
+            (h_blocks, h_before),
+        ):
+            self.assertEqual(set(original), set(snapshot))
+            for key in original:
+                np.testing.assert_array_equal(original[key], snapshot[key])
+
+    def test_map_dotc_uses_sorted_key_order(self):
+        dotc = self._dotc()
+        keys = [BlockKey(index, index, (0, 0, 0)) for index in range(3)]
+        density = {
+            keys[0]: np.ones((1, 1), dtype=np.float64),
+            keys[2]: np.ones((1, 1), dtype=np.float64),
+            keys[1]: np.ones((1, 1), dtype=np.float64),
+        }
+        h_blocks = {
+            keys[0]: np.asarray([[1.0e16]], dtype=np.float64),
+            keys[2]: np.asarray([[1.0]], dtype=np.float64),
+            keys[1]: np.asarray([[-1.0e16]], dtype=np.float64),
+        }
+
+        self.assertEqual(dotc(density, h_blocks), 1.0 + 0.0j)
+
+    def test_map_dotc_empty_intersection_returns_python_complex_zero(self):
+        dotc = self._dotc()
+        density = {
+            BlockKey(0, 0, (0, 0, 0)): np.ones((1, 1), dtype=np.float64)
+        }
+        h_blocks = {
+            BlockKey(0, 0, (1, 0, 0)): np.ones((1, 1), dtype=np.float64)
+        }
+
+        result = dotc(density, h_blocks)
+
+        self.assertIs(type(result), complex)
+        self.assertEqual(result, 0j)
+        self.assertEqual(dotc({}, {}), 0j)
+
+    def test_map_dotc_rejects_shape_mapping_key_value_rank_dtype_and_nonfinite(self):
+        dotc = self._dotc()
+        key = BlockKey(0, 0, (0, 0, 0))
+        valid = {key: np.ones((1, 1), dtype=np.float64)}
+        with self.assertRaisesRegex(ValueError, "shape"):
+            dotc(valid, {key: np.ones((1, 2), dtype=np.float64)})
+
+        for bad_mapping in (None, [], ((key, np.ones((1, 1))),)):
+            with self.subTest(mapping=bad_mapping):
+                with self.assertRaises(TypeError):
+                    dotc(bad_mapping, valid)
+                with self.assertRaises(TypeError):
+                    dotc(valid, bad_mapping)
+
+        bad_maps = {
+            "key": {"not-a-block-key": np.ones((1, 1), dtype=np.float64)},
+            "value": {key: [[1.0]]},
+            "rank": {key: np.ones((1,), dtype=np.float64)},
+            "dtype": {key: np.ones((1, 1), dtype=np.float32)},
+            "nonfinite": {key: np.asarray([[np.nan]], dtype=np.float64)},
+        }
+        for name, bad_map in bad_maps.items():
+            with self.subTest(name=name, side="density"):
+                with self.assertRaises((TypeError, ValueError)):
+                    dotc(bad_map, valid)
+            with self.subTest(name=name, side="H"):
+                with self.assertRaises((TypeError, ValueError)):
+                    dotc(valid, bad_map)
+
+    def test_map_dotc_rejects_malformed_block_key_fields_before_sorting(self):
+        dotc = self._dotc()
+        block = np.ones((1, 1), dtype=np.float64)
+        malformed = (
+            (BlockKey(-1, 0, (0, 0, 0)), ValueError, "ia1"),
+            (BlockKey("atom", 0, (0, 0, 0)), TypeError, "ia1"),
+            (BlockKey(True, 0, (0, 0, 0)), TypeError, "ia1"),
+            (BlockKey(0, 0, (0, 0)), ValueError, "R"),
+            (BlockKey(0, 0, (0, "R", 0)), TypeError, "R"),
+            (BlockKey(0, 0, (0, True, 0)), TypeError, "R"),
+        )
+        for key, error_type, message in malformed:
+            blocks = {key: block}
+            with self.subTest(key=key), self.assertRaisesRegex(
+                error_type, message
+            ):
+                dotc(blocks, blocks)
+
+        string_atom = BlockKey("atom", 0, (0, 0, 0))
+        string_cell = BlockKey(0, 0, (0, "R", 0))
+        heterogeneous_orders = (
+            ((string_atom, string_cell), "ia1"),
+            ((string_cell, string_atom), "R"),
+        )
+        for keys, message in heterogeneous_orders:
+            blocks = {key: block for key in keys}
+            with self.subTest(keys=keys), self.assertRaisesRegex(
+                TypeError, message
+            ):
+                dotc(blocks, dict(blocks))
+
+    def test_map_dotc_rejects_finite_product_and_sum_overflow(self):
+        dotc = self._dotc()
+        key0 = BlockKey(0, 0, (0, 0, 0))
+        key1 = BlockKey(1, 1, (0, 0, 0))
+        with self.assertRaisesRegex(ValueError, "finite|overflow"):
+            dotc(
+                {key0: np.asarray([[1.0e308]], dtype=np.float64)},
+                {key0: np.asarray([[1.0e308]], dtype=np.float64)},
+            )
+        density = {
+            key0: np.ones((1, 1), dtype=np.float64),
+            key1: np.ones((1, 1), dtype=np.float64),
+        }
+        h_blocks = {
+            key0: np.asarray([[1.0e308]], dtype=np.float64),
+            key1: np.asarray([[1.0e308]], dtype=np.float64),
+        }
+        with self.assertRaisesRegex(ValueError, "finite|overflow"):
+            dotc(density, h_blocks)
 
 
 class ExchangeContractionTest(unittest.TestCase):

@@ -9,7 +9,7 @@ from typing import Dict, List, Mapping, Tuple
 
 import numpy as np
 
-from .io import BlockKey
+from .io import BlockKey, TensorMap
 
 
 Cell = Tuple[int, int, int]
@@ -382,6 +382,132 @@ def assemble_translation_matrix(
     return matrix
 
 
+def _centered_cell(residue: Cell, period: Cell) -> Cell:
+    coordinates = tuple(
+        value if value <= (extent - 1) // 2 else value - extent
+        for value, extent in zip(residue, period)
+    )
+    return coordinates[0], coordinates[1], coordinates[2]
+
+
+def extract_reference_cell_blocks(
+    matrix: object, layout: SupercellLayout, scalar: str
+) -> TensorMap:
+    """Extract all reference-cell row blocks from a dense supercell matrix."""
+
+    checked_layout = _validated_layout(layout)
+    if not isinstance(scalar, str) or scalar not in ("real64", "complex128"):
+        raise ValueError("scalar must be 'real64' or 'complex128'")
+    converted = _complex_c_array(matrix, "matrix")
+    expected_shape = (
+        checked_layout.nao_supercell,
+        checked_layout.nao_supercell,
+    )
+    if converted.ndim != 2 or converted.shape != expected_shape:
+        raise ValueError("matrix must have shape {}".format(expected_shape))
+
+    if scalar == "real64":
+        maximum_real = float(np.max(np.abs(converted.real)))
+        maximum_imaginary = float(np.max(np.abs(converted.imag)))
+        tolerance = 1.0e-12 * max(maximum_real, 1.0)
+        if maximum_imaginary > tolerance:
+            raise ValueError(
+                "matrix imaginary part is too large for scalar 'real64'"
+            )
+
+    reference_cell = (0, 0, 0)
+    blocks: TensorMap = {}
+    for ia1 in checked_layout.atoms:
+        row = _slice(
+            checked_layout.ao_offsets[(reference_cell, ia1)],
+            checked_layout.ao_dimensions[ia1],
+        )
+        for ia2 in checked_layout.atoms:
+            for residue in checked_layout.cells:
+                column = _slice(
+                    checked_layout.ao_offsets[(residue, ia2)],
+                    checked_layout.ao_dimensions[ia2],
+                )
+                key = BlockKey(
+                    ia1,
+                    ia2,
+                    _centered_cell(residue, checked_layout.period),
+                )
+                selected = converted[row, column]
+                if scalar == "complex128":
+                    block = np.array(
+                        selected, dtype=np.complex128, order="C", copy=True
+                    )
+                else:
+                    block = np.array(
+                        selected.real, dtype=np.float64, order="C", copy=True
+                    )
+                blocks[key] = block
+    return blocks
+
+
+def _validate_raw_cell(value: object) -> None:
+    if not isinstance(value, tuple) or len(value) != 3:
+        raise ValueError("R must be a tuple of three integers")
+    for coordinate in value:
+        if isinstance(coordinate, (bool, np.bool_)):
+            raise TypeError("R must contain only integers")
+        try:
+            operator.index(coordinate)
+        except TypeError as error:
+            raise TypeError("R must contain only integers") from error
+
+
+def _validated_dotc_map(blocks: object, name: str) -> Mapping[BlockKey, np.ndarray]:
+    if not isinstance(blocks, Mapping):
+        raise TypeError("{} blocks must be a mapping".format(name))
+    for key, array in blocks.items():
+        if not isinstance(key, BlockKey):
+            raise TypeError("{} block keys must be BlockKey instances".format(name))
+        _validated_atom(key.ia1, "ia1")
+        _validated_atom(key.ia2, "ia2")
+        _validate_raw_cell(key.R)
+        if not isinstance(array, np.ndarray):
+            raise TypeError("{} blocks must be NumPy arrays".format(name))
+        if array.dtype not in (np.dtype(np.float64), np.dtype(np.complex128)):
+            raise TypeError(
+                "{} blocks must have dtype float64 or complex128".format(name)
+            )
+        if array.ndim != 2:
+            raise ValueError("{} blocks must have rank 2".format(name))
+        if not bool(np.all(np.isfinite(array))):
+            raise ValueError("{} blocks must contain only finite values".format(name))
+    return blocks
+
+
+def map_dotc(density_blocks: object, h_blocks: object) -> complex:
+    """Return the conjugate-first dot product over exactly matching blocks."""
+
+    density = _validated_dotc_map(density_blocks, "density")
+    hamiltonian = _validated_dotc_map(h_blocks, "H")
+    matching_keys = sorted(
+        set(density).intersection(hamiltonian),
+        key=lambda key: (key.ia1, key.ia2, key.R),
+    )
+    total = np.complex128(0.0)
+    try:
+        with np.errstate(over="raise", invalid="raise"):
+            for key in matching_keys:
+                if density[key].shape != hamiltonian[key].shape:
+                    raise ValueError("matching block shapes must be identical")
+                contribution = np.vdot(density[key], hamiltonian[key])
+                if not bool(np.isfinite(contribution)):
+                    raise ValueError("block dot product produced a non-finite value")
+                total = total + contribution
+                if not bool(np.isfinite(total)):
+                    raise ValueError("block dot-product sum produced a non-finite value")
+    except FloatingPointError as error:
+        raise ValueError(
+            "block dot product overflowed or produced an invalid value"
+        ) from error
+    return complex(total)
+
+
 def _complex_c_array(value: object, name: str) -> np.ndarray:
     try:
         array = np.asarray(value, dtype=np.complex128, order="C")
@@ -518,6 +644,8 @@ __all__ = [
     "infer_supercell_layout",
     "assemble_pair_coefficient",
     "assemble_translation_matrix",
+    "extract_reference_cell_blocks",
+    "map_dotc",
     "direct_exchange",
     "occupied_exchange",
 ]
