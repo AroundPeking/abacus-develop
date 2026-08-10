@@ -1,7 +1,7 @@
 # GaAs k444 EXX 占据乘积空间张量压缩设计
 
 日期：2026-08-10
-状态：用户已批准，实施计划已完成，待执行
+状态：阶段 A 的小 Si 零误差门槛已通过；GaAs 提交暂停，待流式/局域表示判定
 ABACUS 基线：`master_ghj@31ad8d2db354853249969e50a377881929eaf2fa`
 开发分支：`codex/mps-exx-k444`
 执行服务器：`159.226.208.66:62030`
@@ -306,6 +306,26 @@ S_{\rm ideal}
 
 阶段 A 的结果是“最佳无结构低秩上界”。若在预期物理误差区间内，连理想 SVD/TT 都无法达到 \(10\times\) 存储压缩或理论 \(5\times\) 收缩减量，则直接停止 THC 实现。
 
+#### 阶段 A 当前证据（2026-08-11）
+
+66 服务器上的两原子小 Si、`3×1×1` Born--von Karman
+超胞已经通过完整矩阵与能量门槛。验证提交为
+`15eaa29c7d955985f930ede028b280bc27c01179`，Slurm 作业为 `407512`。
+
+| 比较 | 相对 Frobenius / 绝对能量误差 |
+| --- | ---: |
+| dense `CVCD` `H` vs LibRI `H` | `4.165215491959301e-16` |
+| label-aware occupied `H` vs LibRI `H` | `1.8020961013658177e-15` |
+| dense `H` vs occupied `H` | `1.9195131881570017e-15` |
+| dense `E_x` vs LibRI `E_x` | `0 Ry/atom` |
+| occupied `E_x` vs LibRI `E_x` | `2.220446049250313e-16 Ry/atom` |
+
+这证明按四个 LibRI 标签选择 `D` 所连接 AO 腿的占据分解是完整
+交换算符的精确重写。它不恢复“固定压缩第二个 AO 指标”的旧方案，也不
+证明周期双动量张量在存储上有利。当前阶段 A 只完成了数学恒等性门槛；
+GaAs 只有在流式或局域 occupied/ISDF 表示满足 180 GB 峰值内存与
+`10×` 存储压缩的静态估算后才可提交。
+
 ### 阶段 B：local occupied-THC/ISDF 精度
 
 1. 从原子轨道支撑区交集中选择插值点，建立 `occupied-occupied` 和 `AO-occupied` 两条原型。
@@ -456,4 +476,18 @@ Scheduler snapshot: partition 640 has 3 idle nodes; partition 740 has 5 idle nod
 Version verdict: source branch matches the recorded local master_ghj commit
 Design verdict: approved by user for implementation planning
 Next action: write a file-by-file implementation plan; do not start compute before plan review
+```
+
+2026-08-11 的执行更新：
+
+```text
+Execution: server=159.226.208.66:62030, local_compute=no
+Local master_ghj at execution: 0e3bedae4d6fafe19ce176aa7a2e1ca5c842fa43
+Feature branch/server HEAD: codex/mps-exx-k444@15eaa29c7d955985f930ede028b280bc27c01179
+LibRI selected by CMakeCache: 21f92f943bf2f284fee9128bcd3e1a9f197916e1
+LibComm selected by CMakeCache: c46a34d7b76d0f317ccd1718740f8169d8aa3fa4
+Snapshot producer job: 407502, completed
+Label-aware gate job: 407512, completed, exit 0:0
+Version verdict: feature-branch exception for the label-aware occupied EXX gate
+Next action: apply the periodic storage/peak-memory decision before any GaAs submission
 ```
