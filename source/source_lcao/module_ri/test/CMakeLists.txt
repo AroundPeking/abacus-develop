@@ -11,6 +11,11 @@ AddTest(
   LIBS base ${math_libs} device parameter
   SOURCES ri_cv_io_test.cpp
 )
+AddTest(
+  TARGET MODULE_RI_exx_compression_io_test
+  LIBS base ${math_libs} device parameter
+  SOURCES exx_compression_io_test.cpp
+)
 add_executable(MODULE_RI_ewald_tail_utils_test ewald_tail_utils_test.cpp)
 install(TARGETS MODULE_RI_ewald_tail_utils_test DESTINATION ${CMAKE_BINARY_DIR}/tests)
 add_test(
