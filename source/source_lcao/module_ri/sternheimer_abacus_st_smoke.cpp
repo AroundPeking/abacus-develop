@@ -1182,17 +1182,6 @@ std::vector<SternheimerDeltaGridFunction> reorder_response_orbital_grid_function
     return ordered;
 }
 
-std::vector<std::vector<double>> collect_channel_potentials(const std::vector<SternheimerABFGridChannel>& channels)
-{
-    std::vector<std::vector<double>> potentials;
-    potentials.reserve(channels.size());
-    for (const SternheimerABFGridChannel& channel: channels)
-    {
-        potentials.push_back(channel.potential_r);
-    }
-    return potentials;
-}
-
 std::vector<siab::AuxiliaryChannelMetadata> make_siab_auxiliary_metadata(
     const std::vector<SternheimerABFGridChannel>& channels)
 {
@@ -2269,9 +2258,12 @@ void run_sternheimer_abacus_chi0_output_impl(const elecstate::Potential& potenti
         std::vector<std::vector<double>> perturbations_ry;
         if (!write_siab)
         {
-            potentials = collect_channel_potentials(channels);
-            // Raw ABFS Coulomb potentials are retained in Ha for M=V chi0 V output.
-            perturbations_ry = scale_potentials(potentials, kHartreeToRydberg);
+            potentials = take_sternheimer_channel_potentials(channels);
+            if (!output_mode.fixed_ao_only)
+            {
+                // Raw ABFS Coulomb potentials are retained in Ha for M=V chi0 V output.
+                perturbations_ry = scale_potentials(potentials, kHartreeToRydberg);
+            }
         }
         else
         {

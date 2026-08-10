@@ -1,5 +1,6 @@
 #include "source_lcao/module_ri/sternheimer_abacus_st_smoke.h"
 
+#include "source_lcao/module_ri/sternheimer_abfs_perturbation.h"
 #include "source_lcao/module_ri/sternheimer_channel_parallel.h"
 
 #include <array>
@@ -21,6 +22,19 @@ TEST(SternheimerABACUSSTSmoke, UsesProductionDefaults)
     EXPECT_DOUBLE_EQ(ModuleRI::default_sternheimer_solver_tolerance(), 1.0e-6);
     EXPECT_EQ(ModuleRI::parse_sternheimer_lcao_virtual_source(""),
               ModuleRI::SternheimerLCAOVirtualSource::KSBands);
+}
+
+TEST(SternheimerABACUSSTSmoke, MovesSampledPotentialsOutOfChannelStorage)
+{
+    std::vector<ModuleRI::SternheimerABFGridChannel> channels(2);
+    channels[0].potential_r = {1.0, 2.0};
+    channels[1].potential_r = {3.0};
+
+    const auto potentials = ModuleRI::take_sternheimer_channel_potentials(channels);
+
+    EXPECT_EQ(potentials, (std::vector<std::vector<double>>{{1.0, 2.0}, {3.0}}));
+    EXPECT_TRUE(channels[0].potential_r.empty());
+    EXPECT_TRUE(channels[1].potential_r.empty());
 }
 
 TEST(SternheimerChannelParallel, ExecutesConcurrentlyAndReturnsChannelOrder)

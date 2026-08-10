@@ -7,6 +7,7 @@
 
 #include <stdexcept>
 #include <string>
+#include <utility>
 #include <vector>
 
 namespace ModuleRI
@@ -46,6 +47,18 @@ struct SternheimerABFGridChannel
     std::vector<double> potential_r;
     double max_abs = 0.0;
 };
+
+inline std::vector<std::vector<double>> take_sternheimer_channel_potentials(
+    std::vector<SternheimerABFGridChannel>& channels)
+{
+    std::vector<std::vector<double>> potentials;
+    potentials.reserve(channels.size());
+    for (SternheimerABFGridChannel& channel: channels)
+    {
+        potentials.push_back(std::move(channel.potential_r));
+    }
+    return potentials;
+}
 
 std::vector<std::vector<SternheimerRadialPerturbation>> make_sternheimer_radial_perturbations_from_orbitals(
     const std::vector<std::vector<std::vector<Numerical_Orbital_Lm>>>& orbitals);
