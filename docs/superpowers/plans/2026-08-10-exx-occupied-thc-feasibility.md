@@ -4,7 +4,9 @@
 
 **Goal:** 在 66 服务器的 GaAs TZDP、Gamma-centered $4\times4\times4$ 案例上，判断占据乘积空间是否能在保持 EXX 精度的同时达到至少 $10\times$ 存储压缩和 $5\times$ 因子化核心收缩加速。
 
-**Architecture:** ABACUS 仅增加默认关闭的二进制快照与重放入口；(C,V,D) 保存实际进入 `cal_loop3` 的 active map，(V,D) 另存筛选前 raw map。先用 active (C,V,D) 验证原样重放；再把 raw (D) 只做周期化而不做 filter，建立严格 occupied-factor 参考，避免把块筛选后可能非半正定的 (D_{\rm active}) 错写成 (OO^\dagger)。raw (V) 只用于构造完整 Coulomb 白化 metric，实际 (H,E) 重放和核心计时仍用生产 active (V)。无 MPI 假设的 Python 原型精确构造占据投影后的 $\bar C$、TT Schmidt 谱与代数 occupied-THC。近似张量先重构成只在占据子空间有意义的 $C P_{\rm occ}$，交回原始 `RI::Exx` 重放，以真实 LibRI 路径检验 $H_x,E_x$；性能测试使用 $K=-X[Z\odot S]X^\dagger$ 且禁止恢复稠密 $\bar C$。本计划只覆盖设计稿的阶段 A--C；只有通过 $10\times/5\times$ 门槛后，才另写 LibRI/local-ISDF 接入计划并测试 `cal_exx_elec` 的 $2\times$ 门槛。
+**Current decision (2026-08-11):** 小 Si 的 label-aware 完整 `H/E` 恒等式已通过；物化全部 GaAs 双动量 B 的静态存储判定失败，因此未提交 GaAs。下一步必须先完成 streamed/localized 表示设计。
+
+**Architecture:** ABACUS 仅增加默认关闭的二进制快照与重放入口；`C,V,D` 保存实际进入 `cal_loop3` 的 active map，`V,D` 另存筛选前 raw map。raw `D` 只做周期化而不做 filter，建立严格 full-density reference。完整 LibRI `cal_Hs` 的四个标签会让 `a1`、`a2` 两条 AO 腿分别成为密度收缩腿，因此禁止再构造“固定投影第二腿”的标准 C-map。小 Si 已用有限 BvK dense `CVCD` 与 label-aware `D=OO†` 两条独立路径验证完整 `H_x,E_x`。周期生产候选显式使用双动量 `B(k,q)`，只压缩当次与 `D` 相连的 AO 腿并保留自由 AO 腿。GaAs 计算在流式 sector 或局域 occupied/Wannier/ISDF 因子给出 `<180 GB` 峰值内存和 `>=10×` 总存储压缩之前保持停止。性能候选仍使用不解压的 `K=-X[Z⊙S]X†`；只有通过 `10×/5×` 门槛后，才另写 LibRI/local-ISDF 接入计划并测试 `cal_exx_elec` 的 `2×` 门槛。
 
 **Tech Stack:** ABACUS C++17、LibRI、MPI/OpenMP、CMake/CTest/GoogleTest、Python 3、NumPy、SciPy、`unittest`、Slurm、XeLaTeX。
 
@@ -20,21 +22,28 @@ D^\sigma(\mathbf k)=O^\sigma(\mathbf k)O^\sigma(\mathbf k)^\dagger,
 O=U\sqrt{f}.
 \]
 
-令 $O^+$ 为保留占据子空间上的 Moore--Penrose 逆，$P_{\rm occ}=OO^+=UU^\dagger$。把 $C$ 看作从第二个 AO 指标到复合指标 $(\mu i)$ 的线性映射，则
+在某一个确定的指标方向中，把与密度矩阵相连的 AO 腿写成 `j`，有
 
-\[
-\bar C(\mathbf k)=C(\mathbf k)O(\mathbf k),
-\qquad
-C_{\rm occ}(\mathbf k)=\bar C(\mathbf k)O(\mathbf k)^+=C(\mathbf k)P_{\rm occ}(\mathbf k),
-\]
+```text
+K_ik = -sum_{j,l,mu,nu} C_{mu,i,j} V_{mu,nu} C*_{nu,k,l} D_{j,l}
+D    = O O†
+B_{mu,i,v} = sum_j C_{mu,i,j} O_{j,v}
+K_ik = -sum_{mu,nu,v} B_{mu,i,v} V_{mu,nu} B*_{nu,k,v}.
+```
 
-并且
+这个重写在该方向上零误差，并把一条 AO 腿从 `NAO` 降到 `Nocc`。
+但 `RI::Exx::cal_Hs` 同时包含 `a1b1`、`a1b2`、`a2b1`、`a2b2`
+四条路径；与 `D` 相连的腿会在 `a1` 和 `a2` 之间切换。因此一份固定
+投影某条 AO 腿的标准 C-map 不是完整交换算符的等价表示。周期精确对象
+必须显式携带电子动量与转移动量：
 
-\[
-C_{\rm occ}D C_{\rm occ}^\dagger=CDC^\dagger.
-\]
+```text
+B^{k,q}_{mu,i,v} = sum_j C^{k,q}_{mu,i,j} O^{k-q}_{j,v}.
+```
 
-这个等式是“零误差占据投影”硬门槛；它必须先通过小体系的实际 `RI::Exx` 重放，才能用于 GaAs。主候选表示为
+小 Si 的 label-aware 有限超胞 oracle 已对完整 `H_x,E_x` 验证该恒等式。
+GaAs 只能使用流式 `(k,q)` sector 或保持 LibRI 局域性的低秩因子，不得把
+全部双动量 B 张量物化后称为压缩。主候选的局部可分离表示为
 
 \[
 \bar C_{\mu iv}\approx\sum_{x=1}^{R}T_{\mu x}^{*}X_{ix}Y_{vx},
@@ -58,6 +67,9 @@ K=-X[Z\odot S]X^\dagger.
 - 零误差占据投影经 `RI::Exx` 重放后，
   \(\|H_x^{\rm occ}-H_x\|_F/\|H_x\|_F\le10^{-10}\)，
   \(|E_x^{\rm occ}-E_x|\le10^{-10}\) Ry/atom；
+- GaAs 前置存储门槛：不得物化全部双动量 B；流式或局域因子的静态
+  峰值内存必须低于 180 GB，总因子、索引、Coulomb kernel 与最大工作区
+  必须不超过原始 C 快照的 `0.1×`；
 - GaAs 近似表示满足
   \(\|\widehat H_x-H_x\|_F/\|H_x\|_F\le10^{-4}\)，
   \(|\widehat E_x-E_x|\le1\) meV/atom；
@@ -80,12 +92,12 @@ K=-X[Z\odot S]X^\dagger.
 - `tools/exx_thc/pyproject.toml`：离线包元数据，仅声明服务器已有的 NumPy/SciPy。
 - `tools/exx_thc/src/exx_thc/io.py`：解析/写回 `EXXCMP1` 文件及清单。
 - `tools/exx_thc/src/exx_thc/bvk.py`：原子块组装、离散 Fourier 变换、Hermiticity 与周期往返检查。
-- `tools/exx_thc/src/exx_thc/occupied.py`：(D=OO^\dagger)、(O^+)、(\bar C)、(C P_{\rm occ}) 和占据截断。
+- `tools/exx_thc/src/exx_thc/occupied.py`：`D=OO†`、占据截断与局部代数诊断；固定腿 `C P_occ` 不作为完整 LibRI H 的生产表示。
 - `tools/exx_thc/src/exx_thc/tt.py`：三阶 TT-SVD、Schmidt 谱、discarded weight 和误差界。
 - `tools/exx_thc/src/exx_thc/thc.py`：确定性的复数 CP-ALS、THC 因子约定和稠密重构，仅供精度验证。
 - `tools/exx_thc/src/exx_thc/contract.py`：稠密占据收缩与不解压 THC 收缩。
 - `tools/exx_thc/src/exx_thc/metrics.py`：误差、全量字节数、理论 FLOP、计时统计和门槛判定。
-- `tools/exx_thc/src/exx_thc/cli.py`：`inspect`、`compare`、`project`、`scan`、`benchmark` 五个可复现命令。
+- `tools/exx_thc/src/exx_thc/cli.py`：`inspect`、`compare`、`project`、`supercell-gate`、`scan`、`benchmark` 六个可复现命令；`project` 只保留为固定腿负面诊断。
 - `tools/exx_thc/tests/`：与上述模块一一对应的 `unittest`。
 - `tools/exx_thc/cases/gaas_k444/`：固定 GaAs 输入、Slurm 脚本和 SHA256 清单；不把 PP/轨道大文件提交进 Git。
 - `/Users/ghj/同步空间/AITP_project/exx_occupied_thc_feasibility/`：最终 TeX/PDF、输入、数据摘要、图、脚本副本和来源记录。
@@ -691,7 +703,7 @@ period: RI::Exx::lri.period; R is interpreted modulo this period after set_tenso
 
 同时记录 `RI::Exx::cal_Hs` 是否存在 (D=OO^\dagger) 或占据轨道入口。当前预期结论是：接口只接收 (D) map，`cal_loop3` 中未显式暴露 occupied-factor 路径。
 
-- [ ] **Step 5: 在小 Si 实例做原始快照重放门槛**
+- [x] **Step 5: 在小 Si 实例做原始快照重放门槛**
 
 对 `tests/08_EXX/11_KP_PBE0` active 快照运行 replay，再用 `cli compare` 比较原始与重放：
 
@@ -705,11 +717,20 @@ PYTHONPATH=tools/exx_thc/src python3 -m exx_thc.cli compare \
 
 active replay 配置使用 `D_path=D.active...` 和 `D_post_path=D.raw...`。Expected: active (C,V,D) 的 `H_rel_fro <= 1e-12`、`E_abs_Ry_atom <= 1e-12`，命令退出 0。这一步只证明快照/重放忠实，不对 active (D) 做 PSD 假设。
 
-- [ ] **Step 6: 做零误差 occupied projection 重放**
+- [x] **Step 6: 固定腿负面诊断与标签感知零误差门槛**
 
-先用 raw-(D) replay 生成 `D.full.exxcmp` 及对应 (H_{\rm full},E_{\rm full})。`cli project` 对 `D.full` 的所有 BvK (k) 扇区执行 (D(k)=OO^\dagger)、(C_{\rm occ}(k)=C(k)P_{\rm occ}(k))，逆变换回 `C_occ.active.exxcmp`。首先要求 (C,D) 各自的 Fourier 往返误差 `<1e-13`、每个 (D(k)) Hermiticity `<1e-12`、负本征值不低于 `-1e-10*lambda_max`；再把 `C_occ` 与同一个 `D.full` 作为 active map 交给 replay，同时仍以原始 `D.raw` 作为 `D_post_path` 计算能量。
+raw-D replay 已生成 `D.full.exxcmp` 与 full-D reference。旧 `cli project`
+把一个固定 AO 腿投影成 `C_occ` 再交回原始 `cal_Hs`，只作为负面诊断：
+作业 `407507` 的能量误差为 `6.661338147750939e-16 Ry/atom`，但完整
+`H_rel_fro=0.1560547995868126`；负 k 作业 `407508` 同样失败。这证明
+Fourier/PSD gate 和能量相等不能替代完整 H 等价性。
 
-Expected: 小 Si 相对于 raw-(D) full reference 的 `H_rel_fro <= 1e-10`、`E_abs_Ry_atom <= 1e-10`。另报告生产 active-(D) 与 full-(D) 的差，但不把这部分既有 DM screening 误差归因于 occupied projection。若零误差投影失败，停止 GaAs 和 THC 工作，保留快照，并把问题定位为 Fourier/LibRI map 语义不一致；不得调宽门槛掩盖。
+替代门槛使用有限 BvK supercell，同一份 C/V/D 分别执行 direct `CVCD`
+和 label-aware `D=OO†` 收缩，不构造标准 `C_occ` map。作业 `407512`
+得到 dense H vs LibRI `4.165215491959301e-16`、occupied H vs LibRI
+`1.8020961013658177e-15`，能量误差分别为 `0` 与
+`2.220446049250313e-16 Ry/atom`，命令退出 0。该结果是后续周期
+streamed/localized kernel 的零误差 reference。
 
 - [ ] **Step 7: 提交**
 
@@ -1000,9 +1021,12 @@ cmake --build /home/ghj/abacus/260810/mps-exx-k444/build -j20
 
 Expected: 构建成功并生成 `build/abacus_3p`；`CMakeCache.txt` 的 MPI/LCAO/LibRI/LibComm/DEBUG_INFO 为 `ON`、MLALGO 为 `OFF`；记录 executable 的绝对路径、`stat` 和 SHA256。配置后 `git status --porcelain` 仍为空；若 cache 参数不能复现参考 profile，则停止并记录第一个 configure 错误，不直接修改源码。
 
-- [ ] **Step 3: 先跑小 Si 语义门槛**
+- [x] **Step 3: 先跑小 Si 语义门槛**
 
-在 `si_kp_pbe0` 副本中使用 1 rank、48 threads 和 dump 开关。要求 ABACUS 正常结束、快照齐全、Task 5 的原始 replay 和 occupied projection replay 都通过。未通过时停止，不提交 GaAs。
+在 `si_kp_pbe0` 副本中使用 1 rank、48 threads 和 dump 开关。要求
+ABACUS 正常结束、快照齐全、Task 5 的原始 replay 与 label-aware
+`supercell-gate` 都通过；fixed-leg replay 作为预期失败的负面诊断保留。
+未通过时停止，不提交 GaAs。
 
 2026-08-11 的首次生产快照作业 `407502` 暴露了一个接口门槛：nspin=1 的 C/V/D/H 文件使用 EXXCMP1 `real64`，而最初的 replay/project 原型只接受 `complex128`。原始作业正常结束且 manifest 为 `session_state=complete`；不得通过改成复数算例绕过。新增回归要求 replay 按统一的输入标量 tag 分派到 `RI::Exx<double>` 或 `RI::Exx<complex<double>>`，Python compare/project 同样接受两种同型输入并保持输出类型。先在真实 server-66 LibRI 上通过 real64 直接结果测试，再继续本步骤的 raw/occupied replay。
 
@@ -1010,15 +1034,38 @@ real64 修复提交 `09c0261dfe395d31886330b6c5dd8b952f00f26a` 后，作业 `407
 
 源码审计给出根因：`cal_Hs` 同时执行 `a0b0_a1b1`、`a0b0_a1b2`、`a0b0_a2b1`、`a0b0_a2b2`，密度矩阵连接的 C 张量 AO 腿随标签在 `a1` 和 `a2` 之间变化。一份固定投影 `a2` 的标准 C-map 在部分路径投影了自由输出腿，因此可能保能量却不能保完整 H。这里停止 GaAs 提交；下一步改为标签感知或双动量 AO--occupied 直接收缩的零误差 Si 门槛。
 
-- [ ] **Step 4: 运行 GaAs PBE 门槛**
+标签感知门槛已由提交 `15eaa29c7d955985f930ede028b280bc27c01179`
+和作业 `407512` 完成。有限 `3×1×1` BvK dense `CVCD` 与全局
+`D=OO†` 两条路径分别得到：dense H vs LibRI
+`4.165215491959301e-16`、occupied H vs LibRI
+`1.8020961013658177e-15`、两条 H 之间 `1.9195131881570017e-15`；
+能量误差分别为 `0` 与 `2.220446049250313e-16 Ry/atom`。完整矩阵与能量
+数学门槛通过。作业 `407509/407510` 和 NFS 探针 `407511` 记录了输出
+发布中 open-FD `.nfs*` 根因；最终 ownership-anchor 方案在 `407512`
+成功且未留下隐藏目录。
+
+但这不解除 GaAs 停止条件。对 `NAO=82`、`Nocc=14`、`Nk=64`，物化
+全部双动量精确 B 的相对存储为
+
+```text
+Nk * Nocc / NAO = 64 * 14 / 82 = 10.9268292683.
+```
+
+它比原 C 大约 `10.9×`，相对于“因子存储不超过原 C 的 `0.1×`”目标
+差约 `109.3×`。同时保留 C 与 B 时约占 `11.93 S_C`，180 GB 节点只在
+`S_C < 15.1 GB` 时才可能容纳，且还未计其他 EXX 数据。因此 Step 4--6
+保持 blocked；必须先设计流式 `(k,q)` sector 或局域
+occupied/Wannier/ISDF 表示并给出 `<180 GB` 静态峰值估算。
+
+- [ ] **Step 4: 运行 GaAs PBE 门槛（blocked：等待流式/局域存储设计）**
 
 在 GaAs run 目录复制 `INPUT_pbe` 为 `INPUT`，不设置 dump 开关，提交 1 MPI × 48 OMP。验收：SCF 正常收敛、最终 `drho < 1e-9`、无 `NaN/Inf`、82 NAO 和 64 k 点与预期一致。记录总时间、峰值内存、能量和作业号；PBE 只作为同 PP/NAO 的低成本输入门槛。
 
-- [ ] **Step 5: 运行一次 EXX 快照**
+- [ ] **Step 5: 运行一次 EXX 快照（blocked）**
 
 复制 `INPUT_exx_snapshot` 为 `INPUT`，设置 dump，提交相同资源。验收：至少完成一次 `cal_exx_elec`、C/V/D/H/E 快照全部闭合、日志中记录 ABF 数量、块数、shape、`cal_Hs` 时间与峰值内存。该结果标记为“fixed-density EXX snapshot”，不称为收敛 PBE0。
 
-- [ ] **Step 6: 保存快照清单且不删除结果**
+- [ ] **Step 6: 保存快照清单且不删除结果（blocked）**
 
 对输入、日志、二进制、快照 manifest 和 summary 生成 `sha256sum`; 大文件留在 66，只把相对路径、大小和哈希写入本地 `tools/exx_thc/cases/gaas_k444/remote_artifacts.txt`。所有原始结果保留。
 
@@ -1046,7 +1093,15 @@ factor_seconds,seed_min_residual,seed_max_residual
 
 - [ ] **Step 2: 先做标签感知 AO--occupied 零误差 reference**
 
-先把 `D.raw` 通过 replay 只做 periodization，得到 `D.full` 与 full-(D) (H,E) reference。随后不得再把固定投影一个 AO 腿的 `C_occ` 交给原始 `cal_Hs`。新 reference 必须逐项覆盖四个 LibRI 标签，在每个路径只把当次与 D 相连的 AO 腿写成占据因子，并保留另一条自由 AO 腿；周期实现显式携带电子 k 与转移动量 q。先在小 Si 达到 `H_rel_fro <=1e-10`、`E_abs_Ry_atom <=1e-10`，再对 GaAs 运行同一内核。同时单列 active-(D) 生产结果与 full-(D) 的差。零误差门槛失败即停止，不能继续用局部 block 残差或仅能量相等代替物理等价性。
+先把 `D.raw` 通过 replay 只做 periodization，得到 `D.full` 与 full-D 的
+`H,E` reference。随后不得再把固定投影一个 AO 腿的 `C_occ` 交给原始
+`cal_Hs`。reference 必须逐项覆盖四个 LibRI 标签，在每个路径只把当次
+与 D 相连的 AO 腿写成占据因子，并保留另一条自由 AO 腿；周期实现显式
+携带电子 k 与转移动量 q。小 Si 已由作业 `407512` 达到
+`H_rel_fro <=1e-10`、`E_abs_Ry_atom <=1e-10`。这一步只解除了数学
+恒等式门槛；在流式/局域表示通过 `0.1 S_C` 存储和 180 GB 峰值门槛前，
+不得对 GaAs 物化或运行全部双动量 B。同时单列 active-D 生产结果与
+full-D 的差。不能用局部 block 残差或仅能量相等代替物理等价性。
 
 - [ ] **Step 3: 扫描 TT 阈值**
 
@@ -1062,16 +1117,23 @@ factor_seconds,seed_min_residual,seed_max_residual
 
 仅在 TT 上界通过时，对每个扇区从 `R=max(r1,r2)` 开始，以 `ceil(1.25*R)` 增长，直到白化残差达到阈值或因子字节数已使压缩比低于 `10x`。每个 rank 运行 seeds `0,1,2`、最多 100 ALS 轮。保存最优因子和全部 seed 残差，不保存解压后的稠密 `cbar`。
 
-- [ ] **Step 5: 用原始 LibRI 重放检查 (H_x,E_x)**
+- [ ] **Step 5: 用标签感知 kernel 检查 `H_x,E_x`**
 
-对候选因子仅为精度验证而重构 `cbar_hat`，计算 `C_occ_hat=cbar_hat@O_pinv`，逆 Fourier 写 `C_candidate.active.exxcmp`，然后用 active-map replay 得到 LibRI 原始 (H,E)：`D_path` 使用与 reference 相同的 `D.full`，`D_post_path` 使用原始 `D.raw`。相对 (H) 误差在统一乘 (-2) 后不变；能量差先按现有 `post_process_Eexx` 乘自旋因子（`nspin=1` 时为 2），再换算：
+候选因子只允许在单个受控 sector 内为精度验证重构 `B_hat`，不得再计算
+`C_occ_hat=cbar_hat@O_pinv` 或写成标准 C-map 交回原始 `cal_Hs`。用与
+小 Si `supercell-gate` 相同的标签感知收缩逐项覆盖四个 LibRI 路径，
+每条路径只压缩当次与 D 相连的 AO 腿并保留自由 AO 腿。`D.full` 负责 H
+收缩，原始 `D.raw` 负责 post-process 能量；active V 与 reference 保持
+一致。相对 H 误差在统一乘 `-2` 后不变；能量差先按现有
+`post_process_Eexx` 乘自旋因子（`nspin=1` 时为 2），再换算：
 
 ```python
 spin_factor = {1: 2.0, 2: 1.0, 4: 1.0}[nspin]
 mev_per_atom = spin_factor * abs(delta_energy_ry) * 13.605693122994 * 1000 / natom
 ```
 
-筛选 `H_rel_fro <= 1e-4` 且 `mev_per_atom <= 1.0` 的点；重构和 replay 时间不计入加速，只计入精度验证成本。
+筛选 `H_rel_fro <= 1e-4` 且 `mev_per_atom <= 1.0` 的点；受控 sector
+重构和 reference 收缩时间不计入加速，只计入精度验证成本。
 
 - [ ] **Step 6: 计算真实总存储与长尾**
 
@@ -1280,7 +1342,8 @@ Expected: 远端 HEAD 与本地相同且工作区 clean；不用 force push、re
 
 1. 小 Si 原始重放不等价：修 dump/replay，不跑 GaAs。
 2. 小 Si 或 GaAs 零误差占据投影不等价：停止并修正 BvK/LibRI 指标语义。
-3. TT/SVD 理想上界达不到 (10\times)：停止 THC。
-4. THC 精度下达不到 (10\times)：停止性能实现。
-5. 直接核心达不到 (5\times) 或五次不能摊销：不做 LibRI 生产接入。
-6. 第一阶段全部通过：只说明值得进入下一阶段，另写 local-ISDF/LibRI 计划后再测试 `cal_exx_elec` (2\times)。
+3. 物化双动量 B 的存储或峰值超过门槛：停止 GaAs，先做流式/局域设计。
+4. TT/SVD 理想上界达不到 `10×`：停止 THC。
+5. THC 精度下达不到 `10×`：停止性能实现。
+6. 直接核心达不到 `5×` 或五次不能摊销：不做 LibRI 生产接入。
+7. 第一阶段全部通过：只说明值得进入下一阶段，另写 local-ISDF/LibRI 计划后再测试 `cal_exx_elec` 的 `2×` 门槛。
