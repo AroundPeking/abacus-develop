@@ -19,6 +19,8 @@ using GridVector = std::vector<Complex>;
 using PrimitiveGrid = std::vector<GridVector>;
 
 constexpr std::size_t grid_block_size = 32768;
+constexpr std::size_t hamiltonian_batch_target_bytes
+    = static_cast<std::size_t>(4) * 1024 * 1024 * 1024;
 
 void validate_delta_omega(const double delta_omega)
 {
@@ -310,13 +312,20 @@ std::vector<Complex> hamiltonian_matrix(
     }
 
     const std::size_t n_basis = basis_functions.size();
+    const std::size_t bytes_per_column
+        = std::max<std::size_t>(1, grid_size * sizeof(Complex));
+    const std::size_t memory_limited_batch_size
+        = std::max<std::size_t>(1, hamiltonian_batch_target_bytes / bytes_per_column);
+    const std::size_t effective_batch_size
+        = std::min({n_basis,
+                    static_cast<std::size_t>(column_batch_size),
+                    memory_limited_batch_size});
     std::vector<Complex> result(n_basis * n_basis, Complex(0.0, 0.0));
     for (std::size_t first_column = 0; first_column < n_basis;
-         first_column += static_cast<std::size_t>(column_batch_size))
+         first_column += effective_batch_size)
     {
         const std::size_t batch_size
-            = std::min(static_cast<std::size_t>(column_batch_size),
-                       n_basis - first_column);
+            = std::min(effective_batch_size, n_basis - first_column);
         PrimitiveGrid h_basis(batch_size);
 #pragma omp parallel for schedule(dynamic)
         for (int local_column = 0;

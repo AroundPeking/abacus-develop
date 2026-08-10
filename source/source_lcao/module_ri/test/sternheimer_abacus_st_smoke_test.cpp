@@ -2,6 +2,7 @@
 
 #include "source_lcao/module_ri/sternheimer_abfs_perturbation.h"
 #include "source_lcao/module_ri/sternheimer_channel_parallel.h"
+#include "source_lcao/module_ri/sternheimer_delta.h"
 
 #include <array>
 #include <atomic>
@@ -35,6 +36,47 @@ TEST(SternheimerABACUSSTSmoke, MovesSampledPotentialsOutOfChannelStorage)
     EXPECT_EQ(potentials, (std::vector<std::vector<double>>{{1.0, 2.0}, {3.0}}));
     EXPECT_TRUE(channels[0].potential_r.empty());
     EXPECT_TRUE(channels[1].potential_r.empty());
+}
+
+TEST(SternheimerABACUSSTSmoke, AllocatesOnlyValuesForGalerkinSidecars)
+{
+    ModuleRI::SternheimerDeltaGridFunction function;
+
+    ModuleRI::allocate_sternheimer_grid_function_storage(function, 7, false);
+
+    EXPECT_EQ(function.values.size(), 7U);
+    for (const auto& gradient: function.gradients)
+    {
+        EXPECT_TRUE(gradient.empty());
+    }
+}
+
+TEST(SternheimerABACUSSTSmoke, MovesGridValuesAndReleasesGradients)
+{
+    std::vector<ModuleRI::SternheimerDeltaGridFunction> functions(2);
+    for (auto& function: functions)
+    {
+        ModuleRI::allocate_sternheimer_grid_function_storage(function, 3, true);
+    }
+    functions[0].values = {{1.0, 0.0}, {2.0, 0.0}, {3.0, 0.0}};
+    functions[1].values = {{4.0, 0.0}, {5.0, 0.0}, {6.0, 0.0}};
+    const auto* first_values = functions[0].values.data();
+    const auto* second_values = functions[1].values.data();
+
+    const auto values = ModuleRI::take_sternheimer_grid_values(functions);
+
+    ASSERT_EQ(values.size(), 2U);
+    EXPECT_EQ(values[0].data(), first_values);
+    EXPECT_EQ(values[1].data(), second_values);
+    for (const auto& function: functions)
+    {
+        EXPECT_TRUE(function.values.empty());
+        for (const auto& gradient: function.gradients)
+        {
+            EXPECT_TRUE(gradient.empty());
+            EXPECT_EQ(gradient.capacity(), 0U);
+        }
+    }
 }
 
 TEST(SternheimerChannelParallel, ExecutesConcurrentlyAndReturnsChannelOrder)

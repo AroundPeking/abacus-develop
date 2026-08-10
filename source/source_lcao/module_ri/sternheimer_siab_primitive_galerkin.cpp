@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <complex>
+#include <iterator>
 #include <stdexcept>
 #include <utility>
 #include <vector>
@@ -58,8 +59,8 @@ std::vector<std::complex<double>> rectangular_block(
 PrimitiveGalerkinData build_primitive_galerkin_data(
     const std::vector<PrimitiveBlock>& blocks,
     const std::vector<AuxiliaryChannelMetadata>& auxiliary_channels,
-    const std::vector<std::vector<std::complex<double>>>& primitive_basis_functions,
-    const std::vector<std::vector<std::complex<double>>>& fixed_ao_basis_functions,
+    std::vector<std::vector<std::complex<double>>> primitive_basis_functions,
+    std::vector<std::vector<std::complex<double>>> fixed_ao_basis_functions,
     const std::vector<FixedAOSpinInput>& fixed_ao_spins,
     const std::vector<ModuleRI::SternheimerFDHamiltonian>& hamiltonians_ry,
     const std::vector<std::vector<double>>& potentials_ha,
@@ -119,14 +120,29 @@ PrimitiveGalerkinData build_primitive_galerkin_data(
     result.fixed_ao_grid_overlap
         = overlap_s(fixed_ao_basis_functions, delta_omega);
 
+    result.primitive_ao_overlap.assign(
+        n_primitive * n_fixed_ao, std::complex<double>(0.0, 0.0));
+    for (std::size_t fixed_ao = 0; fixed_ao != n_fixed_ao; ++fixed_ao)
+    {
+        const std::vector<std::complex<double>> ao_primitive_overlap
+            = overlap_q(fixed_ao_basis_functions[fixed_ao],
+                        primitive_basis_functions,
+                        delta_omega);
+        for (std::size_t primitive = 0; primitive != n_primitive; ++primitive)
+        {
+            result.primitive_ao_overlap[primitive * n_fixed_ao + fixed_ao]
+                = std::conj(ao_primitive_overlap[primitive]);
+        }
+    }
+
     std::vector<std::vector<std::complex<double>>> combined_basis_functions;
     combined_basis_functions.reserve(combined_dimension);
     combined_basis_functions.insert(combined_basis_functions.end(),
-                                    primitive_basis_functions.begin(),
-                                    primitive_basis_functions.end());
+                                    std::make_move_iterator(primitive_basis_functions.begin()),
+                                    std::make_move_iterator(primitive_basis_functions.end()));
     combined_basis_functions.insert(combined_basis_functions.end(),
-                                    fixed_ao_basis_functions.begin(),
-                                    fixed_ao_basis_functions.end());
+                                    std::make_move_iterator(fixed_ao_basis_functions.begin()),
+                                    std::make_move_iterator(fixed_ao_basis_functions.end()));
 
     const std::vector<std::vector<std::complex<double>>>
         combined_perturbations_ha
@@ -152,21 +168,6 @@ PrimitiveGalerkinData build_primitive_galerkin_data(
                               n_primitive,
                               n_primitive,
                               n_fixed_ao));
-    }
-
-    result.primitive_ao_overlap.assign(
-        n_primitive * n_fixed_ao, std::complex<double>(0.0, 0.0));
-    for (std::size_t fixed_ao = 0; fixed_ao != n_fixed_ao; ++fixed_ao)
-    {
-        const std::vector<std::complex<double>> ao_primitive_overlap
-            = overlap_q(fixed_ao_basis_functions[fixed_ao],
-                        primitive_basis_functions,
-                        delta_omega);
-        for (std::size_t primitive = 0; primitive != n_primitive; ++primitive)
-        {
-            result.primitive_ao_overlap[primitive * n_fixed_ao + fixed_ao]
-                = std::conj(ao_primitive_overlap[primitive]);
-        }
     }
 
     result.spins.reserve(fixed_ao_spins.size());

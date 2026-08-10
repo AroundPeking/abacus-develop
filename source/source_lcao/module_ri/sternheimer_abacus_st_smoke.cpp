@@ -1016,7 +1016,8 @@ siab::Provenance make_siab_production_provenance(
 std::vector<SternheimerDeltaGridFunction> build_lcao_candidate_grid_functions(
     const UnitCell& ucell,
     const SternheimerFDHamiltonian::Grid& grid,
-    const LCAO_Orbitals* provided_orbitals = nullptr)
+    const LCAO_Orbitals* provided_orbitals = nullptr,
+    const bool include_gradients = true)
 {
     LCAO_Orbitals loaded_orbitals;
     if (provided_orbitals == nullptr)
@@ -1056,12 +1057,9 @@ std::vector<SternheimerDeltaGridFunction> build_lcao_candidate_grid_functions(
             for (int iw = 0; iw != orbital_count; ++iw)
             {
                 SternheimerDeltaGridFunction& candidate = candidates[candidate_begin + static_cast<std::size_t>(iw)];
-                candidate.values.assign(static_cast<std::size_t>(grid_size),
-                                        SternheimerFDHamiltonian::Complex(0.0, 0.0));
-                for (SternheimerFDHamiltonian::Vector& gradient: candidate.gradients)
-                {
-                    gradient.assign(static_cast<std::size_t>(grid_size), SternheimerFDHamiltonian::Complex(0.0, 0.0));
-                }
+                allocate_sternheimer_grid_function_storage(candidate,
+                                                            static_cast<std::size_t>(grid_size),
+                                                            include_gradients);
             }
 
             ModuleGint::GintAtom sampler(&sampling_atom,
@@ -1120,12 +1118,15 @@ std::vector<SternheimerDeltaGridFunction> build_lcao_candidate_grid_functions(
                                 = candidates[candidate_begin + static_cast<std::size_t>(iw)];
                             candidate.values[grid_index]
                                 += SternheimerFDHamiltonian::Complex(values[buffer_index], 0.0);
-                            candidate.gradients[0][grid_index]
-                                += SternheimerFDHamiltonian::Complex(gradient_x[buffer_index], 0.0);
-                            candidate.gradients[1][grid_index]
-                                += SternheimerFDHamiltonian::Complex(gradient_y[buffer_index], 0.0);
-                            candidate.gradients[2][grid_index]
-                                += SternheimerFDHamiltonian::Complex(gradient_z[buffer_index], 0.0);
+                            if (include_gradients)
+                            {
+                                candidate.gradients[0][grid_index]
+                                    += SternheimerFDHamiltonian::Complex(gradient_x[buffer_index], 0.0);
+                                candidate.gradients[1][grid_index]
+                                    += SternheimerFDHamiltonian::Complex(gradient_y[buffer_index], 0.0);
+                                candidate.gradients[2][grid_index]
+                                    += SternheimerFDHamiltonian::Complex(gradient_z[buffer_index], 0.0);
+                            }
                         }
                     }
                 }
@@ -1289,30 +1290,34 @@ std::string write_sternheimer_response_galerkin_sidecar(
     const double pca_threshold,
     const SternheimerABACUSFDGridData& grid_data,
     const std::vector<siab::PrimitiveBlock>& response_blocks,
-    const std::vector<SternheimerDeltaGridFunction>& response_functions,
-    const std::vector<SternheimerDeltaGridFunction>& sampled_ao_functions,
+    std::vector<SternheimerDeltaGridFunction> response_functions,
+    std::vector<SternheimerDeltaGridFunction>& sampled_ao_functions,
+    const bool take_fixed_ao_values,
     const std::vector<std::vector<double>>& potentials,
     const SternheimerLCAOFixedAOMatrices& fixed_ao_matrices,
     const std::vector<SternheimerFDHamiltonian>& hamiltonians_ry)
 {
-    std::vector<std::vector<std::complex<double>>> response_values;
-    response_values.reserve(response_functions.size());
-    for (const SternheimerDeltaGridFunction& function: response_functions)
-    {
-        response_values.push_back(function.values);
-    }
+    std::vector<std::vector<std::complex<double>>> response_values
+        = take_sternheimer_grid_values(response_functions);
     std::vector<std::vector<std::complex<double>>> fixed_ao_values;
-    fixed_ao_values.reserve(sampled_ao_functions.size());
-    for (const SternheimerDeltaGridFunction& function: sampled_ao_functions)
+    if (take_fixed_ao_values)
     {
-        fixed_ao_values.push_back(function.values);
+        fixed_ao_values = take_sternheimer_grid_values(sampled_ao_functions);
+    }
+    else
+    {
+        fixed_ao_values.reserve(sampled_ao_functions.size());
+        for (const SternheimerDeltaGridFunction& function: sampled_ao_functions)
+        {
+            fixed_ao_values.push_back(function.values);
+        }
     }
 
     const siab::PrimitiveGalerkinData data = siab::build_primitive_galerkin_data(
         response_blocks,
         make_siab_auxiliary_metadata(channels),
-        response_values,
-        fixed_ao_values,
+        std::move(response_values),
+        std::move(fixed_ao_values),
         fixed_ao_matrices.spins,
         hamiltonians_ry,
         potentials,
@@ -2283,7 +2288,10 @@ void run_sternheimer_abacus_chi0_output_impl(const elecstate::Potential& potenti
         std::vector<SternheimerDeltaGridFunction> sampled_ao_functions;
         if (use_lcao_zero_order)
         {
-            sampled_ao_functions = build_lcao_candidate_grid_functions(ucell, grid_data.grid, lcao_orbitals);
+            sampled_ao_functions = build_lcao_candidate_grid_functions(ucell,
+                                                                       grid_data.grid,
+                                                                       lcao_orbitals,
+                                                                       !output_mode.fixed_ao_only);
             if (sampled_ao_functions.empty())
             {
                 throw std::runtime_error("Sternheimer LCAO zero-order input found no sampled AO functions.");
@@ -2299,7 +2307,10 @@ void run_sternheimer_abacus_chi0_output_impl(const elecstate::Potential& potenti
             response_layout = build_sternheimer_response_orbital_layout(
                 make_response_orbital_atom_specs(ucell, response_orbitals));
             response_orbital_functions = reorder_response_orbital_grid_functions(
-                build_lcao_candidate_grid_functions(ucell, grid_data.grid, &response_orbitals),
+                build_lcao_candidate_grid_functions(ucell,
+                                                    grid_data.grid,
+                                                    &response_orbitals,
+                                                    !output_mode.fixed_ao_only),
                 response_layout);
         }
 
@@ -2353,8 +2364,9 @@ void run_sternheimer_abacus_chi0_output_impl(const elecstate::Potential& potenti
                 pca_threshold,
                 grid_data,
                 response_layout.blocks,
-                response_orbital_functions,
+                std::move(response_orbital_functions),
                 sampled_ao_functions,
+                output_mode.fixed_ao_only,
                 potentials,
                 *fixed_ao_matrices,
                 hamiltonians_ry);

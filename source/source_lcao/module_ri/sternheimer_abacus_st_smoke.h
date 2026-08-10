@@ -2,6 +2,7 @@
 #define STERNHEIMER_ABACUS_ST_SMOKE_H
 
 #include "source_lcao/module_ri/sternheimer_abacus_fd_adapter.h"
+#include "source_lcao/module_ri/sternheimer_delta.h"
 #include "source_lcao/module_ri/sternheimer_response_orbital_layout.h"
 #include "source_lcao/module_ri/sternheimer_siab_fixed_ao.h"
 #include "source_lcao/module_ri/sternheimer_siab_memory.h"
@@ -16,6 +17,7 @@
 #include <sstream>
 #include <stdexcept>
 #include <string>
+#include <utility>
 #include <vector>
 
 class UnitCell;
@@ -40,6 +42,42 @@ namespace ModuleRI
 inline constexpr double default_sternheimer_solver_tolerance() noexcept
 {
     return 1.0e-6;
+}
+
+inline void allocate_sternheimer_grid_function_storage(
+    SternheimerDeltaGridFunction& function,
+    const std::size_t grid_size,
+    const bool include_gradients)
+{
+    function.values.assign(grid_size, SternheimerFDHamiltonian::Complex(0.0, 0.0));
+    for (SternheimerFDHamiltonian::Vector& gradient: function.gradients)
+    {
+        if (include_gradients)
+        {
+            gradient.assign(grid_size, SternheimerFDHamiltonian::Complex(0.0, 0.0));
+        }
+        else
+        {
+            SternheimerFDHamiltonian::Vector().swap(gradient);
+        }
+    }
+}
+
+inline std::vector<std::vector<std::complex<double>>> take_sternheimer_grid_values(
+    std::vector<SternheimerDeltaGridFunction>& functions)
+{
+    std::vector<std::vector<std::complex<double>>> values;
+    values.reserve(functions.size());
+    for (SternheimerDeltaGridFunction& function: functions)
+    {
+        values.push_back(std::move(function.values));
+        function.values.clear();
+        for (SternheimerFDHamiltonian::Vector& gradient: function.gradients)
+        {
+            SternheimerFDHamiltonian::Vector().swap(gradient);
+        }
+    }
+    return values;
 }
 
 struct SternheimerLCAOOccupiedChannel

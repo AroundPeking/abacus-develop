@@ -15,8 +15,8 @@ namespace sternheimer_siab
 PrimitiveGalerkinData build_primitive_galerkin_data(
     const std::vector<PrimitiveBlock>& blocks,
     const std::vector<AuxiliaryChannelMetadata>& auxiliary_channels,
-    const std::vector<std::vector<std::complex<double>>>& primitive_basis_functions,
-    const std::vector<std::vector<std::complex<double>>>& fixed_ao_basis_functions,
+    std::vector<std::vector<std::complex<double>>> primitive_basis_functions,
+    std::vector<std::vector<std::complex<double>>> fixed_ao_basis_functions,
     const std::vector<FixedAOSpinInput>& fixed_ao_spins,
     const std::vector<ModuleRI::SternheimerFDHamiltonian>& hamiltonians_ry,
     const std::vector<std::vector<double>>& potentials_ha,
