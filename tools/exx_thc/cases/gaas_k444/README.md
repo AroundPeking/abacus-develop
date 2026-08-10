@@ -47,8 +47,8 @@ abacus_exe="$build_dir/abacus_3p"
 cmake_cache="$build_dir/CMakeCache.txt"
 build_manifest="$abacus_exe.provenance"
 
-test -z "$(git -C "$source_root" status --porcelain --untracked-files=no)"
-test "$(git -C "$source_root" branch --show-current)" = codex/mps-exx-k444
+test -z "$(cd "$source_root" && git status --porcelain --untracked-files=no)"
+test "$(cd "$source_root" && git symbolic-ref --quiet --short HEAD)" = codex/mps-exx-k444
 
 cmake -S "$source_root" -B "$build_dir" \
   -DCMAKE_CXX_COMPILER=/home/apps/intel20u4/compilers_and_libraries_2020.4.304/linux/bin/intel64/icpc \
@@ -69,9 +69,9 @@ cmake --build "$build_dir" -j20
 
 test -x "$abacus_exe"
 test -f "$cmake_cache"
-test -z "$(git -C "$source_root" status --porcelain --untracked-files=no)"
+test -z "$(cd "$source_root" && git status --porcelain --untracked-files=no)"
 
-source_commit=$(git -C "$source_root" rev-parse --verify HEAD)
+source_commit=$(cd "$source_root" && git rev-parse --verify HEAD)
 executable_sha256=$(sha256sum "$abacus_exe" | awk '{print $1}')
 cmakecache_sha256=$(sha256sum "$cmake_cache" | awk '{print $1}')
 built_at_utc=$(date -u +%Y-%m-%dT%H:%M:%SZ)

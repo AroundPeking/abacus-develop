@@ -87,10 +87,10 @@ done < "$build_manifest"
 [[ "$built_at_utc" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$ ]] \
     || die "invalid BUILT_AT_UTC"
 
-tracked_status=$(git -C "$source_root" status --porcelain --untracked-files=no)
+tracked_status=$(cd -- "$source_root" && git status --porcelain --untracked-files=no)
 [[ -z "$tracked_status" ]] || die "source checkout has tracked-file changes"
 
-current_source_commit=$(git -C "$source_root" rev-parse --verify HEAD)
+current_source_commit=$(cd -- "$source_root" && git rev-parse --verify HEAD)
 [[ "$current_source_commit" == "$source_commit" ]] \
     || die "source HEAD does not match build manifest"
 
