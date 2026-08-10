@@ -3,6 +3,7 @@
 
 #include "source_lcao/module_ri/sternheimer_fd_nonlocal_projector.h"
 
+#include <array>
 #include <complex>
 #include <memory>
 #include <vector>
@@ -63,13 +64,22 @@ class SternheimerFDHamiltonian
     int index(int ix, int iy, int iz) const;
 
   private:
-    int shifted_index(int ix, int iy, int iz) const;
+    template <int Radius>
+    void apply_local(const Vector& psi, Vector& hpsi, int* threads_used) const;
+
+    static constexpr int max_stencil_radius_ = 4;
 
     Grid grid_;
     std::vector<double> local_potential_;
     double kinetic_prefactor_ = 0.5;
     int finite_difference_order_ = 2;
     std::shared_ptr<const SternheimerFDNonlocalProjector> nonlocal_projector_;
+    std::array<std::vector<int>, max_stencil_radius_> x_positive_coordinates_;
+    std::array<std::vector<int>, max_stencil_radius_> x_negative_coordinates_;
+    std::array<std::vector<int>, max_stencil_radius_> y_positive_coordinates_;
+    std::array<std::vector<int>, max_stencil_radius_> y_negative_coordinates_;
+    std::array<std::vector<int>, max_stencil_radius_> z_positive_coordinates_;
+    std::array<std::vector<int>, max_stencil_radius_> z_negative_coordinates_;
 };
 
 } // namespace ModuleRI
