@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import argparse
-import errno
 import json
 import math
 import os
@@ -11,7 +10,6 @@ from pathlib import Path
 import shutil
 import sys
 import tempfile
-import time
 from typing import Dict, Mapping, Optional, Sequence, Tuple
 
 import numpy as np
@@ -555,45 +553,16 @@ def _fsync_directory(directory: Path) -> None:
         os.close(descriptor)
 
 
-def _same_inode_as_descriptor(descriptor: int, path: Path) -> bool:
+def _same_inode(left: Path, right: Path) -> bool:
     try:
-        owner_stat = os.fstat(descriptor)
-        path_stat = os.stat(str(path), follow_symlinks=False)
+        left_stat = os.stat(str(left), follow_symlinks=False)
+        right_stat = os.stat(str(right), follow_symlinks=False)
     except FileNotFoundError:
         return False
-    return (owner_stat.st_dev, owner_stat.st_ino) == (
-        path_stat.st_dev,
-        path_stat.st_ino,
+    return (left_stat.st_dev, left_stat.st_ino) == (
+        right_stat.st_dev,
+        right_stat.st_ino,
     )
-
-
-def _close_descriptors(descriptors: Sequence[int]) -> None:
-    for descriptor in descriptors:
-        try:
-            os.close(descriptor)
-        except OSError:
-            pass
-
-
-def _remove_stage_directory(directory: Path) -> None:
-    """Retry only the empty-directory ENOTEMPTY race observed on NFS."""
-
-    for delay in (0.01, 0.02, 0.04):
-        try:
-            shutil.rmtree(directory)
-            return
-        except OSError as error:
-            if error.errno != errno.ENOTEMPTY:
-                raise
-            try:
-                with os.scandir(str(directory)) as entries:
-                    empty = next(entries, None) is None
-            except OSError:
-                raise error
-            if not empty:
-                raise error
-            time.sleep(delay)
-    shutil.rmtree(directory)
 
 
 def _publish_snapshots_together(
@@ -607,29 +576,45 @@ def _publish_snapshots_together(
     dense = Path(dense_path)
     occupied = Path(occupied_path)
     parent = _validate_output_paths(dense, occupied)
-    stage_directory = Path(
-        tempfile.mkdtemp(prefix=".supercell-gate.", dir=str(parent))
-    )
-    descriptors = []
+    stage_directory = None
+    owner_directory = None
     owned_publications = []
     try:
+        stage_directory = Path(
+            tempfile.mkdtemp(prefix=".supercell-gate-stage.", dir=str(parent))
+        )
+        owner_directory = Path(
+            tempfile.mkdtemp(prefix=".supercell-gate-owner.", dir=str(parent))
+        )
         dense_stage = stage_directory / "H.dense.stage.exxcmp"
         occupied_stage = stage_directory / "H.occ.stage.exxcmp"
         write_snapshot(dense_stage, dense_snapshot)
         write_snapshot(occupied_stage, occupied_snapshot)
-        stages = ((dense_stage, dense), (occupied_stage, occupied))
-        for stage, final in stages:
-            descriptor = os.open(str(stage), os.O_RDONLY)
-            descriptors.append(descriptor)
-            owned_publications.append((descriptor, final))
-        for stage, final in stages:
+        publications = (
+            (
+                dense_stage,
+                owner_directory / "H.dense.owner.exxcmp",
+                dense,
+            ),
+            (
+                occupied_stage,
+                owner_directory / "H.occ.owner.exxcmp",
+                occupied,
+            ),
+        )
+        for stage, owner, final in publications:
+            os.link(str(stage), str(owner))
+            owned_publications.append((owner, final))
+        for stage, _owner, final in publications:
             os.link(str(stage), str(final))
         _fsync_directory(parent)
-        _remove_stage_directory(stage_directory)
+        # A successful stage removal is the commit boundary.  The remaining
+        # owner links are no longer needed to identify rollback candidates.
+        shutil.rmtree(stage_directory)
     except BaseException:
-        for descriptor, final in owned_publications:
+        for owner, final in owned_publications:
             try:
-                if _same_inode_as_descriptor(descriptor, final):
+                if _same_inode(owner, final):
                     final.unlink()
             except OSError:
                 pass
@@ -637,13 +622,18 @@ def _publish_snapshots_together(
             _fsync_directory(parent)
         except OSError:
             pass
-        try:
-            shutil.rmtree(stage_directory)
-        except OSError:
-            pass
-        _close_descriptors(descriptors)
+        for directory in (stage_directory, owner_directory):
+            if directory is not None:
+                try:
+                    shutil.rmtree(directory)
+                except OSError:
+                    pass
         raise
-    _close_descriptors(descriptors)
+    try:
+        # Post-commit cleanup must never turn published outputs into an error.
+        shutil.rmtree(owner_directory)
+    except OSError:
+        pass
 
 
 def _supercell_report(

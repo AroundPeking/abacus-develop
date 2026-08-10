@@ -1,4 +1,3 @@
-import errno
 import json
 import os
 from pathlib import Path
@@ -924,7 +923,7 @@ class SupercellGateCommandTest(unittest.TestCase):
 
         def fail_second_link(source, destination):
             calls.append((Path(source), Path(destination)))
-            if len(calls) == 2:
+            if Path(destination) == self.h_occ_out:
                 Path(destination).write_bytes(b"external race\n")
                 raise FileExistsError("simulated second-link race")
             real_link(source, destination)
@@ -940,6 +939,7 @@ class SupercellGateCommandTest(unittest.TestCase):
 
         self.assertFalse(self.h_dense_out.exists())
         self.assertEqual(self.h_occ_out.read_bytes(), b"external race\n")
+        self.assertEqual(list(self.root.glob(".supercell-gate*")), [])
 
     def test_joint_publication_rolls_back_both_links_when_stage_cleanup_fails(self):
         key = BlockKey(0, 0, (0, 0, 0))
@@ -948,7 +948,9 @@ class SupercellGateCommandTest(unittest.TestCase):
         cleanup_failed = [False]
 
         def fail_first_stage_cleanup(path, *arguments, **keywords):
-            if Path(path).name.startswith(".supercell-gate.") and not cleanup_failed[0]:
+            if Path(path).name.startswith(
+                (".supercell-gate.", ".supercell-gate-stage.")
+            ) and not cleanup_failed[0]:
                 cleanup_failed[0] = True
                 raise OSError("simulated stage cleanup failure")
             return real_rmtree(path, *arguments, **keywords)
@@ -970,71 +972,82 @@ class SupercellGateCommandTest(unittest.TestCase):
                             snapshot,
                         )
 
-        self.assertEqual(link.call_count, 2)
+        final_links = [
+            call
+            for call in link.call_args_list
+            if Path(call.args[1]) in (self.h_dense_out, self.h_occ_out)
+        ]
+        self.assertEqual(len(final_links), 2)
         self.assertGreaterEqual(fsync.call_count, 2)
         self.assert_no_outputs()
+        self.assertEqual(list(self.root.glob(".supercell-gate*")), [])
 
-    def test_joint_publication_retries_empty_nfs_stage_cleanup_race(self):
+    def test_joint_publication_does_not_open_stage_snapshot_files(self):
         key = BlockKey(0, 0, (0, 0, 0))
         snapshot = _snapshot({key: np.ones((1, 1), dtype=np.float64)}, scalar="real64")
-        real_rmtree = shutil.rmtree
-        cleanup_attempts = []
+        real_open = os.open
+        opened_paths = []
 
-        def fail_once_after_removing_stage_contents(path, *arguments, **keywords):
-            cleanup_attempts.append(Path(path))
-            if len(cleanup_attempts) == 1:
-                for child in Path(path).iterdir():
-                    child.unlink()
-                raise OSError(
-                    errno.ENOTEMPTY,
-                    os.strerror(errno.ENOTEMPTY),
-                    str(path),
-                )
-            return real_rmtree(path, *arguments, **keywords)
+        def reject_stage_snapshot_open(path, *arguments, **keywords):
+            opened_path = Path(path)
+            opened_paths.append(opened_path)
+            if opened_path.name.endswith((".stage.exxcmp", ".owner.exxcmp")):
+                raise AssertionError("publication opened an ownership-linked file")
+            return real_open(path, *arguments, **keywords)
 
-        with mock.patch.object(
-            shutil,
-            "rmtree",
-            side_effect=fail_once_after_removing_stage_contents,
-        ):
-            try:
-                cli._publish_snapshots_together(
-                    self.h_dense_out,
-                    snapshot,
-                    self.h_occ_out,
-                    snapshot,
-                )
-            except OSError as error:
-                self.fail("empty NFS cleanup race was not retried: {}".format(error))
+        with mock.patch.object(os, "open", side_effect=reject_stage_snapshot_open):
+            cli._publish_snapshots_together(
+                self.h_dense_out,
+                snapshot,
+                self.h_occ_out,
+                snapshot,
+            )
 
-        self.assertEqual(len(cleanup_attempts), 2)
+        self.assertTrue(opened_paths)
         for output in (self.h_dense_out, self.h_occ_out):
             published = read_snapshot(output)
             np.testing.assert_array_equal(published.blocks[key], np.ones((1, 1)))
 
-    def test_joint_publication_does_not_retry_nonempty_enotempty(self):
+    def test_joint_publication_uses_owner_anchors_after_partial_stage_cleanup(self):
         key = BlockKey(0, 0, (0, 0, 0))
         snapshot = _snapshot({key: np.ones((1, 1), dtype=np.float64)}, scalar="real64")
         real_rmtree = shutil.rmtree
-        cleanup_attempts = []
+        stage_cleanup_failed = [False]
 
-        def fail_once_while_stage_is_nonempty(path, *arguments, **keywords):
-            cleanup_attempts.append(Path(path))
-            if len(cleanup_attempts) == 1:
-                self.assertTrue(any(Path(path).iterdir()))
-                raise OSError(
-                    errno.ENOTEMPTY,
-                    os.strerror(errno.ENOTEMPTY),
-                    str(path),
+        def fail_after_removing_stage_contents(path, *arguments, **keywords):
+            directory = Path(path)
+            if directory.name.startswith(
+                (".supercell-gate.", ".supercell-gate-stage.")
+            ) and not stage_cleanup_failed[0]:
+                stage_cleanup_failed[0] = True
+                owner_directories = list(
+                    self.root.glob(".supercell-gate-owner.*")
                 )
+                self.assertEqual(len(owner_directories), 1)
+                owners = sorted(owner_directories[0].iterdir())
+                self.assertEqual(len(owners), 2)
+                for owner, final in zip(
+                    owners, (self.h_dense_out, self.h_occ_out)
+                ):
+                    owner_stat = owner.stat()
+                    final_stat = final.stat()
+                    self.assertEqual(
+                        (owner_stat.st_dev, owner_stat.st_ino),
+                        (final_stat.st_dev, final_stat.st_ino),
+                    )
+                for child in directory.iterdir():
+                    child.unlink()
+                raise OSError("simulated partial stage cleanup failure")
             return real_rmtree(path, *arguments, **keywords)
 
         with mock.patch.object(
             shutil,
             "rmtree",
-            side_effect=fail_once_while_stage_is_nonempty,
+            side_effect=fail_after_removing_stage_contents,
         ):
-            with self.assertRaisesRegex(OSError, os.strerror(errno.ENOTEMPTY)):
+            with self.assertRaisesRegex(
+                OSError, "simulated partial stage cleanup failure"
+            ):
                 cli._publish_snapshots_together(
                     self.h_dense_out,
                     snapshot,
@@ -1042,40 +1055,53 @@ class SupercellGateCommandTest(unittest.TestCase):
                     snapshot,
                 )
 
-        self.assertEqual(len(cleanup_attempts), 2)
+        self.assertTrue(stage_cleanup_failed[0])
         self.assert_no_outputs()
+        self.assertEqual(list(self.root.glob(".supercell-gate*")), [])
 
-    def test_joint_publication_bounds_repeated_empty_enotempty_retries(self):
+    def test_joint_publication_owner_cleanup_failure_is_postcommit(self):
         key = BlockKey(0, 0, (0, 0, 0))
         snapshot = _snapshot({key: np.ones((1, 1), dtype=np.float64)}, scalar="real64")
-        cleanup_attempts = []
+        real_rmtree = shutil.rmtree
+        owner_cleanup_attempted = [False]
 
-        def keep_reporting_enotempty_after_emptying(path, *arguments, **keywords):
-            cleanup_attempts.append(Path(path))
-            for child in Path(path).iterdir():
-                child.unlink()
-            raise OSError(
-                errno.ENOTEMPTY,
-                os.strerror(errno.ENOTEMPTY),
-                str(path),
-            )
+        def fail_owner_cleanup(path, *arguments, **keywords):
+            if Path(path).name.startswith(".supercell-gate-owner."):
+                owner_cleanup_attempted[0] = True
+                raise OSError("simulated owner cleanup failure")
+            return real_rmtree(path, *arguments, **keywords)
 
         with mock.patch.object(
             shutil,
             "rmtree",
-            side_effect=keep_reporting_enotempty_after_emptying,
+            side_effect=fail_owner_cleanup,
         ):
-            with self.assertRaisesRegex(OSError, os.strerror(errno.ENOTEMPTY)):
-                cli._publish_snapshots_together(
-                    self.h_dense_out,
-                    snapshot,
-                    self.h_occ_out,
-                    snapshot,
-                )
+            cli._publish_snapshots_together(
+                self.h_dense_out,
+                snapshot,
+                self.h_occ_out,
+                snapshot,
+            )
 
-        self.assertGreaterEqual(len(cleanup_attempts), 3)
-        self.assertLessEqual(len(cleanup_attempts), 6)
-        self.assert_no_outputs()
+        self.assertTrue(owner_cleanup_attempted[0])
+        self.assertEqual(len(list(self.root.glob(".supercell-gate-owner.*"))), 1)
+        self.assertEqual(list(self.root.glob(".supercell-gate-stage.*")), [])
+        for output in (self.h_dense_out, self.h_occ_out):
+            published = read_snapshot(output)
+            np.testing.assert_array_equal(published.blocks[key], np.ones((1, 1)))
+
+    def test_joint_publication_normal_path_removes_hidden_directories(self):
+        key = BlockKey(0, 0, (0, 0, 0))
+        snapshot = _snapshot({key: np.ones((1, 1), dtype=np.float64)}, scalar="real64")
+
+        cli._publish_snapshots_together(
+            self.h_dense_out,
+            snapshot,
+            self.h_occ_out,
+            snapshot,
+        )
+
+        self.assertEqual(list(self.root.glob(".supercell-gate*")), [])
 
     def test_outputs_in_different_parents_are_rejected(self):
         self.write_valid_case()
