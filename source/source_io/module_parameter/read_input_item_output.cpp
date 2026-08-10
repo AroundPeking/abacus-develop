@@ -936,6 +936,49 @@ If EXX(exact exchange) is calculated (i.e. dft_fuctional==hse/hf/pbe0/scan0 or r
         this->add_item(item);
     }
     {
+        Input_Item item("sternheimer_siab_radial_counts");
+        item.annotation = "Per-angular-channel Sternheimer-SIAB radial primitive counts";
+        item.category = "Output information";
+        item.type = "Vector of Integer (lmax+1 values)";
+        item.description = "Optionally set a separate spherical-Bessel radial-root count for every angular "
+                           "channel, ordered as l=0,...,sternheimer_siab_lmax. This is useful when an added "
+                           "high-l candidate channel needs fewer roots than established lower-l channels. "
+                           "It is mutually exclusive with sternheimer_siab_radial_count.";
+        item.default_value = "{}";
+        item.unit = "";
+        item.availability = "out_sternheimer_siab=True or out_sternheimer_galerkin_primitive=True.";
+        item.read_value = [](const Input_Item& item, Parameter& para) {
+            para.input.sternheimer_siab_radial_counts.clear();
+            para.input.sternheimer_siab_radial_counts.reserve(item.get_size());
+            for (const std::string& value: item.str_values)
+            {
+                para.input.sternheimer_siab_radial_counts.push_back(std::stoi(value));
+            }
+        };
+        item.check_value = [](const Input_Item& item, const Parameter& para) {
+            const std::vector<int>& counts = para.input.sternheimer_siab_radial_counts;
+            if (std::any_of(counts.begin(), counts.end(), [](const int count) { return count < 0; }))
+            {
+                ModuleBase::WARNING_QUIT("ReadInput", item.label + " entries must be non-negative.");
+            }
+            if (!counts.empty() && para.input.sternheimer_siab_radial_count != 0)
+            {
+                ModuleBase::WARNING_QUIT(
+                    "ReadInput", item.label + " is mutually exclusive with sternheimer_siab_radial_count.");
+            }
+            if (!counts.empty() && para.input.sternheimer_siab_lmax >= 0
+                && counts.size() != static_cast<std::size_t>(para.input.sternheimer_siab_lmax + 1))
+            {
+                ModuleBase::WARNING_QUIT(
+                    "ReadInput", item.label + " requires exactly sternheimer_siab_lmax+1 entries.");
+            }
+        };
+        sync_intvec(input.sternheimer_siab_radial_counts,
+                    para.input.sternheimer_siab_radial_counts.size(),
+                    0);
+        this->add_item(item);
+    }
+    {
         Input_Item item("out_sternheimer_galerkin_primitive");
         item.annotation = "true: output Bessel-primitive Sternheimer Galerkin matrices; false: default";
         item.category = "Output information";

@@ -39,23 +39,27 @@ TEST(SternheimerSIABPrimitives, DefaultPrimitiveEcutInheritsWavefunctionCutoff)
     const std::vector<double> old_rcuts = input.bessel_nao_rcuts;
     const int old_siab_lmax = input.sternheimer_siab_lmax;
     const int old_radial_count = input.sternheimer_siab_radial_count;
+    const std::vector<int> old_radial_counts = input.sternheimer_siab_radial_counts;
     input.bessel_nao_ecut = "default";
     input.ecutwfc = 37.5;
     input.bessel_nao_rcuts = {8.0};
     input.sternheimer_siab_lmax = 2;
     input.sternheimer_siab_radial_count = 15;
+    input.sternheimer_siab_radial_counts.clear();
 
     const auto parameters = Numerical_Basis::siab_parameters_from_input(0, input.sternheimer_siab_lmax);
     EXPECT_DOUBLE_EQ(parameters.ecut_ry, 37.5);
     EXPECT_DOUBLE_EQ(parameters.rcut_bohr, 8.0);
     EXPECT_EQ(parameters.lmax, 2);
     EXPECT_EQ(parameters.radial_count, 15);
+    EXPECT_TRUE(parameters.radial_counts_by_l.empty());
 
     input.bessel_nao_ecut = old_bessel_ecut;
     input.ecutwfc = old_ecutwfc;
     input.bessel_nao_rcuts = old_rcuts;
     input.sternheimer_siab_lmax = old_siab_lmax;
     input.sternheimer_siab_radial_count = old_radial_count;
+    input.sternheimer_siab_radial_counts = old_radial_counts;
 }
 
 void expect_complex_near(const Complex& actual, const Complex& expected)
@@ -471,6 +475,40 @@ TEST_F(SternheimerSIABPrimitivesTest, ExplicitRadialCountCapsEveryAngularBlock)
         EXPECT_EQ(blocks[block_index].n_primitive, 2);
         EXPECT_EQ(blocks[block_index].values.size(), 2);
         EXPECT_EQ(blocks[block_index].offset, static_cast<int>(2 * block_index));
+    }
+}
+
+TEST_F(SternheimerSIABPrimitivesTest, PerAngularRadialCountsPreserveContiguousBlocks)
+{
+    const Numerical_Basis::SIABPrimitiveParameters parameters{
+        ecut_ry,
+        rcut_bohr,
+        false,
+        0.1,
+        tolerance,
+        2,
+        0,
+        {3, 2, 1},
+    };
+    Numerical_Basis numerical_basis;
+    const auto blocks
+        = numerical_basis.siab_primitive_reciprocal_values(ik, &full_pw, structure_factor, ucell, parameters);
+
+    ASSERT_EQ(blocks.size(), 9);
+    EXPECT_EQ(blocks[0].l, 0);
+    EXPECT_EQ(blocks[0].n_primitive, 3);
+    EXPECT_EQ(blocks[0].offset, 0);
+    for (std::size_t block_index = 1; block_index != 4; ++block_index)
+    {
+        EXPECT_EQ(blocks[block_index].l, 1);
+        EXPECT_EQ(blocks[block_index].n_primitive, 2);
+        EXPECT_EQ(blocks[block_index].offset, 3 + 2 * static_cast<int>(block_index - 1));
+    }
+    for (std::size_t block_index = 4; block_index != blocks.size(); ++block_index)
+    {
+        EXPECT_EQ(blocks[block_index].l, 2);
+        EXPECT_EQ(blocks[block_index].n_primitive, 1);
+        EXPECT_EQ(blocks[block_index].offset, 9 + static_cast<int>(block_index - 4));
     }
 }
 

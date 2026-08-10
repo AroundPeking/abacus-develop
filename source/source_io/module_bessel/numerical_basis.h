@@ -45,6 +45,7 @@ class Numerical_Basis
         double tolerance;
         int lmax = -1;
         int radial_count = 0;
+        std::vector<int> radial_counts_by_l;
     };
 
     struct SIABPrimitiveGridBlock
