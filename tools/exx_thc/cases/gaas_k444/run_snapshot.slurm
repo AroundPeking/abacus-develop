@@ -22,7 +22,7 @@ run_dir=$(cd -- "$submitted_run_dir" && pwd -P) \
     || die "cannot resolve run directory: $submitted_run_dir"
 cd -- "$run_dir"
 
-source_root=/home/ghj/abacus/260810/mps-exx-k444
+source_root=/home/ghj/abacus/260810/mps-exx-k444/source
 abacus_exe=/home/ghj/abacus/260810/mps-exx-k444/build/abacus_3p
 cmake_cache=/home/ghj/abacus/260810/mps-exx-k444/build/CMakeCache.txt
 build_manifest=/home/ghj/abacus/260810/mps-exx-k444/build/abacus_3p.provenance

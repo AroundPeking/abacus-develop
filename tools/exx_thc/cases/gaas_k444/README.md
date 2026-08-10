@@ -27,7 +27,7 @@ baseline:
 
 ```text
 server: server 66
-remote source/worktree: /home/ghj/abacus/260810/mps-exx-k444
+remote source/worktree: /home/ghj/abacus/260810/mps-exx-k444/source
 feature branch: codex/mps-exx-k444
 starting commit: 72499d1ab1ec8aadbe2739f4ca9cee962f93d486
 executable: /home/ghj/abacus/260810/mps-exx-k444/build/abacus_3p
@@ -40,8 +40,9 @@ executable that binds the binary and CMake cache to the exact source commit.
 On server 66, in the shell with the validated compiler environment loaded, use:
 
 ```bash
-source_root=/home/ghj/abacus/260810/mps-exx-k444
-build_dir="$source_root/build"
+project_root=/home/ghj/abacus/260810/mps-exx-k444
+source_root="$project_root/source"
+build_dir="$project_root/build"
 abacus_exe="$build_dir/abacus_3p"
 cmake_cache="$build_dir/CMakeCache.txt"
 build_manifest="$abacus_exe.provenance"
@@ -57,9 +58,10 @@ cmake -S "$source_root" -B "$build_dir" \
   -DELPA_LIBRARY=/home/linpz/software/elpa/elpa-openmp_2021.11.002/lib/libelpa_openmp.so \
   -DELPA_DIR=/home/linpz/software/elpa/elpa-openmp_2021.11.002 \
   -DELPA_INCLUDE_DIR=/home/linpz/software/elpa/elpa-openmp_2021.11.002/include/elpa_openmp-2021.11.002 \
-  -DLIBRI_DIR=/home/ghj/abacus/250920/LibRI \
+  -DLIBRI_DIR=/home/ghj/abacus/260810/mps-exx-k444/LibRI-21f92 \
   -DLIBCOMM_DIR=/home/ghj/abacus/250920/LibComm \
   -DLibxc_DIR=/home/ghj/abacus/libxc-6.0.0-build \
+  -DFETCHCONTENT_SOURCE_DIR_GOOGLETEST=/home/ghj/abacus/260807/test-deps/googletest-v1.14.0 \
   -DENABLE_MPI=ON -DENABLE_LCAO=ON -DENABLE_LIBRI=ON \
   -DENABLE_LIBCOMM=ON -DENABLE_MLALGO=OFF -DDEBUG_INFO=ON \
   -DBUILD_TESTING=ON
