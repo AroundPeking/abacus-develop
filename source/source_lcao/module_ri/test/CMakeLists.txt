@@ -38,6 +38,11 @@ add_test(
   WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
 )
 if(ENABLE_MPI)
+  AddTest(
+    TARGET MODULE_RI_exx_compression_replay
+    LIBS ri base parameter ${math_libs} device MPI::MPI_CXX
+    SOURCES exx_compression_replay.cpp
+  )
   add_executable(MODULE_RI_ewald_mpi_distribution_test ewald_mpi_distribution_test.cpp)
   target_link_libraries(MODULE_RI_ewald_mpi_distribution_test MPI::MPI_CXX)
   install(TARGETS MODULE_RI_ewald_mpi_distribution_test DESTINATION ${CMAKE_BINARY_DIR}/tests)
