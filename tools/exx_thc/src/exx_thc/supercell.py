@@ -18,6 +18,15 @@ BlockRecord = Tuple[int, int, Cell, np.ndarray]
 
 
 @dataclass(frozen=True)
+class ExchangeResult:
+    """One dense exchange matrix and the sizes of its contraction temporaries."""
+
+    matrix: np.ndarray
+    temporary_shapes: Tuple[Tuple[int, ...], ...]
+    temporary_elements: int
+
+
+@dataclass(frozen=True)
 class SupercellLayout:
     """Immutable cell ordering, per-atom dimensions, and dense offsets."""
 
@@ -373,9 +382,142 @@ def assemble_translation_matrix(
     return matrix
 
 
+def _complex_c_array(value: object, name: str) -> np.ndarray:
+    try:
+        array = np.asarray(value, dtype=np.complex128, order="C")
+    except (TypeError, ValueError, OverflowError) as error:
+        raise ValueError(
+            "{} could not be converted to complex128".format(name)
+        ) from error
+    if not bool(np.all(np.isfinite(array))):
+        raise ValueError("{} must contain only finite values".format(name))
+    return array
+
+
+def _exchange_coefficient(value: object) -> Tuple[np.ndarray, int, int]:
+    coefficient = _complex_c_array(value, "C")
+    if coefficient.ndim != 3:
+        raise ValueError("C must have rank 3")
+    naux, nao_left, nao_right = coefficient.shape
+    if naux == 0:
+        raise ValueError("C auxiliary dimension must be nonempty")
+    if nao_left == 0 or nao_right == 0:
+        raise ValueError("C AO dimensions must be nonempty")
+    if nao_left != nao_right:
+        raise ValueError("C must have shape (naux, nao, nao)")
+    return coefficient, int(naux), int(nao_left)
+
+
+def _exchange_square_matrix(
+    value: object, name: str, dimension: int
+) -> np.ndarray:
+    matrix = _complex_c_array(value, name)
+    if matrix.ndim != 2 or matrix.shape != (dimension, dimension):
+        raise ValueError(
+            "{} must have shape ({}, {})".format(name, dimension, dimension)
+        )
+    return matrix
+
+
+def _require_hermitian(matrix: np.ndarray, name: str) -> None:
+    real_scale = float(np.max(np.abs(matrix.real)))
+    imaginary_scale = float(np.max(np.abs(matrix.imag)))
+    scale = max(real_scale, imaginary_scale)
+    if scale == 0.0:
+        return
+    try:
+        with np.errstate(over="raise", invalid="raise", divide="raise"):
+            normalized = np.empty(matrix.shape, dtype=np.complex128, order="C")
+            normalized.real = matrix.real / scale
+            normalized.imag = matrix.imag / scale
+    except FloatingPointError as error:
+        raise ValueError(
+            "{} Hermiticity normalization produced a non-finite value".format(name)
+        ) from error
+    if not bool(np.all(np.isfinite(normalized))):
+        raise ValueError(
+            "{} Hermiticity normalization produced a non-finite value".format(name)
+        )
+    residual = float(np.linalg.norm(normalized - normalized.conj().T, ord="fro"))
+    reference = float(np.linalg.norm(normalized, ord="fro"))
+    if not np.isfinite(residual) or not np.isfinite(reference):
+        raise ValueError("{} Hermiticity norms must be finite".format(name))
+    if residual > 1.0e-12 * reference:
+        raise ValueError(
+            "{} must be Hermitian within relative tolerance 1e-12".format(name)
+        )
+
+
+def _require_finite_temporary(array: np.ndarray, name: str) -> None:
+    if not bool(np.all(np.isfinite(array))):
+        raise ValueError("{} produced a non-finite value".format(name))
+
+
+def _exchange_result(*arrays: np.ndarray) -> ExchangeResult:
+    shapes = tuple(tuple(int(extent) for extent in array.shape) for array in arrays)
+    elements = sum(int(array.size) for array in arrays)
+    return ExchangeResult(
+        matrix=arrays[-1],
+        temporary_shapes=shapes,
+        temporary_elements=elements,
+    )
+
+
+def direct_exchange(C: object, V: object, D: object) -> ExchangeResult:
+    """Contract dense C, V, and D arrays without forming a four-index ERI."""
+
+    C, naux, nao = _exchange_coefficient(C)
+    V = _exchange_square_matrix(V, "V", naux)
+    D = _exchange_square_matrix(D, "D", nao)
+    _require_hermitian(V, "V")
+    _require_hermitian(D, "D")
+    try:
+        with np.errstate(over="raise", invalid="raise"):
+            left = np.einsum("apq,qr->apr", C, D, optimize=True)
+            _require_finite_temporary(left, "direct exchange left temporary")
+            coulomb = np.einsum("ab,bsr->asr", V, C.conj(), optimize=True)
+            _require_finite_temporary(
+                coulomb, "direct exchange Coulomb temporary"
+            )
+            H = np.einsum("apr,asr->ps", left, coulomb, optimize=True)
+            _require_finite_temporary(H, "direct exchange matrix")
+    except FloatingPointError as error:
+        raise ValueError(
+            "direct exchange contraction overflowed or produced an invalid value"
+        ) from error
+    return _exchange_result(left, coulomb, H)
+
+
+def occupied_exchange(C: object, V: object, O: object) -> ExchangeResult:
+    """Contract dense C and V arrays in an exact occupied-state subspace."""
+
+    C, naux, nao = _exchange_coefficient(C)
+    V = _exchange_square_matrix(V, "V", naux)
+    O = _complex_c_array(O, "O")
+    if O.ndim != 2 or O.shape[0] != nao:
+        raise ValueError("O must have shape (nao, rank)")
+    _require_hermitian(V, "V")
+    try:
+        with np.errstate(over="raise", invalid="raise"):
+            B = np.einsum("apq,qv->apv", C, O, optimize=True)
+            _require_finite_temporary(B, "occupied exchange B temporary")
+            VB = np.einsum("ab,bsv->asv", V, B.conj(), optimize=True)
+            _require_finite_temporary(VB, "occupied exchange VB temporary")
+            H = np.einsum("apv,asv->ps", B, VB, optimize=True)
+            _require_finite_temporary(H, "occupied exchange matrix")
+    except FloatingPointError as error:
+        raise ValueError(
+            "occupied exchange contraction overflowed or produced an invalid value"
+        ) from error
+    return _exchange_result(B, VB, H)
+
+
 __all__ = [
+    "ExchangeResult",
     "SupercellLayout",
     "infer_supercell_layout",
     "assemble_pair_coefficient",
     "assemble_translation_matrix",
+    "direct_exchange",
+    "occupied_exchange",
 ]

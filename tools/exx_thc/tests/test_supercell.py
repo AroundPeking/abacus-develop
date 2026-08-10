@@ -8,9 +8,12 @@ import numpy as np
 
 from exx_thc.io import BlockKey
 from exx_thc.supercell import (
+    ExchangeResult,
     assemble_pair_coefficient,
     assemble_translation_matrix,
+    direct_exchange,
     infer_supercell_layout,
+    occupied_exchange,
 )
 
 
@@ -390,6 +393,271 @@ class SupercellAssemblyTest(unittest.TestCase):
                     layout,
                     space="orbital",
                     max_elements=16,
+                )
+
+
+class ExchangeContractionTest(unittest.TestCase):
+    def setUp(self) -> None:
+        rng = np.random.default_rng(20260811)
+        self.C = rng.standard_normal((3, 4, 4)) + 1j * rng.standard_normal(
+            (3, 4, 4)
+        )
+        factor = rng.standard_normal((3, 3)) + 1j * rng.standard_normal((3, 3))
+        self.V = factor @ factor.conj().T
+        self.O = rng.standard_normal((4, 2)) + 1j * rng.standard_normal((4, 2))
+        self.D = self.O @ self.O.conj().T
+
+    def test_occupied_matches_direct_for_exact_density_factor(self) -> None:
+        direct = direct_exchange(self.C, self.V, self.D)
+        occupied = occupied_exchange(self.C, self.V, self.O)
+
+        np.testing.assert_allclose(
+            occupied.matrix, direct.matrix, atol=1.0e-12, rtol=0.0
+        )
+        self.assertIsInstance(direct, ExchangeResult)
+        with self.assertRaises(FrozenInstanceError):
+            direct.temporary_elements = 0
+
+    def test_direct_matches_independent_explicit_loop(self) -> None:
+        C = np.asarray(
+            [
+                [[1.0 + 0.5j, -0.25j], [0.75, -1.0j]],
+                [[-0.5, 0.25 + 0.5j], [1.25j, 0.5]],
+            ]
+        )
+        V = np.asarray([[2.0, 0.25j], [-0.25j, 1.5]])
+        D = np.asarray([[1.25, 0.5 - 0.25j], [0.5 + 0.25j, 0.75]])
+        expected = np.zeros((2, 2), dtype=np.complex128)
+        for p in range(2):
+            for s in range(2):
+                for a in range(2):
+                    for b in range(2):
+                        for q in range(2):
+                            for r in range(2):
+                                expected[p, s] += (
+                                    C[a, p, q]
+                                    * D[q, r]
+                                    * V[a, b]
+                                    * C[b, s, r].conjugate()
+                                )
+
+        result = direct_exchange(C, V, D)
+
+        np.testing.assert_allclose(result.matrix, expected, atol=1.0e-12, rtol=0.0)
+
+    def test_zero_density_and_rank_zero_occupied_space_return_zero(self) -> None:
+        direct = direct_exchange(self.C, self.V, np.zeros((4, 4)))
+        occupied = occupied_exchange(self.C, self.V, np.empty((4, 0)))
+
+        np.testing.assert_array_equal(direct.matrix, np.zeros((4, 4)))
+        np.testing.assert_array_equal(occupied.matrix, np.zeros((4, 4)))
+        self.assertEqual(occupied.temporary_shapes, ((3, 4, 0), (3, 4, 0), (4, 4)))
+        self.assertEqual(occupied.temporary_elements, 16)
+
+    def test_positive_semidefinite_metric_may_have_zero_modes(self) -> None:
+        C = self.C[:2]
+        V = np.diag([2.0, 0.0])
+
+        direct = direct_exchange(C, V, self.D)
+        occupied = occupied_exchange(C, V, self.O)
+
+        np.testing.assert_allclose(
+            occupied.matrix, direct.matrix, atol=1.0e-12, rtol=0.0
+        )
+        self.assertTrue(np.all(np.isfinite(direct.matrix)))
+
+    def test_rejects_nonhermitian_metric_and_density(self) -> None:
+        nonhermitian_V = self.V.copy()
+        nonhermitian_V[0, 1] += 1.0e-4j
+        nonhermitian_D = self.D.copy()
+        nonhermitian_D[0, 1] += 1.0e-4
+
+        for contraction in (
+            lambda: direct_exchange(self.C, nonhermitian_V, self.D),
+            lambda: direct_exchange(self.C, self.V, nonhermitian_D),
+            lambda: occupied_exchange(self.C, nonhermitian_V, self.O),
+        ):
+            with self.subTest(contraction=contraction), self.assertRaisesRegex(
+                ValueError, "Hermitian"
+            ):
+                contraction()
+
+    def test_relative_hermiticity_check_is_scale_safe_and_does_not_symmetrize(self) -> None:
+        huge_V = np.asarray(
+            [[1.0e308 + 0.0j, 0.0], [0.0, -1.0e308 + 0.0j]]
+        )
+        zero_C = np.zeros((2, 2, 2), dtype=np.complex128)
+        result = direct_exchange(zero_C, huge_V, np.eye(2))
+        np.testing.assert_array_equal(result.matrix, np.zeros((2, 2)))
+
+        C = np.eye(2, dtype=np.complex128)[None, :, :]
+        raw_D = np.asarray([[1.0, 5.0e-13], [0.0, 1.0]], dtype=np.complex128)
+        raw_result = direct_exchange(C, np.ones((1, 1)), raw_D)
+        np.testing.assert_array_equal(raw_result.matrix, raw_D)
+
+        near_V = np.asarray(
+            [[1.0, 5.0e-13j], [0.0, 1.0]], dtype=np.complex128
+        )
+        scalar_result = occupied_exchange(
+            np.ones((2, 1, 1)), near_V, np.ones((1, 1))
+        )
+        self.assertGreater(scalar_result.matrix[0, 0].imag, 0.0)
+
+    def test_subnormal_nonhermitian_metric_is_rejected(self) -> None:
+        tiny = np.nextafter(0.0, 1.0)
+        V = np.asarray(
+            [[tiny, tiny + 1j * tiny], [0.0, tiny]], dtype=np.complex128
+        )
+
+        with self.assertRaisesRegex(ValueError, "Hermitian"):
+            occupied_exchange(np.ones((2, 1, 1)), V, np.ones((1, 1)))
+
+    def test_subnormal_hermitian_metric_is_accepted_without_warning(self) -> None:
+        tiny = np.nextafter(0.0, 1.0)
+        V = np.asarray(
+            [
+                [tiny, tiny - 1j * tiny],
+                [tiny + 1j * tiny, tiny],
+            ],
+            dtype=np.complex128,
+        )
+
+        result = occupied_exchange(
+            np.zeros((2, 1, 1)), V, np.ones((1, 1))
+        )
+
+        self.assertTrue(np.all(np.isfinite(result.matrix)))
+
+    def test_rejects_rank_shape_and_empty_dimension_errors(self) -> None:
+        invalid_direct = (
+            (np.ones((3, 4)), self.V, self.D),
+            (np.ones((3, 4, 5)), self.V, self.D),
+            (self.C, np.ones((3, 2)), self.D),
+            (self.C, np.eye(2), self.D),
+            (self.C, self.V, np.ones((4, 3))),
+            (np.empty((0, 4, 4)), np.empty((0, 0)), self.D),
+            (np.empty((2, 0, 0)), np.eye(2), np.empty((0, 0))),
+        )
+        for arguments in invalid_direct:
+            with self.subTest(arguments=tuple(a.shape for a in arguments)):
+                with self.assertRaises(ValueError):
+                    direct_exchange(*arguments)
+
+        invalid_occupied = (
+            np.ones(4),
+            np.ones((3, 2)),
+            np.empty((4, 0, 1)),
+        )
+        for O in invalid_occupied:
+            with self.subTest(shape=O.shape), self.assertRaises(ValueError):
+                occupied_exchange(self.C, self.V, O)
+
+    def test_rejects_failed_conversions_and_nonfinite_inputs(self) -> None:
+        class CannotConvert:
+            def __complex__(self):
+                raise TypeError("conversion refused")
+
+        with self.assertRaisesRegex(ValueError, "convert"):
+            direct_exchange(CannotConvert(), self.V, self.D)
+        with self.assertRaisesRegex(ValueError, "convert"):
+            occupied_exchange(self.C, self.V, CannotConvert())
+
+        nonfinite_V = self.V.copy()
+        nonfinite_V[0, 0] = np.inf
+        nonfinite_D = self.D.copy()
+        nonfinite_D[0, 0] = np.nan
+        nonfinite_O = self.O.copy()
+        nonfinite_O[0, 0] = np.inf
+        calls = (
+            lambda: direct_exchange(
+                np.where(np.indices(self.C.shape)[0] == 0, np.nan, self.C),
+                self.V,
+                self.D,
+            ),
+            lambda: direct_exchange(self.C, nonfinite_V, self.D),
+            lambda: direct_exchange(self.C, self.V, nonfinite_D),
+            lambda: occupied_exchange(self.C, self.V, nonfinite_O),
+        )
+        for call in calls:
+            with self.subTest(call=call), self.assertRaisesRegex(ValueError, "finite"):
+                call()
+
+    def test_large_finite_contractions_that_overflow_raise_value_error(self) -> None:
+        C = np.asarray([[[1.0e308 + 0.0j]]])
+        V = np.ones((1, 1))
+
+        for contraction in (
+            lambda: direct_exchange(C, V, np.ones((1, 1))),
+            lambda: occupied_exchange(C, V, np.ones((1, 1))),
+        ):
+            with self.subTest(contraction=contraction), self.assertRaisesRegex(
+                ValueError, "finite|overflow"
+            ):
+                contraction()
+
+    def test_inputs_are_c_contiguous_complex128_and_einsums_are_exact(self) -> None:
+        C = np.asfortranarray(np.arange(12.0).reshape(3, 2, 2))
+        V = np.asfortranarray(np.eye(3))
+        D = np.asfortranarray(np.eye(2))
+        O = np.asfortranarray(np.arange(4.0).reshape(2, 2))
+        real_einsum = np.einsum
+
+        direct_calls = []
+
+        def record_direct(subscripts, *operands, **kwargs):
+            direct_calls.append((subscripts, operands, kwargs))
+            return real_einsum(subscripts, *operands, **kwargs)
+
+        with mock.patch("exx_thc.supercell.np.einsum", side_effect=record_direct):
+            direct = direct_exchange(C, V, D)
+        self.assertEqual(
+            [call[0] for call in direct_calls],
+            ["apq,qr->apr", "ab,bsr->asr", "apr,asr->ps"],
+        )
+        for array in (
+            direct_calls[0][1][0],
+            direct_calls[0][1][1],
+            direct_calls[1][1][0],
+        ):
+            self.assertEqual(array.dtype, np.dtype(np.complex128))
+            self.assertTrue(array.flags.c_contiguous)
+        self.assertTrue(all(call[2] == {"optimize": True} for call in direct_calls))
+        self.assertEqual(direct.temporary_shapes, ((3, 2, 2), (3, 2, 2), (2, 2)))
+        self.assertEqual(direct.temporary_elements, 28)
+
+        occupied_calls = []
+
+        def record_occupied(subscripts, *operands, **kwargs):
+            occupied_calls.append((subscripts, operands, kwargs))
+            return real_einsum(subscripts, *operands, **kwargs)
+
+        with mock.patch("exx_thc.supercell.np.einsum", side_effect=record_occupied):
+            occupied = occupied_exchange(C, V, O)
+        self.assertEqual(
+            [call[0] for call in occupied_calls],
+            ["apq,qv->apv", "ab,bsv->asv", "apv,asv->ps"],
+        )
+        for array in (
+            occupied_calls[0][1][0],
+            occupied_calls[0][1][1],
+            occupied_calls[1][1][0],
+        ):
+            self.assertEqual(array.dtype, np.dtype(np.complex128))
+            self.assertTrue(array.flags.c_contiguous)
+        self.assertTrue(all(call[2] == {"optimize": True} for call in occupied_calls))
+        self.assertEqual(occupied.temporary_shapes, ((3, 2, 2), (3, 2, 2), (2, 2)))
+        self.assertEqual(occupied.temporary_elements, 28)
+
+    def test_reported_temporaries_are_never_four_index(self) -> None:
+        for result in (
+            direct_exchange(self.C, self.V, self.D),
+            occupied_exchange(self.C, self.V, self.O),
+        ):
+            with self.subTest(result=result):
+                self.assertTrue(all(len(shape) <= 3 for shape in result.temporary_shapes))
+                self.assertEqual(
+                    result.temporary_elements,
+                    sum(int(np.prod(shape)) for shape in result.temporary_shapes),
                 )
 
 
