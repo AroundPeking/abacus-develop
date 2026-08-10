@@ -1120,11 +1120,14 @@ class UcellTestReadStru : public ::testing::Test
 
 TEST(ReadAuxiliaryOrbitals, SternheimerOutputRequiresABFSWithoutEXXOrRPA)
 {
-    EXPECT_FALSE(unitcell::should_read_abfs_orbitals(false, false, false, false));
-    EXPECT_TRUE(unitcell::should_read_abfs_orbitals(true, false, false, false));
-    EXPECT_TRUE(unitcell::should_read_abfs_orbitals(false, true, false, false));
-    EXPECT_TRUE(unitcell::should_read_abfs_orbitals(false, false, true, false));
-    EXPECT_TRUE(unitcell::should_read_abfs_orbitals(false, false, false, true));
+    EXPECT_FALSE(unitcell::should_read_abfs_orbitals(false, false, false, false, false, false, false));
+    EXPECT_TRUE(unitcell::should_read_abfs_orbitals(true, false, false, false, false, false, false));
+    EXPECT_TRUE(unitcell::should_read_abfs_orbitals(false, true, false, false, false, false, false));
+    EXPECT_TRUE(unitcell::should_read_abfs_orbitals(false, false, true, false, false, false, false));
+    EXPECT_TRUE(unitcell::should_read_abfs_orbitals(false, false, false, true, false, false, false));
+    EXPECT_TRUE(unitcell::should_read_abfs_orbitals(false, false, false, false, true, false, false));
+    EXPECT_TRUE(unitcell::should_read_abfs_orbitals(false, false, false, false, false, true, false));
+    EXPECT_TRUE(unitcell::should_read_abfs_orbitals(false, false, false, false, false, false, true));
 }
 
 TEST_F(UcellTestReadStru, ReadAtomSpecies)
