@@ -6,6 +6,7 @@
 
 #include <array>
 #include <complex>
+#include <memory>
 #include <utility>
 
 // functions
@@ -30,6 +31,7 @@
 #include "source_lcao/module_ri/Exx_LRI_interface.h" // use EXX codes
 #include "source_lcao/module_ri/RPA_LRI.h"           // use RPA code
 #include "source_lcao/module_ri/sternheimer_abacus_st_smoke.h"
+#include "source_lcao/module_ri/sternheimer_response_openmp.h"
 #endif
 #include "../module_qo/to_qo.h"                // use toQO
 #include "source_lcao/module_rdmft/rdmft.h" // use RDMFT codes
@@ -548,6 +550,24 @@ void ModuleIO::ctrl_scf_lcao(UnitCell& ucell,
         }
     }
 
+    const ModuleRI::SternheimerOutputMode sternheimer_output_mode
+        = ModuleRI::select_sternheimer_output_mode(inp.out_sternheimer_librpa,
+                                                   inp.out_sternheimer_siab,
+                                                   inp.out_sternheimer_galerkin,
+                                                   inp.out_sternheimer_galerkin_primitive,
+                                                   inp.out_sternheimer_galerkin_response);
+    std::unique_ptr<ModuleRI::ScopedSternheimerResponseOpenMPThreads> sternheimer_response_threads;
+    if (sternheimer_output_mode.run)
+    {
+        sternheimer_response_threads.reset(new ModuleRI::ScopedSternheimerResponseOpenMPThreads());
+        if (GlobalV::MY_RANK == 0)
+        {
+            GlobalV::ofs_running << " Sternheimer post-SCF OpenMP threads: "
+                                 << sternheimer_response_threads->previous_threads() << " -> "
+                                 << sternheimer_response_threads->active_threads() << std::endl;
+        }
+    }
+
     //------------------------------------------------------------------
     //! 16) Write RPA information in LCAO basis
     //------------------------------------------------------------------
@@ -557,12 +577,6 @@ void ModuleIO::ctrl_scf_lcao(UnitCell& ucell,
         rpa_lri_double.postSCF(ucell, MPI_COMM_WORLD, *dm, pelec, kv, orb, pv, *psi);
     }
 
-    const ModuleRI::SternheimerOutputMode sternheimer_output_mode
-        = ModuleRI::select_sternheimer_output_mode(inp.out_sternheimer_librpa,
-                                                   inp.out_sternheimer_siab,
-                                                   inp.out_sternheimer_galerkin,
-                                                   inp.out_sternheimer_galerkin_primitive,
-                                                   inp.out_sternheimer_galerkin_response);
     if (sternheimer_output_mode.run)
     {
         if (pelec == nullptr || pelec->pot == nullptr || pw_rho == nullptr || psi == nullptr)

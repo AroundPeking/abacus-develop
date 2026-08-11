@@ -23,6 +23,7 @@
 #include "source_lcao/module_ri/sternheimer_delta.h"
 #include "source_lcao/module_ri/sternheimer_fd_solver.h"
 #include "source_lcao/module_ri/sternheimer_rpa.h"
+#include "source_lcao/module_ri/sternheimer_response_openmp.h"
 #include "source_lcao/module_ri/sternheimer_response_spectral.h"
 #include "source_lcao/module_ri/sternheimer_siab_mpi.h"
 #include "source_lcao/module_ri/sternheimer_siab_fixed_ao.h"
@@ -1879,6 +1880,7 @@ void run_sternheimer_abacus_chi0_output_impl(const elecstate::Potential& potenti
 
     try
     {
+        const ScopedSternheimerResponseOpenMPThreads response_openmp_threads;
         const auto chi0_start_time = std::chrono::steady_clock::now();
         reset_chi0_progress_file();
         append_chi0_progress_event("enter",
@@ -1892,7 +1894,11 @@ void run_sternheimer_abacus_chi0_output_impl(const elecstate::Potential& potenti
                                    elapsed_seconds_since(chi0_start_time),
                                    std::string("frequency_mpi=") + (use_frequency_mpi ? "yes" : "no")
                                        + " channel_mpi=" + (use_channel_mpi ? "yes" : "no")
-                                       + " mpi_layout=" + mpi_layout);
+                                       + " mpi_layout=" + mpi_layout
+                                       + " omp_threads_before_response="
+                                       + std::to_string(response_openmp_threads.previous_threads())
+                                       + " omp_threads_in_response="
+                                       + std::to_string(response_openmp_threads.active_threads()));
         if (write_librpa && PARAM.inp.out_librpa_reader_version != 1)
         {
             throw std::runtime_error("out_sternheimer_librpa requires out_librpa_reader_version=1.");

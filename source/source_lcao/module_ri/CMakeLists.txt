@@ -29,6 +29,7 @@ if (ENABLE_LIBRI)
         sternheimer_fd_projector_sampler.cpp
         sternheimer_fd_solver.cpp
         sternheimer_rpa.cpp
+        sternheimer_response_openmp.cpp
         sternheimer_response_spectral.cpp
         sternheimer_response_orbital_layout.cpp
         sternheimer_siab_mpi.cpp

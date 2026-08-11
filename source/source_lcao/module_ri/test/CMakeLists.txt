@@ -83,6 +83,7 @@ AddTest(
   TARGET MODULE_RI_sternheimer_abacus_st_smoke_test
   LIBS ${math_libs}
   SOURCES sternheimer_abacus_st_smoke_test.cpp
+          ../sternheimer_response_openmp.cpp
           ../sternheimer_response_orbital_layout.cpp
           ../sternheimer_siab_memory.cpp
 )

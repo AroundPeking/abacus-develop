@@ -3,6 +3,7 @@
 #include "source_lcao/module_ri/sternheimer_abfs_perturbation.h"
 #include "source_lcao/module_ri/sternheimer_channel_parallel.h"
 #include "source_lcao/module_ri/sternheimer_delta.h"
+#include "source_lcao/module_ri/sternheimer_response_openmp.h"
 
 #include <array>
 #include <atomic>
@@ -23,6 +24,40 @@ TEST(SternheimerABACUSSTSmoke, UsesProductionDefaults)
     EXPECT_DOUBLE_EQ(ModuleRI::default_sternheimer_solver_tolerance(), 1.0e-6);
     EXPECT_EQ(ModuleRI::parse_sternheimer_lcao_virtual_source(""),
               ModuleRI::SternheimerLCAOVirtualSource::KSBands);
+}
+
+TEST(SternheimerABACUSSTSmoke, RaisesThreadsOnlyInsideResponseScope)
+{
+#ifdef _OPENMP
+    const int previous_threads = omp_get_max_threads();
+    const int previous_dynamic = omp_get_dynamic();
+    omp_set_dynamic(0);
+    omp_set_num_threads(1);
+    setenv("ABACUS_STERNHEIMER_RESPONSE_OMP_THREADS", "4", 1);
+
+    int response_team_size = 0;
+    {
+        ModuleRI::ScopedSternheimerResponseOpenMPThreads response_threads;
+        EXPECT_EQ(response_threads.previous_threads(), 1);
+        EXPECT_EQ(response_threads.active_threads(), 4);
+        EXPECT_EQ(omp_get_max_threads(), 4);
+#pragma omp parallel
+        {
+#pragma omp single
+            response_team_size = omp_get_num_threads();
+        }
+    }
+
+    EXPECT_EQ(response_team_size, 4);
+    EXPECT_EQ(omp_get_max_threads(), 1);
+    unsetenv("ABACUS_STERNHEIMER_RESPONSE_OMP_THREADS");
+    omp_set_num_threads(previous_threads);
+    omp_set_dynamic(previous_dynamic);
+#else
+    ModuleRI::ScopedSternheimerResponseOpenMPThreads response_threads;
+    EXPECT_EQ(response_threads.previous_threads(), 1);
+    EXPECT_EQ(response_threads.active_threads(), 1);
+#endif
 }
 
 TEST(SternheimerABACUSSTSmoke, MovesSampledPotentialsOutOfChannelStorage)
