@@ -12,6 +12,7 @@ import scipy.linalg
 @dataclass(frozen=True)
 class WhitenedTensor:
     tensor: np.ndarray
+    transform: np.ndarray
     eigenvalues: np.ndarray
     removed_zero_modes: int
     hermiticity_rel: float
@@ -83,6 +84,7 @@ def whiten(v: np.ndarray, cbar: np.ndarray) -> WhitenedTensor:
         raise ValueError("whitened tensor must contain only finite values")
     return WhitenedTensor(
         whitened,
+        factor.conj().T,
         clipped,
         int(clipped.size - np.count_nonzero(keep)),
         hermiticity_rel,

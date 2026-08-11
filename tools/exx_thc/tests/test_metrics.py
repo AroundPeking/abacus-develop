@@ -20,6 +20,7 @@ class CoulombMetricTest(unittest.TestCase):
         result = whiten(metric, cbar)
 
         self.assertEqual(result.tensor.shape, (2, 2, 4))
+        self.assertEqual(result.transform.shape, (2, 3))
         self.assertEqual(result.tensor.dtype, np.complex128)
         self.assertEqual(result.removed_zero_modes, 1)
         self.assertLess(result.hermiticity_rel, 1.0e-14)
@@ -29,6 +30,12 @@ class CoulombMetricTest(unittest.TestCase):
             np.einsum("miv,mn,niv->", cbar.conj(), metric, cbar).real
         )
         self.assertAlmostEqual(whitened_norm_squared, direct_metric_norm_squared, places=11)
+        np.testing.assert_allclose(
+            result.tensor,
+            np.einsum("xm,miv->xiv", result.transform, cbar),
+            rtol=1.0e-13,
+            atol=1.0e-13,
+        )
 
     def test_records_residual_before_hermitizing_full_matrix(self):
         metric = np.asarray(
@@ -62,6 +69,7 @@ class CoulombMetricTest(unittest.TestCase):
         result = whiten(metric, cbar)
 
         self.assertEqual(result.tensor.shape, (1, 1, 1))
+        self.assertEqual(result.transform.shape, (1, 2))
         self.assertEqual(result.removed_zero_modes, 1)
         np.testing.assert_array_equal(result.eigenvalues, np.asarray([0.0, 1.0]))
         np.testing.assert_allclose(np.abs(result.tensor[0]), np.abs(cbar[0]), atol=1.0e-14)
@@ -73,6 +81,7 @@ class CoulombMetricTest(unittest.TestCase):
         result = whiten(metric, cbar)
 
         self.assertEqual(result.tensor.shape, (0, 2, 4))
+        self.assertEqual(result.transform.shape, (0, 3))
         self.assertEqual(result.removed_zero_modes, 3)
         self.assertEqual(result.hermiticity_rel, 0.0)
         np.testing.assert_array_equal(result.eigenvalues, np.zeros(3))
@@ -85,6 +94,7 @@ class CoulombMetricTest(unittest.TestCase):
 
         self.assertGreater(result.hermiticity_rel, 0.0)
         self.assertEqual(result.tensor.shape, (0, 1, 3))
+        self.assertEqual(result.transform.shape, (0, 2))
         self.assertEqual(result.removed_zero_modes, 2)
         np.testing.assert_array_equal(result.eigenvalues, np.zeros(2))
 
