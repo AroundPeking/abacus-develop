@@ -8,6 +8,10 @@
 #include <stdexcept>
 #include <vector>
 
+#ifdef _OPENMP
+#include <omp.h>
+#endif
+
 namespace
 {
 
@@ -145,6 +149,47 @@ TEST(SternheimerSIABOverlap, BuildsComplexHermitianPerturbationMatricesWithGridV
     for (const Complex& value: matrices[1])
     {
         EXPECT_EQ(value, Complex(0.0, 0.0));
+    }
+}
+
+TEST(SternheimerSIABOverlap, DistributesIndependentPerturbationChannelsAcrossOpenMPThreads)
+{
+    const PrimitiveGrid basis_functions = {
+        {{1.0, 0.0}, {0.0, 1.0}},
+        {{1.0, 1.0}, {2.0, 0.0}},
+    };
+    const std::vector<std::vector<double>> potentials(
+        8,
+        std::vector<double>{2.0, -1.0});
+    int threads_used = 0;
+
+#ifdef _OPENMP
+    const int previous_threads = omp_get_max_threads();
+    const int previous_dynamic = omp_get_dynamic();
+    omp_set_dynamic(0);
+    omp_set_num_threads(4);
+#endif
+
+    const auto matrices
+        = siab::perturbation_matrices(basis_functions, potentials, 0.5, &threads_used);
+
+#ifdef _OPENMP
+    omp_set_num_threads(previous_threads);
+    omp_set_dynamic(previous_dynamic);
+    EXPECT_GE(threads_used, 2);
+#else
+    EXPECT_EQ(threads_used, 1);
+#endif
+    ASSERT_EQ(matrices.size(), potentials.size());
+    for (const auto& matrix: matrices)
+    {
+        ASSERT_EQ(matrix.size(), 4);
+        EXPECT_NEAR(matrix[0].real(), 0.5, 1.0e-14);
+        EXPECT_NEAR(matrix[1].real(), 1.0, 1.0e-14);
+        EXPECT_NEAR(matrix[1].imag(), 2.0, 1.0e-14);
+        EXPECT_NEAR(matrix[2].real(), 1.0, 1.0e-14);
+        EXPECT_NEAR(matrix[2].imag(), -2.0, 1.0e-14);
+        EXPECT_NEAR(matrix[3].real(), 0.0, 1.0e-14);
     }
 }
 

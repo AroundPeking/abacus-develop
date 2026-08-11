@@ -25,7 +25,8 @@ std::vector<std::complex<double>> overlap_s(
 std::vector<std::vector<std::complex<double>>> perturbation_matrices(
     const std::vector<std::vector<std::complex<double>>>& basis_functions,
     const std::vector<std::vector<double>>& potentials_ha,
-    double delta_omega);
+    double delta_omega,
+    int* threads_used = nullptr);
 
 std::vector<std::complex<double>> hamiltonian_matrix(
     const std::vector<std::vector<std::complex<double>>>& basis_functions,

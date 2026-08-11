@@ -7,6 +7,14 @@
 #include <limits>
 #include <stdexcept>
 
+#ifdef _OPENMP
+#include <omp.h>
+#endif
+
+#ifdef __MKL
+#include <mkl_service.h>
+#endif
+
 namespace module_ri
 {
 namespace sternheimer_siab
@@ -184,7 +192,8 @@ std::vector<Complex> overlap_s(const PrimitiveGrid& primitives, const double del
 
 std::vector<std::vector<Complex>> perturbation_matrices(const PrimitiveGrid& basis_functions,
                                                         const std::vector<std::vector<double>>& potentials_ha,
-                                                        const double delta_omega)
+                                                        const double delta_omega,
+                                                        int* threads_used)
 {
     validate_delta_omega(delta_omega);
     const std::size_t grid_size = validate_primitives(basis_functions);
@@ -210,6 +219,22 @@ std::vector<std::vector<Complex>> perturbation_matrices(const PrimitiveGrid& bas
     std::vector<std::vector<Complex>> column_major(
         potentials_ha.size(),
         std::vector<Complex>(matrix_size, Complex(0.0, 0.0)));
+
+    int channel_threads = 1;
+#ifdef _OPENMP
+    channel_threads = std::min(static_cast<int>(potentials_ha.size()), omp_get_max_threads());
+#endif
+    if (threads_used != nullptr)
+    {
+        *threads_used = 1;
+    }
+    const std::size_t maximum_block_size = std::min(grid_block_size, grid_size);
+    const std::size_t weighted_block_size
+        = maximum_block_size * static_cast<std::size_t>(n_basis);
+    std::vector<std::vector<Complex>> weighted_blocks(
+        static_cast<std::size_t>(channel_threads),
+        std::vector<Complex>(weighted_block_size));
+
     for (std::size_t first = 0; first < grid_size; first += grid_block_size)
     {
         const int block_size = static_cast<int>(
@@ -217,45 +242,74 @@ std::vector<std::vector<Complex>> perturbation_matrices(const PrimitiveGrid& bas
         std::vector<Complex> basis_block(
             static_cast<std::size_t>(block_size)
             * static_cast<std::size_t>(n_basis));
-        std::vector<Complex> weighted_block(basis_block.size());
-#pragma omp parallel for schedule(static)
-        for (int basis = 0; basis < n_basis; ++basis)
+
+#ifdef _OPENMP
+#pragma omp parallel num_threads(channel_threads)
+#endif
         {
-            for (int grid = 0; grid < block_size; ++grid)
+            int thread_index = 0;
+#ifdef _OPENMP
+            thread_index = omp_get_thread_num();
+#pragma omp single
             {
-                basis_block[static_cast<std::size_t>(basis) * block_size + grid]
-                    = basis_functions[static_cast<std::size_t>(basis)]
-                                     [first + static_cast<std::size_t>(grid)];
+                if (threads_used != nullptr)
+                {
+                    *threads_used = omp_get_num_threads();
+                }
             }
-        }
-        for (std::size_t channel = 0; channel != potentials_ha.size(); ++channel)
-        {
-#pragma omp parallel for schedule(static)
+#endif
+
+#ifdef __MKL
+            const int previous_mkl_threads = mkl_set_num_threads_local(1);
+#endif
+
+#pragma omp for schedule(static)
             for (int basis = 0; basis < n_basis; ++basis)
             {
                 for (int grid = 0; grid < block_size; ++grid)
                 {
-                    const std::size_t index
-                        = static_cast<std::size_t>(basis) * block_size + grid;
-                    weighted_block[index]
-                        = basis_block[index]
-                          * potentials_ha[channel]
+                    basis_block[static_cast<std::size_t>(basis) * block_size + grid]
+                        = basis_functions[static_cast<std::size_t>(basis)]
                                          [first + static_cast<std::size_t>(grid)];
                 }
             }
-            container::BlasConnector::gemm('C',
-                                'N',
-                                n_basis,
-                                n_basis,
-                                block_size,
-                                Complex(delta_omega, 0.0),
-                                basis_block.data(),
-                                block_size,
-                                weighted_block.data(),
-                                block_size,
-                                Complex(1.0, 0.0),
-                                column_major[channel].data(),
-                                n_basis);
+
+            std::vector<Complex>& weighted_block
+                = weighted_blocks[static_cast<std::size_t>(thread_index)];
+#pragma omp for schedule(dynamic)
+            for (int channel = 0; channel < static_cast<int>(potentials_ha.size()); ++channel)
+            {
+                for (int basis = 0; basis < n_basis; ++basis)
+                {
+                    for (int grid = 0; grid < block_size; ++grid)
+                    {
+                        const std::size_t index
+                            = static_cast<std::size_t>(basis) * block_size + grid;
+                        weighted_block[index]
+                            = basis_block[index]
+                              * potentials_ha[static_cast<std::size_t>(channel)]
+                                             [first + static_cast<std::size_t>(grid)];
+                    }
+                }
+                container::BlasConnector::gemm(
+                    'C',
+                    'N',
+                    n_basis,
+                    n_basis,
+                    block_size,
+                    Complex(delta_omega, 0.0),
+                    basis_block.data(),
+                    block_size,
+                    weighted_block.data(),
+                    block_size,
+                    Complex(1.0, 0.0),
+                    column_major[static_cast<std::size_t>(channel)].data(),
+                    n_basis);
+            }
+
+#ifdef __MKL
+            mkl_set_num_threads_local(previous_mkl_threads);
+#endif
         }
     }
 
