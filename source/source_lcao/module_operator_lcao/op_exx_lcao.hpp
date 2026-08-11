@@ -17,6 +17,8 @@
 #include <fstream>
 #include <iomanip>
 #include <iostream>
+#include <limits>
+#include <set>
 #include <sstream>
 #include <string>
 #include <vector>
@@ -142,6 +144,199 @@ namespace hamilt
         }
     } // namespace
 
+    template <typename Tdata>
+    std::pair<bool, std::array<int, 3>>
+    infer_complete_Rs_period_from_Hexxs(
+        const std::vector<std::map<int, std::map<TAC, RI::Tensor<Tdata>>>>& Hexxs)
+    {
+        std::array<int, 3> Rs_period = {0, 0, 0};
+        if (Hexxs.empty())
+        {
+            return {false, Rs_period};
+        }
+
+        std::set<std::array<int, 3>> unique_Rs;
+        std::array<int, 3> min_R = {
+            std::numeric_limits<int>::max(),
+            std::numeric_limits<int>::max(),
+            std::numeric_limits<int>::max()};
+        std::array<int, 3> max_R = {
+            std::numeric_limits<int>::min(),
+            std::numeric_limits<int>::min(),
+            std::numeric_limits<int>::min()};
+
+        for (const auto& Htmp1 : Hexxs[0])
+        {
+            for (const auto& Htmp2 : Htmp1.second)
+            {
+                const std::array<int, 3>& cell = Htmp2.first.second;
+                if (unique_Rs.insert(cell).second)
+                {
+                    for (int idim = 0; idim < 3; ++idim)
+                    {
+                        min_R[idim] = std::min(min_R[idim], cell[idim]);
+                        max_R[idim] = std::max(max_R[idim], cell[idim]);
+                    }
+                }
+            }
+        }
+
+        if (unique_Rs.empty())
+        {
+            return {false, Rs_period};
+        }
+
+        size_t expected_nR = 1;
+        for (int idim = 0; idim < 3; ++idim)
+        {
+            Rs_period[idim] = max_R[idim] - min_R[idim] + 1;
+            if (Rs_period[idim] <= 0)
+            {
+                return {false, {0, 0, 0}};
+            }
+            expected_nR *= static_cast<size_t>(Rs_period[idim]);
+        }
+
+        if (expected_nR != unique_Rs.size())
+        {
+            return {false, {0, 0, 0}};
+        }
+
+        return {true, Rs_period};
+    }
+
+    inline bool can_remap_wigner_seitz_for_nscf(const Add_Hexx_Type add_hexx_type,
+                                                const bool period_from_kmesh,
+                                                const bool zero_koffset)
+    {
+        return add_hexx_type == Add_Hexx_Type::R
+               && (!period_from_kmesh || zero_koffset);
+    }
+
+    struct WignerSeitzRemapStats
+    {
+        size_t input_blocks = 0;
+        size_t output_blocks = 0;
+        size_t remapped_blocks = 0;
+        size_t split_blocks = 0;
+        size_t max_images = 0;
+    };
+
+    inline std::vector<std::array<int, 3>> find_nearest_bvk_cells(
+        const UnitCell& ucell,
+        const int iat0,
+        const int iat1,
+        const std::array<int, 3>& R,
+        const std::array<int, 3>& period)
+    {
+        // Boundary-equivalent BvK images must all carry the same matrix weight.
+        double min_distance_sq = std::numeric_limits<double>::max();
+        std::vector<std::array<int, 3>> nearest_cells;
+
+        for (int ix = -1; ix <= 1; ++ix)
+        {
+            for (int iy = -1; iy <= 1; ++iy)
+            {
+                for (int iz = -1; iz <= 1; ++iz)
+                {
+                    const std::array<int, 3> candidate = {
+                        R[0] + ix * period[0],
+                        R[1] + iy * period[1],
+                        R[2] + iz * period[2]};
+                    const ModuleBase::Vector3<int> candidate_vector(
+                        candidate[0], candidate[1], candidate[2]);
+                    const double distance_sq
+                        = ucell.cal_dtau(iat0, iat1, candidate_vector).norm2();
+                    const double tolerance
+                        = 1.0e-10
+                          * std::max(1.0,
+                                     std::max(std::abs(distance_sq),
+                                              std::abs(min_distance_sq)));
+
+                    if (distance_sq + tolerance < min_distance_sq)
+                    {
+                        min_distance_sq = distance_sq;
+                        nearest_cells.clear();
+                        nearest_cells.push_back(candidate);
+                    }
+                    else if (std::abs(distance_sq - min_distance_sq) <= tolerance)
+                    {
+                        nearest_cells.push_back(candidate);
+                    }
+                }
+            }
+        }
+        return nearest_cells;
+    }
+
+    template <typename Tdata>
+    WignerSeitzRemapStats remap_Hexxs_wigner_seitz(
+        const UnitCell& ucell,
+        const std::array<int, 3>& period,
+        std::vector<std::map<int, std::map<TAC, RI::Tensor<Tdata>>>>& Hexxs)
+    {
+        WignerSeitzRemapStats stats;
+        std::vector<std::map<int, std::map<TAC, RI::Tensor<Tdata>>>> remapped(
+            Hexxs.size());
+
+        for (size_t is = 0; is < Hexxs.size(); ++is)
+        {
+            for (const auto& Htmp1 : Hexxs[is])
+            {
+                const int iat0 = Htmp1.first;
+                for (const auto& Htmp2 : Htmp1.second)
+                {
+                    ++stats.input_blocks;
+                    const int iat1 = Htmp2.first.first;
+                    const std::array<int, 3>& R = Htmp2.first.second;
+                    const auto nearest_cells
+                        = find_nearest_bvk_cells(ucell, iat0, iat1, R, period);
+                    if (nearest_cells.empty())
+                    {
+                        throw std::runtime_error("No nearest BvK image found for HexxR block");
+                    }
+
+                    stats.max_images = std::max(stats.max_images, nearest_cells.size());
+                    if (nearest_cells.size() != 1 || nearest_cells.front() != R)
+                    {
+                        ++stats.remapped_blocks;
+                    }
+                    if (nearest_cells.size() > 1)
+                    {
+                        ++stats.split_blocks;
+                    }
+
+                    const Tdata weight
+                        = static_cast<Tdata>(1.0 / static_cast<double>(nearest_cells.size()));
+                    auto& target = remapped[is][iat0];
+                    for (const auto& R_bvk : nearest_cells)
+                    {
+                        const TAC key = {iat1, R_bvk};
+                        auto it = target.find(key);
+                        if (it == target.end())
+                        {
+                            target.emplace(key, weight * Htmp2.second);
+                        }
+                        else
+                        {
+                            it->second += weight * Htmp2.second;
+                        }
+                    }
+                }
+            }
+        }
+
+        Hexxs.swap(remapped);
+        for (const auto& Hspin : Hexxs)
+        {
+            for (const auto& Htmp1 : Hspin)
+            {
+                stats.output_blocks += Htmp1.second.size();
+            }
+        }
+        return stats;
+    }
+
     // allocate according to the read-in HexxR, used in nscf
     template <typename Tdata, typename TR>
     void reallocate_hcontainer(const std::vector<std::map<int, std::map<TAC, RI::Tensor<Tdata>>>>& Hexxs,
@@ -237,11 +432,60 @@ OperatorEXX<OperatorLCAO<TK, TR>>::OperatorEXX(HS_Matrix_K<TK>* hsk_in,
     ModuleBase::TITLE("OperatorEXX", "OperatorEXX");
     this->cal_type = calculation_type::lcao_exx;
     const Parallel_Orbitals* const pv = hR_in->get_paraV();
+    const bool zero_koffset =
+        (ModuleBase::Vector3<double>(std::fmod(this->kv.get_koffset(0), 1.0),
+                                    std::fmod(this->kv.get_koffset(1), 1.0),
+                                    std::fmod(this->kv.get_koffset(2), 1.0))
+             .norm()
+         < 1e-10);
 
     if (PARAM.inp.calculation == "nscf"
         && (GlobalC::exx_info.info_global.cal_exx
             || abacus_debug_dump_exx_ao_enabled()))
     {    // if nscf, read HexxR first and reallocate hR according to the read-in HexxR
+        this->use_cell_nearest = false;
+        auto maybe_remap_wigner_seitz = [&](auto& Hexxs_loaded)
+        {
+            std::array<int, 3> Rs_period = {this->kv.nmp[0], this->kv.nmp[1], this->kv.nmp[2]};
+            const bool period_from_kmesh
+                = (Rs_period[0] > 0 && Rs_period[1] > 0 && Rs_period[2] > 0);
+            if (!can_remap_wigner_seitz_for_nscf(
+                    this->add_hexx_type,
+                    period_from_kmesh,
+                    zero_koffset))
+            {
+                return;
+            }
+            if (!period_from_kmesh)
+            {
+                const auto inferred = infer_complete_Rs_period_from_Hexxs(Hexxs_loaded);
+                if (!inferred.first)
+                {
+                    if (GlobalV::MY_RANK == 0)
+                    {
+                        ModuleBase::WARNING(
+                            "OperatorEXX",
+                            "Cannot infer a complete BvK period; HexxR Wigner-Seitz remapping is disabled");
+                    }
+                    return;
+                }
+                Rs_period = inferred.second;
+            }
+
+            const WignerSeitzRemapStats stats
+                = remap_Hexxs_wigner_seitz(ucell, Rs_period, Hexxs_loaded);
+            if (GlobalV::MY_RANK == 0)
+            {
+                std::cout << " NSCF EXX Wigner-Seitz remapping enabled with R period: "
+                          << Rs_period[0] << " " << Rs_period[1] << " " << Rs_period[2]
+                          << "; input blocks=" << stats.input_blocks
+                          << "; output blocks=" << stats.output_blocks
+                          << "; remapped blocks=" << stats.remapped_blocks
+                          << "; split blocks=" << stats.split_blocks
+                          << "; max images=" << stats.max_images
+                          << std::endl;
+            }
+        };
         auto file_name_list_csr = []() -> std::vector<std::string>
         {
             std::vector<std::string> file_name_list;
@@ -278,13 +522,19 @@ OperatorEXX<OperatorLCAO<TK, TR>>::OperatorEXX(HS_Matrix_K<TK>* hsk_in,
             {
                 ModuleIO::read_Hexxs_csr(file_name_exx_csr, ucell, PARAM.inp.nspin, PARAM.globalv.nlocal, *Hexxd);
                 if (this->add_hexx_type == Add_Hexx_Type::R)
-                    { reallocate_hcontainer(*Hexxd, this->hR); }
+                {
+                    maybe_remap_wigner_seitz(*Hexxd);
+                    reallocate_hcontainer(*Hexxd, this->hR);
+                }
             }
             else
             {
                 ModuleIO::read_Hexxs_csr(file_name_exx_csr, ucell, PARAM.inp.nspin, PARAM.globalv.nlocal, *Hexxc);
                 if (this->add_hexx_type == Add_Hexx_Type::R)
-                    { reallocate_hcontainer(*Hexxc, this->hR); }
+                {
+                    maybe_remap_wigner_seitz(*Hexxc);
+                    reallocate_hcontainer(*Hexxc, this->hR);
+                }
             }
         }
         else if (check_exist(file_name_list_cereal()))
@@ -298,28 +548,32 @@ OperatorEXX<OperatorLCAO<TK, TR>>::OperatorEXX(HS_Matrix_K<TK>* hsk_in,
             {
                 ModuleIO::read_Hexxs_cereal(file_name_exx_cereal, *Hexxd);
                 if (this->add_hexx_type == Add_Hexx_Type::R)
-                    { reallocate_hcontainer(*Hexxd, this->hR); }
+                {
+                    maybe_remap_wigner_seitz(*Hexxd);
+                    reallocate_hcontainer(*Hexxd, this->hR);
+                }
             }
             else
             {   
                 ModuleIO::read_Hexxs_cereal(file_name_exx_cereal, *Hexxc);
                 if (this->add_hexx_type == Add_Hexx_Type::R)
-                    { reallocate_hcontainer(*Hexxc, this->hR); }
+                {
+                    maybe_remap_wigner_seitz(*Hexxc);
+                    reallocate_hcontainer(*Hexxc, this->hR);
+                }
             }
         }
         else
         {
             ModuleBase::WARNING_QUIT("OperatorEXX", "Can't open EXX file in " + PARAM.globalv.global_readin_dir);
         }
-        this->use_cell_nearest = false;
     }
     else
     {   // if scf and Add_Hexx_Type::R, init cell_nearest and reallocate hR according to BvK cells
         if (this->add_hexx_type == Add_Hexx_Type::R)
         {
             // if k points has no shift, use cell_nearest to reduce the memory cost
-            this->use_cell_nearest = (ModuleBase::Vector3<double>(std::fmod(this->kv.get_koffset(0), 1.0),
-                std::fmod(this->kv.get_koffset(1), 1.0), std::fmod(this->kv.get_koffset(2), 1.0)).norm() < 1e-10);
+            this->use_cell_nearest = zero_koffset;
 
             const std::array<int, 3> Rs_period = { this->kv.nmp[0], this->kv.nmp[1], this->kv.nmp[2] };
             if (this->use_cell_nearest)
