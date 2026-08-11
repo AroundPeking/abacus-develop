@@ -4,7 +4,7 @@ import unittest
 
 import numpy as np
 
-from exx_thc.tt import tt_svd_3
+from exx_thc.tt import tt_core_elements, tt_gram, tt_mode_transform, tt_svd_3
 
 
 class TTThreeTest(unittest.TestCase):
@@ -137,6 +137,67 @@ class TTThreeTest(unittest.TestCase):
         self.assertEqual(result.g2.dtype, np.complex128)
         self.assertEqual(result.g3.dtype, np.complex128)
         np.testing.assert_allclose(result.reconstruct(), tensor, rtol=2.0e-6, atol=0.0)
+
+    def test_mode_transform_matches_dense_for_every_axis(self):
+        rng = np.random.default_rng(811)
+        tensor = rng.normal(size=(3, 4, 2)) + 1j * rng.normal(size=(3, 4, 2))
+        for axis in range(3):
+            transform = rng.normal(size=(5, tensor.shape[axis])) + 1j * rng.normal(
+                size=(5, tensor.shape[axis])
+            )
+
+            transformed = tt_mode_transform(tt_svd_3(tensor, 0.0), axis, transform)
+            expected = np.tensordot(transform, tensor, axes=(1, axis))
+            expected = np.moveaxis(expected, 0, axis)
+
+            with self.subTest(axis=axis):
+                np.testing.assert_allclose(
+                    transformed.reconstruct(), expected, rtol=2.0e-13, atol=2.0e-13
+                )
+
+    def test_gram_matches_dense_for_every_output_axis(self):
+        rng = np.random.default_rng(812)
+        tensor = rng.normal(size=(3, 4, 2)) + 1j * rng.normal(size=(3, 4, 2))
+        tt = tt_svd_3(tensor, 0.0)
+
+        for axis in range(3):
+            flattened = np.moveaxis(tensor, axis, 0).reshape(tensor.shape[axis], -1)
+            expected = flattened @ flattened.conj().T
+
+            with self.subTest(axis=axis):
+                np.testing.assert_allclose(
+                    tt_gram(tt, axis), expected, rtol=2.0e-13, atol=2.0e-13
+                )
+
+    def test_zero_rank_transform_and_gram_preserve_shapes(self):
+        tt = tt_svd_3(np.zeros((3, 2, 4), dtype=np.complex128), 0.0)
+        transformed = tt_mode_transform(tt, 1, np.ones((5, 2), dtype=np.complex128))
+
+        self.assertEqual(transformed.reconstruct().shape, (3, 5, 4))
+        self.assertEqual(tt_core_elements(transformed), 0)
+        np.testing.assert_array_equal(tt_gram(transformed, 1), np.zeros((5, 5)))
+
+    def test_core_element_count_uses_only_three_cores(self):
+        tt = tt_svd_3(self.known_rank_tensor(), 0.0)
+
+        self.assertEqual(tt_core_elements(tt), tt.g1.size + tt.g2.size + tt.g3.size)
+
+    def test_transform_and_gram_reject_invalid_axes_shapes_and_values(self):
+        tt = tt_svd_3(np.ones((2, 3, 4), dtype=np.complex128), 0.0)
+        invalid_transforms = [
+            (True, np.ones((2, 2), dtype=np.complex128)),
+            (-1, np.ones((2, 4), dtype=np.complex128)),
+            (3, np.ones((2, 4), dtype=np.complex128)),
+            (0, np.ones(2, dtype=np.complex128)),
+            (1, np.ones((2, 2), dtype=np.complex128)),
+            (2, np.full((2, 4), np.nan + 0.0j, dtype=np.complex128)),
+        ]
+        for axis, transform in invalid_transforms:
+            with self.subTest(axis=axis, shape=transform.shape), self.assertRaises(ValueError):
+                tt_mode_transform(tt, axis, transform)
+        for axis in (True, -1, 3):
+            with self.subTest(gram_axis=axis), self.assertRaises(ValueError):
+                tt_gram(tt, axis)
 
     def test_rejects_bad_shape_empty_nonfinite_tolerance_and_overflow_norm(self):
         valid = np.ones((2, 2, 2), dtype=np.complex128)

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import math
+import operator
 from typing import Tuple
 
 import numpy as np
@@ -24,6 +25,113 @@ class TT3:
         """Reconstruct the dense rank-three tensor represented by the cores."""
 
         return np.einsum("ia,ajb,bk->ijk", self.g1, self.g2, self.g3)
+
+
+def _physical_axis(value: int) -> int:
+    if isinstance(value, bool):
+        raise ValueError("TT physical axis must be 0, 1, or 2")
+    try:
+        axis = operator.index(value)
+    except TypeError as error:
+        raise ValueError("TT physical axis must be 0, 1, or 2") from error
+    if axis not in (0, 1, 2):
+        raise ValueError("TT physical axis must be 0, 1, or 2")
+    return int(axis)
+
+
+def _core_shapes(tt: TT3) -> Tuple[int, int, int]:
+    if tt.g1.ndim != 2 or tt.g2.ndim != 3 or tt.g3.ndim != 2:
+        raise ValueError("TT cores must have ranks 2, 3, and 2")
+    if tt.g1.shape[1] != tt.g2.shape[0] or tt.g2.shape[2] != tt.g3.shape[0]:
+        raise ValueError("TT core bond dimensions do not match")
+    if tt.g1.shape[0] == 0 or tt.g2.shape[1] == 0 or tt.g3.shape[1] == 0:
+        raise ValueError("TT physical dimensions must be nonempty")
+    if not all(np.isfinite(core).all() for core in (tt.g1, tt.g2, tt.g3)):
+        raise ValueError("TT cores must contain only finite values")
+    return int(tt.g1.shape[0]), int(tt.g2.shape[1]), int(tt.g3.shape[1])
+
+
+def tt_core_elements(tt: TT3) -> int:
+    """Return the number of stored numeric elements in the three TT cores."""
+
+    _core_shapes(tt)
+    return int(tt.g1.size + tt.g2.size + tt.g3.size)
+
+
+def tt_mode_transform(tt: TT3, axis: int, transform: np.ndarray) -> TT3:
+    """Apply an output-by-input matrix to one physical TT index."""
+
+    axis = _physical_axis(axis)
+    physical_shapes = _core_shapes(tt)
+    try:
+        matrix = np.asarray(transform, dtype=np.complex128)
+    except (TypeError, ValueError) as error:
+        raise ValueError("TT mode transform must be a finite matrix") from error
+    if matrix.ndim != 2 or matrix.shape[0] == 0:
+        raise ValueError("TT mode transform must be a nonempty matrix")
+    if matrix.shape[1] != physical_shapes[axis]:
+        raise ValueError("TT mode transform has incompatible shape")
+    if not np.isfinite(matrix).all():
+        raise ValueError("TT mode transform must contain only finite values")
+
+    cores = [tt.g1, tt.g2, tt.g3]
+    with np.errstate(over="ignore", invalid="ignore"):
+        if axis == 0:
+            cores[0] = np.einsum("pi,ia->pa", matrix, cores[0], optimize=True)
+        elif axis == 1:
+            cores[1] = np.einsum("pj,ajb->apb", matrix, cores[1], optimize=True)
+        else:
+            cores[2] = np.einsum("pk,bk->bp", matrix, cores[2], optimize=True)
+    if not np.isfinite(cores[axis]).all():
+        raise ValueError("TT mode transform produced a non-finite core")
+    return TT3(
+        cores[0],
+        cores[1],
+        cores[2],
+        tt.spectra,
+        tt.discarded_weights,
+        tt.error_bound,
+        tt.ranks,
+    )
+
+
+def tt_gram(tt: TT3, output_axis: int) -> np.ndarray:
+    """Contract a TT with its conjugate, retaining one physical index."""
+
+    output_axis = _physical_axis(output_axis)
+    _core_shapes(tt)
+    g1, g2, g3 = tt.g1, tt.g2, tt.g3
+    with np.errstate(over="ignore", invalid="ignore"):
+        if output_axis == 0:
+            right = np.einsum("bk,dk->bd", g3, g3.conj(), optimize=True)
+            middle = np.einsum(
+                "ajb,cjd,bd->ac", g2, g2.conj(), right, optimize=True
+            )
+            result = np.einsum(
+                "ia,sc,ac->is", g1, g1.conj(), middle, optimize=True
+            )
+        elif output_axis == 1:
+            left = np.einsum("ia,ic->ac", g1, g1.conj(), optimize=True)
+            right = np.einsum("bk,dk->bd", g3, g3.conj(), optimize=True)
+            result = np.einsum(
+                "ajb,csd,ac,bd->js",
+                g2,
+                g2.conj(),
+                left,
+                right,
+                optimize=True,
+            )
+        else:
+            left = np.einsum("ia,ic->ac", g1, g1.conj(), optimize=True)
+            middle = np.einsum(
+                "ajb,cjd,ac->bd", g2, g2.conj(), left, optimize=True
+            )
+            result = np.einsum(
+                "bk,dl,bd->kl", g3, g3.conj(), middle, optimize=True
+            )
+    if not np.isfinite(result).all():
+        raise ValueError("TT Gram contraction produced a non-finite matrix")
+    return result
 
 
 def _validated_tolerance(value: float) -> float:
