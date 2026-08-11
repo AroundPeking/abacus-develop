@@ -71,11 +71,13 @@ class TTBenchmarkPoint:
 class TTBenchmarkResult:
     points: Tuple[TTBenchmarkPoint, ...]
     metric_setup_seconds: float
+    dense_occupied_seconds: float
     selected: Optional[TTBenchmarkPoint]
 
     def to_json_dict(self) -> dict:
         return {
             "metric_setup_seconds": self.metric_setup_seconds,
+            "dense_occupied_seconds": self.dense_occupied_seconds,
             "points": [point.to_json_dict() for point in self.points],
             "selected": None if self.selected is None else self.selected.to_json_dict(),
         }
@@ -230,7 +232,10 @@ def scan_exx_tt_routes(
     C, V, O = _validated_inputs(coefficient, metric, occupied)
     tolerance_values = _validated_tolerances(tolerances)
     sample_count = _validated_repeats(repeats)
-    exact_h = occupied_exchange(C, V, O).matrix
+    dense_seconds, exact_value = _timed(
+        lambda: occupied_exchange(C, V, O).matrix, sample_count
+    )
+    exact_h = np.asarray(exact_value)
 
     metric_probe = np.zeros((C.shape[0], 1, 1), dtype=np.complex128)
     metric_seconds, whitened_probe = _timed(
@@ -321,5 +326,6 @@ def scan_exx_tt_routes(
     return TTBenchmarkResult(
         points=point_tuple,
         metric_setup_seconds=metric_seconds,
+        dense_occupied_seconds=dense_seconds,
         selected=select_tt_point(point_tuple),
     )

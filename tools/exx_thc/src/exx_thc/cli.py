@@ -7,6 +7,7 @@ import json
 import math
 import os
 from pathlib import Path
+import resource
 import shutil
 import sys
 import tempfile
@@ -26,6 +27,7 @@ from .supercell import (
     map_dotc,
     occupied_exchange,
 )
+from .tt_benchmark import scan_exx_tt_routes, select_tt_point
 
 
 Period = Tuple[int, int, int]
@@ -906,6 +908,213 @@ def supercell_gate(arguments: argparse.Namespace) -> dict:
     return report
 
 
+def _maximum_rss_kb() -> int:
+    maximum = int(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss)
+    if sys.platform == "darwin":
+        maximum //= 1024
+    return maximum
+
+
+def supercell_tt_scan(arguments: argparse.Namespace) -> dict:
+    """Scan TT routes from complete label-aware supercell snapshots."""
+
+    period = tuple(int(value) for value in arguments.period)
+    if any(value <= 0 for value in period):
+        raise ValueError("period must contain three positive integers")
+    max_elements = int(arguments.max_elements)
+    nk = math.prod(period)
+    if nk * nk > max_elements:
+        raise ValueError("supercell cell-pair count exceeds max_elements")
+
+    snapshot_paths = (
+        arguments.C,
+        arguments.V,
+        arguments.D_full,
+        arguments.D_post,
+        arguments.H_reference,
+    )
+    snapshot_elements = _snapshot_elements_upper_bound(snapshot_paths)
+    if snapshot_elements > max_elements:
+        raise ValueError("dense supercell live allocation exceeds max_elements")
+
+    coefficient = _serial_numeric_snapshot(arguments.C, "C")
+    metric = _serial_numeric_snapshot(arguments.V, "V")
+    density = _serial_numeric_snapshot(arguments.D_full, "D.full")
+    density_post = _serial_numeric_snapshot(arguments.D_post, "D.post")
+    h_reference = _serial_numeric_snapshot(arguments.H_reference, "reference H")
+    snapshots = (coefficient, metric, density, density_post, h_reference)
+    scalar = coefficient.scalar
+    if any(snapshot.scalar != scalar for snapshot in snapshots[1:]):
+        raise ValueError("all supercell-tt-scan snapshots must use the same scalar type")
+    energy_reference = read_real_scalar(arguments.energy_reference)
+
+    layout = infer_supercell_layout(
+        coefficient.blocks, metric.blocks, density.blocks, period
+    )
+    _validate_ao_blocks_against_layout(h_reference.blocks, layout, "reference H")
+    _validate_ao_blocks_against_layout(density_post.blocks, layout, "D.post")
+    nat = len(layout.atoms)
+    nP = int(layout.naux_supercell)
+    nA = int(layout.nao_supercell)
+    coefficient_elements = nP * nA * nA
+    metric_elements = nP * nP
+    density_elements = nA * nA
+    # Conservative complex128-equivalent bound for simultaneous snapshots,
+    # C/V/D/O, B/X, TT-SVD factors/workspace, and one dense H validation.
+    core_elements = (
+        12 * coefficient_elements
+        + 4 * metric_elements
+        + 14 * density_elements
+    )
+    live_elements = snapshot_elements + core_elements
+    if live_elements > max_elements:
+        raise ValueError("dense supercell live allocation exceeds max_elements")
+
+    report = {
+        "D_hermiticity_rel_fro": None,
+        "D_min_eigenvalue": None,
+        "D_min_eigenvalue_scaled": None,
+        "density_factor_rel_fro": None,
+        "occupied_rank": 0,
+        "metric_setup_seconds": 0.0,
+        "dense_occupied_seconds": 0.0,
+        "points": [],
+        "selected": None,
+        "snapshot_elements_upper_bound": snapshot_elements,
+        "live_elements_upper_bound": live_elements,
+        "max_elements": max_elements,
+        "max_rss_kb": 0,
+        "nat": nat,
+        "gaas_authorized": False,
+        "pass": False,
+    }
+
+    dense_coefficient = assemble_pair_coefficient(
+        coefficient.blocks, layout, max_elements
+    )
+    dense_metric = assemble_translation_matrix(
+        metric.blocks, layout, "auxiliary", max_elements
+    )
+    dense_density = assemble_translation_matrix(
+        density.blocks, layout, "ao", max_elements
+    )
+    del coefficient, metric, density
+
+    hermiticity = _relative_frobenius_arrays(
+        dense_density, dense_density.conj().T
+    )
+    if hermiticity is None:
+        raise ValueError("D Hermiticity residual is undefined")
+    report["D_hermiticity_rel_fro"] = hermiticity
+    if hermiticity > 1.0e-12:
+        report["max_rss_kb"] = _maximum_rss_kb()
+        return report
+
+    with np.errstate(over="ignore", invalid="ignore"):
+        hermitian_density = 0.5 * dense_density + 0.5 * dense_density.conj().T
+    del dense_density
+    if not np.isfinite(hermitian_density).all():
+        raise ValueError("Hermitian D matrix must contain only finite values")
+    try:
+        eigenvalues = np.linalg.eigvalsh(hermitian_density)
+    except np.linalg.LinAlgError as error:
+        raise ValueError("Hermitian D eigensolver failed") from error
+    if not np.isfinite(eigenvalues).all():
+        raise ValueError("D eigenvalues must contain only finite values")
+    minimum = float(np.min(eigenvalues))
+    maximum = float(np.max(eigenvalues))
+    report["D_min_eigenvalue"] = minimum
+    if maximum > 0.0:
+        scaled_minimum = minimum / maximum
+        if not math.isfinite(scaled_minimum):
+            scaled_minimum = math.copysign(sys.float_info.max, minimum)
+        report["D_min_eigenvalue_scaled"] = scaled_minimum
+        psd_pass = minimum >= -1.0e-10 * maximum
+    elif minimum < 0.0:
+        report["D_min_eigenvalue_scaled"] = None
+        psd_pass = False
+    else:
+        report["D_min_eigenvalue_scaled"] = 0.0
+        psd_pass = True
+    del eigenvalues
+    if not psd_pass:
+        report["max_rss_kb"] = _maximum_rss_kb()
+        return report
+
+    factor = occupied_factor(hermitian_density, 0.0)
+    occupied_orbitals = factor.O
+    report["occupied_rank"] = int(occupied_orbitals.shape[1])
+    with np.errstate(over="ignore", invalid="ignore"):
+        factored_density = occupied_orbitals @ occupied_orbitals.conj().T
+    if not np.isfinite(factored_density).all():
+        raise ValueError("occupied density factor product must contain only finite values")
+    density_factor_relative = _relative_frobenius_arrays(
+        hermitian_density, factored_density
+    )
+    if density_factor_relative is None:
+        raise ValueError("density factor relative Frobenius residual is undefined")
+    report["density_factor_rel_fro"] = density_factor_relative
+    if density_factor_relative > 1.0e-12:
+        report["max_rss_kb"] = _maximum_rss_kb()
+        return report
+    del factor, factored_density, hermitian_density
+
+    benchmark = scan_exx_tt_routes(
+        dense_coefficient,
+        dense_metric,
+        occupied_orbitals,
+        tolerances=arguments.relative_tol,
+        repeats=arguments.repeats,
+    )
+    report["metric_setup_seconds"] = benchmark.metric_setup_seconds
+    report["dense_occupied_seconds"] = benchmark.dense_occupied_seconds
+    physical_points = []
+    point_reports = []
+    report_by_identity = {}
+    for point in benchmark.points:
+        blocks = extract_reference_cell_blocks(point.matrix, layout, scalar)
+        h_relative = _relative_frobenius_union(h_reference.blocks, blocks)
+        energy = _real_map_energy(density_post.blocks, blocks)
+        energy_error = _absolute_energy_error_per_atom(
+            energy, energy_reference, nat
+        )
+        steady_speedup = benchmark.dense_occupied_seconds / point.steady_seconds
+        core_speedup = benchmark.dense_occupied_seconds / point.exx_seconds
+        point_pass = (
+            point.h_rel_fro <= 1.0e-8
+            and h_relative is not None
+            and h_relative <= 1.0e-8
+            and energy_error <= 1.0e-8
+        )
+        point_report = point.to_json_dict()
+        point_report.update(
+            {
+                "H_librI_rel_fro": h_relative,
+                "E_abs_Ry_atom": energy_error,
+                "steady_speedup": steady_speedup,
+                "core_speedup": core_speedup,
+                "accuracy_pass": point_pass,
+                "gaas_viable": (
+                    point_pass
+                    and point.compression_ratio >= 5.0
+                    and steady_speedup >= 2.0
+                ),
+            }
+        )
+        point_reports.append(point_report)
+        report_by_identity[id(point)] = point_report
+        if point_pass:
+            physical_points.append(point)
+    selected = select_tt_point(tuple(physical_points))
+    report["points"] = point_reports
+    if selected is not None:
+        report["selected"] = report_by_identity[id(selected)]
+        report["gaas_authorized"] = bool(report["selected"]["gaas_viable"])
+        report["pass"] = True
+    report["max_rss_kb"] = _maximum_rss_kb()
+    return report
+
+
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="python -m exx_thc.cli")
     commands = parser.add_subparsers(dest="command", required=True)
@@ -949,6 +1158,29 @@ def _parser() -> argparse.ArgumentParser:
         "--H-occ-out", dest="H_occ_out", type=Path, required=True
     )
     supercell.add_argument("--max-elements", type=_positive_integer, required=True)
+
+    tt_scan = commands.add_parser(
+        "supercell-tt-scan",
+        help="scan TT routes against finite-supercell EXX",
+    )
+    tt_scan.add_argument("--C", type=Path, required=True)
+    tt_scan.add_argument("--V", type=Path, required=True)
+    tt_scan.add_argument("--D-full", dest="D_full", type=Path, required=True)
+    tt_scan.add_argument("--D-post", dest="D_post", type=Path, required=True)
+    tt_scan.add_argument(
+        "--H-reference", dest="H_reference", type=Path, required=True
+    )
+    tt_scan.add_argument(
+        "--energy-reference", dest="energy_reference", type=Path, required=True
+    )
+    tt_scan.add_argument(
+        "--period", type=int, nargs=3, metavar=("PX", "PY", "PZ"), required=True
+    )
+    tt_scan.add_argument(
+        "--relative-tol", type=float, nargs="+", required=True
+    )
+    tt_scan.add_argument("--repeats", type=_positive_integer, default=5)
+    tt_scan.add_argument("--max-elements", type=_positive_integer, required=True)
     return parser
 
 
@@ -963,8 +1195,10 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             report = compare_snapshots(arguments)
         elif arguments.command == "project":
             report = project_snapshot(arguments)
-        else:
+        elif arguments.command == "supercell-gate":
             report = supercell_gate(arguments)
+        else:
+            report = supercell_tt_scan(arguments)
         print(json.dumps(report, sort_keys=True, allow_nan=False))
         return 0 if report["pass"] else 1
     except (OSError, TypeError, ValueError) as error:

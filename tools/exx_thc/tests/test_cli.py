@@ -1142,5 +1142,113 @@ class SupercellGateCommandTest(unittest.TestCase):
         )
 
 
+class SupercellTTScanCommandTest(unittest.TestCase):
+    setUp = SupercellGateCommandTest.setUp
+    tearDown = SupercellGateCommandTest.tearDown
+    _explicit_exchange = staticmethod(SupercellGateCommandTest._explicit_exchange)
+    _explicit_dotc = staticmethod(SupercellGateCommandTest._explicit_dotc)
+    write_valid_case = SupercellGateCommandTest.write_valid_case
+    snapshot_elements_upper_bound = (
+        SupercellGateCommandTest.snapshot_elements_upper_bound
+    )
+
+    def scan_arguments(self, *extra, include_max_elements=True):
+        arguments = [
+            "supercell-tt-scan",
+            "--C",
+            self.c_path,
+            "--V",
+            self.v_path,
+            "--D-full",
+            self.d_full_path,
+            "--D-post",
+            self.d_post_path,
+            "--H-reference",
+            self.h_reference_path,
+            "--energy-reference",
+            self.energy_reference_path,
+            "--period",
+            *self.period,
+            "--relative-tol",
+            "0",
+            "1e-8",
+            "--repeats",
+            "1",
+        ]
+        if include_max_elements:
+            arguments.extend(("--max-elements", "100000"))
+        arguments.extend(extra)
+        return arguments
+
+    def run_scan(self, *extra, include_max_elements=True):
+        return _run_cli(
+            *self.scan_arguments(*extra, include_max_elements=include_max_elements)
+        )
+
+    def test_exact_complex_case_scans_all_routes_and_emits_no_outputs(self):
+        self.write_valid_case(scalar="complex128")
+
+        result = self.run_scan()
+
+        self.assertEqual(result.returncode, 0, msg=result.stderr)
+        report = json.loads(result.stdout, parse_constant=lambda value: self.fail(value))
+        self.assertTrue(report["pass"])
+        self.assertEqual(report["nat"], 1)
+        self.assertEqual(len(report["points"]), 3 * 6 * 2)
+        self.assertEqual({point["route"] for point in report["points"]}, {"C", "B", "X"})
+        self.assertEqual(
+            {tuple(point["order"]) for point in report["points"]},
+            {
+                (0, 1, 2),
+                (0, 2, 1),
+                (1, 0, 2),
+                (1, 2, 0),
+                (2, 0, 1),
+                (2, 1, 0),
+            },
+        )
+        self.assertIsNotNone(report["selected"])
+        self.assertGreater(report["dense_occupied_seconds"], 0.0)
+        self.assertGreaterEqual(report["metric_setup_seconds"], 0.0)
+        for point in report["points"]:
+            self.assertGreaterEqual(point["H_librI_rel_fro"], 0.0)
+            self.assertGreaterEqual(point["E_abs_Ry_atom"], 0.0)
+            self.assertGreaterEqual(point["steady_speedup"], 0.0)
+        self.assertFalse(self.h_dense_out.exists())
+        self.assertFalse(self.h_occ_out.exists())
+
+    def test_memory_limit_is_checked_before_snapshot_read(self):
+        self.write_valid_case()
+        arguments = cli._parser().parse_args(
+            [str(value) for value in self.scan_arguments("--max-elements", 1, include_max_elements=False)]
+        )
+
+        with mock.patch.object(
+            cli, "_serial_numeric_snapshot", wraps=cli._serial_numeric_snapshot
+        ) as reader:
+            with self.assertRaisesRegex(
+                ValueError, "dense supercell live allocation exceeds max_elements"
+            ):
+                cli.supercell_tt_scan(arguments)
+
+        self.assertEqual(reader.call_count, 0)
+
+    def test_rejects_scalar_mismatch_and_invalid_scan_controls(self):
+        key, _expected_h, _density_post = self.write_valid_case()
+        metric = read_snapshot(self.v_path).blocks[key].astype(np.complex128)
+        write_snapshot(self.v_path, _snapshot({key: metric}, scalar="complex128"))
+
+        mismatch = self.run_scan()
+        missing_limit = self.run_scan(include_max_elements=False)
+        bad_repeats = self.run_scan("--repeats", 0)
+        bad_tolerance = self.run_scan("--relative-tol", -1.0)
+
+        self.assertEqual(mismatch.returncode, 2)
+        self.assertIn("scalar", mismatch.stderr)
+        self.assertEqual(missing_limit.returncode, 2)
+        self.assertEqual(bad_repeats.returncode, 2)
+        self.assertEqual(bad_tolerance.returncode, 2)
+
+
 if __name__ == "__main__":
     unittest.main()
