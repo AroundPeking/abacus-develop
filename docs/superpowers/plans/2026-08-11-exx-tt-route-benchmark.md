@@ -150,19 +150,22 @@ Expected: `ModuleNotFoundError: No module named 'exx_thc.tt_benchmark'`.
 
 - [ ] **Step 3: Implement route construction and one scan point**
 
-First extend `WhitenedTensor` with a `transform` array equal to
-`factor.conj().T`, shape `(n_active_aux, n_aux)`, and test
+First extend `WhitenedTensor` with a `transform` array equal to the existing
+standard whitening transform `factor.conj().T`, shape
+`(n_active_aux, n_aux)`, and test
 `result.tensor == einsum("xm,miv->xiv", result.transform, cbar)`. This reuses
 the exact eigensystem, clipping, and zero-mode decision already made by
-`whiten`; the benchmark must not diagonalize `V` a second time.
+`whiten`; the benchmark must not diagonalize `V` a second time. For the LibRI
+EXX convention, use `result.transform.conj() == factor.T`, because the target
+is `B.T @ V @ B.conj()`, not the standard `B.conj().T @ V @ B`.
 
 Canonical tensors are:
 
 ```python
 B = np.einsum("mij,jv->miv", C, O, optimize=True)
 whitened = whiten(V, B)
-X = whitened.tensor
-sqrt_v = whitened.transform
+sqrt_v = whitened.transform.conj()
+X = np.einsum("xm,miv->xiv", sqrt_v, B, optimize=True)
 ```
 
 For each order, transpose the canonical tensor, run `tt_svd_3`, and map the canonical free-AO axis into the permuted axis. Route-specific direct contractions are:

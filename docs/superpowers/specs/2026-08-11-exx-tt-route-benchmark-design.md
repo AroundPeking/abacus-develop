@@ -58,10 +58,16 @@ B_{\mu iv}=\sum_j C_{\mu ij}O_{jv},\qquad D=OO^\dagger,
 V=U\Lambda U^\dagger
 \]
 
-删除满足当前白化规则的数值零模，并定义
+删除满足当前白化规则的数值零模，令
 
 \[
-X_{xiv}=\sum_{\mu}(\sqrt{\Lambda}U^\dagger)_{x\mu}B_{\mu iv}.
+F=U\sqrt{\Lambda},\qquad V=FF^\dagger,
+\]
+
+并按 LibRI occupied-EXX 的共轭方向定义
+
+\[
+X_{xiv}=\sum_{\mu}F_{\mu x}B_{\mu iv}=(F^T B)_{xiv}.
 \]
 
 此时
@@ -70,13 +76,13 @@ X_{xiv}=\sum_{\mu}(\sqrt{\Lambda}U^\dagger)_{x\mu}B_{\mu iv}.
 H_{is}=\sum_{xv}X_{xiv}X^*_{xsv}.
 \]
 
-这条路线的 Frobenius 截断直接作用在 EXX 的 Gram 因子上，也可能先减少有效辅助基维数。与 \(B\) 一样，如果从稠密 \(X\) 开始分解，TT-SVD 是每次 EXX 更新的代价。
+这条路线的 Frobenius 截断直接作用在 EXX 的 Gram 因子上，也可能先减少有效辅助基维数。这里不能误用标准白化方向 \(F^\dagger B\)：后者保持的是 \(B^\dagger V B\)，而本测试必须复现代码中的 \(B^T V B^*\)。两者在实数测试中相同，但一般复数情况下不同。与 \(B\) 一样，如果从稠密 \(X\) 开始分解，TT-SVD 是每次 EXX 更新的代价。
 
 ## TT 运算与公平计时
 
 测试不能把“压缩后重构稠密张量再调用原算法”当作加速。实现提供两个独立操作：
 
-1. **物理指标变换**：矩阵只乘到包含目标物理指标的 TT 核上。例如在 \(C\) 的 \(j\) 核上施加 \(O\)，在 \(\mu\) 核上施加 \(\sqrt{\Lambda}U^\dagger\)。这不改变 TT 拓扑秩。
+1. **物理指标变换**：矩阵只乘到包含目标物理指标的 TT 核上。例如在 \(C\) 的 \(j\) 核上施加 \(O\)，在 \(\mu\) 核上施加 \(F^T\)。这不改变 TT 拓扑秩。
 2. **TT Gram 收缩**：保留自由 AO 指标 \(i\)，其余两个物理指标在核心网络中直接与共轭网络收缩，得到 \(H_{is}\)，不形成稠密 \(C\)、\(B\) 或 \(X\)。
 
 每条路线记录两类时间：
