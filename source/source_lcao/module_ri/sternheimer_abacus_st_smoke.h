@@ -21,10 +21,12 @@
 
 class UnitCell;
 class LCAO_Orbitals;
+class Structure_Factor;
 
 namespace ModulePW
 {
 class PW_Basis;
+class PW_Basis_K;
 }
 
 namespace elecstate
@@ -936,6 +938,13 @@ inline void validate_sternheimer_lcao_occupied_kpoints(
                 {
                     throw std::invalid_argument("Sternheimer LCAO unoccupied coefficient is not finite.");
                 }
+            }
+        }
+        for (const auto& band_coefficients: channel.unoccupied_coefficients)
+        {
+            if (band_coefficients.size() != static_cast<std::size_t>(basis_size))
+            {
+                throw std::invalid_argument("Sternheimer LCAO unoccupied coefficient basis size is inconsistent.");
             }
         }
     }

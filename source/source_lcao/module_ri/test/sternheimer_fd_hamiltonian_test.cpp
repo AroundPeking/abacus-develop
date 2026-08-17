@@ -19,6 +19,28 @@ using Complex = std::complex<double>;
 using Hamiltonian = ModuleRI::SternheimerFDHamiltonian;
 using Vector = Hamiltonian::Vector;
 
+void ExpectOrderEightDenseMatrixIsHermitian(const bool periodic)
+{
+    Hamiltonian::Grid grid{6, 5, 4, 0.4, 0.5, 0.6, periodic};
+    std::vector<double> potential(grid.size());
+    for (int ir = 0; ir != grid.size(); ++ir)
+    {
+        potential[static_cast<std::size_t>(ir)] = 0.07 * (ir % 11) - 0.13 * (ir % 5);
+    }
+    Hamiltonian hamiltonian(grid, potential, 1.0, nullptr, 8);
+
+    const auto matrix = hamiltonian.dense_matrix();
+    for (std::size_t row = 0; row != matrix.size(); ++row)
+    {
+        for (std::size_t col = 0; col != matrix.size(); ++col)
+        {
+            const Complex difference = matrix[row][col] - std::conj(matrix[col][row]);
+            EXPECT_NEAR(difference.real(), 0.0, 1.0e-12);
+            EXPECT_NEAR(difference.imag(), 0.0, 1.0e-12);
+        }
+    }
+}
+
 } // namespace
 
 TEST(SternheimerFDHamiltonian, ConstantFunctionHasOnlyLocalPotential)
@@ -309,6 +331,16 @@ TEST(SternheimerFDHamiltonian, DenseMatrixIsHermitianForLocalRealPotential)
             EXPECT_NEAR(difference.imag(), 0.0, 1.0e-12);
         }
     }
+}
+
+TEST(SternheimerFDHamiltonian, DenseMatrixIsHermitianForOrderEightLocalRealPotentialPeriodic)
+{
+    ExpectOrderEightDenseMatrixIsHermitian(true);
+}
+
+TEST(SternheimerFDHamiltonian, DenseMatrixIsHermitianForOrderEightLocalRealPotentialNonperiodic)
+{
+    ExpectOrderEightDenseMatrixIsHermitian(false);
 }
 
 TEST(SternheimerFDHamiltonian, DenseDiagonalizationReturnsFreeParticleEigenpairs)

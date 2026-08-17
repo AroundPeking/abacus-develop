@@ -1510,6 +1510,30 @@ TEST_F(InputTest, Item_test2)
         it->second.read_value(it->second, param);
         EXPECT_TRUE(param.input.sternheimer_frequency_mpi);
     }
+    { // sternheimer_channel_mpi
+        auto it = find_label("sternheimer_channel_mpi", readinput.input_lists);
+        ASSERT_NE(it, readinput.input_lists.end());
+        EXPECT_FALSE(param.input.sternheimer_channel_mpi);
+
+        it->second.str_values = {"true"};
+        it->second.read_value(it->second, param);
+        EXPECT_TRUE(param.input.sternheimer_channel_mpi);
+    }
+    { // sternheimer_mpi_layout
+        auto it = find_label("sternheimer_mpi_layout", readinput.input_lists);
+        ASSERT_NE(it, readinput.input_lists.end());
+        EXPECT_EQ(param.input.sternheimer_mpi_layout, "frequency_grouped");
+
+        it->second.str_values = {"global_equation"};
+        it->second.read_value(it->second, param);
+        EXPECT_EQ(param.input.sternheimer_mpi_layout, "global_equation");
+
+        param.input.sternheimer_mpi_layout = "invalid";
+        testing::internal::CaptureStdout();
+        EXPECT_EXIT(it->second.check_value(it->second, param), ::testing::ExitedWithCode(1), "");
+        output = testing::internal::GetCapturedStdout();
+        EXPECT_THAT(output, testing::HasSubstr("frequency_grouped or global_equation"));
+    }
     { // sternheimer_delta
         auto it = find_label("sternheimer_delta", readinput.input_lists);
         ASSERT_NE(it, readinput.input_lists.end());
@@ -1518,6 +1542,48 @@ TEST_F(InputTest, Item_test2)
         it->second.str_values = {"true"};
         it->second.read_value(it->second, param);
         EXPECT_TRUE(param.input.sternheimer_delta);
+    }
+    { // sternheimer_grid_diagnostics
+        auto it = find_label("sternheimer_grid_diagnostics", readinput.input_lists);
+        ASSERT_NE(it, readinput.input_lists.end());
+        EXPECT_FALSE(param.input.sternheimer_grid_diagnostics);
+
+        it->second.str_values = {"true"};
+        it->second.read_value(it->second, param);
+        EXPECT_TRUE(param.input.sternheimer_grid_diagnostics);
+    }
+    { // sternheimer_fd_order
+        auto it = find_label("sternheimer_fd_order", readinput.input_lists);
+        ASSERT_NE(it, readinput.input_lists.end());
+        EXPECT_EQ(param.input.sternheimer_fd_order, 2);
+
+        it->second.str_values = {"4"};
+        it->second.read_value(it->second, param);
+        EXPECT_EQ(param.input.sternheimer_fd_order, 4);
+
+        it->second.str_values = {"6"};
+        it->second.read_value(it->second, param);
+        EXPECT_EQ(param.input.sternheimer_fd_order, 6);
+
+        it->second.str_values = {"8"};
+        it->second.read_value(it->second, param);
+        EXPECT_EQ(param.input.sternheimer_fd_order, 8);
+
+        param.input.sternheimer_fd_order = 10;
+        testing::internal::CaptureStdout();
+        EXPECT_EXIT(it->second.check_value(it->second, param), ::testing::ExitedWithCode(1), "");
+        output = testing::internal::GetCapturedStdout();
+        EXPECT_THAT(output, testing::HasSubstr("must be 2, 4, 6, or 8"));
+    }
+    { // sternheimer_delta_virtual_source
+        auto it = find_label("sternheimer_delta_virtual_source", readinput.input_lists);
+        ASSERT_NE(it, readinput.input_lists.end());
+        EXPECT_EQ(param.input.sternheimer_delta_virtual_source, "ks_bands");
+
+        it->second.str_values = {"PROJECTED_AO"};
+        it->second.read_value(it->second, param);
+        it->second.reset_value(it->second, param);
+        EXPECT_EQ(param.input.sternheimer_delta_virtual_source, "projected_ao");
     }
     { // sternheimer_delta_max_states
         auto it = find_label("sternheimer_delta_max_states", readinput.input_lists);

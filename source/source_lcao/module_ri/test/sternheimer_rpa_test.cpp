@@ -108,15 +108,15 @@ TEST(SternheimerRPA, AccumulateChi0BranchColumnIncludesOccupation)
                                                             branch);
 
     const Complex expected0 = occupation
-        * ModuleRI::SternheimerRPA::accumulate_polarizability_grid_element(potentials[0],
-                                                                          psi_r,
-                                                                          delta_psi_r,
-                                                                          grid_weight);
+                              * ModuleRI::SternheimerRPA::accumulate_polarizability_grid_element(potentials[0],
+                                                                                                 psi_r,
+                                                                                                 delta_psi_r,
+                                                                                                 grid_weight);
     const Complex expected1 = occupation
-        * ModuleRI::SternheimerRPA::accumulate_polarizability_grid_element(potentials[1],
-                                                                          psi_r,
-                                                                          delta_psi_r,
-                                                                          grid_weight);
+                              * ModuleRI::SternheimerRPA::accumulate_polarizability_grid_element(potentials[1],
+                                                                                                 psi_r,
+                                                                                                 delta_psi_r,
+                                                                                                 grid_weight);
     EXPECT_EQ(branch[0], Complex(0.0, 0.0));
     EXPECT_EQ(branch[2], Complex(0.0, 0.0));
     EXPECT_NEAR(branch[1].real(), expected0.real(), 1.0e-14);
@@ -157,10 +157,7 @@ TEST(SternheimerRPA, AccumulateComplexQChi0BranchColumnUsesMinusQProbe)
 
 TEST(SternheimerRPA, SymmetrizeImaginaryFrequencyChi0AddsAdjointBranch)
 {
-    const std::vector<Complex> branch = {Complex(1.0, 2.0),
-                                         Complex(3.0, -4.0),
-                                         Complex(5.0, 6.0),
-                                         Complex(-7.0, 8.0)};
+    const std::vector<Complex> branch = {Complex(1.0, 2.0), Complex(3.0, -4.0), Complex(5.0, 6.0), Complex(-7.0, 8.0)};
 
     const std::vector<Complex> chi0 = ModuleRI::SternheimerRPA::symmetrize_chi0_imaginary_frequency(branch, 2);
 
@@ -181,12 +178,8 @@ TEST(SternheimerRPA, WriteChi0V1FileUsesAtomPairBlocks)
     metadata.weight = 0.125;
     metadata.atom_naux = {1, 1};
 
-    const std::vector<ModuleRI::SternheimerRPA::AuxiliaryChannel> channels
-        = {{0, 0, 0}, {1, 1, 0}};
-    const std::vector<Complex> chi0 = {Complex(1.0, 0.0),
-                                       Complex(2.0, -0.5),
-                                       Complex(2.0, 0.5),
-                                       Complex(3.0, 0.0)};
+    const std::vector<ModuleRI::SternheimerRPA::AuxiliaryChannel> channels = {{0, 0, 0}, {1, 1, 0}};
+    const std::vector<Complex> chi0 = {Complex(1.0, 0.0), Complex(2.0, -0.5), Complex(2.0, 0.5), Complex(3.0, 0.0)};
 
     const std::string filename = ::testing::TempDir() + "/sternheimer_chi0_v1_test.dat";
     ModuleRI::SternheimerRPA::write_chi0_v1_file(filename, metadata, channels, chi0);
@@ -299,6 +292,34 @@ TEST(SternheimerRPA, TransitionEnergyWindowUsesOccupiedToEmptyPairsAndReturnsHar
     EXPECT_DOUBLE_EQ(window.emax_ha, 1.25);
 }
 
+TEST(SternheimerRPA, OptionalTransitionEnergyWindowDoesNotBlockExternalFrequencyGrid)
+{
+    using Window = ModuleRI::SternheimerRPA::TransitionEnergyWindow;
+    Window window;
+
+    EXPECT_FALSE(ModuleRI::SternheimerRPA::try_transition_energy_window_from_eigenvalues_ry(
+        {-1.0, -0.5}, {2.0, 2.0}, window));
+    EXPECT_THROW(ModuleRI::SternheimerRPA::try_transition_energy_window_from_eigenvalues_ry(
+                     {-1.0}, {2.0, 0.0}, window),
+                 std::invalid_argument);
+
+    EXPECT_TRUE(ModuleRI::SternheimerRPA::try_transition_energy_window_from_eigenvalues_ry(
+        {-1.0, 0.5}, {2.0, 0.0}, window));
+    EXPECT_DOUBLE_EQ(window.emin_ha, 0.75);
+    EXPECT_DOUBLE_EQ(window.emax_ha, 0.75);
+}
+
+TEST(SternheimerRPA, MergeTransitionEnergyWindowsCoversAllSpinChannels)
+{
+    using Window = ModuleRI::SternheimerRPA::TransitionEnergyWindow;
+    const auto merged = ModuleRI::SternheimerRPA::merge_transition_energy_windows({Window{0.4, 2.0}, Window{0.2, 3.5}});
+
+    EXPECT_DOUBLE_EQ(merged.emin_ha, 0.2);
+    EXPECT_DOUBLE_EQ(merged.emax_ha, 3.5);
+    EXPECT_THROW(ModuleRI::SternheimerRPA::merge_transition_energy_windows({}), std::invalid_argument);
+    EXPECT_THROW(ModuleRI::SternheimerRPA::merge_transition_energy_windows({Window{0.0, 1.0}}), std::invalid_argument);
+}
+
 TEST(SternheimerRPA, GreenXMinimaxFrequencyGridMatchesReference)
 {
     const auto grid = ModuleRI::SternheimerRPA::generate_greenx_minimax_frequency_grid(10, 2.0, 30.0);
@@ -384,6 +405,178 @@ TEST(SternheimerRPA, FrequencyOwnerRankSupportsRankShift)
     EXPECT_EQ(ModuleRI::SternheimerRPA::frequency_owner_rank(1, 4, -1), 0);
     EXPECT_THROW(ModuleRI::SternheimerRPA::frequency_owner_rank(-1, 6, 0), std::invalid_argument);
     EXPECT_THROW(ModuleRI::SternheimerRPA::frequency_owner_rank(0, 0, 0), std::invalid_argument);
+}
+
+TEST(SternheimerRPA, AssignsChannelMPIWithinFrequencyGroups)
+{
+    const auto leader = ModuleRI::SternheimerRPA::frequency_mpi_assignment(0, 16, 32, 2, 1, true);
+    EXPECT_TRUE(leader.owns_frequency);
+    EXPECT_EQ(leader.frequency_leader_rank, 2);
+    EXPECT_EQ(leader.frequency_group_size, 2);
+    EXPECT_EQ(leader.frequency_group_local_rank, 0);
+
+    const auto partner = ModuleRI::SternheimerRPA::frequency_mpi_assignment(0, 16, 32, 3, 1, true);
+    EXPECT_TRUE(partner.owns_frequency);
+    EXPECT_EQ(partner.frequency_leader_rank, 2);
+    EXPECT_EQ(partner.frequency_group_size, 2);
+    EXPECT_EQ(partner.frequency_group_local_rank, 1);
+
+    const auto other = ModuleRI::SternheimerRPA::frequency_mpi_assignment(0, 16, 32, 4, 1, true);
+    EXPECT_FALSE(other.owns_frequency);
+    EXPECT_EQ(other.frequency_group_local_rank, -1);
+
+    const auto wrapped = ModuleRI::SternheimerRPA::frequency_mpi_assignment(15, 16, 32, 1, 1, true);
+    EXPECT_TRUE(wrapped.owns_frequency);
+    EXPECT_EQ(wrapped.frequency_leader_rank, 0);
+    EXPECT_EQ(wrapped.frequency_group_local_rank, 1);
+
+    EXPECT_EQ(ModuleRI::SternheimerRPA::channel_group_owner(0, 0, 428, 2), 0);
+    EXPECT_EQ(ModuleRI::SternheimerRPA::channel_group_owner(0, 1, 428, 2), 1);
+    EXPECT_EQ(ModuleRI::SternheimerRPA::channel_group_owner(1, 0, 428, 2), 0);
+    EXPECT_EQ(ModuleRI::SternheimerRPA::channel_group_owner(1, 1, 428, 2), 1);
+
+    EXPECT_THROW(ModuleRI::SternheimerRPA::frequency_mpi_assignment(0, 16, 30, 0, 0, true),
+                 std::invalid_argument);
+    EXPECT_THROW(ModuleRI::SternheimerRPA::channel_group_owner(0, 0, 428, 0), std::invalid_argument);
+}
+
+TEST(SternheimerRPA, AssignsGlobalEquationsUniquelyAndEvenly)
+{
+    EXPECT_EQ(ModuleRI::SternheimerRPA::global_equation_owner(0, 0, 0, 16, 428, 32, 0), 0);
+    EXPECT_EQ(ModuleRI::SternheimerRPA::global_equation_owner(0, 0, 31, 16, 428, 32, 0), 31);
+    EXPECT_EQ(ModuleRI::SternheimerRPA::global_equation_owner(0, 0, 32, 16, 428, 32, 0), 0);
+    EXPECT_EQ(ModuleRI::SternheimerRPA::global_equation_owner(0, 0, 0, 16, 428, 32, 1), 1);
+
+    constexpr int occupied_count = 2;
+    constexpr int frequency_count = 3;
+    constexpr int channel_count = 5;
+    constexpr int mpi_ranks = 4;
+    std::vector<int> owner_counts(mpi_ranks, 0);
+    for (int occupied = 0; occupied != occupied_count; ++occupied)
+    {
+        for (int frequency = 0; frequency != frequency_count; ++frequency)
+        {
+            for (int channel = 0; channel != channel_count; ++channel)
+            {
+                const int owner = ModuleRI::SternheimerRPA::global_equation_owner(occupied,
+                                                                                  frequency,
+                                                                                  channel,
+                                                                                  frequency_count,
+                                                                                  channel_count,
+                                                                                  mpi_ranks,
+                                                                                  0);
+                ASSERT_GE(owner, 0);
+                ASSERT_LT(owner, mpi_ranks);
+                ++owner_counts[owner];
+            }
+        }
+    }
+    int minimum_count = owner_counts.front();
+    int maximum_count = owner_counts.front();
+    int total_count = 0;
+    for (const int count: owner_counts)
+    {
+        minimum_count = std::min(minimum_count, count);
+        maximum_count = std::max(maximum_count, count);
+        total_count += count;
+    }
+    EXPECT_EQ(total_count, occupied_count * frequency_count * channel_count);
+    EXPECT_LE(maximum_count - minimum_count, 1);
+
+    EXPECT_THROW(ModuleRI::SternheimerRPA::global_equation_owner(-1, 0, 0, 3, 5, 4, 0),
+                 std::invalid_argument);
+    EXPECT_THROW(ModuleRI::SternheimerRPA::global_equation_owner(0, -1, 0, 3, 5, 4, 0),
+                 std::invalid_argument);
+    EXPECT_THROW(ModuleRI::SternheimerRPA::global_equation_owner(0, 3, 0, 3, 5, 4, 0),
+                 std::invalid_argument);
+    EXPECT_THROW(ModuleRI::SternheimerRPA::global_equation_owner(0, 0, 5, 3, 5, 4, 0),
+                 std::invalid_argument);
+    EXPECT_THROW(ModuleRI::SternheimerRPA::global_equation_owner(0, 0, 0, 0, 5, 4, 0),
+                 std::invalid_argument);
+    EXPECT_THROW(ModuleRI::SternheimerRPA::global_equation_owner(0, 0, 0, 3, 0, 4, 0),
+                 std::invalid_argument);
+    EXPECT_THROW(ModuleRI::SternheimerRPA::global_equation_owner(0, 0, 0, 3, 5, 0, 0),
+                 std::invalid_argument);
+}
+
+TEST(SternheimerRPA, ValidatesGlobalEquationMPILayoutRequirements)
+{
+    EXPECT_NO_THROW(ModuleRI::SternheimerRPA::validate_mpi_layout("frequency_grouped",
+                                                                   true,
+                                                                   true,
+                                                                   true,
+                                                                   false,
+                                                                   16,
+                                                                   32));
+    EXPECT_NO_THROW(ModuleRI::SternheimerRPA::validate_mpi_layout("frequency_grouped",
+                                                                   true,
+                                                                   true,
+                                                                   false,
+                                                                   true,
+                                                                   16,
+                                                                   32));
+    EXPECT_THROW(ModuleRI::SternheimerRPA::validate_mpi_layout("frequency_grouped",
+                                                                true,
+                                                                true,
+                                                                true,
+                                                                false,
+                                                                16,
+                                                                30),
+                 std::invalid_argument);
+
+    EXPECT_NO_THROW(ModuleRI::SternheimerRPA::validate_mpi_layout("global_equation",
+                                                                   true,
+                                                                   true,
+                                                                   true,
+                                                                   false,
+                                                                   6,
+                                                                   4));
+    EXPECT_NO_THROW(ModuleRI::SternheimerRPA::validate_mpi_layout("global_equation",
+                                                                   true,
+                                                                   true,
+                                                                   false,
+                                                                   true,
+                                                                   6,
+                                                                   4));
+    EXPECT_NO_THROW(ModuleRI::SternheimerRPA::validate_mpi_layout("global_equation",
+                                                                   true,
+                                                                   true,
+                                                                   true,
+                                                                   true,
+                                                                   6,
+                                                                   4));
+    EXPECT_THROW(ModuleRI::SternheimerRPA::validate_mpi_layout("global_equation",
+                                                                false,
+                                                                true,
+                                                                true,
+                                                                false,
+                                                                6,
+                                                                4),
+                 std::invalid_argument);
+    EXPECT_THROW(ModuleRI::SternheimerRPA::validate_mpi_layout("global_equation",
+                                                                true,
+                                                                false,
+                                                                true,
+                                                                false,
+                                                                6,
+                                                                4),
+                 std::invalid_argument);
+    EXPECT_THROW(ModuleRI::SternheimerRPA::validate_mpi_layout("global_equation",
+                                                                true,
+                                                                true,
+                                                                false,
+                                                                false,
+                                                                6,
+                                                                4),
+                 std::invalid_argument);
+    EXPECT_THROW(ModuleRI::SternheimerRPA::validate_mpi_layout("invalid",
+                                                                true,
+                                                                true,
+                                                                true,
+                                                                false,
+                                                                6,
+                                                                4),
+                 std::invalid_argument);
 }
 
 TEST(SternheimerRPA, SolveBiCGStabDiagonalComplexSystem)

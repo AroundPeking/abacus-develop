@@ -954,9 +954,166 @@ int SternheimerRPA::frequency_owner_rank(const int ifrequency_zero_based,
     return (ifrequency_zero_based + normalized_shift) % mpi_ranks;
 }
 
+SternheimerRPA::FrequencyMPIAssignment SternheimerRPA::frequency_mpi_assignment(
+    const int ifrequency_zero_based,
+    const int frequency_count,
+    const int mpi_ranks,
+    const int mpi_rank,
+    const int rank_shift,
+    const bool use_channel_mpi)
+{
+    if (frequency_count <= 0 || ifrequency_zero_based < 0 || ifrequency_zero_based >= frequency_count)
+    {
+        throw std::invalid_argument(
+            "SternheimerRPA::frequency_mpi_assignment requires a valid frequency index and count.");
+    }
+    if (mpi_ranks <= 0 || mpi_rank < 0 || mpi_rank >= mpi_ranks)
+    {
+        throw std::invalid_argument(
+            "SternheimerRPA::frequency_mpi_assignment requires a valid MPI rank and rank count.");
+    }
+
+    FrequencyMPIAssignment assignment;
+    if (!use_channel_mpi)
+    {
+        assignment.frequency_leader_rank = frequency_owner_rank(ifrequency_zero_based, mpi_ranks, rank_shift);
+        assignment.frequency_group_size = 1;
+        assignment.owns_frequency = mpi_rank == assignment.frequency_leader_rank;
+        assignment.frequency_group_local_rank = assignment.owns_frequency ? 0 : -1;
+        return assignment;
+    }
+
+    if (mpi_ranks < frequency_count || mpi_ranks % frequency_count != 0)
+    {
+        throw std::invalid_argument(
+            "Sternheimer channel MPI requires MPI ranks to be an integer multiple of the frequency count.");
+    }
+
+    assignment.frequency_group_size = mpi_ranks / frequency_count;
+    const int frequency_slot = frequency_owner_rank(ifrequency_zero_based, frequency_count, rank_shift);
+    assignment.frequency_leader_rank = frequency_slot * assignment.frequency_group_size;
+    const int frequency_group_end = assignment.frequency_leader_rank + assignment.frequency_group_size;
+    assignment.owns_frequency
+        = mpi_rank >= assignment.frequency_leader_rank && mpi_rank < frequency_group_end;
+    assignment.frequency_group_local_rank
+        = assignment.owns_frequency ? mpi_rank - assignment.frequency_leader_rank : -1;
+    return assignment;
+}
+
+int SternheimerRPA::channel_group_owner(const int occupied_state,
+                                        const int auxiliary_channel,
+                                        const int auxiliary_channel_count,
+                                        const int frequency_group_size)
+{
+    if (occupied_state < 0 || auxiliary_channel < 0 || auxiliary_channel_count <= 0
+        || auxiliary_channel >= auxiliary_channel_count || frequency_group_size <= 0)
+    {
+        throw std::invalid_argument("SternheimerRPA::channel_group_owner received invalid dimensions or indices.");
+    }
+    const std::int64_t equation_index = static_cast<std::int64_t>(occupied_state) * auxiliary_channel_count
+                                        + auxiliary_channel;
+    return static_cast<int>(equation_index % frequency_group_size);
+}
+
+int SternheimerRPA::global_equation_owner(const int occupied_state,
+                                          const int frequency_index,
+                                          const int auxiliary_channel,
+                                          const int frequency_count,
+                                          const int auxiliary_channel_count,
+                                          const int mpi_ranks,
+                                          const int rank_shift)
+{
+    if (occupied_state < 0 || frequency_count <= 0 || frequency_index < 0
+        || frequency_index >= frequency_count || auxiliary_channel_count <= 0 || auxiliary_channel < 0
+        || auxiliary_channel >= auxiliary_channel_count || mpi_ranks <= 0)
+    {
+        throw std::invalid_argument("SternheimerRPA::global_equation_owner received invalid dimensions or indices.");
+    }
+
+    constexpr std::int64_t max_task_index = std::numeric_limits<std::int64_t>::max();
+    if (static_cast<std::int64_t>(occupied_state)
+        > (max_task_index - frequency_index) / frequency_count)
+    {
+        throw std::overflow_error("SternheimerRPA::global_equation_owner task index overflow.");
+    }
+    const std::int64_t occupied_frequency
+        = static_cast<std::int64_t>(occupied_state) * frequency_count + frequency_index;
+    if (occupied_frequency > (max_task_index - auxiliary_channel) / auxiliary_channel_count)
+    {
+        throw std::overflow_error("SternheimerRPA::global_equation_owner task index overflow.");
+    }
+    const std::int64_t task_index = occupied_frequency * auxiliary_channel_count + auxiliary_channel;
+
+    int normalized_shift = rank_shift % mpi_ranks;
+    if (normalized_shift < 0)
+    {
+        normalized_shift += mpi_ranks;
+    }
+    return static_cast<int>((task_index % mpi_ranks + normalized_shift) % mpi_ranks);
+}
+
+void SternheimerRPA::validate_mpi_layout(const std::string& layout,
+                                         const bool use_frequency_mpi,
+                                         const bool use_channel_mpi,
+                                         const bool write_siab,
+                                         const bool write_librpa,
+                                         const int frequency_count,
+                                         const int mpi_ranks)
+{
+    if (layout != "frequency_grouped" && layout != "global_equation")
+    {
+        throw std::invalid_argument("Sternheimer MPI layout must be frequency_grouped or global_equation.");
+    }
+    if (frequency_count <= 0 || mpi_ranks <= 0)
+    {
+        throw std::invalid_argument("Sternheimer MPI layout requires positive frequency and MPI rank counts.");
+    }
+    if (use_channel_mpi && !use_frequency_mpi)
+    {
+        throw std::invalid_argument("sternheimer_channel_mpi requires sternheimer_frequency_mpi=true.");
+    }
+    if (!write_siab && !write_librpa)
+    {
+        throw std::invalid_argument("Sternheimer MPI layout requires an enabled output target.");
+    }
+
+    if (layout == "global_equation")
+    {
+        if (!use_frequency_mpi || !use_channel_mpi)
+        {
+            throw std::invalid_argument(
+                "sternheimer_mpi_layout=global_equation requires frequency MPI and channel MPI.");
+        }
+        return;
+    }
+
+    if (use_channel_mpi && (mpi_ranks < frequency_count || mpi_ranks % frequency_count != 0))
+    {
+        throw std::invalid_argument(
+            "Sternheimer channel MPI requires MPI ranks to be an integer multiple of the frequency count.");
+    }
+}
+
 SternheimerRPA::TransitionEnergyWindow SternheimerRPA::transition_energy_window_from_eigenvalues_ry(
     const std::vector<double>& eigenvalues_ry,
     const std::vector<double>& occupations,
+    const double occupation_tolerance)
+{
+    TransitionEnergyWindow window;
+    if (!try_transition_energy_window_from_eigenvalues_ry(eigenvalues_ry,
+                                                           occupations,
+                                                           window,
+                                                           occupation_tolerance))
+    {
+        throw std::runtime_error("Sternheimer minimax window found no positive occupied-to-empty transition.");
+    }
+    return window;
+}
+
+bool SternheimerRPA::try_transition_energy_window_from_eigenvalues_ry(
+    const std::vector<double>& eigenvalues_ry,
+    const std::vector<double>& occupations,
+    TransitionEnergyWindow& window,
     const double occupation_tolerance)
 {
     if (eigenvalues_ry.size() != occupations.size())
@@ -1000,13 +1157,33 @@ SternheimerRPA::TransitionEnergyWindow SternheimerRPA::transition_energy_window_
 
     if (!found_transition)
     {
-        throw std::runtime_error("Sternheimer minimax window found no positive occupied-to-empty transition.");
+        return false;
     }
 
-    TransitionEnergyWindow window;
     window.emin_ha = 0.5 * emin_ry;
     window.emax_ha = 0.5 * emax_ry;
-    return window;
+    return true;
+}
+
+SternheimerRPA::TransitionEnergyWindow SternheimerRPA::merge_transition_energy_windows(
+    const std::vector<TransitionEnergyWindow>& windows)
+{
+    if (windows.empty())
+    {
+        throw std::invalid_argument("Sternheimer minimax window merge requires at least one spin channel.");
+    }
+
+    TransitionEnergyWindow merged = windows.front();
+    for (const TransitionEnergyWindow& window: windows)
+    {
+        if (window.emin_ha <= 0.0 || window.emax_ha < window.emin_ha)
+        {
+            throw std::invalid_argument("Sternheimer minimax spin window is invalid.");
+        }
+        merged.emin_ha = std::min(merged.emin_ha, window.emin_ha);
+        merged.emax_ha = std::max(merged.emax_ha, window.emax_ha);
+    }
+    return merged;
 }
 
 SternheimerRPA::FrequencyGrid SternheimerRPA::generate_greenx_minimax_frequency_grid(const int nfreq,

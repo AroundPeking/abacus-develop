@@ -70,12 +70,14 @@ SternheimerFDHamiltonian make_sternheimer_fd_hamiltonian_from_local_potential(
     const SternheimerABACUSFDGridData& grid_data,
     std::vector<double> local_potential,
     double kinetic_prefactor = 1.0,
-    std::shared_ptr<const SternheimerFDNonlocalProjector> nonlocal_projector = nullptr);
+    std::shared_ptr<const SternheimerFDNonlocalProjector> nonlocal_projector = nullptr,
+    int finite_difference_order = 2);
 
 SternheimerFDHamiltonian make_sternheimer_fd_hamiltonian(const elecstate::Potential& potential,
                                                          const ModulePW::PW_Basis& pw_basis,
                                                          int spin,
-                                                         double kinetic_prefactor = 1.0);
+                                                         double kinetic_prefactor = 1.0,
+                                                         int finite_difference_order = 2);
 
 SternheimerFDHamiltonian make_sternheimer_fd_hamiltonian(const elecstate::Potential& potential,
                                                          const ModulePW::PW_Basis& pw_basis,

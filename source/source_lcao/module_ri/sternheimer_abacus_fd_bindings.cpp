@@ -160,14 +160,17 @@ std::vector<double> copy_sternheimer_full_fixed_local_potential(
 SternheimerFDHamiltonian make_sternheimer_fd_hamiltonian(const elecstate::Potential& potential,
                                                          const ModulePW::PW_Basis& pw_basis,
                                                          const int spin,
-                                                         const double kinetic_prefactor)
+                                                         const double kinetic_prefactor,
+                                                         const int finite_difference_order)
 {
     const SternheimerABACUSFDGridData grid_data = make_sternheimer_fd_grid(pw_basis);
     return make_sternheimer_fd_hamiltonian_from_local_potential(grid_data,
                                                                 copy_sternheimer_local_potential(potential,
                                                                                                   pw_basis,
                                                                                                   spin),
-                                                                kinetic_prefactor);
+                                                                kinetic_prefactor,
+                                                                nullptr,
+                                                                finite_difference_order);
 }
 
 SternheimerFDHamiltonian make_sternheimer_fd_hamiltonian(const elecstate::Potential& potential,
@@ -186,7 +189,8 @@ SternheimerFDHamiltonian make_sternheimer_fd_hamiltonian(const elecstate::Potent
                                                                                                   pw_basis,
                                                                                                   spin),
                                                                 kinetic_prefactor,
-                                                                std::move(nonlocal_projector));
+                                                                std::move(nonlocal_projector),
+                                                                finite_difference_order);
 }
 
 SternheimerFDHamiltonian make_sternheimer_fd_full_hamiltonian(const elecstate::Potential& potential,
@@ -204,7 +208,8 @@ SternheimerFDHamiltonian make_sternheimer_fd_full_hamiltonian(const elecstate::P
         grid_data,
         copy_sternheimer_full_local_potential(potential, pw_basis, spin),
         kinetic_prefactor,
-        std::move(nonlocal_projector));
+        std::move(nonlocal_projector),
+        finite_difference_order);
 }
 
 } // namespace ModuleRI

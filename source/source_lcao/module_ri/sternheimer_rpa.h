@@ -66,6 +66,14 @@ class SternheimerRPA
         std::vector<double> weights_ha;
     };
 
+    struct FrequencyMPIAssignment
+    {
+        bool owns_frequency = false;
+        int frequency_leader_rank = -1;
+        int frequency_group_size = 0;
+        int frequency_group_local_rank = -1;
+    };
+
     struct LinearProblem
     {
         // Applies Pc (H - eps_i + i omega) Pc to a band-limited grid/PW vector.
@@ -135,11 +143,48 @@ class SternheimerRPA
         const std::vector<double>& occupations,
         double occupation_tolerance = 1.0e-8);
 
+    static bool try_transition_energy_window_from_eigenvalues_ry(
+        const std::vector<double>& eigenvalues_ry,
+        const std::vector<double>& occupations,
+        TransitionEnergyWindow& window,
+        double occupation_tolerance = 1.0e-8);
+
+    static TransitionEnergyWindow merge_transition_energy_windows(
+        const std::vector<TransitionEnergyWindow>& windows);
+
     static FrequencyGrid generate_greenx_minimax_frequency_grid(int nfreq, double emin_ha, double emax_ha);
 
     static FrequencyGrid read_frequency_grid_file(const std::string& filename, int expected_size);
 
     static int frequency_owner_rank(int ifrequency_zero_based, int mpi_ranks, int rank_shift = 0);
+
+    static FrequencyMPIAssignment frequency_mpi_assignment(int ifrequency_zero_based,
+                                                            int frequency_count,
+                                                            int mpi_ranks,
+                                                            int mpi_rank,
+                                                            int rank_shift,
+                                                            bool use_channel_mpi);
+
+    static int channel_group_owner(int occupied_state,
+                                   int auxiliary_channel,
+                                   int auxiliary_channel_count,
+                                   int frequency_group_size);
+
+    static int global_equation_owner(int occupied_state,
+                                     int frequency_index,
+                                     int auxiliary_channel,
+                                     int frequency_count,
+                                     int auxiliary_channel_count,
+                                     int mpi_ranks,
+                                     int rank_shift = 0);
+
+    static void validate_mpi_layout(const std::string& layout,
+                                    bool use_frequency_mpi,
+                                    bool use_channel_mpi,
+                                    bool write_siab,
+                                    bool write_librpa,
+                                    int frequency_count,
+                                    int mpi_ranks);
 
     static void write_chi0_v1_file(const std::string& filename,
                                    const Chi0V1Metadata& metadata,

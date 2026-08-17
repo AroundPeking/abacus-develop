@@ -90,6 +90,9 @@ struct SternheimerDeltaGridMatrices
 {
     // LAPACK column-major storage.
     std::vector<SternheimerFDHamiltonian::Complex> overlap;
+    std::vector<SternheimerFDHamiltonian::Complex> kinetic;
+    std::vector<SternheimerFDHamiltonian::Complex> local_potential;
+    std::vector<SternheimerFDHamiltonian::Complex> nonlocal;
     std::vector<SternheimerFDHamiltonian::Complex> hamiltonian;
 };
 
@@ -159,6 +162,11 @@ struct SternheimerDeltaLinearResponse
     SternheimerDeltaPostprocessResult response;
     SternheimerRPA::SolverResult solver;
     double residual_norm = 0.0;
+};
+
+struct SternheimerDeltaFixedSubspace
+{
+    std::vector<SternheimerFDHamiltonian::Vector> functions;
 };
 
 SternheimerDeltaPostprocessResult postprocess_delta_sternheimer_solution(
