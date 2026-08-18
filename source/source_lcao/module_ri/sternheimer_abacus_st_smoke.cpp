@@ -77,6 +77,11 @@ namespace
 namespace siab = ::module_ri::sternheimer_siab;
 namespace sternheimer_chi0 = ::module_ri::sternheimer_chi0;
 
+std::string sternheimer_abfs_perturbation_source(const std::vector<std::string>& explicit_abfs_files)
+{
+    return explicit_abfs_files.empty() ? "product_pca" : "explicit_abfs";
+}
+
 constexpr const char* kSmokeEnv = "ABACUS_STERNHEIMER_FD_ST_SMOKE";
 constexpr const char* kOutputEnv = "ABACUS_STERNHEIMER_FD_ST_OUT";
 constexpr const char* kBandsEnv = "ABACUS_STERNHEIMER_FD_ST_BANDS";
@@ -4358,7 +4363,6 @@ void run_sternheimer_abacus_chi0_output_impl(
             transition_window.emin_ha = std::min(transition_window.emin_ha, spin_window.emin_ha);
             transition_window.emax_ha = std::max(transition_window.emax_ha, spin_window.emax_ha);
         }
-        const bool use_frequency_grid_file = !frequency_grid_file.empty();
         const std::string frequency_grid_source = use_frequency_grid_file ? "file" : "greenx_minimax";
         const SternheimerRPA::FrequencyGrid frequency_grid
             = use_frequency_grid_file
