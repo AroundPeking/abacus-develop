@@ -730,6 +730,8 @@ void ModuleIO::ctrl_scf_lcao(UnitCell& ucell,
                                                           orb,
                                                           occupied_kpoints,
                                                           {kv.nmp[0], kv.nmp[1], kv.nmp[2]},
+                                                          pw_wfc,
+                                                          &sf,
                                                           global_out_dir);
     }
 #endif
