@@ -2607,7 +2607,8 @@ void run_sternheimer_periodic_lcao_chi0_output(
                 return make_sternheimer_fd_hamiltonian_from_local_potential(target_grid_data,
                                                                              kpoint_parallel_full_potential,
                                                                              1.0,
-                                                                             std::move(nonlocal_projector));
+                                                                             std::move(nonlocal_projector),
+                                                                             PARAM.inp.sternheimer_fd_order);
             }
             return use_frequency_mpi
                        ? make_sternheimer_fd_full_hamiltonian(
@@ -2616,14 +2617,16 @@ void run_sternheimer_periodic_lcao_chi0_output(
                              ucell,
                              0,
                              1.0,
-                             sternheimer_lcao_grid_kpoint(target_record))
+                             sternheimer_lcao_grid_kpoint(target_record),
+                             PARAM.inp.sternheimer_fd_order)
                        : make_sternheimer_fd_hamiltonian(
                              potential,
                              pw_basis,
                              ucell,
                              0,
                              1.0,
-                             sternheimer_lcao_grid_kpoint(target_record));
+                             sternheimer_lcao_grid_kpoint(target_record),
+                             PARAM.inp.sternheimer_fd_order);
         }();
 
         std::vector<SternheimerFDHamiltonian::Vector> target_occupied_projector;
@@ -3612,7 +3615,7 @@ void run_sternheimer_abacus_st_smoke(const elecstate::Potential& potential,
 
         const SternheimerFDHamiltonian hamiltonian
             = make_sternheimer_fd_hamiltonian(
-                potential, pw_basis, ucell, 0, 1.0, PARAM.inp.sternheimer_fd_order);
+                potential, pw_basis, ucell, 0, 1.0, {0.0, 0.0, 0.0}, PARAM.inp.sternheimer_fd_order);
         const SternheimerFDZeroOrderStates states = solve_fd_zero_order_auto(hamiltonian,
                                                                              num_bands,
                                                                              result.grid_data.volume_element,
@@ -4174,12 +4177,27 @@ void run_sternheimer_abacus_chi0_output_impl(
             const SternheimerLCAOOccupiedKPoint* response_kpoint = response_kpoints[response_index];
             const int response_k_index = response_kpoint == nullptr ? 0 : response_kpoint->local_k_index;
             const int response_spin_index = response_kpoint == nullptr ? 0 : response_kpoint->spin_index;
+            const SternheimerReducedKPoint response_grid_kpoint
+                = response_kpoint == nullptr ? SternheimerReducedKPoint{0.0, 0.0, 0.0}
+                                              : sternheimer_lcao_grid_kpoint(*response_kpoint);
             hamiltonians.push_back(
                 use_frequency_mpi
                     ? make_sternheimer_fd_full_hamiltonian(
-                          potential, pw_basis, ucell, response_spin_index, 1.0)
+                          potential,
+                          pw_basis,
+                          ucell,
+                          response_spin_index,
+                          1.0,
+                          response_grid_kpoint,
+                          PARAM.inp.sternheimer_fd_order)
                     : make_sternheimer_fd_hamiltonian(
-                          potential, pw_basis, ucell, response_spin_index, 1.0));
+                          potential,
+                          pw_basis,
+                          ucell,
+                          response_spin_index,
+                          1.0,
+                          response_grid_kpoint,
+                          PARAM.inp.sternheimer_fd_order));
             append_chi0_progress_event("hamiltonian_ready",
                                        0,
                                        -1,

@@ -178,7 +178,8 @@ SternheimerFDHamiltonian make_sternheimer_fd_hamiltonian(const elecstate::Potent
                                                          const UnitCell& ucell,
                                                          const int spin,
                                                          const double kinetic_prefactor,
-                                                         const SternheimerReducedKPoint& kpoint)
+                                                         const SternheimerReducedKPoint& kpoint,
+                                                         const int finite_difference_order)
 {
     SternheimerABACUSFDGridData grid_data = make_sternheimer_fd_grid(pw_basis);
     grid_data.grid.kpoint = kpoint;
@@ -198,7 +199,8 @@ SternheimerFDHamiltonian make_sternheimer_fd_full_hamiltonian(const elecstate::P
                                                               const UnitCell& ucell,
                                                               const int spin,
                                                               const double kinetic_prefactor,
-                                                              const SternheimerReducedKPoint& kpoint)
+                                                              const SternheimerReducedKPoint& kpoint,
+                                                              const int finite_difference_order)
 {
     SternheimerABACUSFDGridData grid_data = make_sternheimer_fd_full_grid(pw_basis);
     grid_data.grid.kpoint = kpoint;
