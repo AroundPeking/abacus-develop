@@ -1377,6 +1377,15 @@ SternheimerFDHamiltonian::Vector build_delta_sternheimer_sos_wavefunction(
     return response;
 }
 
+SternheimerDeltaFixedSubspace build_delta_sternheimer_fixed_subspace(
+    const std::vector<SternheimerFDHamiltonian::Vector>& occupied_wavefunctions,
+    const std::vector<SternheimerDeltaVirtualState>& virtual_states)
+{
+    SternheimerDeltaFixedSubspace fixed_subspace;
+    fixed_subspace.functions = collect_fixed_subspace(occupied_wavefunctions, virtual_states);
+    return fixed_subspace;
+}
+
 SternheimerDeltaLinearResponse solve_delta_sternheimer_linear_response(
     const SternheimerFDHamiltonian& hamiltonian,
     const SternheimerDeltaFixedSubspace& fixed_subspace,
@@ -1452,7 +1461,7 @@ SternheimerDeltaLinearResponse solve_delta_sternheimer_linear_response(
 
     SternheimerDeltaLinearResponse result;
     result.response.out_wavefunction.assign(static_cast<std::size_t>(grid_size), Complex(0.0, 0.0));
-    if (fixed_subspace.size() >= static_cast<std::size_t>(grid_size))
+    if (fixed_functions.size() >= static_cast<std::size_t>(grid_size))
     {
         const double projected_rhs_norm = sternheimer_fd_grid_norm(projected_rhs, volume_element);
         const double rhs_norm = sternheimer_fd_grid_norm(rhs, volume_element);
@@ -1472,7 +1481,7 @@ SternheimerDeltaLinearResponse solve_delta_sternheimer_linear_response(
         result.solver
             = SternheimerRPA::solve_gmres(problem, projected_rhs, result.response.out_wavefunction, options);
     }
-    SternheimerRPA::project_out_subspace(fixed_subspace, dot, result.response.out_wavefunction);
+    SternheimerRPA::project_out_subspace(fixed_functions, dot, result.response.out_wavefunction);
 
     const SternheimerDeltaCoefficientComponents components
         = compute_delta_coefficient_components(virtual_states,
@@ -1502,7 +1511,7 @@ SternheimerDeltaLinearResponse solve_delta_sternheimer_linear_response(
     }
 
     Vector q_rhs = rhs;
-    SternheimerRPA::project_out_subspace(fixed_subspace, dot, q_rhs);
+    SternheimerRPA::project_out_subspace(fixed_functions, dot, q_rhs);
 #pragma omp parallel for schedule(static)
     for (std::size_t ir = 0; ir != q_residual.size(); ++ir)
     {

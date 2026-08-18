@@ -239,6 +239,10 @@ std::vector<SternheimerFDHamiltonian::Complex> delta_sternheimer_perturbation_ma
     const SternheimerFDHamiltonian::Vector& occupied_wavefunction,
     double volume_element);
 
+SternheimerDeltaFixedSubspace build_delta_sternheimer_fixed_subspace(
+    const std::vector<SternheimerFDHamiltonian::Vector>& occupied_wavefunctions,
+    const std::vector<SternheimerDeltaVirtualState>& virtual_states);
+
 // Assemble the positive-frequency SOS branch from explicit orthonormal
 // virtual states. Energies and omega must use the same units.
 SternheimerFDHamiltonian::Vector build_delta_sternheimer_sos_wavefunction(
