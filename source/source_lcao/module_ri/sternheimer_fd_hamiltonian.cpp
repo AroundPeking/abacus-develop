@@ -12,6 +12,38 @@
 #include <omp.h>
 #endif
 
+namespace
+{
+
+template <int Radius>
+std::array<double, Radius + 1> second_derivative_coefficients();
+
+template <>
+std::array<double, 2> second_derivative_coefficients<1>()
+{
+    return {{-2.0, 1.0}};
+}
+
+template <>
+std::array<double, 3> second_derivative_coefficients<2>()
+{
+    return {{-5.0 / 2.0, 4.0 / 3.0, -1.0 / 12.0}};
+}
+
+template <>
+std::array<double, 4> second_derivative_coefficients<3>()
+{
+    return {{-49.0 / 18.0, 3.0 / 2.0, -3.0 / 20.0, 1.0 / 90.0}};
+}
+
+template <>
+std::array<double, 5> second_derivative_coefficients<4>()
+{
+    return {{-205.0 / 72.0, 8.0 / 5.0, -1.0 / 5.0, 8.0 / 315.0, -1.0 / 560.0}};
+}
+
+} // namespace
+
 namespace ModuleRI
 {
 
@@ -45,6 +77,11 @@ SternheimerFDHamiltonian::SternheimerFDHamiltonian(
     {
         throw std::invalid_argument("SternheimerFDHamiltonian requires a non-negative kinetic prefactor.");
     }
+    if (finite_difference_order_ != 2 && finite_difference_order_ != 4 && finite_difference_order_ != 6
+        && finite_difference_order_ != 8)
+    {
+        throw std::invalid_argument("SternheimerFDHamiltonian finite-difference order must be 2, 4, 6, or 8.");
+    }
     bool has_nonzero_twist = false;
     for (const double coordinate: grid_.kpoint)
     {
@@ -57,6 +94,23 @@ SternheimerFDHamiltonian::SternheimerFDHamiltonian(
     if (!grid_.periodic && has_nonzero_twist)
     {
         throw std::invalid_argument("SternheimerFDHamiltonian nonperiodic grids cannot use a Bloch twist.");
+    }
+    bool has_explicit_lattice = false;
+    bool has_off_diagonal_lattice = false;
+    for (std::size_t row = 0; row != grid_.lattice_vectors.size(); ++row)
+    {
+        for (std::size_t column = 0; column != grid_.lattice_vectors[row].size(); ++column)
+        {
+            const double value = grid_.lattice_vectors[row][column];
+            has_explicit_lattice = has_explicit_lattice || value != 0.0;
+            has_off_diagonal_lattice
+                = has_off_diagonal_lattice || (row != column && std::abs(value) > 1.0e-14);
+        }
+    }
+    if (finite_difference_order_ > 2 && (has_nonzero_twist || (has_explicit_lattice && has_off_diagonal_lattice)))
+    {
+        throw std::invalid_argument(
+            "Higher-order Sternheimer finite differences currently require an orthogonal Gamma-point grid.");
     }
     if (nonlocal_projector_ != nullptr && nonlocal_projector_->grid_size() != grid_.size())
     {
@@ -111,6 +165,11 @@ double SternheimerFDHamiltonian::kinetic_prefactor() const
     return kinetic_prefactor_;
 }
 
+int SternheimerFDHamiltonian::finite_difference_order() const
+{
+    return finite_difference_order_;
+}
+
 const SternheimerReducedKPoint& SternheimerFDHamiltonian::kpoint() const
 {
     return grid_.kpoint;
@@ -153,14 +212,40 @@ SternheimerFDHamiltonian::ShiftedGridPoint SternheimerFDHamiltonian::shifted_gri
     return {index(ix, iy, iz), Complex(1.0, 0.0)};
 }
 
-void SternheimerFDHamiltonian::apply(const Vector& psi, Vector& hpsi, int* threads_used) const
+void SternheimerFDHamiltonian::apply(const Vector& psi, Vector& hpsi) const
 {
     apply(psi, hpsi, nullptr);
 }
 
 void SternheimerFDHamiltonian::apply(const Vector& psi, Vector& hpsi, int* threads_used) const
 {
-    apply_grid_terms(psi, hpsi, true, threads_used);
+    if (static_cast<int>(psi.size()) != grid_.size())
+    {
+        throw std::invalid_argument("SternheimerFDHamiltonian::apply input size does not match the grid.");
+    }
+
+    if (finite_difference_order_ == 2)
+    {
+        apply_grid_terms(psi, hpsi, true, threads_used);
+    }
+    else
+    {
+        hpsi.assign(psi.size(), Complex(0.0, 0.0));
+        switch (finite_difference_order_)
+        {
+        case 4:
+            apply_local<2>(psi, hpsi, threads_used);
+            break;
+        case 6:
+            apply_local<3>(psi, hpsi, threads_used);
+            break;
+        case 8:
+            apply_local<4>(psi, hpsi, threads_used);
+            break;
+        default:
+            throw std::logic_error("Unsupported Sternheimer finite-difference order.");
+        }
+    }
     if (nonlocal_projector_ != nullptr)
     {
         nonlocal_projector_->add_to(psi, hpsi);
@@ -176,7 +261,36 @@ void SternheimerFDHamiltonian::apply_kinetic(const Vector& psi,
                                              Vector& kinetic_psi,
                                              int* threads_used) const
 {
-    apply_grid_terms(psi, kinetic_psi, false, threads_used);
+    if (finite_difference_order_ == 2)
+    {
+        apply_grid_terms(psi, kinetic_psi, false, threads_used);
+        return;
+    }
+    if (static_cast<int>(psi.size()) != grid_.size())
+    {
+        throw std::invalid_argument(
+            "SternheimerFDHamiltonian::apply_kinetic input size does not match the grid.");
+    }
+    kinetic_psi.assign(psi.size(), Complex(0.0, 0.0));
+    switch (finite_difference_order_)
+    {
+    case 4:
+        apply_local<2>(psi, kinetic_psi, threads_used);
+        break;
+    case 6:
+        apply_local<3>(psi, kinetic_psi, threads_used);
+        break;
+    case 8:
+        apply_local<4>(psi, kinetic_psi, threads_used);
+        break;
+    default:
+        throw std::logic_error("Unsupported Sternheimer finite-difference order.");
+    }
+#pragma omp parallel for schedule(static)
+    for (std::size_t ir = 0; ir != psi.size(); ++ir)
+    {
+        kinetic_psi[ir] -= local_potential_[ir] * psi[ir];
+    }
 }
 
 void SternheimerFDHamiltonian::apply_grid_terms(const Vector& psi,

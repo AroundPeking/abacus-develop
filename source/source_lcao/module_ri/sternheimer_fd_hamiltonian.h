@@ -56,6 +56,7 @@ class SternheimerFDHamiltonian
     const Grid& grid() const;
     const std::vector<double>& local_potential() const;
     double kinetic_prefactor() const;
+    int finite_difference_order() const;
     const SternheimerReducedKPoint& kpoint() const;
     const SternheimerFDNonlocalProjector* nonlocal_projector() const;
 
@@ -76,6 +77,9 @@ class SternheimerFDHamiltonian
     int index(int ix, int iy, int iz) const;
 
   private:
+    template <int Radius>
+    void apply_local(const Vector& psi, Vector& hpsi, int* threads_used) const;
+
     static constexpr int max_stencil_radius_ = 4;
 
     struct ShiftedGridPoint
