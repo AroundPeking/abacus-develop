@@ -76,6 +76,8 @@ class SternheimerFDHamiltonian
     int index(int ix, int iy, int iz) const;
 
   private:
+    static constexpr int max_stencil_radius_ = 4;
+
     struct ShiftedGridPoint
     {
         int index = -1;
