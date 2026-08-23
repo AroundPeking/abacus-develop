@@ -1,5 +1,7 @@
 #include "source_lcao/module_ri/sternheimer_siab_memory.h"
 
+#include "source_lcao/module_ri/sternheimer_abfs_perturbation.h"
+
 #include <complex>
 #include <cstddef>
 #include <limits>
@@ -38,10 +40,14 @@ SternheimerSIABMemoryEstimate estimate_sternheimer_siab_dense_memory(const int g
 
     SternheimerSIABMemoryEstimate result;
     result.coulomb_metric_bytes = multiply(multiply(raw_auxiliary_channels, raw_auxiliary_channels), sizeof(double));
-    result.raw_potential_bytes = multiply(multiply(grid_size, raw_auxiliary_channels), sizeof(double));
     result.transformed_potential_bytes = multiply(multiply(grid_size, response_channels), sizeof(double));
+    const std::uint64_t transform_chunk = static_cast<std::uint64_t>(sternheimer_abfs_transform_grid_chunk);
+    const std::uint64_t transform_columns
+        = add(static_cast<std::uint64_t>(raw_auxiliary_channels),
+              static_cast<std::uint64_t>(response_channels));
     result.channel_transform_workspace_bytes
-        = add(result.raw_potential_bytes, result.transformed_potential_bytes);
+        = add(multiply(multiply(transform_chunk, transform_columns), sizeof(double)),
+              multiply(transform_chunk, sizeof(std::size_t)));
     result.reciprocal_primitive_bytes
         = multiply(multiply(primitive_count, reciprocal_count), sizeof(std::complex<double>));
     result.primitive_overlap_bytes
@@ -51,8 +57,7 @@ SternheimerSIABMemoryEstimate estimate_sternheimer_siab_dense_memory(const int g
     const std::uint64_t row_count
         = multiply(multiply(occupied_states, response_channels), frequency_count);
     result.gathered_reference_row_bytes = multiply(3U, multiply(row_count, row_bytes));
-    result.total_bytes = add(add(add(add(result.coulomb_metric_bytes, result.raw_potential_bytes),
-                                     result.transformed_potential_bytes),
+    result.total_bytes = add(add(add(result.coulomb_metric_bytes, result.transformed_potential_bytes),
                                  result.channel_transform_workspace_bytes),
                              add(result.reciprocal_primitive_bytes,
                                  add(result.primitive_overlap_bytes, result.gathered_reference_row_bytes)));

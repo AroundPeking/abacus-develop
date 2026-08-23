@@ -1135,11 +1135,16 @@ SternheimerABFBuildData build_abfs_ccp_data(const UnitCell& ucell,
     result.radials_by_type = std::move(radials_by_type);
     result.atom_types = std::move(atom_types);
     result.atom_positions = std::move(atom_positions);
-    result.channels = sample_sternheimer_abf_grid_channels(result.radials_by_type,
-                                                            result.atom_types,
-                                                            result.atom_positions,
-                                                            grid,
-                                                            max_channels);
+    result.channels = build_coulomb_metric
+                          ? describe_sternheimer_abf_grid_channels(result.radials_by_type,
+                                                                   result.atom_types,
+                                                                   result.atom_positions,
+                                                                   max_channels)
+                          : sample_sternheimer_abf_grid_channels(result.radials_by_type,
+                                                                 result.atom_types,
+                                                                 result.atom_positions,
+                                                                 grid,
+                                                                 max_channels);
     if (build_coulomb_metric)
     {
         if (max_channels > 0)
@@ -1889,15 +1894,23 @@ std::vector<std::vector<double>> collect_channel_potentials(const std::vector<St
     return potentials;
 }
 
-std::vector<std::vector<double>> take_channel_potentials(std::vector<SternheimerABFGridChannel>& channels)
+std::vector<std::vector<double>> transform_channel_potentials(
+    SternheimerABFBuildData& abfs_data,
+    const SternheimerFDHamiltonian::Grid& grid,
+    const SternheimerCoulombWhitening& whitening)
 {
-    std::vector<std::vector<double>> potentials;
-    potentials.reserve(channels.size());
-    for (SternheimerABFGridChannel& channel: channels)
+    if (abfs_data.channels.size() != static_cast<std::size_t>(whitening.raw_dimension)
+        || abfs_data.channels.empty())
     {
-        potentials.push_back(std::move(channel.potential_r));
+        throw std::invalid_argument("Sternheimer Coulomb transform does not match the raw ABFS channel count.");
     }
-    return potentials;
+    return sample_sternheimer_abf_grid_channel_transform(abfs_data.radials_by_type,
+                                                          abfs_data.atom_types,
+                                                          abfs_data.atom_positions,
+                                                          grid,
+                                                          abfs_data.channels,
+                                                          whitening.transform,
+                                                          whitening.retained_rank);
 }
 
 std::vector<SternheimerFDHamiltonian::Vector> collect_channel_potentials(
@@ -1935,6 +1948,17 @@ std::vector<std::vector<Scalar>> scale_potentials(const std::vector<std::vector<
         }
     }
     return scaled;
+}
+
+void scale_potentials_in_place(std::vector<std::vector<double>>& potentials, const double factor)
+{
+    for (std::vector<double>& potential: potentials)
+    {
+        for (double& value: potential)
+        {
+            value *= factor;
+        }
+    }
 }
 
 template <typename Channel>
@@ -4498,9 +4522,8 @@ void run_sternheimer_abacus_chi0_output_impl(
                     throw std::runtime_error("Failed to open Sternheimer SIAB memory diagnostic file.");
                 }
                 memory << "# ABACUS Sternheimer SIAB conservative dense-memory estimate\n";
-                memory << "representation sampled_raw_full_coulomb_whitening_v1\n";
+                memory << "representation streamed_raw_hartree_and_serial_reciprocal_primitives_v1\n";
                 memory << "coulomb_metric_bytes " << siab_memory_estimate.coulomb_metric_bytes << '\n';
-                memory << "raw_potential_bytes " << siab_memory_estimate.raw_potential_bytes << '\n';
                 memory << "transformed_potential_bytes " << siab_memory_estimate.transformed_potential_bytes << '\n';
                 memory << "channel_transform_workspace_bytes "
                        << siab_memory_estimate.channel_transform_workspace_bytes << '\n';
@@ -4711,18 +4734,29 @@ void run_sternheimer_abacus_chi0_output_impl(
         }
 
         std::vector<std::vector<double>> potentials;
-        if (write_siab)
+        std::vector<std::vector<double>> perturbations_ry;
+        if (write_librpa)
         {
-            const std::vector<std::vector<double>> raw_potentials = take_channel_potentials(channels);
-            potentials = apply_sternheimer_channel_transform(raw_potentials, coulomb_whitening);
+            potentials = collect_channel_potentials(channels);
+            // Raw ABFS Coulomb potentials are retained in Ha for M=V chi0 V output.
+            perturbations_ry = scale_potentials(potentials, kHartreeToRydberg);
         }
         else
         {
-            potentials = collect_channel_potentials(channels);
+            perturbations_ry = transform_channel_potentials(abfs_data, grid_data.grid, coulomb_whitening);
+            scale_potentials_in_place(perturbations_ry, kHartreeToRydberg);
+            if (GlobalV::MY_RANK == 0)
+            {
+                write_abfs_channel_diagnostic("STERNHEIMER_ABFS_CHANNELS.dat", channels);
+            }
+            for (SternheimerABFGridChannel& channel: channels)
+            {
+                channel.potential_r.clear();
+                channel.potential_r.shrink_to_fit();
+            }
         }
         // ABFS Coulomb potentials are in Ha units; the FD Hamiltonian and omega are in Ry.
         // Keep Ha potentials for M=V chi0 V output, but use Ry perturbations in the linear equation.
-        const std::vector<std::vector<double>> perturbations_ry = scale_potentials(potentials, kHartreeToRydberg);
 
         if (use_delta_sternheimer)
         {

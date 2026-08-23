@@ -73,6 +73,15 @@ std::vector<SternheimerABFGridChannel> sample_sternheimer_abf_grid_channels(
     const SternheimerFDHamiltonian::Grid& grid,
     int max_channels = -1);
 
+std::vector<std::vector<double>> sample_sternheimer_abf_grid_channel_transform(
+    const std::vector<std::vector<SternheimerRadialPerturbation>>& radials_by_type,
+    const std::vector<int>& atom_types,
+    const std::vector<ModuleBase::Vector3<double>>& atom_positions,
+    const SternheimerFDHamiltonian::Grid& grid,
+    std::vector<SternheimerABFGridChannel>& raw_channels,
+    const std::vector<double>& raw_to_output,
+    int output_channels);
+
 std::vector<SternheimerABFBlochGridChannel> sample_sternheimer_abf_bloch_grid_channels(
     const std::vector<std::vector<SternheimerRadialPerturbation>>& radials_by_type,
     const std::vector<int>& atom_types,

@@ -28,10 +28,6 @@ std::vector<double> apply_sternheimer_channel_transform(const std::vector<double
                                                         int raw_dimension,
                                                         const SternheimerCoulombWhitening& whitening);
 
-std::vector<std::vector<double>> apply_sternheimer_channel_transform(
-    const std::vector<std::vector<double>>& raw_channel_grid_values,
-    const SternheimerCoulombWhitening& whitening);
-
 } // namespace ModuleRI
 
 #endif

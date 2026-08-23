@@ -9,7 +9,6 @@ namespace ModuleRI
 struct SternheimerSIABMemoryEstimate
 {
     std::uint64_t coulomb_metric_bytes = 0;
-    std::uint64_t raw_potential_bytes = 0;
     std::uint64_t transformed_potential_bytes = 0;
     std::uint64_t channel_transform_workspace_bytes = 0;
     std::uint64_t reciprocal_primitive_bytes = 0;
