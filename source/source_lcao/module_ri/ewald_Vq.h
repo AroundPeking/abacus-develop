@@ -114,6 +114,11 @@ class Ewald_Vq
         std::map<TA, std::map<TAC, RI::Tensor<Tdata>>>& Vs_bare,
         const std::size_t local_production_blocks,
         const double local_reference_norm);
+    inline std::map<TA, std::map<TAC, RI::Tensor<Tdata>>> cal_bare_periodic_Vs(
+        const UnitCell& ucell,
+        const std::vector<TA>& list_A0,
+        const std::vector<TAC>& list_A1,
+        std::map<TA, std::map<TAC, RI::Tensor<Tdata>>>& Vs_in);
     inline std::map<TA, std::map<TAC, RI::Tensor<Tdata>>> cal_short_range_Vs_serial_full(
         const UnitCell& ucell,
         std::map<TA, std::map<TAC, RI::Tensor<Tdata>>>& Vs_in_full,

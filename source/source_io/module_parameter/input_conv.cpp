@@ -433,11 +433,13 @@ void Input_Conv::Convert()
         {
             throw std::invalid_argument("RPA currently expects basis_type=lcao when initializing RI Coulomb parameters.");
         }
+        const std::string singularity_correction
+            = PARAM.inp.exx_singularity_correction == "default" ? "massidda" : PARAM.inp.exx_singularity_correction;
         GlobalC::exx_info.info_global.hybrid_alpha = 1.0;
         GlobalC::exx_info.info_global.ccp_type = Conv_Coulomb_Pot_K::Ccp_Type::Hf;
         GlobalC::exx_info.info_global.coulomb_param[Conv_Coulomb_Pot_K::Coulomb_Type::Fock] = {{
             {"alpha", "1"},
-            {"singularity_correction", PARAM.inp.exx_singularity_correction}
+            {"singularity_correction", singularity_correction}
         }};
     }
 

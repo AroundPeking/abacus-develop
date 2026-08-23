@@ -4,7 +4,12 @@
 #include "source_hamilt/hamilt.h"         // use Hamilt<T>
 #include "source_lcao/hamilt_lcao.h"      // use hamilt::HamiltLCAO<TK, TR>
 
+#include <cmath>
 #include <complex>
+#include <iomanip>
+#include <sstream>
+#include <stdexcept>
+#include <utility>
 
 // functions
 #include "../module_unk/berryphase.h"                          // use berryphase
@@ -27,11 +32,307 @@
 #ifdef __EXX
 #include "source_lcao/module_ri/Exx_LRI_interface.h" // use EXX codes
 #include "source_lcao/module_ri/RPA_LRI.h"           // use RPA code
+#include "source_lcao/module_ri/RI_Util.h"
+#include "source_lcao/module_ri/module_exx_symmetry/symmetry_rotation.h"
+#include "source_lcao/module_ri/sternheimer_abacus_st_smoke.h"
 #endif
 #include "../module_qo/to_qo.h"                // use toQO
 #include "source_lcao/module_rdmft/rdmft.h" // use RDMFT codes
 #include "source_lcao/rho_tau_lcao.h"       // mohan add 2025-10-24
 #include "source_lcao/module_operator_lcao/overlap.h" // use hamilt::Overlap for NAMD
+
+#ifdef __EXX
+namespace
+{
+
+template <typename TK>
+std::vector<ModuleRI::SternheimerLCAOOccupiedKPoint> gather_sternheimer_lcao_occupied_kpoints(
+    const elecstate::ElecState& elec_state,
+    const K_Vectors& kv,
+    const UnitCell& ucell,
+    const Parallel_Orbitals& parallel_orbitals,
+    const psi::Psi<TK>& psi)
+{
+    if (kv.get_nks() != kv.get_nkstot())
+    {
+        throw std::runtime_error(
+            "Sternheimer solid LCAO coefficient gathering currently requires KPAR=1.");
+    }
+    if (elec_state.wg.nr != kv.get_nks()
+        || elec_state.ekb.nr != kv.get_nks()
+        || psi.get_nk() != kv.get_nks()
+        || kv.ik2iktot.size() != static_cast<std::size_t>(kv.get_nks())
+        || kv.kvec_d.size() != static_cast<std::size_t>(kv.get_nks())
+        || kv.wk.size() != static_cast<std::size_t>(kv.get_nks())
+        || kv.isk.size() != static_cast<std::size_t>(kv.get_nks()))
+    {
+        throw std::runtime_error("Sternheimer solid LCAO k-point metadata are incomplete.");
+    }
+
+    std::vector<ModuleRI::SternheimerLCAOOccupiedKPoint> records;
+    records.reserve(static_cast<std::size_t>(kv.get_nks()));
+    for (int local_k_index = 0; local_k_index != kv.get_nks(); ++local_k_index)
+    {
+        if (!std::isfinite(kv.wk[local_k_index]) || kv.wk[local_k_index] <= 0.0)
+        {
+            throw std::runtime_error("Sternheimer solid LCAO requires positive k-point weights.");
+        }
+        int occupied_count = 0;
+        for (int ib = 0; ib != elec_state.wg.nc; ++ib)
+        {
+            if (elec_state.wg(local_k_index, ib) / kv.wk[local_k_index] > 1.0e-8)
+            {
+                occupied_count = ib + 1;
+            }
+        }
+        if (occupied_count == 0)
+        {
+            continue;
+        }
+
+        ModuleRI::SternheimerLCAOOccupiedKPoint record;
+        record.local_k_index = local_k_index;
+        record.global_k_index = kv.ik2iktot[static_cast<std::size_t>(local_k_index)];
+        record.zero_order_k_index = local_k_index;
+        record.spin_index = kv.isk[static_cast<std::size_t>(local_k_index)];
+        record.kpoint = {kv.kvec_d[static_cast<std::size_t>(local_k_index)].x,
+                         kv.kvec_d[static_cast<std::size_t>(local_k_index)].y,
+                         kv.kvec_d[static_cast<std::size_t>(local_k_index)].z};
+        // ABACUS normalizes sum(wk) to the spin degeneracy, so wg/wk is the band filling, not another spin factor.
+        record.kweight = kv.wk[static_cast<std::size_t>(local_k_index)];
+        record.eigenvalues.reserve(static_cast<std::size_t>(occupied_count));
+        record.occupations.reserve(static_cast<std::size_t>(occupied_count));
+        record.coefficients.assign(
+            static_cast<std::size_t>(occupied_count),
+            std::vector<std::complex<double>>(static_cast<std::size_t>(PARAM.globalv.nlocal),
+                                              std::complex<double>(0.0, 0.0)));
+        for (int ib = 0; ib != occupied_count; ++ib)
+        {
+            record.eigenvalues.push_back(elec_state.ekb(local_k_index, ib));
+            record.occupations.push_back(elec_state.wg(local_k_index, ib) / record.kweight);
+            const int local_band = parallel_orbitals.global2local_col(ib);
+            if (local_band >= 0)
+            {
+                for (int local_basis = 0; local_basis != psi.get_nbasis(); ++local_basis)
+                {
+                    const int global_basis = parallel_orbitals.local2global_row(local_basis);
+                    if (global_basis < 0 || global_basis >= PARAM.globalv.nlocal)
+                    {
+                        throw std::runtime_error("Sternheimer solid LCAO global basis index is out of range.");
+                    }
+                    record.coefficients[static_cast<std::size_t>(ib)][static_cast<std::size_t>(global_basis)]
+                        = std::complex<double>(psi(local_k_index, local_band, local_basis));
+                }
+            }
+#ifdef __MPI
+            MPI_Allreduce(MPI_IN_PLACE,
+                          record.coefficients[static_cast<std::size_t>(ib)].data(),
+                          PARAM.globalv.nlocal,
+                          MPI_DOUBLE_COMPLEX,
+                          MPI_SUM,
+                          MPI_COMM_WORLD);
+#endif
+        }
+        if (ModuleRI::sternheimer_lcao_virtual_state_gathering_enabled())
+        {
+            const int unoccupied_count = elec_state.ekb.nc - occupied_count;
+            record.unoccupied_eigenvalues.reserve(static_cast<std::size_t>(unoccupied_count));
+            record.unoccupied_coefficients.assign(
+                static_cast<std::size_t>(unoccupied_count),
+                std::vector<std::complex<double>>(static_cast<std::size_t>(PARAM.globalv.nlocal),
+                                                  std::complex<double>(0.0, 0.0)));
+            for (int ib = occupied_count; ib != elec_state.ekb.nc; ++ib)
+            {
+                const std::size_t virtual_index = static_cast<std::size_t>(ib - occupied_count);
+                record.unoccupied_eigenvalues.push_back(elec_state.ekb(local_k_index, ib));
+                const int local_band = parallel_orbitals.global2local_col(ib);
+                if (local_band >= 0)
+                {
+                    for (int local_basis = 0; local_basis != psi.get_nbasis(); ++local_basis)
+                    {
+                        const int global_basis = parallel_orbitals.local2global_row(local_basis);
+                        if (global_basis < 0 || global_basis >= PARAM.globalv.nlocal)
+                        {
+                            throw std::runtime_error(
+                                "Sternheimer solid LCAO global unoccupied basis index is out of range.");
+                        }
+                        record.unoccupied_coefficients[virtual_index][static_cast<std::size_t>(global_basis)]
+                            = std::complex<double>(psi(local_k_index, local_band, local_basis));
+                    }
+                }
+#ifdef __MPI
+                MPI_Allreduce(MPI_IN_PLACE,
+                              record.unoccupied_coefficients[virtual_index].data(),
+                              PARAM.globalv.nlocal,
+                              MPI_DOUBLE_COMPLEX,
+                              MPI_SUM,
+                              MPI_COMM_WORLD);
+#endif
+            }
+        }
+        records.push_back(std::move(record));
+    }
+    ModuleRI::validate_sternheimer_lcao_occupied_kpoints(
+        records, kv.get_nks(), kv.get_nkstot(), kv.get_nspin(), PARAM.globalv.nlocal);
+
+    const int ibz_kpoint_count = kv.get_nkstot();
+    const int full_kpoint_count = kv.get_nkstot_full();
+    if (!ModuleRI::sternheimer_full_k_reconstruction_required(
+            ibz_kpoint_count,
+            full_kpoint_count,
+            PARAM.inp.nspin,
+            ModuleSymmetry::Symmetry::symm_flag))
+    {
+        return records;
+    }
+    if (full_kpoint_count <= 0
+        || kv.kstars.size() != static_cast<std::size_t>(ibz_kpoint_count)
+        || kv.ibz_index.size() != static_cast<std::size_t>(full_kpoint_count)
+        || kv.kvec_c_full.size() != static_cast<std::size_t>(full_kpoint_count))
+    {
+        throw std::runtime_error("Sternheimer full-k symmetry metadata are incomplete.");
+    }
+
+    std::vector<int> record_by_ibz(static_cast<std::size_t>(ibz_kpoint_count), -1);
+    for (std::size_t record_index = 0; record_index != records.size(); ++record_index)
+    {
+        const int ibz_index = records[record_index].global_k_index;
+        if (ibz_index < 0 || ibz_index >= ibz_kpoint_count
+            || record_by_ibz[static_cast<std::size_t>(ibz_index)] >= 0)
+        {
+            throw std::runtime_error("Sternheimer IBZ record map is inconsistent.");
+        }
+        record_by_ibz[static_cast<std::size_t>(ibz_index)] = static_cast<int>(record_index);
+    }
+
+    ModuleSymmetry::Symmetry_rotation symmetry_rotation;
+    const std::array<int, 3>& period = RI_Util::get_Born_vonKarmen_period(kv);
+    symmetry_rotation.find_irreducible_sector(ucell.symm,
+                                               ucell.atoms,
+                                               ucell.st,
+                                               RI_Util::get_Born_von_Karmen_cells(period),
+                                               period,
+                                               ucell.lat);
+    symmetry_rotation.cal_Ms(kv, ucell, parallel_orbitals);
+
+    auto restrict_kpoint = [&ucell](ModuleBase::Vector3<double> kpoint) {
+        const double epsilon = ucell.symm.epsilon;
+        kpoint.x = std::fmod(kpoint.x + 100.5 - 0.5 * epsilon, 1.0) - 0.5 + 0.5 * epsilon;
+        kpoint.y = std::fmod(kpoint.y + 100.5 - 0.5 * epsilon, 1.0) - 0.5 + 0.5 * epsilon;
+        kpoint.z = std::fmod(kpoint.z + 100.5 - 0.5 * epsilon, 1.0) - 0.5 + 0.5 * epsilon;
+        if (std::abs(kpoint.x) < epsilon)
+        {
+            kpoint.x = 0.0;
+        }
+        if (std::abs(kpoint.y) < epsilon)
+        {
+            kpoint.y = 0.0;
+        }
+        if (std::abs(kpoint.z) < epsilon)
+        {
+            kpoint.z = 0.0;
+        }
+        return kpoint;
+    };
+    auto same_kpoint = [&ucell](const ModuleBase::Vector3<double>& lhs,
+                                const ModuleBase::Vector3<double>& rhs) {
+        return std::abs(lhs.x - rhs.x) < ucell.symm.epsilon
+               && std::abs(lhs.y - rhs.y) < ucell.symm.epsilon
+               && std::abs(lhs.z - rhs.z) < ucell.symm.epsilon;
+    };
+    auto conjugate_coefficients = [](std::vector<std::vector<std::complex<double>>> coefficients) {
+        for (auto& band: coefficients)
+        {
+            for (auto& coefficient: band)
+            {
+                coefficient = std::conj(coefficient);
+            }
+        }
+        return coefficients;
+    };
+
+    std::vector<ModuleRI::SternheimerLCAOOccupiedKPoint> full_records;
+    full_records.reserve(static_cast<std::size_t>(full_kpoint_count));
+    const double full_kweight = 2.0 / static_cast<double>(full_kpoint_count);
+    const ModuleBase::Matrix3 reciprocal_inverse = ucell.G.Inverse();
+    for (int full_k_index = 0; full_k_index != full_kpoint_count; ++full_k_index)
+    {
+        const int ibz_index = kv.ibz_index[static_cast<std::size_t>(full_k_index)];
+        if (ibz_index < 0 || ibz_index >= ibz_kpoint_count
+            || record_by_ibz[static_cast<std::size_t>(ibz_index)] < 0)
+        {
+            throw std::runtime_error("Sternheimer full-k point has no IBZ source record.");
+        }
+        const ModuleBase::Vector3<double> full_kpoint
+            = restrict_kpoint(kv.kvec_c_full[static_cast<std::size_t>(full_k_index)]
+                              * reciprocal_inverse);
+        int combined_isym = -1;
+        for (const auto& star_member: kv.kstars[static_cast<std::size_t>(ibz_index)])
+        {
+            if (same_kpoint(restrict_kpoint(star_member.second), full_kpoint))
+            {
+                combined_isym = star_member.first;
+                break;
+            }
+        }
+        if (combined_isym < 0)
+        {
+            std::ostringstream message;
+            message << std::setprecision(17)
+                    << "Sternheimer full-k point is absent from its IBZ k-star: full_index="
+                    << full_k_index << " ibz_index=" << ibz_index << " full_direct=("
+                    << full_kpoint.x << "," << full_kpoint.y << "," << full_kpoint.z
+                    << ") full_cartesian=("
+                    << kv.kvec_c_full[static_cast<std::size_t>(full_k_index)].x << ","
+                    << kv.kvec_c_full[static_cast<std::size_t>(full_k_index)].y << ","
+                    << kv.kvec_c_full[static_cast<std::size_t>(full_k_index)].z << ") star=";
+            for (const auto& star_member: kv.kstars[static_cast<std::size_t>(ibz_index)])
+            {
+                const auto member = restrict_kpoint(star_member.second);
+                message << " [isym=" << star_member.first << " k=(" << member.x << ","
+                        << member.y << "," << member.z << ")]";
+            }
+            throw std::runtime_error(message.str());
+        }
+
+        const auto& ibz_record
+            = records[static_cast<std::size_t>(record_by_ibz[static_cast<std::size_t>(ibz_index)])];
+        const int spatial_isym = combined_isym % ucell.symm.nrotk;
+        const bool time_reversal = combined_isym >= ucell.symm.nrotk;
+        auto rotate_coefficients = [&](const std::vector<std::vector<std::complex<double>>>& coefficients) {
+            if (coefficients.empty())
+            {
+                return coefficients;
+            }
+            if (spatial_isym == 0)
+            {
+                return time_reversal ? conjugate_coefficients(coefficients) : coefficients;
+            }
+            return symmetry_rotation.rotate_ao_coefficients(
+                coefficients, ibz_index, spatial_isym, parallel_orbitals, time_reversal);
+        };
+        auto full_record = ModuleRI::make_sternheimer_full_kpoint_record(
+            ibz_record,
+            full_k_index,
+            {full_kpoint.x, full_kpoint.y, full_kpoint.z},
+            full_kweight,
+            rotate_coefficients(ibz_record.coefficients),
+            rotate_coefficients(ibz_record.unoccupied_coefficients));
+        full_record.symmetry_spatial_isym = spatial_isym;
+        full_record.symmetry_time_reversal = time_reversal;
+        full_records.push_back(std::move(full_record));
+    }
+    ModuleRI::validate_sternheimer_lcao_occupied_kpoints(full_records,
+                                                         full_kpoint_count,
+                                                         full_kpoint_count,
+                                                         1,
+                                                         PARAM.globalv.nlocal,
+                                                         ibz_kpoint_count);
+    return full_records;
+}
+
+} // namespace
+#endif
 
 template <typename TK, typename TR>
 void ModuleIO::ctrl_scf_lcao(UnitCell& ucell,
@@ -412,6 +713,26 @@ void ModuleIO::ctrl_scf_lcao(UnitCell& ucell,
     {
         RPA_LRI<TK, double> rpa_lri_double(GlobalC::exx_info.info_ri);
         rpa_lri_double.postSCF(ucell, MPI_COMM_WORLD, *dm, pelec, kv, orb, pv, *psi);
+    }
+
+    if (inp.out_sternheimer_librpa || inp.out_sternheimer_siab)
+    {
+        if (pelec == nullptr || pelec->pot == nullptr || pw_rho == nullptr || psi == nullptr)
+        {
+            ModuleBase::WARNING_QUIT("ctrl_scf_lcao", "Sternheimer LCAO output requires potential, grid, and KS states.");
+        }
+        const auto occupied_kpoints
+            = gather_sternheimer_lcao_occupied_kpoints(*pelec, kv, ucell, pv, *psi);
+        ModuleRI::run_sternheimer_abacus_lcao_chi0_output(*(pelec->pot),
+                                                          *pw_rho,
+                                                          ucell,
+                                                          *pelec,
+                                                          orb,
+                                                          occupied_kpoints,
+                                                          {kv.nmp[0], kv.nmp[1], kv.nmp[2]},
+                                                          pw_wfc,
+                                                          &sf,
+                                                          global_out_dir);
     }
 #endif
 

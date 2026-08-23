@@ -32,6 +32,7 @@ option(ENABLE_LCAO "Enable LCAO algorithm" ON)
 option(USE_ELPA "Enable ELPA for LCAO" ON)
 option(ENABLE_LIBRI "Enable LibRI for hybrid functional" OFF)
 option(ENABLE_LIBCOMM "Enable LibComm" OFF)
+option(ENABLE_GREENX_MINIMAX "Enable bundled GreenX minimax grids for Sternheimer response" ON)
 option(ENABLE_PEXSI "Enable PEXSI for LCAO" OFF)
 
 option(BUILD_TESTING "Build unittests" OFF)
@@ -98,7 +99,7 @@ You can install Git first and reinstall abacus.")
   else()
     message(STATUS "Found git: attempting to get commit info...")
     execute_process(
-      COMMAND ${GIT_EXECUTABLE} log -1 --pretty=format:%h
+      COMMAND ${GIT_EXECUTABLE} log -1 --pretty=format:%H
       OUTPUT_VARIABLE GIT_COMMIT_HASH
       OUTPUT_STRIP_TRAILING_WHITESPACE
       WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
@@ -674,6 +675,10 @@ if(ENABLE_LIBCOMM)
   include_directories(${LIBCOMM_DIR}/include)
 endif()
 
+if(ENABLE_LIBRI AND ENABLE_GREENX_MINIMAX)
+  enable_language(Fortran)
+  add_compile_definitions(__GREENX_MINIMAX)
+endif()
 
 if(DEFINED Libxc_DIR)
   set(ENABLE_LIBXC ON)
@@ -731,6 +736,10 @@ endif()
 include(cmake/Testing.cmake)
 
 add_subdirectory(source)
+
+if(TARGET abacus_greenx_minimax)
+  target_link_libraries(${ABACUS_BIN_NAME} abacus_greenx_minimax)
+endif()
 
 include(cmake/BuildInfo.cmake)
 setup_build_info()

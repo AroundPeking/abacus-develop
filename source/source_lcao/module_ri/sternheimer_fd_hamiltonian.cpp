@@ -1,0 +1,513 @@
+#include "source_lcao/module_ri/sternheimer_fd_hamiltonian.h"
+
+#include "source_base/module_external/lapack_connector.h"
+
+#include <algorithm>
+#include <cmath>
+#include <stdexcept>
+#include <string>
+#include <utility>
+
+#ifdef _OPENMP
+#include <omp.h>
+#endif
+
+namespace
+{
+
+struct FiniteDifferenceWeights
+{
+    int radius = 0;
+    std::array<double, 5> second{};
+    std::array<double, 4> first{};
+};
+
+FiniteDifferenceWeights finite_difference_weights(const int order)
+{
+    FiniteDifferenceWeights weights;
+    weights.radius = order / 2;
+    switch (order)
+    {
+    case 2:
+        weights.second = {{-2.0, 1.0, 0.0, 0.0, 0.0}};
+        weights.first = {{1.0 / 2.0, 0.0, 0.0, 0.0}};
+        break;
+    case 4:
+        weights.second = {{-5.0 / 2.0, 4.0 / 3.0, -1.0 / 12.0, 0.0, 0.0}};
+        weights.first = {{2.0 / 3.0, -1.0 / 12.0, 0.0, 0.0}};
+        break;
+    case 6:
+        weights.second = {{-49.0 / 18.0, 3.0 / 2.0, -3.0 / 20.0, 1.0 / 90.0, 0.0}};
+        weights.first = {{3.0 / 4.0, -3.0 / 20.0, 1.0 / 60.0, 0.0}};
+        break;
+    case 8:
+        weights.second = {{-205.0 / 72.0, 8.0 / 5.0, -1.0 / 5.0, 8.0 / 315.0, -1.0 / 560.0}};
+        weights.first = {{4.0 / 5.0, -1.0 / 5.0, 4.0 / 105.0, -1.0 / 280.0}};
+        break;
+    default:
+        throw std::logic_error("Unsupported Sternheimer finite-difference order.");
+    }
+    return weights;
+}
+
+} // namespace
+
+namespace ModuleRI
+{
+
+int SternheimerFDHamiltonian::Grid::size() const
+{
+    return nx * ny * nz;
+}
+
+SternheimerFDHamiltonian::SternheimerFDHamiltonian(
+    Grid grid,
+    std::vector<double> local_potential,
+    const double kinetic_prefactor,
+    std::shared_ptr<const SternheimerFDNonlocalProjector> nonlocal_projector,
+    const int finite_difference_order)
+    : grid_(grid), local_potential_(std::move(local_potential)), kinetic_prefactor_(kinetic_prefactor),
+      finite_difference_order_(finite_difference_order), nonlocal_projector_(std::move(nonlocal_projector))
+{
+    if (grid_.nx <= 0 || grid_.ny <= 0 || grid_.nz <= 0)
+    {
+        throw std::invalid_argument("SternheimerFDHamiltonian requires positive grid dimensions.");
+    }
+    if (grid_.hx <= 0.0 || grid_.hy <= 0.0 || grid_.hz <= 0.0)
+    {
+        throw std::invalid_argument("SternheimerFDHamiltonian requires positive grid spacings.");
+    }
+    if (static_cast<int>(local_potential_.size()) != grid_.size())
+    {
+        throw std::invalid_argument("SternheimerFDHamiltonian local potential size does not match the grid.");
+    }
+    if (kinetic_prefactor_ < 0.0)
+    {
+        throw std::invalid_argument("SternheimerFDHamiltonian requires a non-negative kinetic prefactor.");
+    }
+    if (finite_difference_order_ != 2 && finite_difference_order_ != 4 && finite_difference_order_ != 6
+        && finite_difference_order_ != 8)
+    {
+        throw std::invalid_argument("SternheimerFDHamiltonian finite-difference order must be 2, 4, 6, or 8.");
+    }
+    bool has_nonzero_twist = false;
+    for (const double coordinate: grid_.kpoint)
+    {
+        if (!std::isfinite(coordinate))
+        {
+            throw std::invalid_argument("SternheimerFDHamiltonian requires finite reduced k-point coordinates.");
+        }
+        has_nonzero_twist = has_nonzero_twist || coordinate != 0.0;
+    }
+    if (!grid_.periodic && has_nonzero_twist)
+    {
+        throw std::invalid_argument("SternheimerFDHamiltonian nonperiodic grids cannot use a Bloch twist.");
+    }
+    if (nonlocal_projector_ != nullptr && nonlocal_projector_->grid_size() != grid_.size())
+    {
+        throw std::invalid_argument("SternheimerFDHamiltonian nonlocal projector size does not match the grid.");
+    }
+}
+
+const SternheimerFDHamiltonian::Grid& SternheimerFDHamiltonian::grid() const
+{
+    return grid_;
+}
+
+const std::vector<double>& SternheimerFDHamiltonian::local_potential() const
+{
+    return local_potential_;
+}
+
+double SternheimerFDHamiltonian::kinetic_prefactor() const
+{
+    return kinetic_prefactor_;
+}
+
+int SternheimerFDHamiltonian::finite_difference_order() const
+{
+    return finite_difference_order_;
+}
+
+const SternheimerReducedKPoint& SternheimerFDHamiltonian::kpoint() const
+{
+    return grid_.kpoint;
+}
+
+const SternheimerFDNonlocalProjector* SternheimerFDHamiltonian::nonlocal_projector() const
+{
+    return nonlocal_projector_.get();
+}
+
+int SternheimerFDHamiltonian::index(const int ix, const int iy, const int iz) const
+{
+    return (ix * grid_.ny + iy) * grid_.nz + iz;
+}
+
+SternheimerFDHamiltonian::ShiftedGridPoint SternheimerFDHamiltonian::shifted_grid_point(int ix, int iy, int iz) const
+{
+    if (grid_.periodic)
+    {
+        const std::array<int, 3> dimensions{grid_.nx, grid_.ny, grid_.nz};
+        std::array<int, 3> coordinates{ix, iy, iz};
+        std::array<int, 3> lattice_translation{};
+        for (std::size_t direction = 0; direction != coordinates.size(); ++direction)
+        {
+            const int dimension = dimensions[direction];
+            const int wrapped = (coordinates[direction] % dimension + dimension) % dimension;
+            lattice_translation[direction] = (coordinates[direction] - wrapped) / dimension;
+            coordinates[direction] = wrapped;
+        }
+        return {index(coordinates[0], coordinates[1], coordinates[2]),
+                sternheimer_bloch_phase(grid_.kpoint, lattice_translation)};
+    }
+
+    if (ix < 0 || ix >= grid_.nx || iy < 0 || iy >= grid_.ny || iz < 0 || iz >= grid_.nz)
+    {
+        return {-1, Complex(1.0, 0.0)};
+    }
+    return {index(ix, iy, iz), Complex(1.0, 0.0)};
+}
+
+void SternheimerFDHamiltonian::apply(const Vector& psi, Vector& hpsi) const
+{
+    apply(psi, hpsi, nullptr);
+}
+
+void SternheimerFDHamiltonian::apply(const Vector& psi, Vector& hpsi, int* threads_used) const
+{
+    if (static_cast<int>(psi.size()) != grid_.size())
+    {
+        throw std::invalid_argument("SternheimerFDHamiltonian::apply input size does not match the grid.");
+    }
+
+    apply_grid_terms(psi, hpsi, true, threads_used);
+    if (nonlocal_projector_ != nullptr)
+    {
+        nonlocal_projector_->add_to(psi, hpsi);
+    }
+}
+
+void SternheimerFDHamiltonian::apply_kinetic(const Vector& psi, Vector& kinetic_psi) const
+{
+    apply_kinetic(psi, kinetic_psi, nullptr);
+}
+
+void SternheimerFDHamiltonian::apply_kinetic(const Vector& psi, Vector& kinetic_psi, int* threads_used) const
+{
+    apply_grid_terms(psi, kinetic_psi, false, threads_used);
+}
+
+void SternheimerFDHamiltonian::apply_grid_terms(const Vector& psi,
+                                                Vector& output,
+                                                const bool include_local_potential,
+                                                int* threads_used) const
+{
+    if (static_cast<int>(psi.size()) != grid_.size())
+    {
+        throw std::invalid_argument("SternheimerFDHamiltonian::apply_kinetic input size does not match the grid.");
+    }
+
+    output.assign(psi.size(), Complex(0.0, 0.0));
+    const FiniteDifferenceWeights weights = finite_difference_weights(finite_difference_order_);
+    const SternheimerFDLatticeVectors dual = sternheimer_fd_grid_dual_vectors(grid_);
+    const std::array<double, 3> dimensions{static_cast<double>(grid_.nx),
+                                           static_cast<double>(grid_.ny),
+                                           static_cast<double>(grid_.nz)};
+    std::array<std::array<double, 3>, 3> laplacian_coefficients{};
+    for (int left = 0; left != 3; ++left)
+    {
+        for (int right = 0; right != 3; ++right)
+        {
+            for (int component = 0; component != 3; ++component)
+            {
+                laplacian_coefficients[left][right]
+                    += dual[left][component] * dual[right][component] * dimensions[left] * dimensions[right];
+            }
+        }
+    }
+
+    const bool use_separable_mixed_derivatives = grid_.periodic && weights.radius > 1;
+    std::array<Vector, 3> first_derivatives;
+    if (use_separable_mixed_derivatives)
+    {
+        // Mixed pairs are evaluated as D_left(D_right psi), so only right=1,2 are cached.
+        for (int direction = 1; direction != 3; ++direction)
+        {
+            Vector& derivative = first_derivatives[direction];
+            derivative.assign(psi.size(), Complex(0.0, 0.0));
+#ifdef _OPENMP
+#pragma omp parallel for collapse(2) schedule(static)
+#endif
+            for (int ix = 0; ix != grid_.nx; ++ix)
+            {
+                for (int iy = 0; iy != grid_.ny; ++iy)
+                {
+                    for (int iz = 0; iz != grid_.nz; ++iz)
+                    {
+                        Complex value(0.0, 0.0);
+                        for (int offset = 1; offset <= weights.radius; ++offset)
+                        {
+                            std::array<int, 3> shift{};
+                            shift[direction] = offset;
+                            const ShiftedGridPoint positive
+                                = shifted_grid_point(ix + shift[0], iy + shift[1], iz + shift[2]);
+                            const ShiftedGridPoint negative
+                                = shifted_grid_point(ix - shift[0], iy - shift[1], iz - shift[2]);
+                            const double coefficient = weights.first[static_cast<std::size_t>(offset - 1)];
+                            if (positive.index >= 0)
+                            {
+                                value += coefficient * positive.phase * psi[positive.index];
+                            }
+                            if (negative.index >= 0)
+                            {
+                                value -= coefficient * negative.phase * psi[negative.index];
+                            }
+                        }
+                        derivative[static_cast<std::size_t>(index(ix, iy, iz))] = value;
+                    }
+                }
+            }
+        }
+    }
+
+#ifdef _OPENMP
+#pragma omp parallel
+    {
+#pragma omp single
+        {
+            if (threads_used != nullptr)
+            {
+                *threads_used = omp_get_num_threads();
+            }
+        }
+
+#pragma omp for collapse(2) schedule(static)
+#endif
+        for (int ix = 0; ix != grid_.nx; ++ix)
+        {
+            for (int iy = 0; iy != grid_.ny; ++iy)
+            {
+                for (int iz = 0; iz != grid_.nz; ++iz)
+                {
+                    const int center = index(ix, iy, iz);
+                    const Complex psi_center = psi[center];
+
+                    Complex laplacian
+                        = weights.second[0]
+                          * (laplacian_coefficients[0][0] + laplacian_coefficients[1][1] + laplacian_coefficients[2][2])
+                          * psi_center;
+                    const auto add_shift = [&](const int dx, const int dy, const int dz, const double coefficient) {
+                        const ShiftedGridPoint shifted = shifted_grid_point(ix + dx, iy + dy, iz + dz);
+                        if (shifted.index >= 0)
+                        {
+                            laplacian += coefficient * shifted.phase * psi[shifted.index];
+                        }
+                    };
+                    for (int direction = 0; direction != 3; ++direction)
+                    {
+                        for (int offset = 1; offset <= weights.radius; ++offset)
+                        {
+                            std::array<int, 3> shift{};
+                            shift[direction] = offset;
+                            const double coefficient = weights.second[static_cast<std::size_t>(offset)]
+                                                       * laplacian_coefficients[direction][direction];
+                            add_shift(shift[0], shift[1], shift[2], coefficient);
+                            add_shift(-shift[0], -shift[1], -shift[2], coefficient);
+                        }
+                    }
+
+                    for (int left = 0; left != 3; ++left)
+                    {
+                        for (int right = left + 1; right != 3; ++right)
+                        {
+                            if (use_separable_mixed_derivatives)
+                            {
+                                Complex mixed_derivative(0.0, 0.0);
+                                for (int offset = 1; offset <= weights.radius; ++offset)
+                                {
+                                    std::array<int, 3> shift{};
+                                    shift[left] = offset;
+                                    const ShiftedGridPoint positive
+                                        = shifted_grid_point(ix + shift[0], iy + shift[1], iz + shift[2]);
+                                    const ShiftedGridPoint negative
+                                        = shifted_grid_point(ix - shift[0], iy - shift[1], iz - shift[2]);
+                                    const double coefficient = weights.first[static_cast<std::size_t>(offset - 1)];
+                                    if (positive.index >= 0)
+                                    {
+                                        mixed_derivative
+                                            += coefficient * positive.phase * first_derivatives[right][positive.index];
+                                    }
+                                    if (negative.index >= 0)
+                                    {
+                                        mixed_derivative
+                                            -= coefficient * negative.phase * first_derivatives[right][negative.index];
+                                    }
+                                }
+                                laplacian += 2.0 * laplacian_coefficients[left][right] * mixed_derivative;
+                            }
+                            else
+                            {
+                                for (int left_offset = 1; left_offset <= weights.radius; ++left_offset)
+                                {
+                                    for (int right_offset = 1; right_offset <= weights.radius; ++right_offset)
+                                    {
+                                        const double coefficient
+                                            = 2.0 * laplacian_coefficients[left][right]
+                                              * weights.first[static_cast<std::size_t>(left_offset - 1)]
+                                              * weights.first[static_cast<std::size_t>(right_offset - 1)];
+                                        for (const int left_sign: {-1, 1})
+                                        {
+                                            for (const int right_sign: {-1, 1})
+                                            {
+                                                std::array<int, 3> shift{};
+                                                shift[left] = left_sign * left_offset;
+                                                shift[right] = right_sign * right_offset;
+                                                add_shift(shift[0],
+                                                          shift[1],
+                                                          shift[2],
+                                                          coefficient * left_sign * right_sign);
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    output[center] = -kinetic_prefactor_ * laplacian;
+                    if (include_local_potential)
+                    {
+                        output[center] += local_potential_[center] * psi_center;
+                    }
+                }
+            }
+        }
+#ifdef _OPENMP
+    }
+#else
+    if (threads_used != nullptr)
+    {
+        *threads_used = 1;
+    }
+#endif
+}
+
+void SternheimerFDHamiltonian::apply_local_potential(const Vector& psi, Vector& local_psi) const
+{
+    if (static_cast<int>(psi.size()) != grid_.size())
+    {
+        throw std::invalid_argument(
+            "SternheimerFDHamiltonian::apply_local_potential input size does not match the grid.");
+    }
+    local_psi.resize(psi.size());
+#pragma omp parallel for schedule(static)
+    for (std::size_t ir = 0; ir != psi.size(); ++ir)
+    {
+        local_psi[ir] = local_potential_[ir] * psi[ir];
+    }
+}
+
+void SternheimerFDHamiltonian::apply_nonlocal(const Vector& psi, Vector& nonlocal_psi) const
+{
+    if (static_cast<int>(psi.size()) != grid_.size())
+    {
+        throw std::invalid_argument("SternheimerFDHamiltonian::apply_nonlocal input size does not match the grid.");
+    }
+    nonlocal_psi.assign(psi.size(), Complex(0.0, 0.0));
+    if (nonlocal_projector_ != nullptr)
+    {
+        nonlocal_projector_->add_to(psi, nonlocal_psi);
+    }
+}
+
+SternheimerFDHamiltonian::Matrix SternheimerFDHamiltonian::dense_matrix(const int max_size) const
+{
+    const int size = grid_.size();
+    if (size > max_size)
+    {
+        throw std::invalid_argument("SternheimerFDHamiltonian::dense_matrix is only intended for small debug grids.");
+    }
+
+    Matrix matrix(size, Vector(size, Complex(0.0, 0.0)));
+    Vector basis(size, Complex(0.0, 0.0));
+    Vector h_basis;
+    for (int col = 0; col != size; ++col)
+    {
+        std::fill(basis.begin(), basis.end(), Complex(0.0, 0.0));
+        basis[col] = Complex(1.0, 0.0);
+        apply(basis, h_basis);
+        for (int row = 0; row != size; ++row)
+        {
+            matrix[row][col] = h_basis[row];
+        }
+    }
+    return matrix;
+}
+
+SternheimerFDHamiltonian::Eigenpairs SternheimerFDHamiltonian::diagonalize_dense(const int max_size) const
+{
+    const int size = grid_.size();
+    if (size > max_size)
+    {
+        throw std::invalid_argument(
+            "SternheimerFDHamiltonian::diagonalize_dense is only intended for small debug grids.");
+    }
+
+    const Matrix matrix = dense_matrix(max_size);
+    std::vector<Complex> lapack_matrix(size * size, Complex(0.0, 0.0));
+    for (int col = 0; col != size; ++col)
+    {
+        for (int row = 0; row != size; ++row)
+        {
+            lapack_matrix[row + size * col] = matrix[row][col];
+        }
+    }
+
+    char jobz = 'V';
+    char uplo = 'U';
+    const int n = size;
+    const int lda = size;
+    const int minus_one = -1;
+    int info = 0;
+    std::vector<double> eigenvalues(size, 0.0);
+    Complex work_query(0.0, 0.0);
+    std::vector<double> rwork(std::max(1, 3 * n - 2), 0.0);
+
+    zheev_(&jobz,
+           &uplo,
+           &n,
+           lapack_matrix.data(),
+           &lda,
+           eigenvalues.data(),
+           &work_query,
+           &minus_one,
+           rwork.data(),
+           &info);
+    if (info != 0)
+    {
+        throw std::runtime_error("SternheimerFDHamiltonian::diagonalize_dense LAPACK workspace query failed.");
+    }
+
+    const int lwork = std::max(1, static_cast<int>(std::ceil(work_query.real())));
+    std::vector<Complex> work(lwork, Complex(0.0, 0.0));
+    zheev_(&jobz, &uplo, &n, lapack_matrix.data(), &lda, eigenvalues.data(), work.data(), &lwork, rwork.data(), &info);
+    if (info != 0)
+    {
+        throw std::runtime_error("SternheimerFDHamiltonian::diagonalize_dense LAPACK diagonalization failed.");
+    }
+
+    Eigenpairs eigenpairs;
+    eigenpairs.eigenvalues = std::move(eigenvalues);
+    eigenpairs.eigenvectors.assign(size, Vector(size, Complex(0.0, 0.0)));
+    for (int band = 0; band != size; ++band)
+    {
+        for (int row = 0; row != size; ++row)
+        {
+            eigenpairs.eigenvectors[band][row] = lapack_matrix[row + size * band];
+        }
+    }
+    return eigenpairs;
+}
+
+} // namespace ModuleRI

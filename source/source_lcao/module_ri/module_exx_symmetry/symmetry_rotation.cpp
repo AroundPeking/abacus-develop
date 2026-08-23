@@ -7,9 +7,34 @@
 #include "source_base/tool_title.h"
 #include "source_base/timer.h"
 #include "source_base/mathzone.h"
+#include <stdexcept>
 
 namespace ModuleSymmetry
 {
+    std::vector<std::complex<double>> rotate_ao_coefficients_dense(
+        const std::vector<std::complex<double>>& rotation_matrix,
+        const std::vector<std::complex<double>>& coefficients,
+        const bool time_reversal)
+    {
+        const std::size_t nbasis = coefficients.size();
+        if (nbasis == 0 || rotation_matrix.size() != nbasis * nbasis)
+        {
+            throw std::invalid_argument("AO rotation matrix and coefficient dimensions are inconsistent");
+        }
+
+        std::vector<std::complex<double>> rotated(nbasis, 0.0);
+        for (std::size_t i = 0; i < nbasis; ++i)
+        {
+            for (std::size_t j = 0; j < nbasis; ++j)
+            {
+                const std::complex<double> coefficient
+                    = time_reversal ? std::conj(coefficients[j]) : coefficients[j];
+                rotated[i] += rotation_matrix[i * nbasis + j] * coefficient;
+            }
+        }
+        return rotated;
+    }
+
     void Symmetry_rotation::set_Cs_rotation(const std::vector<std::vector<int>>& abfs_l_nchi)
     {
         this->reduce_Cs_ = true;
@@ -53,9 +78,11 @@ namespace ModuleSymmetry
         {
             // const TCdouble& kvec_d_ibz = restrict_kpt((*kstars[ik_ibz].begin()).second * ucell.symm.kgmatrix[(*kstars[ik_ibz].begin()).first], ucell.symm.epsilon);
             for (auto& isym_kvd : kv.kstars[ik_ibz]) {
-                if (isym_kvd.first < nsym_) {
-                    this->Ms_[ik_ibz][isym_kvd.first] = this->contruct_2d_rot_mat_ao(ucell.symm, ucell.atoms, ucell.st, kv.kvec_d[ik_ibz], isym_kvd.first, pv);
-}
+                const int spatial_isym = isym_kvd.first % nsym_;
+                if (this->Ms_[ik_ibz].find(spatial_isym) == this->Ms_[ik_ibz].end()) {
+                    this->Ms_[ik_ibz][spatial_isym] = this->contruct_2d_rot_mat_ao(
+                        ucell.symm, ucell.atoms, ucell.st, kv.kvec_d[ik_ibz], spatial_isym, pv);
+                }
 }
         }
 
@@ -441,6 +468,66 @@ namespace ModuleSymmetry
                 beta, DMk.data(), i1, i1, pv.desc);
         }
         return DMk;
+    }
+
+    std::vector<std::vector<std::complex<double>>> Symmetry_rotation::rotate_ao_coefficients(
+        const std::vector<std::vector<std::complex<double>>>& coefficients,
+        const int ik_ibz,
+        const int isym,
+        const Parallel_2D& pv,
+        const bool time_reversal) const
+    {
+        const int nrow = pv.get_global_row_size();
+        const int ncol = pv.get_global_col_size();
+        if (nrow <= 0 || nrow != ncol)
+        {
+            throw std::invalid_argument("AO rotation matrix must be square");
+        }
+        if (ik_ibz < 0 || ik_ibz >= static_cast<int>(this->Ms_.size()))
+        {
+            throw std::out_of_range("irreducible k-point index is outside the AO rotation table");
+        }
+        const auto matrix_it = this->Ms_[ik_ibz].find(isym);
+        if (matrix_it == this->Ms_[ik_ibz].end())
+        {
+            throw std::out_of_range("space-group operation is outside the AO rotation table");
+        }
+        if (matrix_it->second.size() != static_cast<std::size_t>(pv.get_local_size()))
+        {
+            throw std::invalid_argument("distributed AO rotation matrix has an inconsistent local size");
+        }
+
+        std::vector<std::complex<double>> matrix(static_cast<std::size_t>(nrow) * nrow, 0.0);
+        for (int j = 0; j < pv.get_col_size(); ++j)
+        {
+            const int global_col = pv.local2global_col(j);
+            for (int i = 0; i < pv.get_row_size(); ++i)
+            {
+                const int global_row = pv.local2global_row(i);
+                matrix[static_cast<std::size_t>(global_col) * nrow + global_row]
+                    = matrix_it->second[static_cast<std::size_t>(j) * pv.get_row_size() + i];
+            }
+        }
+#ifdef __MPI
+        MPI_Allreduce(MPI_IN_PLACE,
+                      reinterpret_cast<double*>(matrix.data()),
+                      static_cast<int>(2 * matrix.size()),
+                      MPI_DOUBLE,
+                      MPI_SUM,
+                      pv.comm());
+#endif
+
+        std::vector<std::vector<std::complex<double>>> rotated;
+        rotated.reserve(coefficients.size());
+        for (const auto& coefficient : coefficients)
+        {
+            if (coefficient.size() != static_cast<std::size_t>(nrow))
+            {
+                throw std::invalid_argument("AO coefficient vector has an inconsistent basis size");
+            }
+            rotated.push_back(rotate_ao_coefficients_dense(matrix, coefficient, time_reversal));
+        }
+        return rotated;
     }
 
     std::vector<TC> Symmetry_rotation::get_Rs_from_adjacent_list(const UnitCell& ucell,

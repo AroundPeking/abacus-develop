@@ -4,6 +4,7 @@ remove_definitions(-D__ROCM)
 remove_definitions(-D__EXX)
 
 find_program(BASH bash)
+file(COPY support DESTINATION ${CMAKE_CURRENT_BINARY_DIR})
 install(DIRECTORY support DESTINATION ${CMAKE_CURRENT_BINARY_DIR})
 install(FILES bcast_atom_pseudo_test.sh DESTINATION ${CMAKE_CURRENT_BINARY_DIR})
 install(FILES bcast_atom_spec_test.sh DESTINATION ${CMAKE_CURRENT_BINARY_DIR})
@@ -83,7 +84,7 @@ AddTest(
 )
 
 add_test(NAME MODULE_CELL_klist_test_para4
-      COMMAND ${BASH} klist_test_para.sh
+      COMMAND ${BASH} ${CMAKE_CURRENT_SOURCE_DIR}/klist_test_para.sh
       WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
 )
 

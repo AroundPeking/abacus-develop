@@ -34,6 +34,13 @@
 
 #include "source_hamilt/module_xc/exx_info.h" // use GlobalC::exx_info
 
+#if defined(__EXX)
+#include "source_lcao/module_ri/sternheimer_abacus_fd_smoke.h"
+#endif
+#if defined(__EXX) && defined(__LCAO)
+#include "source_lcao/module_ri/sternheimer_abacus_st_smoke.h"
+#endif
+
 namespace ModuleESolver
 {
 
@@ -272,6 +279,29 @@ void ESolver_KS_PW<T, Device>::after_scf(UnitCell& ucell, const int istep, const
     ModuleIO::ctrl_scf_pw<T, Device>(istep, ucell, this->pelec, this->chr, this->kv, this->pw_wfc,
               this->pw_rho, this->pw_rhod, this->pw_big, this->stp,
               this->ctx, this->device, this->Pgrid, PARAM.inp);
+
+#ifdef __EXX
+    if (this->pelec != nullptr && this->pelec->pot != nullptr && this->pw_rho != nullptr)
+    {
+        ModuleRI::run_sternheimer_fd_zero_order_smoke(*(this->pelec->pot),
+                                                      *(this->pw_rho),
+                                                      ucell,
+                                                      *(this->pelec),
+                                                      PARAM.globalv.global_out_dir);
+#if defined(__LCAO)
+        ModuleRI::run_sternheimer_abacus_st_smoke(*(this->pelec->pot),
+                                                  *(this->pw_rho),
+                                                  ucell,
+                                                  *(this->pelec),
+                                                  PARAM.globalv.global_out_dir);
+        ModuleRI::run_sternheimer_abacus_chi0_output(*(this->pelec->pot),
+                                                     *(this->pw_rho),
+                                                     ucell,
+                                                     *(this->pelec),
+                                                     PARAM.globalv.global_out_dir);
+#endif
+    }
+#endif
 
     ModuleBase::timer::tick("ESolver_KS_PW", "after_scf");
 }
