@@ -838,14 +838,17 @@ inline void validate_sternheimer_lcao_occupied_kpoints(
     const int global_kpoint_count,
     const int spin_channel_count,
     const int basis_size,
-    const int zero_order_kpoint_count = -1)
+    const int zero_order_kpoint_count = -1,
+    const bool require_complete_records = true)
 {
     if (local_kpoint_count <= 0 || global_kpoint_count <= 0 || spin_channel_count <= 0 || basis_size <= 0)
     {
         throw std::invalid_argument("Sternheimer LCAO k-point dimensions must be positive.");
     }
-    if (records.size() != static_cast<std::size_t>(global_kpoint_count)
-        || local_kpoint_count != global_kpoint_count)
+    if (local_kpoint_count != global_kpoint_count
+        || records.size() > static_cast<std::size_t>(global_kpoint_count)
+        || (require_complete_records
+            && records.size() != static_cast<std::size_t>(global_kpoint_count)))
     {
         throw std::invalid_argument(
             "Sternheimer LCAO occupied k-point records are incomplete; the first solid implementation requires "
@@ -1171,10 +1174,11 @@ inline std::vector<const SternheimerLCAOOccupiedKPoint*> select_sternheimer_gamm
     const int spin_channel_count,
     const double tolerance = 1.0e-12)
 {
-    if (spin_channel_count <= 0 || records.size() != static_cast<std::size_t>(spin_channel_count))
+    if (spin_channel_count <= 0 || records.empty()
+        || records.size() > static_cast<std::size_t>(spin_channel_count))
     {
         throw std::invalid_argument(
-            "Gamma Sternheimer response requires exactly one LCAO record per spin channel.");
+            "Gamma Sternheimer response requires at least one occupied LCAO spin record.");
     }
     std::vector<const SternheimerLCAOOccupiedKPoint*> selected(
         static_cast<std::size_t>(spin_channel_count), nullptr);
@@ -1197,10 +1201,7 @@ inline std::vector<const SternheimerLCAOOccupiedKPoint*> select_sternheimer_gamm
         }
         selected[spin_index] = &record;
     }
-    if (std::any_of(selected.begin(), selected.end(), [](const auto* record) { return record == nullptr; }))
-    {
-        throw std::invalid_argument("Gamma Sternheimer response is missing a spin record.");
-    }
+    selected.erase(std::remove(selected.begin(), selected.end(), nullptr), selected.end());
     return selected;
 }
 

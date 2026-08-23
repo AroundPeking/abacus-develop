@@ -4255,7 +4255,9 @@ void run_sternheimer_abacus_chi0_output_impl(
                 elec_state.wg.nr,
                 elec_state.wg.nr,
                 PARAM.inp.nspin,
-                PARAM.globalv.nlocal);
+                PARAM.globalv.nlocal,
+                -1,
+                false);
             response_kpoints
                 = select_sternheimer_gamma_spin_records(*lcao_occupied_kpoints, PARAM.inp.nspin);
         }
