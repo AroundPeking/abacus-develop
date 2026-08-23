@@ -326,7 +326,13 @@ SternheimerChannelWorkerPlan plan_sternheimer_channel_workers(const int num_chan
         = std::min(memory_worker_count, static_cast<std::uint64_t>(std::numeric_limits<int>::max()));
     plan.automatic_workers
         = std::min({num_channels, omp_threads, static_cast<int>(bounded_memory_workers)});
-    return adapt_sternheimer_channel_worker_plan(plan, num_channels, omp_threads, user_cap);
+    const int capped_workers
+        = user_cap > 0 ? std::min(plan.automatic_workers, user_cap) : plan.automatic_workers;
+    const int half_omp_threads_rounded_up = omp_threads / 2 + omp_threads % 2;
+    // Choose the parallel layer from the global memory-capacity plan. MPI ownership
+    // filtering may later shrink this team without changing the chosen layer.
+    plan.effective_workers = capped_workers >= half_omp_threads_rounded_up ? capped_workers : 1;
+    return plan;
 }
 
 std::string sternheimer_memory_accounting_mode_name(const SternheimerMemoryAccountingMode mode)
