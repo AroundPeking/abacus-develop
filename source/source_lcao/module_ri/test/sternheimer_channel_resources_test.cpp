@@ -50,6 +50,30 @@ TEST(SternheimerChannelResources, KeepsOuterParallelismWhenMostThreadsCanWork)
     EXPECT_EQ(plan.effective_workers, 22);
 }
 
+TEST(SternheimerChannelResources, ClampsOuterTeamAfterMpiOwnershipReducesLocalTasks)
+{
+    const ModuleRI::SternheimerChannelWorkerPlan capacity_plan{
+        26,
+        26,
+        100000,
+        68000,
+        4723920000ULL};
+    const auto plan
+        = ModuleRI::adapt_sternheimer_channel_worker_plan(capacity_plan, 15, 40, 0);
+    EXPECT_EQ(plan.automatic_workers, 15);
+    EXPECT_EQ(plan.effective_workers, 15);
+    EXPECT_EQ(plan.memory_per_worker_bytes, capacity_plan.memory_per_worker_bytes);
+}
+
+TEST(SternheimerChannelResources, PreservesGridParallelModeAfterMpiOwnershipFiltering)
+{
+    const ModuleRI::SternheimerChannelWorkerPlan capacity_plan{26, 1, 100000, 68000, 4723920000ULL};
+    const auto plan
+        = ModuleRI::adapt_sternheimer_channel_worker_plan(capacity_plan, 15, 40, 0);
+    EXPECT_EQ(plan.automatic_workers, 15);
+    EXPECT_EQ(plan.effective_workers, 1);
+}
+
 TEST(SternheimerChannelResources, ClampsToChannelsAndOpenMPThreads)
 {
     const ModuleRI::SternheimerMemorySnapshot memory{

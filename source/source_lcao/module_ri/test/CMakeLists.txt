@@ -156,6 +156,11 @@ AddTest(
   SOURCES sternheimer_abacus_st_smoke_test.cpp ../sternheimer_kq.cpp
 )
 AddTest(
+  TARGET MODULE_RI_sternheimer_channel_resources_test
+  LIBS ${math_libs}
+  SOURCES sternheimer_channel_resources_test.cpp ../sternheimer_channel_resources.cpp
+)
+AddTest(
   TARGET MODULE_RI_sternheimer_periodic_solver_test
   LIBS ${STERNHEIMER_RPA_TEST_LIBS}
   SOURCES sternheimer_periodic_solver_test.cpp

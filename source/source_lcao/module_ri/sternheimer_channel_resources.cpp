@@ -214,6 +214,45 @@ std::uint64_t estimate_sternheimer_channel_worker_bytes(const std::size_t grid_s
                             sizeof(std::complex<double>));
 }
 
+SternheimerChannelWorkerPlan adapt_sternheimer_channel_worker_plan(
+    const SternheimerChannelWorkerPlan& capacity_plan,
+    const int local_task_count,
+    const int omp_threads,
+    const int user_cap)
+{
+    if (local_task_count < 0)
+    {
+        throw std::invalid_argument("Sternheimer local channel task count must be non-negative.");
+    }
+    if (omp_threads <= 0)
+    {
+        throw std::invalid_argument("Sternheimer channel worker planning requires a positive OpenMP thread count.");
+    }
+    if (user_cap < 0)
+    {
+        throw std::invalid_argument("Sternheimer channel worker user cap must be non-negative.");
+    }
+    if (capacity_plan.automatic_workers <= 0)
+    {
+        throw std::invalid_argument("Sternheimer channel worker capacity must be positive.");
+    }
+
+    SternheimerChannelWorkerPlan plan = capacity_plan;
+    plan.automatic_workers = std::min(capacity_plan.automatic_workers, local_task_count);
+    if (local_task_count == 0)
+    {
+        plan.effective_workers = 1;
+        return plan;
+    }
+
+    const int capped_workers
+        = user_cap > 0 ? std::min(plan.automatic_workers, user_cap) : plan.automatic_workers;
+    // Preserve the parallel layer chosen from the memory-capacity plan. MPI ownership
+    // may shrink the outer team, but it must not silently serialize all local channels.
+    plan.effective_workers = capacity_plan.effective_workers > 1 ? capped_workers : 1;
+    return plan;
+}
+
 SternheimerChannelWorkerPlan plan_sternheimer_channel_workers(const int num_channels,
                                                               const int omp_threads,
                                                               const std::size_t grid_size,
@@ -287,11 +326,7 @@ SternheimerChannelWorkerPlan plan_sternheimer_channel_workers(const int num_chan
         = std::min(memory_worker_count, static_cast<std::uint64_t>(std::numeric_limits<int>::max()));
     plan.automatic_workers
         = std::min({num_channels, omp_threads, static_cast<int>(bounded_memory_workers)});
-    const int capped_workers
-        = user_cap > 0 ? std::min(plan.automatic_workers, user_cap) : plan.automatic_workers;
-    // A small outer team disables nested grid OpenMP while leaving most cores idle.
-    plan.effective_workers = 2 * capped_workers >= omp_threads ? capped_workers : 1;
-    return plan;
+    return adapt_sternheimer_channel_worker_plan(plan, num_channels, omp_threads, user_cap);
 }
 
 std::string sternheimer_memory_accounting_mode_name(const SternheimerMemoryAccountingMode mode)

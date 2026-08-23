@@ -4912,7 +4912,7 @@ void run_sternheimer_abacus_chi0_output_impl(
         }
         std::vector<siab::ReferenceRow> local_siab_rows;
         const SternheimerMemorySnapshot channel_memory = detect_sternheimer_memory_snapshot();
-        const SternheimerChannelWorkerPlan channel_worker_plan
+        const SternheimerChannelWorkerPlan channel_worker_capacity_plan
             = plan_sternheimer_channel_workers(num_channels,
                                                sternheimer_channel_openmp_threads(),
                                                grid_data.grid.size(),
@@ -4928,9 +4928,14 @@ void run_sternheimer_abacus_chi0_output_impl(
                                    -1.0,
                                    elapsed_seconds_since(chi0_start_time),
                                    format_sternheimer_channel_worker_diagnostic(channel_memory,
-                                                                                channel_worker_plan,
+                                                                                channel_worker_capacity_plan,
                                                                                 grid_data.grid.size(),
                                                                                 channel_worker_user_cap));
+        bool channel_block_worker_plan_logged = false;
+        int local_channel_tasks_min = std::numeric_limits<int>::max();
+        int local_channel_tasks_max = 0;
+        int local_channel_workers_min = std::numeric_limits<int>::max();
+        int local_channel_workers_max = 0;
 
         for (int ifrequency = 0; ifrequency != nfreq; ++ifrequency)
         {
@@ -5021,6 +5026,41 @@ void run_sternheimer_abacus_chi0_output_impl(
                         }
                         owned_channels.push_back(ichannel);
                         equation_owner_ranks.push_back(equation_owner_rank);
+                    }
+
+                    const SternheimerChannelWorkerPlan local_channel_worker_plan
+                        = adapt_sternheimer_channel_worker_plan(channel_worker_capacity_plan,
+                                                               static_cast<int>(owned_channels.size()),
+                                                               sternheimer_channel_openmp_threads(),
+                                                               channel_worker_user_cap);
+                    if (!owned_channels.empty())
+                    {
+                        const int local_channel_tasks = static_cast<int>(owned_channels.size());
+                        local_channel_tasks_min = std::min(local_channel_tasks_min, local_channel_tasks);
+                        local_channel_tasks_max = std::max(local_channel_tasks_max, local_channel_tasks);
+                        local_channel_workers_min
+                            = std::min(local_channel_workers_min, local_channel_worker_plan.effective_workers);
+                        local_channel_workers_max
+                            = std::max(local_channel_workers_max, local_channel_worker_plan.effective_workers);
+                        if (!channel_block_worker_plan_logged)
+                        {
+                            append_chi0_progress_event(
+                                "channel_block_workers",
+                                ifrequency + 1,
+                                GlobalV::MY_RANK,
+                                ib,
+                                -1,
+                                solved_equations,
+                                nullptr,
+                                -1.0,
+                                elapsed_seconds_since(chi0_start_time),
+                                "local_tasks=" + std::to_string(owned_channels.size())
+                                    + " automatic_workers="
+                                    + std::to_string(local_channel_worker_plan.automatic_workers)
+                                    + " effective_workers="
+                                    + std::to_string(local_channel_worker_plan.effective_workers));
+                            channel_block_worker_plan_logged = true;
+                        }
                     }
 
                     std::vector<ChannelEquationResult> channel_results
@@ -5136,7 +5176,7 @@ void run_sternheimer_abacus_chi0_output_impl(
                                 }
                                 return result;
                             },
-                            channel_worker_plan.effective_workers);
+                            local_channel_worker_plan.effective_workers);
 
                     for (ChannelEquationResult& result: channel_results)
                     {
@@ -5315,6 +5355,10 @@ void run_sternheimer_abacus_chi0_output_impl(
         int rank_local_equations_max = local_solved_equations;
         std::int64_t rank_local_iterations_min = local_iteration_sum;
         std::int64_t rank_local_iterations_max = local_iteration_sum;
+        int channel_tasks_min = local_channel_tasks_min;
+        int channel_tasks_max = local_channel_tasks_max;
+        int channel_workers_min = local_channel_workers_min;
+        int channel_workers_max = local_channel_workers_max;
 #ifdef __MPI
         if (use_distributed_mpi && GlobalV::NPROC > 1)
         {
@@ -5342,8 +5386,37 @@ void run_sternheimer_abacus_chi0_output_impl(
                           MPI_INT64_T,
                           MPI_MAX,
                           MPI_COMM_WORLD);
+            MPI_Allreduce(&local_channel_tasks_min,
+                          &channel_tasks_min,
+                          1,
+                          MPI_INT,
+                          MPI_MIN,
+                          MPI_COMM_WORLD);
+            MPI_Allreduce(&local_channel_tasks_max,
+                          &channel_tasks_max,
+                          1,
+                          MPI_INT,
+                          MPI_MAX,
+                          MPI_COMM_WORLD);
+            MPI_Allreduce(&local_channel_workers_min,
+                          &channel_workers_min,
+                          1,
+                          MPI_INT,
+                          MPI_MIN,
+                          MPI_COMM_WORLD);
+            MPI_Allreduce(&local_channel_workers_max,
+                          &channel_workers_max,
+                          1,
+                          MPI_INT,
+                          MPI_MAX,
+                          MPI_COMM_WORLD);
         }
 #endif
+        if (channel_tasks_max == 0)
+        {
+            channel_tasks_min = 0;
+            channel_workers_min = 0;
+        }
 #ifdef __MPI
         if (write_grid_diagnostics && GlobalV::NPROC > 1)
         {
@@ -5428,7 +5501,12 @@ void run_sternheimer_abacus_chi0_output_impl(
             << (use_global_equation_mpi ? "occupied_frequency_channel_modulo" : "frequency_group_assignment")
             << '\n';
         out << "frequency_group_size " << frequency_group_size << '\n';
-        out << "sternheimer_channel_threads " << channel_worker_plan.effective_workers << '\n';
+        out << "sternheimer_channel_worker_capacity " << channel_worker_capacity_plan.effective_workers << '\n';
+        out << "sternheimer_local_channel_tasks_min " << channel_tasks_min << '\n';
+        out << "sternheimer_local_channel_tasks_max " << channel_tasks_max << '\n';
+        out << "sternheimer_channel_threads " << channel_workers_max << '\n';
+        out << "sternheimer_channel_threads_min " << channel_workers_min << '\n';
+        out << "sternheimer_channel_threads_max " << channel_workers_max << '\n';
         out << "mpi_ranks " << GlobalV::NPROC << '\n';
         out << "frequency_rank_shift " << frequency_rank_shift << '\n';
         out << "rank_local_equations_min " << rank_local_equations_min << '\n';
