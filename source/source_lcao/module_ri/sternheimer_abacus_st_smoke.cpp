@@ -89,12 +89,7 @@ namespace periodic_basis_opt = ::module_ri::sternheimer_basis_opt;
 
 std::string sternheimer_abfs_perturbation_source(const std::vector<std::string>& explicit_abfs_files)
 {
-    return explicit_abfs_files.empty() ? "product_pca" : "explicit_abfs";
-}
-
-bool sternheimer_builds_product_pca_auxiliary_basis(const std::vector<std::string>& explicit_abfs_files)
-{
-    return explicit_abfs_files.empty();
+    return explicit_abfs_files.empty() ? "product_pca" : "product_pca_plus_explicit_abfs";
 }
 
 constexpr const char* kSmokeEnv = "ABACUS_STERNHEIMER_FD_ST_SMOKE";
@@ -1095,20 +1090,17 @@ SternheimerOrbitalSet build_sternheimer_abfs(const UnitCell& ucell, const double
 {
     LCAO_Orbitals orb;
     read_sternheimer_orbitals(ucell, orb);
-    std::vector<std::vector<std::vector<Numerical_Orbital_Lm>>> abfs;
-    if (sternheimer_builds_product_pca_auxiliary_basis(GlobalC::exx_info.info_ri.files_abfs))
+    auto lcaos = Exx_Abfs::Construct_Orbs::change_orbs(orb, GlobalC::exx_info.info_ri.kmesh_times);
+    Exx_Abfs::Construct_Orbs::filter_empty_orbs(lcaos);
+    SternheimerOrbitalSet abfs = Exx_Abfs::Construct_Orbs::abfs_same_atom(ucell,
+                                                                         orb,
+                                                                         lcaos,
+                                                                         GlobalC::exx_info.info_ri.kmesh_times,
+                                                                         pca_threshold);
+    if (!GlobalC::exx_info.info_ri.files_abfs.empty())
     {
-        auto lcaos = Exx_Abfs::Construct_Orbs::change_orbs(orb, GlobalC::exx_info.info_ri.kmesh_times);
-        Exx_Abfs::Construct_Orbs::filter_empty_orbs(lcaos);
-        abfs = Exx_Abfs::Construct_Orbs::abfs_same_atom(ucell,
-                                                        orb,
-                                                        lcaos,
-                                                        GlobalC::exx_info.info_ri.kmesh_times,
-                                                        pca_threshold);
-    }
-    else
-    {
-        abfs = Exx_Abfs::IO::construct_abfs(orb,
+        abfs = Exx_Abfs::IO::construct_abfs(abfs,
+                                            orb,
                                             GlobalC::exx_info.info_ri.files_abfs,
                                             GlobalC::exx_info.info_ri.kmesh_times);
     }
@@ -1264,19 +1256,17 @@ SternheimerABFBuildData build_abfs_ccp_data(const UnitCell& ucell,
     LCAO_Orbitals orb;
     read_sternheimer_orbitals(ucell, orb);
     std::vector<std::vector<std::vector<Numerical_Orbital_Lm>>> abfs;
-    if (sternheimer_builds_product_pca_auxiliary_basis(GlobalC::exx_info.info_ri.files_abfs))
+    auto lcaos = Exx_Abfs::Construct_Orbs::change_orbs(orb, GlobalC::exx_info.info_ri.kmesh_times);
+    Exx_Abfs::Construct_Orbs::filter_empty_orbs(lcaos);
+    abfs = Exx_Abfs::Construct_Orbs::abfs_same_atom(ucell,
+                                                    orb,
+                                                    lcaos,
+                                                    GlobalC::exx_info.info_ri.kmesh_times,
+                                                    pca_threshold);
+    if (!GlobalC::exx_info.info_ri.files_abfs.empty())
     {
-        auto lcaos = Exx_Abfs::Construct_Orbs::change_orbs(orb, GlobalC::exx_info.info_ri.kmesh_times);
-        Exx_Abfs::Construct_Orbs::filter_empty_orbs(lcaos);
-        abfs = Exx_Abfs::Construct_Orbs::abfs_same_atom(ucell,
-                                                        orb,
-                                                        lcaos,
-                                                        GlobalC::exx_info.info_ri.kmesh_times,
-                                                        pca_threshold);
-    }
-    else
-    {
-        abfs = Exx_Abfs::IO::construct_abfs(orb,
+        abfs = Exx_Abfs::IO::construct_abfs(abfs,
+                                            orb,
                                             GlobalC::exx_info.info_ri.files_abfs,
                                             GlobalC::exx_info.info_ri.kmesh_times);
     }
@@ -2864,10 +2854,18 @@ void run_sternheimer_periodic_lcao_chi0_output(
     {
         const auto target = SternheimerRPA::read_coulomb_v1_files(
             find_coulomb_v1_rank_files(response_plan.iq, GlobalV::NPROC));
-        if (target.iq != response_plan.iq
-            || target.atom_naux != atom_auxiliary_sizes(periodic_abfs.densities, ucell.nat))
+        const std::vector<int> grid_atom_naux = atom_auxiliary_sizes(periodic_abfs.densities, ucell.nat);
+        if (target.iq != response_plan.iq || target.atom_naux != grid_atom_naux)
         {
-            throw std::runtime_error("Periodic Gamma Sternheimer full-Coulomb v1 metadata do not match the grid ABFS.");
+            std::ostringstream message;
+            message << "Periodic Gamma Sternheimer full-Coulomb v1 metadata do not match the grid ABFS: v1_iq="
+                    << target.iq << " expected_iq=" << response_plan.iq << " v1_atom_naux=";
+            std::copy(target.atom_naux.begin(), target.atom_naux.end(),
+                      std::ostream_iterator<int>(message, ","));
+            message << " grid_atom_naux=";
+            std::copy(grid_atom_naux.begin(), grid_atom_naux.end(),
+                      std::ostream_iterator<int>(message, ","));
+            throw std::runtime_error(message.str());
         }
         gamma_projection_relative_error
             = compare_sternheimer_periodic_coulomb_projection(periodic_abfs.densities,
