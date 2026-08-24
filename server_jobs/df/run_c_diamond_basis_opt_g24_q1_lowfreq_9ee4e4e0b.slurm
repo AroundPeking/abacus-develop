@@ -19,7 +19,7 @@ root=/data/home/df_iopcas_ghj/app/abacus/unified-basis-opt-1474d95c2-20260825
 build_job=3110409
 abacus=$root/artifacts/job$build_job/abacus_3p
 source_commit=9ee4e4e0b72dd1c9441a688fb57712f714e33e5b
-case_root=/work/ssd/work/df_iopcas_ghj/c-periodic-basis-opt-20260825
+case_root=/ssd/work/df_iopcas_ghj/c-periodic-basis-opt-20260825
 work=$case_root/c-diamond-g24-fd8-q1-lowfreq-9ee4e4e0b
 
 test "$SLURM_JOB_PARTITION" = p1
