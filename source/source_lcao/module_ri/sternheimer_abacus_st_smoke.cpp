@@ -38,6 +38,10 @@
 #include "source_pw/module_pwdft/structure_factor.h"
 #include "source_base/module_external/blas_connector.h"
 
+#if defined(COMMIT_INFO)
+#include "commit.h"
+#endif
+
 #include <algorithm>
 #include <array>
 #include <cctype>
