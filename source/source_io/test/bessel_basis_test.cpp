@@ -2,6 +2,7 @@
 
 #include <iostream>
 #include <fstream>
+#include <cstdio>
 
 #include <cmath>
 
@@ -13,6 +14,7 @@
 #include <cassert>
 
 #include "../module_bessel/bessel_basis.h"
+#include "../module_parameter/parameter.h"
 #include "../../source_cell/unitcell.h"
 #include "../../source_estate/magnetism.h"
 
@@ -447,6 +449,35 @@ protected:
      EXPECT_EQ(besselBasis.get_tolerence(), d_Tolerance);
      EXPECT_EQ(besselBasis.get_smooth(), b_Smooth);
      EXPECT_EQ(besselBasis.get_sigma(), d_SmoothSigma);
+}
+
+TEST_F(TestBesselBasis, NonRootRankDoesNotWriteJleOrb) {
+    const int original_rank = GlobalV::MY_RANK;
+    const std::string original_output = PARAM.globalv.global_out_dir;
+    GlobalV::MY_RANK = 1;
+    PARAM.globalv.global_out_dir = "./";
+    std::remove("./jle.orb");
+
+    besselBasis.init(
+        false,
+        4.0,
+        1,
+        0,
+        false,
+        0.1,
+        2.0,
+        0.01,
+        ucell,
+        0.01,
+        2.0
+    );
+
+    std::ifstream output("./jle.orb");
+    EXPECT_FALSE(output.good());
+    output.close();
+    GlobalV::MY_RANK = original_rank;
+    PARAM.globalv.global_out_dir = original_output;
+    std::remove("./jle.orb");
 }
 
 TEST_F(TestBesselBasis, PolynomialInterpolation2Test) {
