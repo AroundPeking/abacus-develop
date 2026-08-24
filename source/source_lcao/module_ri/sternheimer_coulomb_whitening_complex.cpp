@@ -172,28 +172,79 @@ SternheimerComplexCoulombWhitening make_sternheimer_complex_coulomb_whitening(co
         }
     }
 
+    const int threshold_rank = result.retained_rank;
     const std::vector<Complex> metric_times_transform
         = apply_sternheimer_complex_channel_transform(hermitian, dimension, dimension, result);
-    double max_error = 0.0;
-    for (int left = 0; left != result.retained_rank; ++left)
+    std::vector<double> identity_errors(
+        static_cast<std::size_t>(threshold_rank) * static_cast<std::size_t>(threshold_rank),
+        0.0);
+    for (int left = 0; left != threshold_rank; ++left)
     {
-        for (int right = 0; right != result.retained_rank; ++right)
+        for (int right = 0; right != threshold_rank; ++right)
         {
             Complex value(0.0, 0.0);
             for (int raw = 0; raw != dimension; ++raw)
             {
-                value += std::conj(result.transform[static_cast<std::size_t>(raw * result.retained_rank + left)])
-                         * metric_times_transform[static_cast<std::size_t>(raw * result.retained_rank + right)];
+                value += std::conj(result.transform[static_cast<std::size_t>(raw * threshold_rank + left)])
+                         * metric_times_transform[static_cast<std::size_t>(raw * threshold_rank + right)];
             }
             const Complex expected = left == right ? Complex(1.0, 0.0) : Complex(0.0, 0.0);
-            max_error = std::max(max_error, std::abs(value - expected));
+            identity_errors[static_cast<std::size_t>(left * threshold_rank + right)]
+                = std::abs(value - expected);
         }
     }
-    result.max_orthonormality_error = max_error;
-    if (!std::isfinite(max_error) || max_error > 1.0e-8)
+
+    std::vector<double> trailing_max_error(static_cast<std::size_t>(threshold_rank), 0.0);
+    for (int retained = threshold_rank - 1; retained >= 0; --retained)
     {
-        throw std::runtime_error("Complex Sternheimer Coulomb whitening failed its W^dagger V W identity check.");
+        double max_error = retained + 1 < threshold_rank
+                               ? trailing_max_error[static_cast<std::size_t>(retained + 1)]
+                               : 0.0;
+        for (int other = retained; other != threshold_rank; ++other)
+        {
+            max_error = std::max(
+                max_error,
+                identity_errors[static_cast<std::size_t>(retained * threshold_rank + other)]);
+            max_error = std::max(
+                max_error,
+                identity_errors[static_cast<std::size_t>(other * threshold_rank + retained)]);
+        }
+        trailing_max_error[static_cast<std::size_t>(retained)] = max_error;
     }
+
+    constexpr double orthonormality_tolerance = 1.0e-8;
+    int stable_offset = 0;
+    while (stable_offset != threshold_rank
+           && (!std::isfinite(trailing_max_error[static_cast<std::size_t>(stable_offset)])
+               || trailing_max_error[static_cast<std::size_t>(stable_offset)] > orthonormality_tolerance))
+    {
+        ++stable_offset;
+    }
+    if (stable_offset == threshold_rank)
+    {
+        throw std::runtime_error("Complex Sternheimer Coulomb whitening has no numerically stable retained direction.");
+    }
+    result.max_orthonormality_error = trailing_max_error[static_cast<std::size_t>(stable_offset)];
+    if (stable_offset == 0)
+    {
+        return result;
+    }
+
+    const int stable_rank = threshold_rank - stable_offset;
+    std::vector<Complex> stable_transform(
+        static_cast<std::size_t>(dimension) * static_cast<std::size_t>(stable_rank),
+        Complex(0.0, 0.0));
+    for (int raw = 0; raw != dimension; ++raw)
+    {
+        std::copy_n(result.transform.begin() + static_cast<std::size_t>(raw * threshold_rank + stable_offset),
+                    stable_rank,
+                    stable_transform.begin() + static_cast<std::size_t>(raw * stable_rank));
+    }
+    result.retained_rank = stable_rank;
+    result.discarded_rank = first_retained + stable_offset;
+    result.smallest_retained_eigenvalue
+        = eigenvalues[static_cast<std::size_t>(result.discarded_rank)];
+    result.transform = std::move(stable_transform);
     return result;
 }
 
