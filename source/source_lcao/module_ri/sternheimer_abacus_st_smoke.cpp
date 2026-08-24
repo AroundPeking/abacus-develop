@@ -21,6 +21,8 @@
 #include "source_lcao/module_ri/sternheimer_channel_resources.h"
 #include "source_lcao/module_ri/sternheimer_chi0_mpi.h"
 #include "source_lcao/module_ri/sternheimer_coulomb_whitening.h"
+#include "source_lcao/module_ri/sternheimer_coulomb_whitening_complex.h"
+#include "source_lcao/module_ri/sternheimer_basis_opt_periodic.h"
 #include "source_lcao/module_ri/sternheimer_delta.h"
 #include "source_lcao/module_ri/sternheimer_abacus_fd_nonlocal.h"
 #include "source_lcao/module_ri/sternheimer_fd_solver.h"
@@ -36,6 +38,7 @@
 #include "source_lcao/module_ri/sternheimer_supercell_sector.h"
 #include "source_lcao/module_ri/sternheimer_wavefunction_diagnostic.h"
 #include "source_pw/module_pwdft/structure_factor.h"
+#include "source_base/global_function.h"
 #include "source_base/module_external/blas_connector.h"
 
 #if defined(COMMIT_INFO)
@@ -47,6 +50,7 @@
 #include <cctype>
 #include <chrono>
 #include <cmath>
+#include <cstdio>
 #include <cstdint>
 #include <cstring>
 #include <cstdlib>
@@ -81,6 +85,7 @@ namespace
 
 namespace siab = ::module_ri::sternheimer_siab;
 namespace sternheimer_chi0 = ::module_ri::sternheimer_chi0;
+namespace periodic_basis_opt = ::module_ri::sternheimer_basis_opt;
 
 std::string sternheimer_abfs_perturbation_source(const std::vector<std::string>& explicit_abfs_files)
 {
@@ -156,6 +161,26 @@ std::string hash_coulomb_whitening_transform(const SternheimerCoulombWhitening& 
             throw std::runtime_error("Sternheimer Coulomb whitening transform contains a non-finite value.");
         }
         hash_double(digest, value);
+    }
+    return digest.finish();
+}
+
+std::string hash_coulomb_whitening_transform(const SternheimerComplexCoulombWhitening& whitening)
+{
+    siab::Sha256 digest;
+    const std::string marker = "ABACUS_STERNHEIMER_COMPLEX_COULOMB_WHITENING_V1";
+    digest.update(reinterpret_cast<const unsigned char*>(marker.data()), marker.size());
+    hash_int(digest, whitening.raw_dimension);
+    hash_int(digest, whitening.retained_rank);
+    hash_double(digest, whitening.relative_threshold);
+    for (const std::complex<double>& value: whitening.transform)
+    {
+        if (!std::isfinite(value.real()) || !std::isfinite(value.imag()))
+        {
+            throw std::runtime_error("Complex Sternheimer Coulomb whitening transform contains a non-finite value.");
+        }
+        hash_double(digest, value.real());
+        hash_double(digest, value.imag());
     }
     return digest.finish();
 }
@@ -797,6 +822,143 @@ std::string join_path(const std::string& dir, const std::string& file)
     return dir + "/" + file;
 }
 
+std::string periodic_basis_opt_directory(const std::string& output_dir)
+{
+    return join_path(output_dir, "STERNHEIMER_BASIS_OPT_V1");
+}
+
+std::string periodic_basis_opt_k_filename(const std::string& prefix,
+                                          const int source_ik_one_based,
+                                          const int ifrequency = -1)
+{
+    std::string filename = prefix + "_ik_" + std::to_string(source_ik_one_based);
+    if (ifrequency >= 0)
+    {
+        filename += "_ifreq_" + std::to_string(ifrequency);
+    }
+    return filename + ".bin";
+}
+
+void write_periodic_basis_opt_primitive_blocks_atomic(
+    const std::string& path,
+    const std::vector<siab::PrimitiveBlock>& blocks)
+{
+    if (path.empty() || blocks.empty())
+    {
+        throw std::invalid_argument("Periodic basis-optimization primitive blocks are empty.");
+    }
+    const std::string temporary = path + ".tmp";
+    std::remove(temporary.c_str());
+    std::ofstream output(temporary.c_str(), std::ios::trunc);
+    if (!output)
+    {
+        throw std::runtime_error("Cannot open periodic basis-optimization primitive-block file.");
+    }
+    output << "ABACUS_STERNHEIMER_BASIS_OPT_PRIMITIVES_V1\n"
+           << "# element atom_index l m n_primitive offset\n";
+    for (const siab::PrimitiveBlock& block: blocks)
+    {
+        output << block.element << ' ' << block.atom_index << ' ' << block.l << ' ' << block.m << ' '
+               << block.n_primitive << ' ' << block.offset << '\n';
+    }
+    output.close();
+    if (!output || std::rename(temporary.c_str(), path.c_str()) != 0)
+    {
+        std::remove(temporary.c_str());
+        throw std::runtime_error("Cannot finalize periodic basis-optimization primitive-block file.");
+    }
+}
+
+void write_periodic_basis_opt_status_atomic(const std::string& path,
+                                            const std::string& physics_hash,
+                                            const int solved_equations,
+                                            const double max_solver_relative_residual)
+{
+    const std::string temporary = path + ".tmp";
+    std::remove(temporary.c_str());
+    std::ofstream output(temporary.c_str(), std::ios::trunc);
+    if (!output)
+    {
+        throw std::runtime_error("Cannot open periodic basis-optimization status file.");
+    }
+    output << std::scientific << std::setprecision(17)
+           << "status success\n"
+           << "all_converged yes\n"
+           << "physics_hash " << physics_hash << '\n'
+           << "solved_equations " << solved_equations << '\n'
+           << "max_solver_relative_residual " << max_solver_relative_residual << '\n';
+    output.close();
+    if (!output || std::rename(temporary.c_str(), path.c_str()) != 0)
+    {
+        std::remove(temporary.c_str());
+        throw std::runtime_error("Cannot finalize periodic basis-optimization status file.");
+    }
+}
+
+std::string make_periodic_basis_opt_physics_hash(
+    const periodic_basis_opt::Manifest& manifest,
+    const UnitCell& ucell,
+    const SternheimerFDHamiltonian::Grid& grid,
+    const std::array<int, 3>& kmesh,
+    const double pca_threshold,
+    const double solver_tolerance,
+    const int solver_max_iter)
+{
+    std::ostringstream stream;
+    stream << std::scientific << std::setprecision(17)
+           << "ABACUS_STERNHEIMER_BASIS_OPT_PHYSICS_V1\n"
+           << manifest.abacus_commit << '\n' << manifest.executable_sha256 << '\n'
+           << manifest.orbital_sha256 << '\n' << manifest.pseudopotential_sha256 << '\n'
+           << manifest.auxiliary_basis_sha256 << '\n' << manifest.primitive_blocks_sha256 << '\n'
+           << manifest.coulomb_transform_sha256 << '\n'
+           << PARAM.inp.ecutwfc << ' ' << PARAM.inp.sternheimer_fd_order << ' '
+           << pca_threshold << ' ' << solver_tolerance << ' ' << solver_max_iter << ' '
+           << PARAM.inp.sternheimer_delta << ' ' << PARAM.inp.sternheimer_delta_max_states << ' '
+           << PARAM.inp.sternheimer_delta_norm_tol << '\n'
+           << grid.nx << ' ' << grid.ny << ' ' << grid.nz << ' '
+           << grid.hx << ' ' << grid.hy << ' ' << grid.hz << '\n'
+           << kmesh[0] << ' ' << kmesh[1] << ' ' << kmesh[2] << '\n'
+           << manifest.selected_iq << ' ' << manifest.qpoint[0] << ' ' << manifest.qpoint[1] << ' '
+           << manifest.qpoint[2] << ' ' << manifest.q_weight << '\n'
+           << manifest.raw_auxiliary_dimension << ' ' << manifest.whitened_auxiliary_rank << ' '
+           << manifest.discarded_auxiliary_rank << ' ' << manifest.coulomb_relative_threshold << ' '
+           << manifest.coulomb_max_orthonormality_error << ' ' << manifest.primitive_count << '\n';
+    for (const double value: cell_vectors_bohr(ucell))
+    {
+        stream << value << ' ';
+    }
+    stream << '\n';
+    for (std::size_t index = 0; index != manifest.frequency_ha.size(); ++index)
+    {
+        stream << index << ' ' << manifest.frequency_ha[index] << ' '
+               << manifest.frequency_weights_ha[index] << '\n';
+    }
+    for (const auto& kpoint: manifest.kpoints)
+    {
+        stream << kpoint.source_ik << ' ' << kpoint.target_ik << ' ';
+        for (const double value: kpoint.source_kpoint)
+        {
+            stream << value << ' ';
+        }
+        for (const double value: kpoint.target_kpoint)
+        {
+            stream << value << ' ';
+        }
+        for (const int value: kpoint.reciprocal_shift)
+        {
+            stream << value << ' ';
+        }
+        stream << kpoint.k_weight << ' ';
+        for (const double occupation: kpoint.occupations)
+        {
+            stream << occupation << ' ';
+        }
+        stream << '\n';
+    }
+    const std::string serialized = stream.str();
+    return siab::sha256_bytes(std::vector<unsigned char>(serialized.begin(), serialized.end()));
+}
+
 void validate_orbital_files(const std::string& orbital_dir, const std::vector<std::string>& orbital_files)
 {
     if (orbital_files.empty())
@@ -1238,24 +1400,21 @@ SIABPrimitiveExportData build_siab_primitive_export_data(const ModulePW::PW_Basi
     {
         throw std::runtime_error("Sternheimer SIAB reciprocal primitive matrix is empty or incomplete.");
     }
-    if (GlobalV::MY_RANK == 0)
-    {
-        result.overlap_s.assign(static_cast<std::size_t>(result.primitive_count)
-                                    * static_cast<std::size_t>(result.primitive_count), ModuleBase::ZERO);
-        BlasConnector::gemm('N',
-                            'C',
-                            result.primitive_count,
-                            result.primitive_count,
-                            result.reciprocal_count,
-                            std::complex<double>(1.0, 0.0),
-                            result.reciprocal_matrix.data(),
-                            result.reciprocal_count,
-                            result.reciprocal_matrix.data(),
-                            result.reciprocal_count,
-                            std::complex<double>(0.0, 0.0),
-                            result.overlap_s.data(),
-                            result.primitive_count);
-    }
+    result.overlap_s.assign(static_cast<std::size_t>(result.primitive_count)
+                                * static_cast<std::size_t>(result.primitive_count), ModuleBase::ZERO);
+    BlasConnector::gemm('N',
+                        'C',
+                        result.primitive_count,
+                        result.primitive_count,
+                        result.reciprocal_count,
+                        std::complex<double>(1.0, 0.0),
+                        result.reciprocal_matrix.data(),
+                        result.reciprocal_count,
+                        result.reciprocal_matrix.data(),
+                        result.reciprocal_count,
+                        std::complex<double>(0.0, 0.0),
+                        result.overlap_s.data(),
+                        result.primitive_count);
     return result;
 }
 
@@ -2271,13 +2430,20 @@ void run_sternheimer_periodic_lcao_chi0_output(
     const UnitCell& ucell,
     const elecstate::ElecState& elec_state,
     const LCAO_Orbitals& orbitals,
+    const Structure_Factor* structure_factor,
     const std::vector<SternheimerLCAOOccupiedKPoint>& occupied_kpoints,
     const std::array<int, 3>& kmesh,
     std::ofstream& out,
     const bool use_frequency_mpi,
     const int kpoint_groups,
+    const std::string& output_dir,
     const std::chrono::steady_clock::time_point& chi0_start_time)
 {
+    const bool write_basis_opt = PARAM.inp.out_sternheimer_basis_opt;
+    if (write_basis_opt && structure_factor == nullptr)
+    {
+        throw std::runtime_error("Periodic basis-optimization output requires the ABACUS structure factor.");
+    }
     if (PARAM.inp.nspin != 1)
     {
         throw std::runtime_error("The first periodic Sternheimer driver supports only nspin=1 insulators.");
@@ -2292,6 +2458,11 @@ void run_sternheimer_periodic_lcao_chi0_output(
         = supercell_translation_sum_raw != nullptr && supercell_translation_sum_raw[0] != '\0';
     const bool full_supercell_response
         = use_supercell_translation_sum && env_is_true(kSupercellFullResponseEnv);
+    if (write_basis_opt && (use_supercell_translation_sum || PARAM.inp.sternheimer_siab_source_only))
+    {
+        throw std::runtime_error(
+            "Periodic basis-optimization output requires a primitive-cell full response, not a supercell or source-only run.");
+    }
     if (env_is_true(kSupercellFullResponseEnv) && !use_supercell_translation_sum)
     {
         throw std::runtime_error(
@@ -2393,7 +2564,7 @@ void run_sternheimer_periodic_lcao_chi0_output(
     const SternheimerABACUSFDGridData grid_data
         = use_parallel_grid_mpi ? make_sternheimer_fd_full_grid(pw_basis)
                                 : make_sternheimer_fd_grid(pw_basis);
-    const bool use_symmetry_partial_response = PARAM.inp.symmetry == "1";
+    const bool use_symmetry_partial_response = PARAM.inp.symmetry == "1" && !write_basis_opt;
     const bool write_kresolved_diagnostic
         = !use_symmetry_partial_response && env_is_true(kKResolvedDiagnosticEnv);
     const bool write_partial_kresolved = use_symmetry_partial_response || write_kresolved_diagnostic;
@@ -2541,9 +2712,15 @@ void run_sternheimer_periodic_lcao_chi0_output(
                              return static_cast<int>(record.coefficients.size()) > max_bands;
                          });
     const bool write_periodic_v1
-        = sternheimer_write_periodic_v1(use_supercell_translation_sum,
-                                        bands_are_truncated,
-                                        full_supercell_response);
+        = !write_basis_opt
+          && sternheimer_write_periodic_v1(use_supercell_translation_sum,
+                                           bands_are_truncated,
+                                           full_supercell_response);
+    if (write_basis_opt && (bands_are_truncated || max_channels > 0))
+    {
+        throw std::runtime_error(
+            "Periodic basis-optimization output forbids occupied-band or auxiliary-channel truncation.");
+    }
     validate_sternheimer_periodic_output_mode(write_periodic_v1, write_partial_kresolved);
     if (use_symmetry_partial_response
         && (write_delta_components || write_lcao_sos || write_wavefunction_diagnostic))
@@ -2653,7 +2830,32 @@ void run_sternheimer_periodic_lcao_chi0_output(
     {
         throw std::runtime_error("No periodic ABFS full-Coulomb perturbation channels were generated.");
     }
-    const int num_channels = static_cast<int>(periodic_abfs.potentials.size());
+    const int raw_num_channels = static_cast<int>(periodic_abfs.potentials.size());
+    if (write_basis_opt && GlobalC::exx_info.info_ri.files_abfs.empty())
+    {
+        throw std::runtime_error(
+            "Periodic basis-optimization output requires explicit ABFS_ORBITAL files for immutable provenance.");
+    }
+    std::vector<std::complex<double>> full_coulomb_metric;
+    SternheimerComplexCoulombWhitening complex_whitening;
+    std::vector<SternheimerABFBlochGridChannel> whitened_channels;
+    if (write_basis_opt)
+    {
+        full_coulomb_metric = sternheimer_grid_projected_matrix(periodic_abfs.densities,
+                                                                 periodic_abfs.potentials,
+                                                                 grid_data.volume_element);
+        complex_whitening = make_sternheimer_complex_coulomb_whitening(
+            full_coulomb_metric,
+            raw_num_channels,
+            PARAM.inp.sternheimer_siab_coulomb_threshold);
+        whitened_channels = transform_sternheimer_abf_bloch_grid_channels(
+            periodic_abfs.potentials,
+            complex_whitening.transform,
+            complex_whitening.retained_rank);
+    }
+    const std::vector<SternheimerABFBlochGridChannel>& channels
+        = write_basis_opt ? whitened_channels : periodic_abfs.potentials;
+    const int num_channels = static_cast<int>(channels.size());
     const int output_atom_count
         = full_supercell_response ? supercell_translation_sum.atoms_per_primitive : ucell.nat;
     double gamma_projection_relative_error = 0.0;
@@ -2673,7 +2875,6 @@ void run_sternheimer_periodic_lcao_chi0_output(
                                                                grid_data.volume_element)
                   .relative_error;
     }
-    const std::vector<SternheimerABFBlochGridChannel>& channels = periodic_abfs.potentials;
     append_chi0_progress_event("channels_ready",
                                0,
                                -1,
@@ -2731,11 +2932,74 @@ void run_sternheimer_periodic_lcao_chi0_output(
         return;
     }
 
+    std::string basis_opt_dir;
+    double basis_opt_q_weight = 0.0;
+    int basis_opt_primitive_count = 0;
+    if (write_basis_opt)
+    {
+        basis_opt_q_weight = sternheimer_qstar_weight(response_kpoints, response_plan.iq);
+        basis_opt_dir = periodic_basis_opt_directory(output_dir);
+        if (GlobalV::MY_RANK == 0)
+        {
+            const std::string manifest_path = join_path(basis_opt_dir, "manifest.dat");
+            const std::string dataset_status_path = join_path(basis_opt_dir, "status.dat");
+            if (std::ifstream(manifest_path.c_str()) || std::ifstream(dataset_status_path.c_str()))
+            {
+                throw std::runtime_error(
+                    "Periodic basis-optimization output directory already contains a completed dataset.");
+            }
+            ModuleBase::GlobalFunc::MAKE_DIR(basis_opt_dir);
+
+            const SternheimerKQPair& first_pair = response_plan.kq_pairs.front();
+            const int first_target_record_index
+                = response_plan.record_index_by_global_k[static_cast<std::size_t>(first_pair.target_index)];
+            const auto& first_target_record
+                = response_kpoints[static_cast<std::size_t>(first_target_record_index)];
+            const SIABPrimitiveExportData primitive_template
+                = build_siab_primitive_export_data(pw_basis,
+                                                   *structure_factor,
+                                                   ucell,
+                                                   sternheimer_lcao_grid_kpoint(first_target_record));
+            basis_opt_primitive_count = primitive_template.primitive_count;
+            write_periodic_basis_opt_primitive_blocks_atomic(
+                join_path(basis_opt_dir, "primitive_blocks.dat"), primitive_template.blocks);
+
+            periodic_basis_opt::write_periodic_chunk_atomic(
+                join_path(basis_opt_dir, "coulomb_metric.bin"),
+                periodic_basis_opt::make_periodic_chunk_header(
+                    periodic_basis_opt::ChunkKind::coulomb_metric,
+                    response_plan.iq,
+                    0,
+                    -1,
+                    static_cast<std::uint64_t>(raw_num_channels),
+                    static_cast<std::uint64_t>(raw_num_channels)),
+                full_coulomb_metric);
+            periodic_basis_opt::write_periodic_chunk_atomic(
+                join_path(basis_opt_dir, "coulomb_whitening.bin"),
+                periodic_basis_opt::make_periodic_chunk_header(
+                    periodic_basis_opt::ChunkKind::coulomb_whitening,
+                    response_plan.iq,
+                    0,
+                    -1,
+                    static_cast<std::uint64_t>(raw_num_channels),
+                    static_cast<std::uint64_t>(num_channels)),
+                complex_whitening.transform);
+        }
+#ifdef __MPI
+        if (GlobalV::NPROC > 1)
+        {
+            MPI_Bcast(&basis_opt_primitive_count, 1, MPI_INT, 0, MPI_COMM_WORLD);
+            MPI_Barrier(MPI_COMM_WORLD);
+        }
+#endif
+    }
+
     const std::vector<SternheimerFDHamiltonian::Vector> potentials = collect_channel_potentials(channels);
     const std::vector<SternheimerFDHamiltonian::Vector> perturbations_ry
         = scale_potentials(potentials, kHartreeToRydberg);
     const std::vector<SternheimerRPA::AuxiliaryChannel> auxiliary_channels
-        = make_chi0_auxiliary_channels(channels);
+        = write_basis_opt ? std::vector<SternheimerRPA::AuxiliaryChannel>()
+                          : make_chi0_auxiliary_channels(channels);
 
     std::vector<int> frequency_owners(static_cast<std::size_t>(nfreq), 0);
     std::vector<std::vector<SternheimerRPA::Complex>> chi0_branches(static_cast<std::size_t>(nfreq));
@@ -3143,6 +3407,76 @@ void run_sternheimer_periodic_lcao_chi0_output(
             target_lcao_occ_unocc_overlap_max[pair_index] = max_overlap;
         }
 
+        const int source_band_count = sternheimer_periodic_band_count(
+            static_cast<int>(source.states.wavefunctions.size()), max_bands);
+        SIABPrimitiveExportData pair_primitives;
+        if (write_basis_opt)
+        {
+            pair_primitives = build_siab_primitive_export_data(
+                pw_basis,
+                *structure_factor,
+                ucell,
+                sternheimer_lcao_grid_kpoint(target_record));
+            if (pair_primitives.primitive_count != basis_opt_primitive_count)
+            {
+                throw std::runtime_error(
+                    "Periodic basis-optimization primitive layout changes between destination k points.");
+            }
+            const int source_owner = response_owner_rank(pair.source_index, 0);
+            if (source_owner == GlobalV::MY_RANK)
+            {
+                std::vector<std::complex<double>> source_rows(
+                    static_cast<std::size_t>(source_band_count)
+                        * static_cast<std::size_t>(num_channels)
+                        * static_cast<std::size_t>(basis_opt_primitive_count),
+                    std::complex<double>(0.0, 0.0));
+                for (int ib = 0; ib != source_band_count; ++ib)
+                {
+                    for (int ichannel = 0; ichannel != num_channels; ++ichannel)
+                    {
+                        SternheimerFDHamiltonian::Vector source_grid(grid_data.grid.size(),
+                                                                      std::complex<double>(0.0, 0.0));
+                        for (std::size_t ir = 0; ir != source_grid.size(); ++ir)
+                        {
+                            source_grid[ir] = potentials[static_cast<std::size_t>(ichannel)][ir]
+                                              * source.states.wavefunctions[static_cast<std::size_t>(ib)][ir];
+                        }
+                        const auto projected
+                            = project_siab_response_to_primitives(source_grid, ucell, pair_primitives);
+                        const std::size_t row
+                            = static_cast<std::size_t>(ib * num_channels + ichannel);
+                        std::copy(projected.begin(),
+                                  projected.end(),
+                                  source_rows.begin()
+                                      + row * static_cast<std::size_t>(basis_opt_primitive_count));
+                    }
+                }
+                const int source_ik_one_based = pair.source_index + 1;
+                periodic_basis_opt::write_periodic_chunk_atomic(
+                    join_path(basis_opt_dir,
+                              periodic_basis_opt_k_filename("overlap", source_ik_one_based)),
+                    periodic_basis_opt::make_periodic_chunk_header(
+                        periodic_basis_opt::ChunkKind::overlap,
+                        response_plan.iq,
+                        source_ik_one_based,
+                        -1,
+                        static_cast<std::uint64_t>(basis_opt_primitive_count),
+                        static_cast<std::uint64_t>(basis_opt_primitive_count)),
+                    pair_primitives.overlap_s);
+                periodic_basis_opt::write_periodic_chunk_atomic(
+                    join_path(basis_opt_dir,
+                              periodic_basis_opt_k_filename("source", source_ik_one_based)),
+                    periodic_basis_opt::make_periodic_chunk_header(
+                        periodic_basis_opt::ChunkKind::source,
+                        response_plan.iq,
+                        source_ik_one_based,
+                        -1,
+                        static_cast<std::uint64_t>(source_band_count * num_channels),
+                        static_cast<std::uint64_t>(basis_opt_primitive_count)),
+                    source_rows);
+            }
+        }
+
         for (int ifrequency = 0; ifrequency != nfreq; ++ifrequency)
         {
             const int owner_rank = response_owner_rank(pair.source_index, ifrequency);
@@ -3164,8 +3498,15 @@ void run_sternheimer_periodic_lcao_chi0_output(
             std::vector<SternheimerRPA::Complex>* lcao_sos_branch
                 = write_lcao_sos ? &lcao_sos_branches[static_cast<std::size_t>(ifrequency)] : nullptr;
 
-            const int source_band_count = sternheimer_periodic_band_count(
-                static_cast<int>(source.states.wavefunctions.size()), max_bands);
+            std::vector<std::complex<double>> response_rows;
+            if (write_basis_opt)
+            {
+                response_rows.assign(
+                    static_cast<std::size_t>(source_band_count)
+                        * static_cast<std::size_t>(num_channels)
+                        * static_cast<std::size_t>(basis_opt_primitive_count),
+                    std::complex<double>(0.0, 0.0));
+            }
             for (int ib = 0; ib != source_band_count; ++ib)
             {
                 const double occupation = sternheimer_lcao_weighted_occupation(source_record, ib);
@@ -3177,6 +3518,7 @@ void run_sternheimer_periodic_lcao_chi0_output(
                     double full_grid_equation_residual_norm = 0.0;
                     bool has_wavefunction_diagnostic = false;
                     SternheimerWavefunctionDiagnostic::Record wavefunction_diagnostic;
+                    std::vector<std::complex<double>> basis_opt_q;
                 };
                 const std::vector<PeriodicChannelEquationResult> channel_results
                     = run_sternheimer_channel_tasks<PeriodicChannelEquationResult>(
@@ -3270,6 +3612,11 @@ void run_sternheimer_periodic_lcao_chi0_output(
                             result.equation_residual_norm = response.residual_norm;
                             result.full_grid_equation_residual_norm
                                 = response.full_grid_equation_residual_norm;
+                            if (write_basis_opt)
+                            {
+                                result.basis_opt_q = project_siab_response_to_primitives(
+                                    response.wavefunction, ucell, pair_primitives);
+                            }
                             if (write_wavefunction_diagnostic
                                 && wavefunction_diagnostic_config.selector.matches(response_plan.iq,
                                                                                    pair.source_index,
@@ -3385,6 +3732,21 @@ void run_sternheimer_periodic_lcao_chi0_output(
                     max_full_grid_equation_residual_norm
                         = std::max(max_full_grid_equation_residual_norm,
                                    result.full_grid_equation_residual_norm);
+                    if (write_basis_opt)
+                    {
+                        if (result.basis_opt_q.size()
+                            != static_cast<std::size_t>(basis_opt_primitive_count))
+                        {
+                            throw std::runtime_error(
+                                "Periodic basis-optimization response projection has the wrong primitive dimension.");
+                        }
+                        const std::size_t row
+                            = static_cast<std::size_t>(ib * num_channels + ichannel);
+                        std::copy(result.basis_opt_q.begin(),
+                                  result.basis_opt_q.end(),
+                                  response_rows.begin()
+                                      + row * static_cast<std::size_t>(basis_opt_primitive_count));
+                    }
                     if (result.has_wavefunction_diagnostic)
                     {
                         SternheimerWavefunctionDiagnostic::write(
@@ -3406,6 +3768,22 @@ void run_sternheimer_periodic_lcao_chi0_output(
                                                "source_k=" + std::to_string(pair.source_index + 1)
                                                    + ",target_k=" + std::to_string(pair.target_index + 1));
                 }
+            }
+            if (write_basis_opt)
+            {
+                const int source_ik_one_based = pair.source_index + 1;
+                periodic_basis_opt::write_periodic_chunk_atomic(
+                    join_path(basis_opt_dir,
+                              periodic_basis_opt_k_filename(
+                                  "response", source_ik_one_based, ifrequency)),
+                    periodic_basis_opt::make_periodic_chunk_header(
+                        periodic_basis_opt::ChunkKind::response,
+                        response_plan.iq,
+                        source_ik_one_based,
+                        ifrequency,
+                        static_cast<std::uint64_t>(source_band_count * num_channels),
+                        static_cast<std::uint64_t>(basis_opt_primitive_count)),
+                    response_rows);
             }
         }
         if (write_partial_kresolved)
@@ -3683,6 +4061,155 @@ void run_sternheimer_periodic_lcao_chi0_output(
     }
 #endif
 
+    if (write_basis_opt && !all_converged)
+    {
+        throw std::runtime_error(
+            "Periodic basis-optimization output rejected unconverged Sternheimer equations.");
+    }
+    if (write_basis_opt && GlobalV::MY_RANK == 0)
+    {
+        periodic_basis_opt::Manifest manifest;
+        manifest.abacus_commit = siab::require_source_commit(compiled_commit_metadata());
+        manifest.executable_sha256 = siab::sha256_file(siab::resolve_executable_path());
+        const auto orbital_paths = siab::resolve_required_input_files(
+            orbital_dir_from_env_or_input(), orbital_files_from_env_or_cell(ucell), "initial orbital");
+        const auto pseudopotential_paths = siab::resolve_required_input_files(
+            PARAM.inp.pseudo_dir, ucell.pseudo_fn, "pseudopotential");
+        manifest.orbital_sha256 = siab::sha256_file_manifest(orbital_paths);
+        manifest.pseudopotential_sha256 = siab::sha256_file_manifest(pseudopotential_paths);
+        manifest.auxiliary_basis_sha256
+            = siab::sha256_unique_file_manifest(GlobalC::exx_info.info_ri.files_abfs);
+        manifest.primitive_blocks_sha256
+            = siab::sha256_file(join_path(basis_opt_dir, "primitive_blocks.dat"));
+        manifest.kernel = "full_coulomb";
+        manifest.q_count = static_cast<int>(response_kpoints.size());
+        manifest.selected_iq = response_plan.iq;
+        manifest.qpoint = response_plan.qpoint;
+        manifest.q_weight = basis_opt_q_weight;
+        manifest.k_count = static_cast<int>(response_plan.kq_pairs.size());
+        manifest.frequency_count = nfreq;
+        manifest.raw_auxiliary_dimension = raw_num_channels;
+        manifest.whitened_auxiliary_rank = num_channels;
+        manifest.discarded_auxiliary_rank = complex_whitening.discarded_rank;
+        manifest.coulomb_relative_threshold = complex_whitening.relative_threshold;
+        manifest.coulomb_max_orthonormality_error = complex_whitening.max_orthonormality_error;
+        manifest.coulomb_transform_sha256 = hash_coulomb_whitening_transform(complex_whitening);
+        manifest.primitive_count = basis_opt_primitive_count;
+        manifest.frequency_ha = frequency_grid.omega_ha;
+        manifest.frequency_weights_ha = frequency_grid.weights_ha;
+        manifest.kpoints.reserve(response_plan.kq_pairs.size());
+        for (const SternheimerKQPair& pair: response_plan.kq_pairs)
+        {
+            const int source_record_index
+                = response_plan.record_index_by_global_k[static_cast<std::size_t>(pair.source_index)];
+            const int target_record_index
+                = response_plan.record_index_by_global_k[static_cast<std::size_t>(pair.target_index)];
+            const auto& source_record
+                = response_kpoints[static_cast<std::size_t>(source_record_index)];
+            const auto& target_record
+                = response_kpoints[static_cast<std::size_t>(target_record_index)];
+            periodic_basis_opt::KPointRecord record;
+            record.source_ik = pair.source_index + 1;
+            record.target_ik = pair.target_index + 1;
+            record.source_kpoint = source_record.kpoint;
+            record.target_kpoint = target_record.kpoint;
+            record.reciprocal_shift = pair.reciprocal_shift;
+            record.k_weight = source_record.kweight;
+            record.occupations = source_record.occupations;
+            manifest.kpoints.push_back(std::move(record));
+        }
+        manifest.physics_hash = make_periodic_basis_opt_physics_hash(
+            manifest,
+            ucell,
+            grid_data.grid,
+            response_kmesh,
+            pca_threshold,
+            solver_tolerance,
+            solver_max_iter);
+
+        const auto add_entry = [&](const std::string& filename,
+                                   const periodic_basis_opt::PeriodicChunkHeader& header,
+                                   const double k_weight,
+                                   const double frequency) {
+            const std::string path = join_path(basis_opt_dir, filename);
+            manifest.entries.push_back(periodic_basis_opt::make_manifest_entry(
+                path, filename, header, basis_opt_q_weight, k_weight, frequency));
+        };
+        add_entry("coulomb_metric.bin",
+                  periodic_basis_opt::make_periodic_chunk_header(
+                      periodic_basis_opt::ChunkKind::coulomb_metric,
+                      response_plan.iq,
+                      0,
+                      -1,
+                      static_cast<std::uint64_t>(raw_num_channels),
+                      static_cast<std::uint64_t>(raw_num_channels)),
+                  1.0,
+                  -1.0);
+        add_entry("coulomb_whitening.bin",
+                  periodic_basis_opt::make_periodic_chunk_header(
+                      periodic_basis_opt::ChunkKind::coulomb_whitening,
+                      response_plan.iq,
+                      0,
+                      -1,
+                      static_cast<std::uint64_t>(raw_num_channels),
+                      static_cast<std::uint64_t>(num_channels)),
+                  1.0,
+                  -1.0);
+        for (const auto& pair: response_plan.kq_pairs)
+        {
+            const int source_record_index
+                = response_plan.record_index_by_global_k[static_cast<std::size_t>(pair.source_index)];
+            const auto& source_record
+                = response_kpoints[static_cast<std::size_t>(source_record_index)];
+            const int source_ik_one_based = pair.source_index + 1;
+            const std::uint64_t row_count
+                = static_cast<std::uint64_t>(source_record.coefficients.size())
+                  * static_cast<std::uint64_t>(num_channels);
+            add_entry(periodic_basis_opt_k_filename("overlap", source_ik_one_based),
+                      periodic_basis_opt::make_periodic_chunk_header(
+                          periodic_basis_opt::ChunkKind::overlap,
+                          response_plan.iq,
+                          source_ik_one_based,
+                          -1,
+                          static_cast<std::uint64_t>(basis_opt_primitive_count),
+                          static_cast<std::uint64_t>(basis_opt_primitive_count)),
+                      source_record.kweight,
+                      -1.0);
+            add_entry(periodic_basis_opt_k_filename("source", source_ik_one_based),
+                      periodic_basis_opt::make_periodic_chunk_header(
+                          periodic_basis_opt::ChunkKind::source,
+                          response_plan.iq,
+                          source_ik_one_based,
+                          -1,
+                          row_count,
+                          static_cast<std::uint64_t>(basis_opt_primitive_count)),
+                      source_record.kweight,
+                      -1.0);
+            for (int ifrequency = 0; ifrequency != nfreq; ++ifrequency)
+            {
+                add_entry(periodic_basis_opt_k_filename(
+                              "response", source_ik_one_based, ifrequency),
+                          periodic_basis_opt::make_periodic_chunk_header(
+                              periodic_basis_opt::ChunkKind::response,
+                              response_plan.iq,
+                              source_ik_one_based,
+                              ifrequency,
+                              row_count,
+                              static_cast<std::uint64_t>(basis_opt_primitive_count)),
+                          source_record.kweight,
+                          frequency_grid.omega_ha[static_cast<std::size_t>(ifrequency)]);
+            }
+        }
+        periodic_basis_opt::write_manifest_atomic(
+            join_path(basis_opt_dir, "manifest.dat"), manifest);
+        write_periodic_basis_opt_status_atomic(join_path(basis_opt_dir, "status.dat"),
+                                               manifest.physics_hash,
+                                               solved_equations,
+                                               max_solver_relative_residual);
+        GlobalV::ofs_running << " Sternheimer periodic basis-optimization dataset: "
+                             << basis_opt_dir << std::endl;
+    }
+
     if (GlobalV::MY_RANK != 0)
     {
         return;
@@ -3792,13 +4319,23 @@ void run_sternheimer_periodic_lcao_chi0_output(
     }
 
     out << "status success\n";
-    out << "format " << (!write_periodic_v1
+    out << "format " << (write_basis_opt
+                              ? "basis_opt_v1"
+                              : (!write_periodic_v1
                               ? "diagnostic_only"
                               : (use_symmetry_partial_response
                                      ? "v1_partial"
-                                     : (write_kresolved_diagnostic ? "v1_kresolved" : "v1")))
+                                     : (write_kresolved_diagnostic ? "v1_kresolved" : "v1"))))
         << '\n';
-    if (!write_periodic_v1)
+    if (write_basis_opt)
+    {
+        out << "data_files "
+            << 2 + response_plan.kq_pairs.size() * static_cast<std::size_t>(2 + nfreq) << '\n';
+        out << "basis_opt_dataset " << basis_opt_dir << '\n';
+        out << "basis_opt_manifest " << join_path(basis_opt_dir, "manifest.dat") << '\n';
+        out << "basis_opt_status " << join_path(basis_opt_dir, "status.dat") << '\n';
+    }
+    else if (!write_periodic_v1)
     {
         out << "data_files 0\n";
         out << "response_output diagnostic_only_no_v1\n";
@@ -3928,6 +4465,17 @@ void run_sternheimer_periodic_lcao_chi0_output(
         out << "wavefunction_diagnostic_file " << wavefunction_diagnostic_config.output_filename << '\n';
     }
     out << "abfs_channels " << num_channels << '\n';
+    if (write_basis_opt)
+    {
+        out << "abfs_raw_channels " << raw_num_channels << '\n';
+        out << "abfs_whitened_channels " << complex_whitening.retained_rank << '\n';
+        out << "abfs_discarded_channels " << complex_whitening.discarded_rank << '\n';
+        out << "abfs_whitening_relative_threshold " << complex_whitening.relative_threshold << '\n';
+        out << "abfs_whitening_max_orthonormality_error "
+            << complex_whitening.max_orthonormality_error << '\n';
+        out << "basis_opt_q_weight " << basis_opt_q_weight << '\n';
+        out << "basis_opt_primitive_count " << basis_opt_primitive_count << '\n';
+    }
     out << "abfs_max_channels_per_atom " << max_channels << '\n';
     out << "occupied_bands_total " << sternheimer_lcao_total_occupied_bands(response_kpoints) << '\n';
     out << "sternheimer_bands_per_k_limit " << max_bands << '\n';
@@ -4287,11 +4835,13 @@ void run_sternheimer_abacus_chi0_output_impl(
                                                       ucell,
                                                       elec_state,
                                                       *lcao_orbitals,
+                                                      siab_structure_factor,
                                                       *lcao_occupied_kpoints,
                                                       *lcao_kmesh,
                                                       out,
                                                       use_frequency_mpi,
                                                       response_kpoint_groups,
+                                                      output_dir,
                                                       chi0_start_time);
             if (GlobalV::MY_RANK == 0)
             {
