@@ -222,8 +222,11 @@ TEST(SternheimerBasisOptPeriodic, RejectsInvalidHeaderDimensionsAndIndices)
     EXPECT_NO_THROW(header(ChunkKind::coulomb_metric, 1, 0, -1, 1, 1));
     EXPECT_NO_THROW(header(ChunkKind::hamiltonian, 1, 1, -1, 2, 2));
     EXPECT_NO_THROW(header(ChunkKind::occupied_projection, 1, 1, -1, 1, 2));
+    EXPECT_NO_THROW(header(ChunkKind::reference_response, 1, 0, 0, 2, 2));
     EXPECT_THROW(header(ChunkKind::coulomb_metric, 1, 1, -1, 1, 1), std::invalid_argument);
     EXPECT_THROW(header(ChunkKind::response, 1, 1, -1, 1, 1), std::invalid_argument);
+    EXPECT_THROW(header(ChunkKind::reference_response, 1, 1, 0, 1, 1), std::invalid_argument);
+    EXPECT_THROW(header(ChunkKind::reference_response, 1, 0, -1, 1, 1), std::invalid_argument);
     EXPECT_THROW(header(ChunkKind::source, 1, 1, 0, 1, 1), std::invalid_argument);
     EXPECT_THROW(header(ChunkKind::overlap, 1, 1, -1, 0, 1), std::invalid_argument);
 
