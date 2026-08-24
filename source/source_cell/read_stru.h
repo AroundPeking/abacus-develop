@@ -8,7 +8,7 @@ namespace unitcell
     bool should_read_abfs_orbitals(bool cal_exx,
                                    bool rpa,
                                    bool out_sternheimer_librpa,
-                                   bool out_sternheimer_siab);
+                                   bool out_sternheimer_basis_opt);
 
     bool check_tau(const Atom* atoms,
                    const int& ntype,

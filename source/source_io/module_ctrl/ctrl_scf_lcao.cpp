@@ -720,7 +720,7 @@ void ModuleIO::ctrl_scf_lcao(UnitCell& ucell,
         rpa_lri_double.postSCF(ucell, MPI_COMM_WORLD, *dm, pelec, kv, orb, pv, *psi);
     }
 
-    if (inp.out_sternheimer_librpa || inp.out_sternheimer_siab)
+    if (inp.out_sternheimer_librpa || inp.out_sternheimer_basis_opt)
     {
         if (pelec == nullptr || pelec->pot == nullptr || pw_rho == nullptr || psi == nullptr)
         {

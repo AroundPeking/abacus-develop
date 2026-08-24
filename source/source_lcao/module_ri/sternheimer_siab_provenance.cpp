@@ -347,7 +347,7 @@ double require_single_primitive_rcut(const std::vector<double>& rcuts)
     if (rcuts.size() != 1 || !std::isfinite(rcuts.front()) || rcuts.front() <= 0.0)
     {
         throw std::invalid_argument(
-            "out_sternheimer_siab requires exactly one explicit positive finite bessel_nao_rcut.");
+            "out_sternheimer_basis_opt requires exactly one explicit positive finite bessel_nao_rcut.");
     }
     return rcuts.front();
 }
@@ -373,8 +373,8 @@ std::string require_source_commit(const std::string& compiled_commit)
     const std::string selected = normalized_commit_token(compiled_commit);
     if (!is_hex_string(selected, 40) && !is_hex_string(selected, 64))
     {
-        throw std::runtime_error(
-            "out_sternheimer_siab requires a build configured from an exact Git checkout with full COMMIT metadata.");
+        throw std::runtime_error("out_sternheimer_basis_opt requires a build configured from an exact Git checkout "
+                                 "with full COMMIT metadata.");
     }
     std::string normalized = selected;
     std::transform(normalized.begin(), normalized.end(), normalized.begin(), [](const unsigned char character) {

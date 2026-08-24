@@ -831,43 +831,59 @@ If EXX(exact exchange) is calculated (i.e. dft_fuctional==hse/hf/pbe0/scan0 or r
         this->add_item(item);
     }
     {
-        Input_Item item("out_sternheimer_siab");
-        item.annotation = "true: output Sternheimer first-order-wavefunction targets for SIAB; false: default";
+        Input_Item item("out_sternheimer_basis_opt");
+        item.annotation = "true: output Sternheimer references for basis optimization; false: default";
         item.category = "Output information";
         item.type = "Boolean";
-        item.description = "Write deterministic Sternheimer-SIAB v1 targets to "
-                           "OUT.ABACUS/sternheimer_matrix.dat for basis_type=lcao. Delta-ST requires the loaded "
-                           "LCAO orbitals, exactly one explicit bessel_nao_rcut, and a globally Coulomb-orthonormal "
-                           "perturbation space. This output-only switch is independent of rpa and mutually exclusive "
-                           "with out_sternheimer_librpa.";
+        item.description = "Write Sternheimer first-order-wavefunction references for offline atomic-basis "
+                           "optimization. Gamma-only atom and molecule calculations retain the deterministic "
+                           "Sternheimer-SIAB v1 output; positive sternheimer_q_index values select q-resolved "
+                           "periodic output. Delta-ST requires loaded LCAO orbitals, exactly one explicit "
+                           "bessel_nao_rcut, and a globally Coulomb-orthonormal perturbation space. This output-only "
+                           "switch is independent of rpa and mutually exclusive with out_sternheimer_librpa.";
         item.default_value = "False";
         item.unit = "";
         item.availability = "basis_type=lcao with sternheimer_delta=True and out_sternheimer_librpa=False.";
-        read_sync_bool(input.out_sternheimer_siab);
+        read_sync_bool(input.out_sternheimer_basis_opt);
         item.check_value = [](const Input_Item& item, const Parameter& para) {
-            if (para.input.out_sternheimer_siab && para.input.basis_type != "lcao")
+            if (para.input.out_sternheimer_basis_opt && para.input.basis_type != "lcao")
             {
                 ModuleBase::WARNING_QUIT(
                     "ReadInput",
                     item.label + " requires basis_type=lcao so Delta-ST can use the loaded LCAO orbitals.");
             }
-            if (para.input.out_sternheimer_siab && para.input.out_sternheimer_librpa)
+            if (para.input.out_sternheimer_basis_opt && para.input.out_sternheimer_librpa)
             {
                 ModuleBase::WARNING_QUIT(
                     "ReadInput",
                     item.label + " cannot be combined with out_sternheimer_librpa because global Coulomb whitening "
                                  "removes the raw atom-block auxiliary-channel meaning.");
             }
-            if (para.input.out_sternheimer_siab && !para.input.sternheimer_delta)
+            if (para.input.out_sternheimer_basis_opt && !para.input.sternheimer_delta)
             {
                 ModuleBase::WARNING_QUIT("ReadInput", item.label + " requires sternheimer_delta True.");
             }
-            if (para.input.out_sternheimer_siab && para.input.bessel_nao_rcuts.size() != 1)
+            if (para.input.out_sternheimer_basis_opt && para.input.bessel_nao_rcuts.size() != 1)
             {
                 ModuleBase::WARNING_QUIT(
                     "ReadInput",
-                    item.label + " requires exactly one explicit bessel_nao_rcut; the H campaign uses 8 bohr.");
+                    item.label + " requires exactly one explicit bessel_nao_rcut.");
             }
+        };
+        this->add_item(item);
+    }
+    {
+        Input_Item item("out_sternheimer_siab");
+        item.annotation = "Deprecated alias for out_sternheimer_basis_opt";
+        item.category = "Output information";
+        item.type = "Boolean";
+        item.description = "Compatibility alias for out_sternheimer_basis_opt. New inputs should use the canonical "
+                           "name; both names control the same internal output path.";
+        item.default_value = "False";
+        item.unit = "";
+        item.availability = "Deprecated compatibility alias.";
+        item.read_value = [](const Input_Item& item, Parameter& para) {
+            para.input.out_sternheimer_basis_opt = assume_as_boolean(item.str_values[0]);
         };
         this->add_item(item);
     }
@@ -879,13 +895,13 @@ If EXX(exact exchange) is calculated (i.e. dft_fuctional==hse/hf/pbe0/scan0 or r
         item.description = "Write OUT.ABACUS/STERNHEIMER_SIAB_SOURCE_V1.dat without solving first-order equations.";
         item.default_value = "False";
         item.unit = "";
-        item.availability = "out_sternheimer_siab=True, out_sternheimer_librpa=False, basis_type=lcao, and "
+        item.availability = "out_sternheimer_basis_opt=True, out_sternheimer_librpa=False, basis_type=lcao, and "
                             "sternheimer_delta=True.";
         read_sync_bool(input.sternheimer_siab_source_only);
         item.check_value = [](const Input_Item& item, const Parameter& para) {
-            if (para.input.sternheimer_siab_source_only && !para.input.out_sternheimer_siab)
+            if (para.input.sternheimer_siab_source_only && !para.input.out_sternheimer_basis_opt)
             {
-                ModuleBase::WARNING_QUIT("ReadInput", item.label + " requires out_sternheimer_siab True.");
+                ModuleBase::WARNING_QUIT("ReadInput", item.label + " requires out_sternheimer_basis_opt True.");
             }
             if (para.input.sternheimer_siab_source_only && para.input.out_sternheimer_librpa)
             {
@@ -905,7 +921,7 @@ If EXX(exact exchange) is calculated (i.e. dft_fuctional==hse/hf/pbe0/scan0 or r
                            "include complete d blocks without adding d orbitals to the Delta-ST fixed subspace.";
         item.default_value = "-1";
         item.unit = "";
-        item.availability = "out_sternheimer_siab=True.";
+        item.availability = "out_sternheimer_basis_opt=True.";
         read_sync_int(input.sternheimer_siab_lmax);
         item.check_value = [](const Input_Item& item, const Parameter& para) {
             if (para.input.sternheimer_siab_lmax < -1)
@@ -924,7 +940,7 @@ If EXX(exact exchange) is calculated (i.e. dft_fuctional==hse/hf/pbe0/scan0 or r
                            "times the largest eigenvalue. The retained perturbations satisfy W^T V W=I.";
         item.default_value = "1e-10";
         item.unit = "";
-        item.availability = "out_sternheimer_siab=True.";
+        item.availability = "out_sternheimer_basis_opt=True.";
         read_sync_double(input.sternheimer_siab_coulomb_threshold);
         item.check_value = [](const Input_Item& item, const Parameter& para) {
             if (!std::isfinite(para.input.sternheimer_siab_coulomb_threshold)

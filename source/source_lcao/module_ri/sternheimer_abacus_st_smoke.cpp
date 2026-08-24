@@ -335,7 +335,7 @@ std::string join_output_path(const std::string& output_dir, const std::string& f
 std::string chi0_status_path(const std::string& output_dir)
 {
     return join_output_path(output_dir,
-                            PARAM.inp.out_sternheimer_siab ? "STERNHEIMER_SIAB_STATUS.dat"
+                            PARAM.inp.out_sternheimer_basis_opt ? "STERNHEIMER_SIAB_STATUS.dat"
                                                           : "STERNHEIMER_CHI0.dat");
 }
 
@@ -367,7 +367,7 @@ std::string lcao_sos_v1_filename(const int iq, const int ifrequency, const int r
 std::string chi0_progress_filename(const int rank = GlobalV::MY_RANK)
 {
     std::ostringstream out;
-    out << (PARAM.inp.out_sternheimer_siab ? "STERNHEIMER_SIAB_PROGRESS_rank"
+    out << (PARAM.inp.out_sternheimer_basis_opt ? "STERNHEIMER_SIAB_PROGRESS_rank"
                                           : "STERNHEIMER_CHI0_PROGRESS_rank")
         << rank << ".dat";
     return out.str();
@@ -4117,12 +4117,12 @@ void run_sternheimer_abacus_chi0_output_impl(
     const Structure_Factor* siab_structure_factor)
 {
     const bool write_librpa = PARAM.inp.out_sternheimer_librpa;
-    const bool write_siab = PARAM.inp.out_sternheimer_siab;
+    const bool write_siab = PARAM.inp.out_sternheimer_basis_opt;
     const bool source_only = PARAM.inp.sternheimer_siab_source_only;
     const bool write_grid_diagnostics = PARAM.inp.sternheimer_grid_diagnostics;
     if (source_only && !write_siab)
     {
-        throw std::runtime_error("sternheimer_siab_source_only requires out_sternheimer_siab=true.");
+        throw std::runtime_error("sternheimer_siab_source_only requires out_sternheimer_basis_opt=true.");
     }
     if (!write_librpa && !write_siab && !write_grid_diagnostics)
     {
@@ -4254,7 +4254,7 @@ void run_sternheimer_abacus_chi0_output_impl(
             && (!use_lcao_zero_order || siab_pw_wfc == nullptr || siab_structure_factor == nullptr))
         {
             throw std::runtime_error(
-                "out_sternheimer_siab requires LCAO Delta-ST plus the PW FFT basis and structure factor.");
+                "out_sternheimer_basis_opt requires LCAO Delta-ST plus the PW FFT basis and structure factor.");
         }
 
         if (PARAM.inp.sternheimer_q_index > 0)
@@ -4457,7 +4457,7 @@ void run_sternheimer_abacus_chi0_output_impl(
         if (write_siab && GlobalC::exx_info.info_ri.files_abfs.empty())
         {
             throw std::runtime_error(
-                "out_sternheimer_siab requires explicit ABFS_ORBITAL files for immutable target provenance.");
+                "out_sternheimer_basis_opt requires explicit ABFS_ORBITAL files for immutable target provenance.");
         }
         const std::string auxiliary_basis_sha256
             = write_siab && GlobalV::MY_RANK == 0

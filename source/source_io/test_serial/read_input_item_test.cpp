@@ -39,6 +39,58 @@ class ReadInputItemTest : public InputTest
 {
 };
 
+TEST_F(ReadInputItemTest, SternheimerBasisOptimizationOutput)
+{
+    ModuleIO::ReadInput readinput(0);
+    readinput.check_ntype_flag = false;
+    Parameter param;
+
+    auto canonical = find_label("out_sternheimer_basis_opt", readinput.input_lists);
+    ASSERT_NE(canonical, readinput.input_lists.end());
+    EXPECT_FALSE(param.input.out_sternheimer_basis_opt);
+
+    canonical->second.str_values = {"true"};
+    canonical->second.read_value(canonical->second, param);
+    EXPECT_TRUE(param.input.out_sternheimer_basis_opt);
+
+    param.input.basis_type = "pw";
+    testing::internal::CaptureStdout();
+    EXPECT_EXIT(canonical->second.check_value(canonical->second, param), ::testing::ExitedWithCode(1), "");
+    std::string output = testing::internal::GetCapturedStdout();
+    EXPECT_THAT(output, testing::HasSubstr("basis_type=lcao"));
+
+    param.input.basis_type = "lcao";
+    param.input.sternheimer_delta = false;
+    testing::internal::CaptureStdout();
+    EXPECT_EXIT(canonical->second.check_value(canonical->second, param), ::testing::ExitedWithCode(1), "");
+    output = testing::internal::GetCapturedStdout();
+    EXPECT_THAT(output, testing::HasSubstr("sternheimer_delta"));
+
+    param.input.sternheimer_delta = true;
+    param.input.bessel_nao_rcuts.clear();
+    testing::internal::CaptureStdout();
+    EXPECT_EXIT(canonical->second.check_value(canonical->second, param), ::testing::ExitedWithCode(1), "");
+    output = testing::internal::GetCapturedStdout();
+    EXPECT_THAT(output, testing::HasSubstr("bessel_nao_rcut"));
+
+    param.input.bessel_nao_rcuts = {8.0};
+    param.input.out_sternheimer_librpa = true;
+    testing::internal::CaptureStdout();
+    EXPECT_EXIT(canonical->second.check_value(canonical->second, param), ::testing::ExitedWithCode(1), "");
+    output = testing::internal::GetCapturedStdout();
+    EXPECT_THAT(output, testing::HasSubstr("out_sternheimer_librpa"));
+
+    param.input.out_sternheimer_librpa = false;
+    canonical->second.check_value(canonical->second, param);
+
+    param.input.out_sternheimer_basis_opt = false;
+    auto compatibility_alias = find_label("out_sternheimer_siab", readinput.input_lists);
+    ASSERT_NE(compatibility_alias, readinput.input_lists.end());
+    compatibility_alias->second.str_values = {"true"};
+    compatibility_alias->second.read_value(compatibility_alias->second, param);
+    EXPECT_TRUE(param.input.out_sternheimer_basis_opt);
+}
+
 TEST_F(ReadInputItemTest, output)
 {
     ModuleIO::ReadInput readinput(0);
@@ -53,16 +105,16 @@ TEST_F(ReadInputItemTest, output)
     it->second.read_value(it->second, param);
     EXPECT_TRUE(param.input.sternheimer_siab_source_only);
 
-    param.input.out_sternheimer_siab = false;
+    param.input.out_sternheimer_basis_opt = false;
     param.input.out_sternheimer_librpa = false;
     testing::internal::CaptureStdout();
     EXPECT_EXIT(it->second.check_value(it->second, param), ::testing::ExitedWithCode(1), "");
     std::string output = testing::internal::GetCapturedStdout();
     EXPECT_THAT(output,
                 testing::AllOf(testing::HasSubstr("sternheimer_siab_source_only"),
-                               testing::HasSubstr("out_sternheimer_siab")));
+                               testing::HasSubstr("out_sternheimer_basis_opt")));
 
-    param.input.out_sternheimer_siab = true;
+    param.input.out_sternheimer_basis_opt = true;
     param.input.out_sternheimer_librpa = true;
     testing::internal::CaptureStdout();
     EXPECT_EXIT(it->second.check_value(it->second, param), ::testing::ExitedWithCode(1), "");

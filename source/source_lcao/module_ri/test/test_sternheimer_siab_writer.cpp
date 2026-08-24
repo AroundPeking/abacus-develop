@@ -653,7 +653,7 @@ TEST(SternheimerSIABInput, RegisteredCheckEnforcesLcaoDeltaCombination)
     ModuleIO::ReadInput read_input(0);
     const std::vector<std::pair<std::string, ModuleIO::Input_Item>>& items = read_input.get_input_lists();
     const auto found = std::find_if(items.begin(), items.end(), [](const auto& item) {
-        return item.first == "out_sternheimer_siab";
+        return item.first == "out_sternheimer_basis_opt";
     });
     ASSERT_NE(found, items.end());
     const ModuleIO::Input_Item& item = found->second;
@@ -663,10 +663,10 @@ TEST(SternheimerSIABInput, RegisteredCheckEnforcesLcaoDeltaCombination)
 
     Parameter parameter;
     Input_para& input = const_cast<Input_para&>(parameter.inp);
-    EXPECT_FALSE(input.out_sternheimer_siab);
+    EXPECT_FALSE(input.out_sternheimer_basis_opt);
     item.check_value(item, parameter);
 
-    input.out_sternheimer_siab = true;
+    input.out_sternheimer_basis_opt = true;
     input.basis_type = "lcao";
     input.out_sternheimer_librpa = false;
     input.sternheimer_delta = true;

@@ -12,9 +12,9 @@ namespace unitcell
 bool should_read_abfs_orbitals(const bool cal_exx,
                                const bool rpa,
                                const bool out_sternheimer_librpa,
-                               const bool out_sternheimer_siab)
+                               const bool out_sternheimer_basis_opt)
 {
-    return cal_exx || rpa || out_sternheimer_librpa || out_sternheimer_siab;
+    return cal_exx || rpa || out_sternheimer_librpa || out_sternheimer_basis_opt;
 }
 
 bool read_atom_species(std::ifstream& ifa,
@@ -115,7 +115,7 @@ bool read_atom_species(std::ifstream& ifa,
     if (should_read_abfs_orbitals(GlobalC::exx_info.info_global.cal_exx,
                                   PARAM.inp.rpa,
                                   PARAM.inp.out_sternheimer_librpa,
-                                  PARAM.inp.out_sternheimer_siab))
+                                  PARAM.inp.out_sternheimer_basis_opt))
     {
         if( ModuleBase::GlobalFunc::SCAN_LINE_BEGIN(ifa, "ABFS_ORBITAL") )
         {
