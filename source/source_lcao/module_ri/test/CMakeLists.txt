@@ -72,6 +72,11 @@ AddTest(
   SOURCES sternheimer_coulomb_whitening_test.cpp ../sternheimer_coulomb_whitening.cpp
 )
 AddTest(
+  TARGET MODULE_RI_sternheimer_coulomb_whitening_complex_test
+  LIBS ${math_libs}
+  SOURCES sternheimer_coulomb_whitening_complex_test.cpp ../sternheimer_coulomb_whitening_complex.cpp
+)
+AddTest(
   TARGET MODULE_RI_sternheimer_wavefunction_diagnostic_test
   LIBS ${math_libs}
   SOURCES sternheimer_wavefunction_diagnostic_test.cpp ../sternheimer_wavefunction_diagnostic.cpp

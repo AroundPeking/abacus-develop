@@ -22,6 +22,7 @@ if (ENABLE_LIBRI)
         sternheimer_channel_resources.cpp
         sternheimer_chi0_mpi.cpp
         sternheimer_coulomb_whitening.cpp
+        sternheimer_coulomb_whitening_complex.cpp
         sternheimer_dft_zero_order.cpp
         sternheimer_delta.cpp
         sternheimer_grid_diagnostics.cpp
