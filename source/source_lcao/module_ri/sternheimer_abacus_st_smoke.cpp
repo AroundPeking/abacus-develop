@@ -2676,7 +2676,8 @@ void run_sternheimer_periodic_lcao_chi0_output(
                                elapsed_seconds_since(chi0_start_time),
                                "kq_pairs=" + std::to_string(response_plan.kq_pairs.size()));
 
-    const double solver_tolerance = positive_double_from_env(kSolverToleranceEnv, 1.0e-8);
+    const double solver_tolerance
+        = positive_double_from_env(kSolverToleranceEnv, default_sternheimer_solver_tolerance());
     const int solver_max_iter = positive_int_from_env(kSolverMaxIterEnv, 300);
     const double pca_threshold = nonnegative_double_from_env(kPCAThresholdEnv, PARAM.inp.exx_pca_threshold);
     const double ccp_rmesh_times = positive_double_from_env(kCCPRmeshTimesEnv, PARAM.inp.rpa_ccp_rmesh_times);
