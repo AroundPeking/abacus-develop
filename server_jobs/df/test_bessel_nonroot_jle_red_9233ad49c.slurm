@@ -24,9 +24,9 @@ test_binary=$build_root/source/source_io/test/MODULE_IO_bessel_basis_test
 test "$SLURM_JOB_PARTITION" = p1
 test "$SLURM_CPUS_PER_TASK" = 40
 test -s "$bundle"
-/usr/bin/git -C "$source_root" fetch "$bundle" "$commit"
-/usr/bin/git -C "$source_root" checkout --detach "$commit"
-test "$(/usr/bin/git -C "$source_root" rev-parse HEAD)" = "$commit"
+test "$(cat "$root/SOURCE_COMMIT_BESSEL_RED")" = "$commit"
+grep -Fq 'NonRootRankDoesNotWriteJleOrb' \
+  "$source_root/source/source_io/test/bessel_basis_test.cpp"
 
 cmake --build "$build_root" --target MODULE_IO_bessel_basis_test -j "$SLURM_CPUS_PER_TASK"
 test -x "$test_binary"
