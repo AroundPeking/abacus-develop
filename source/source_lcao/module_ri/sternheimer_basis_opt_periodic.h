@@ -21,6 +21,7 @@ enum class ChunkKind : std::uint32_t
     coulomb_whitening = 5,
     hamiltonian = 6,
     occupied_projection = 7,
+    reference_response = 8,
 };
 
 struct PeriodicChunkHeader

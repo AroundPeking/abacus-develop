@@ -834,6 +834,16 @@ std::string periodic_basis_opt_k_filename(const std::string& prefix,
     return filename + ".bin";
 }
 
+std::string periodic_basis_opt_frequency_filename(const std::string& prefix,
+                                                   const int ifrequency)
+{
+    if (ifrequency < 0)
+    {
+        throw std::invalid_argument("Periodic basis-optimization frequency index is negative.");
+    }
+    return prefix + "_ifreq_" + std::to_string(ifrequency) + ".bin";
+}
+
 void write_periodic_basis_opt_primitive_blocks_atomic(
     const std::string& path,
     const std::vector<siab::PrimitiveBlock>& blocks)
@@ -4034,6 +4044,21 @@ void run_sternheimer_periodic_lcao_chi0_output(
             const std::vector<SternheimerRPA::Complex> chi0
                 = SternheimerRPA::symmetrize_chi0_imaginary_frequency(
                     chi0_branches[static_cast<std::size_t>(ifrequency)], num_channels);
+            if (write_basis_opt)
+            {
+                periodic_basis_opt::write_periodic_chunk_atomic(
+                    join_path(basis_opt_dir,
+                              periodic_basis_opt_frequency_filename(
+                                  "reference_response", ifrequency)),
+                    periodic_basis_opt::make_periodic_chunk_header(
+                        periodic_basis_opt::ChunkKind::reference_response,
+                        response_plan.iq,
+                        0,
+                        ifrequency,
+                        static_cast<std::uint64_t>(num_channels),
+                        static_cast<std::uint64_t>(num_channels)),
+                    chi0);
+            }
             const SternheimerRPA::Chi0V1Metadata metadata
                 = make_chi0_v1_metadata(ucell,
                                         channels,
@@ -4274,6 +4299,20 @@ void run_sternheimer_periodic_lcao_chi0_output(
                       static_cast<std::uint64_t>(num_channels)),
                   1.0,
                   -1.0);
+        for (int ifrequency = 0; ifrequency != nfreq; ++ifrequency)
+        {
+            add_entry(periodic_basis_opt_frequency_filename(
+                          "reference_response", ifrequency),
+                      periodic_basis_opt::make_periodic_chunk_header(
+                          periodic_basis_opt::ChunkKind::reference_response,
+                          response_plan.iq,
+                          0,
+                          ifrequency,
+                          static_cast<std::uint64_t>(num_channels),
+                          static_cast<std::uint64_t>(num_channels)),
+                      1.0,
+                      frequency_grid.omega_ha[static_cast<std::size_t>(ifrequency)]);
+        }
         for (const auto& pair: response_plan.kq_pairs)
         {
             const int source_record_index

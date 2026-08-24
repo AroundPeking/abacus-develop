@@ -55,6 +55,7 @@ bool valid_kind(const ChunkKind kind)
     case ChunkKind::coulomb_whitening:
     case ChunkKind::hamiltonian:
     case ChunkKind::occupied_projection:
+    case ChunkKind::reference_response:
         return true;
     }
     return false;
@@ -86,13 +87,14 @@ void validate_header(const PeriodicChunkHeader& header)
     {
         throw std::invalid_argument("Periodic basis-optimization q indices are one-based positive values.");
     }
-    const bool global_q_chunk
-        = header.kind == ChunkKind::coulomb_metric || header.kind == ChunkKind::coulomb_whitening;
+    const bool global_q_chunk = header.kind == ChunkKind::coulomb_metric
+                                || header.kind == ChunkKind::coulomb_whitening
+                                || header.kind == ChunkKind::reference_response;
     if ((global_q_chunk && header.ik != 0) || (!global_q_chunk && header.ik <= 0))
     {
         throw std::invalid_argument("Periodic basis-optimization k indices do not match the chunk kind.");
     }
-    if (header.kind == ChunkKind::response)
+    if (header.kind == ChunkKind::response || header.kind == ChunkKind::reference_response)
     {
         if (header.ifrequency < 0)
         {
@@ -235,7 +237,9 @@ void validate_manifest_entry(const ManifestEntry& entry, const Manifest& manifes
     {
         throw std::invalid_argument("Periodic basis-optimization manifest entry index does not match the dataset.");
     }
-    if (entry.header.kind == ChunkKind::response && entry.header.ifrequency >= manifest.frequency_count)
+    if ((entry.header.kind == ChunkKind::response
+         || entry.header.kind == ChunkKind::reference_response)
+        && entry.header.ifrequency >= manifest.frequency_count)
     {
         throw std::invalid_argument("Periodic basis-optimization response frequency exceeds the manifest grid.");
     }
@@ -250,7 +254,8 @@ void validate_manifest_entry(const ManifestEntry& entry, const Manifest& manifes
         throw std::invalid_argument("Periodic basis-optimization entry q weight differs from the dataset weight.");
     }
     const bool global_q_chunk = entry.header.kind == ChunkKind::coulomb_metric
-                                || entry.header.kind == ChunkKind::coulomb_whitening;
+                                || entry.header.kind == ChunkKind::coulomb_whitening
+                                || entry.header.kind == ChunkKind::reference_response;
     const auto kpoint_iter = std::find_if(
         manifest.kpoints.begin(), manifest.kpoints.end(), [&](const KPointRecord& record) {
             return record.source_ik == entry.header.ik;
@@ -264,7 +269,8 @@ void validate_manifest_entry(const ManifestEntry& entry, const Manifest& manifes
     {
         throw std::invalid_argument("Periodic basis-optimization entry k weight differs from its k-point record.");
     }
-    if (entry.header.kind == ChunkKind::response)
+    if (entry.header.kind == ChunkKind::response
+        || entry.header.kind == ChunkKind::reference_response)
     {
         if (!std::isfinite(entry.frequency) || entry.frequency < 0.0)
         {
