@@ -838,7 +838,7 @@ If EXX(exact exchange) is calculated (i.e. dft_fuctional==hse/hf/pbe0/scan0 or r
         item.description = "Write Sternheimer first-order-wavefunction references for offline atomic-basis "
                            "optimization. Gamma-only atom and molecule calculations retain the deterministic "
                            "Sternheimer-SIAB v1 output; positive sternheimer_q_index values select q-resolved "
-                           "periodic output. Delta-ST requires loaded LCAO orbitals, exactly one explicit "
+                           "periodic output. basis_type=lcao Delta-ST requires loaded LCAO orbitals, exactly one explicit "
                            "bessel_nao_rcut, and a globally Coulomb-orthonormal perturbation space. This output-only "
                            "switch is independent of rpa and mutually exclusive with out_sternheimer_librpa.";
         item.default_value = "False";
