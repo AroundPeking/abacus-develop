@@ -1,8 +1,8 @@
 #!/bin/bash
 #SBATCH --job-name=c24_pi_q1_low
 #SBATCH --partition=p1
-#SBATCH --nodes=16
-#SBATCH --ntasks=16
+#SBATCH --nodes=8
+#SBATCH --ntasks=8
 #SBATCH --ntasks-per-node=1
 #SBATCH --cpus-per-task=40
 #SBATCH --mem=190000
@@ -20,10 +20,10 @@ build_job=3110409
 abacus=$root/artifacts/job$build_job/abacus_3p
 source_commit=9ee4e4e0b72dd1c9441a688fb57712f714e33e5b
 case_root=/ssd/work/df_iopcas_ghj/c-periodic-basis-opt-20260825
-work=$case_root/c-diamond-g24-fd8-q1-lowfreq-9ee4e4e0b
+work=$case_root/c-diamond-g24-fd8-q1-lowfreq-9ee4e4e0b-kpar8
 
 test "$SLURM_JOB_PARTITION" = p1
-test "$SLURM_NTASKS" = 16
+test "$SLURM_NTASKS" = 8
 test "$SLURM_NTASKS_PER_NODE" = 1
 test "$SLURM_CPUS_PER_TASK" = 40
 test -x "$abacus"
@@ -48,7 +48,7 @@ set_input_key ecutwfc 45
 set_input_key nx 24
 set_input_key ny 24
 set_input_key nz 24
-set_input_key kpar 16
+set_input_key kpar 8
 set_input_key sternheimer_fd_order 8
 set_input_key sternheimer_nfreq 1
 set_input_key sternheimer_frequency_mpi 0
@@ -82,6 +82,7 @@ unset ABACUS_STERNHEIMER_FD_ST_SOLVER_TOL
   echo ecut_ry=45
   echo fd_order=8
   echo kmesh=4,4,4
+  echo response_kpoint_groups=8
   echo q_index=1
   echo nfreq=1
   echo omega_ha=0.043870427724643418
