@@ -453,10 +453,9 @@ protected:
 
 TEST_F(TestBesselBasis, NonRootRankDoesNotWriteJleOrb) {
     const int original_rank = GlobalV::MY_RANK;
-    const std::string original_output = PARAM.globalv.global_out_dir;
+    const std::string output_path = PARAM.globalv.global_out_dir + "jle.orb";
     GlobalV::MY_RANK = 1;
-    PARAM.globalv.global_out_dir = "./";
-    std::remove("./jle.orb");
+    std::remove(output_path.c_str());
 
     besselBasis.init(
         false,
@@ -472,12 +471,11 @@ TEST_F(TestBesselBasis, NonRootRankDoesNotWriteJleOrb) {
         2.0
     );
 
-    std::ifstream output("./jle.orb");
+    std::ifstream output(output_path);
     EXPECT_FALSE(output.good());
     output.close();
     GlobalV::MY_RANK = original_rank;
-    PARAM.globalv.global_out_dir = original_output;
-    std::remove("./jle.orb");
+    std::remove(output_path.c_str());
 }
 
 TEST_F(TestBesselBasis, PolynomialInterpolation2Test) {
