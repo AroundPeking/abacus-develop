@@ -948,6 +948,10 @@ std::string make_periodic_basis_opt_physics_hash(
         {
             stream << occupation << ' ';
         }
+        for (const double eigenvalue: kpoint.eigenvalues_ry)
+        {
+            stream << eigenvalue << ' ';
+        }
         stream << '\n';
     }
     const std::string serialized = stream.str();
@@ -1390,22 +1394,45 @@ SIABPrimitiveExportData build_siab_primitive_export_data(const ModulePW::PW_Basi
     {
         throw std::runtime_error("Sternheimer SIAB reciprocal primitive matrix is empty or incomplete.");
     }
-    result.overlap_s.assign(static_cast<std::size_t>(result.primitive_count)
-                                * static_cast<std::size_t>(result.primitive_count), ModuleBase::ZERO);
-    BlasConnector::gemm('N',
-                        'C',
-                        result.primitive_count,
-                        result.primitive_count,
-                        result.reciprocal_count,
-                        std::complex<double>(1.0, 0.0),
-                        result.reciprocal_matrix.data(),
-                        result.reciprocal_count,
-                        result.reciprocal_matrix.data(),
-                        result.reciprocal_count,
-                        std::complex<double>(0.0, 0.0),
-                        result.overlap_s.data(),
-                        result.primitive_count);
+    result.overlap_s = siab::overlap_s_reciprocal_contiguous(result.reciprocal_matrix,
+                                                              result.primitive_count,
+                                                              result.reciprocal_count);
     return result;
+}
+
+std::vector<std::complex<double>> siab_primitive_bloch_grid(
+    const UnitCell& ucell,
+    const SIABPrimitiveExportData& primitives,
+    const int primitive_index)
+{
+    if (!primitives.serial_pw_basis || primitive_index < 0
+        || primitive_index >= primitives.primitive_count || !std::isfinite(ucell.omega)
+        || ucell.omega <= 0.0)
+    {
+        throw std::invalid_argument("Invalid Sternheimer SIAB primitive grid request.");
+    }
+    std::vector<std::complex<double>> periodic_grid(
+        static_cast<std::size_t>(primitives.serial_pw_basis->nrxx), ModuleBase::ZERO);
+    const auto* reciprocal_row
+        = primitives.reciprocal_matrix.data()
+          + static_cast<std::size_t>(primitive_index)
+                * static_cast<std::size_t>(primitives.reciprocal_count);
+#ifdef _OPENMP
+#pragma omp critical(sternheimer_siab_recip2real)
+#endif
+    {
+        primitives.serial_pw_basis->recip2real(reciprocal_row, periodic_grid.data(), 0);
+    }
+    const double scale = 1.0 / std::sqrt(ucell.omega);
+    for (auto& value: periodic_grid)
+    {
+        value *= scale;
+    }
+    return apply_sternheimer_bloch_phase(periodic_grid,
+                                         primitives.serial_pw_basis->nx,
+                                         primitives.serial_pw_basis->ny,
+                                         primitives.serial_pw_basis->nz,
+                                         primitives.destination_kpoint);
 }
 
 std::vector<std::complex<double>> project_siab_response_to_primitives(
@@ -1441,6 +1468,72 @@ std::vector<std::complex<double>> project_siab_response_to_primitives(
                                                  primitives.reciprocal_matrix,
                                                  primitives.primitive_count,
                                                  primitives.reciprocal_count);
+}
+
+std::vector<std::complex<double>> build_siab_primitive_hamiltonian(
+    const SternheimerFDHamiltonian& hamiltonian,
+    const UnitCell& ucell,
+    const SIABPrimitiveExportData& primitives)
+{
+    if (!primitives.serial_pw_basis
+        || hamiltonian.grid().size() != primitives.serial_pw_basis->nrxx)
+    {
+        throw std::invalid_argument("Sternheimer SIAB primitive Hamiltonian grid is inconsistent.");
+    }
+    const std::size_t count = static_cast<std::size_t>(primitives.primitive_count);
+    std::vector<std::complex<double>> matrix(count * count, ModuleBase::ZERO);
+    for (int iprimitive = 0; iprimitive != primitives.primitive_count; ++iprimitive)
+    {
+        const auto primitive_grid = siab_primitive_bloch_grid(ucell, primitives, iprimitive);
+        SternheimerFDHamiltonian::Vector h_primitive;
+        hamiltonian.apply(primitive_grid, h_primitive);
+        const auto row = project_siab_response_to_primitives(h_primitive, ucell, primitives);
+        std::copy(row.begin(), row.end(), matrix.begin() + static_cast<std::size_t>(iprimitive) * count);
+    }
+
+    double max_abs = 0.0;
+    double max_hermiticity_error = 0.0;
+    for (std::size_t i = 0; i != count; ++i)
+    {
+        for (std::size_t j = 0; j != count; ++j)
+        {
+            const auto value = matrix[i * count + j];
+            if (!std::isfinite(value.real()) || !std::isfinite(value.imag()))
+            {
+                throw std::runtime_error("Sternheimer SIAB primitive Hamiltonian is not finite.");
+            }
+            max_abs = std::max(max_abs, std::abs(value));
+            max_hermiticity_error
+                = std::max(max_hermiticity_error,
+                           std::abs(value - std::conj(matrix[j * count + i])));
+        }
+    }
+    if (max_hermiticity_error > 1.0e-8 * std::max(1.0, max_abs))
+    {
+        throw std::runtime_error("Sternheimer SIAB primitive Hamiltonian is not Hermitian on the FD grid.");
+    }
+    return matrix;
+}
+
+std::vector<std::complex<double>> build_siab_occupied_projection(
+    const std::vector<SternheimerFDHamiltonian::Vector>& occupied_wavefunctions,
+    const UnitCell& ucell,
+    const SIABPrimitiveExportData& primitives)
+{
+    if (occupied_wavefunctions.empty())
+    {
+        throw std::invalid_argument("Sternheimer SIAB target occupied manifold is empty.");
+    }
+    const std::size_t primitive_count = static_cast<std::size_t>(primitives.primitive_count);
+    std::vector<std::complex<double>> projection(
+        occupied_wavefunctions.size() * primitive_count, ModuleBase::ZERO);
+    for (std::size_t ib = 0; ib != occupied_wavefunctions.size(); ++ib)
+    {
+        const auto row
+            = project_siab_response_to_primitives(occupied_wavefunctions[ib], ucell, primitives);
+        std::copy(row.begin(), row.end(), projection.begin() + ib * primitive_count);
+    }
+    return projection;
 }
 
 std::vector<SternheimerABFGridChannel> build_abfs_ccp_grid_channels(const UnitCell& ucell,
@@ -3450,6 +3543,10 @@ void run_sternheimer_periodic_lcao_chi0_output(
                                       + row * static_cast<std::size_t>(basis_opt_primitive_count));
                     }
                 }
+                const auto primitive_hamiltonian
+                    = build_siab_primitive_hamiltonian(hamiltonian, ucell, pair_primitives);
+                const auto occupied_projection
+                    = build_siab_occupied_projection(target.states.wavefunctions, ucell, pair_primitives);
                 const int source_ik_one_based = pair.source_index + 1;
                 periodic_basis_opt::write_periodic_chunk_atomic(
                     join_path(basis_opt_dir,
@@ -3462,6 +3559,28 @@ void run_sternheimer_periodic_lcao_chi0_output(
                         static_cast<std::uint64_t>(basis_opt_primitive_count),
                         static_cast<std::uint64_t>(basis_opt_primitive_count)),
                     pair_primitives.overlap_s);
+                periodic_basis_opt::write_periodic_chunk_atomic(
+                    join_path(basis_opt_dir,
+                              periodic_basis_opt_k_filename("hamiltonian", source_ik_one_based)),
+                    periodic_basis_opt::make_periodic_chunk_header(
+                        periodic_basis_opt::ChunkKind::hamiltonian,
+                        response_plan.iq,
+                        source_ik_one_based,
+                        -1,
+                        static_cast<std::uint64_t>(basis_opt_primitive_count),
+                        static_cast<std::uint64_t>(basis_opt_primitive_count)),
+                    primitive_hamiltonian);
+                periodic_basis_opt::write_periodic_chunk_atomic(
+                    join_path(basis_opt_dir,
+                              periodic_basis_opt_k_filename("occupied_projection", source_ik_one_based)),
+                    periodic_basis_opt::make_periodic_chunk_header(
+                        periodic_basis_opt::ChunkKind::occupied_projection,
+                        response_plan.iq,
+                        source_ik_one_based,
+                        -1,
+                        static_cast<std::uint64_t>(target.states.wavefunctions.size()),
+                        static_cast<std::uint64_t>(basis_opt_primitive_count)),
+                    occupied_projection);
                 periodic_basis_opt::write_periodic_chunk_atomic(
                     join_path(basis_opt_dir,
                               periodic_basis_opt_k_filename("source", source_ik_one_based)),
@@ -4115,6 +4234,7 @@ void run_sternheimer_periodic_lcao_chi0_output(
             record.reciprocal_shift = pair.reciprocal_shift;
             record.k_weight = source_record.kweight;
             record.occupations = source_record.occupations;
+            record.eigenvalues_ry = source_record.eigenvalues;
             manifest.kpoints.push_back(std::move(record));
         }
         manifest.physics_hash = make_periodic_basis_opt_physics_hash(
@@ -4158,8 +4278,12 @@ void run_sternheimer_periodic_lcao_chi0_output(
         {
             const int source_record_index
                 = response_plan.record_index_by_global_k[static_cast<std::size_t>(pair.source_index)];
+            const int target_record_index
+                = response_plan.record_index_by_global_k[static_cast<std::size_t>(pair.target_index)];
             const auto& source_record
                 = response_kpoints[static_cast<std::size_t>(source_record_index)];
+            const auto& target_record
+                = response_kpoints[static_cast<std::size_t>(target_record_index)];
             const int source_ik_one_based = pair.source_index + 1;
             const std::uint64_t row_count
                 = static_cast<std::uint64_t>(source_record.coefficients.size())
@@ -4181,6 +4305,26 @@ void run_sternheimer_periodic_lcao_chi0_output(
                           source_ik_one_based,
                           -1,
                           row_count,
+                          static_cast<std::uint64_t>(basis_opt_primitive_count)),
+                      source_record.kweight,
+                      -1.0);
+            add_entry(periodic_basis_opt_k_filename("hamiltonian", source_ik_one_based),
+                      periodic_basis_opt::make_periodic_chunk_header(
+                          periodic_basis_opt::ChunkKind::hamiltonian,
+                          response_plan.iq,
+                          source_ik_one_based,
+                          -1,
+                          static_cast<std::uint64_t>(basis_opt_primitive_count),
+                          static_cast<std::uint64_t>(basis_opt_primitive_count)),
+                      source_record.kweight,
+                      -1.0);
+            add_entry(periodic_basis_opt_k_filename("occupied_projection", source_ik_one_based),
+                      periodic_basis_opt::make_periodic_chunk_header(
+                          periodic_basis_opt::ChunkKind::occupied_projection,
+                          response_plan.iq,
+                          source_ik_one_based,
+                          -1,
+                          static_cast<std::uint64_t>(target_record.coefficients.size()),
                           static_cast<std::uint64_t>(basis_opt_primitive_count)),
                       source_record.kweight,
                       -1.0);

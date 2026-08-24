@@ -22,6 +22,49 @@ void validate_finite_kpoint(const SternheimerReducedKPoint& kpoint, const char* 
     }
 }
 
+std::vector<std::complex<double>> transform_sternheimer_bloch_phase(
+    const std::vector<std::complex<double>>& values,
+    const int nx,
+    const int ny,
+    const int nz,
+    const SternheimerReducedKPoint& kpoint,
+    const double sign)
+{
+    validate_finite_kpoint(kpoint, "Bloch k-point");
+    if (nx <= 0 || ny <= 0 || nz <= 0)
+    {
+        throw std::invalid_argument("Sternheimer Bloch grid dimensions must be positive.");
+    }
+    const std::size_t x_size = static_cast<std::size_t>(nx);
+    const std::size_t y_size = static_cast<std::size_t>(ny);
+    const std::size_t z_size = static_cast<std::size_t>(nz);
+    if (x_size > std::numeric_limits<std::size_t>::max() / y_size
+        || x_size * y_size > std::numeric_limits<std::size_t>::max() / z_size
+        || values.size() != x_size * y_size * z_size)
+    {
+        throw std::invalid_argument("Sternheimer Bloch values do not match the complete FFT grid.");
+    }
+
+    std::vector<std::complex<double>> transformed(values.size());
+    for (int ix = 0; ix != nx; ++ix)
+    {
+        for (int iy = 0; iy != ny; ++iy)
+        {
+            for (int iz = 0; iz != nz; ++iz)
+            {
+                const std::size_t index = static_cast<std::size_t>((ix * ny + iy) * nz + iz);
+                const double reduced_phase = kpoint[0] * static_cast<double>(ix) / nx
+                                             + kpoint[1] * static_cast<double>(iy) / ny
+                                             + kpoint[2] * static_cast<double>(iz) / nz;
+                const double argument = sign * 2.0 * std::acos(-1.0) * reduced_phase;
+                transformed[index]
+                    = values[index] * std::complex<double>(std::cos(argument), std::sin(argument));
+            }
+        }
+    }
+    return transformed;
+}
+
 } // namespace
 
 SternheimerFoldedKPoint fold_sternheimer_kpoint(const SternheimerReducedKPoint& kpoint)
@@ -71,45 +114,23 @@ std::complex<double> sternheimer_bloch_phase(const SternheimerReducedKPoint& kpo
     return {std::cos(argument), std::sin(argument)};
 }
 
+std::vector<std::complex<double>> apply_sternheimer_bloch_phase(
+    const std::vector<std::complex<double>>& periodic_values,
+    const int nx,
+    const int ny,
+    const int nz,
+    const SternheimerReducedKPoint& kpoint)
+{
+    return transform_sternheimer_bloch_phase(periodic_values, nx, ny, nz, kpoint, 1.0);
+}
+
 std::vector<std::complex<double>> remove_sternheimer_bloch_phase(const std::vector<std::complex<double>>& bloch_values,
                                                                  const int nx,
                                                                  const int ny,
                                                                  const int nz,
                                                                  const SternheimerReducedKPoint& kpoint)
 {
-    validate_finite_kpoint(kpoint, "Bloch k-point");
-    if (nx <= 0 || ny <= 0 || nz <= 0)
-    {
-        throw std::invalid_argument("Sternheimer Bloch grid dimensions must be positive.");
-    }
-    const std::size_t x_size = static_cast<std::size_t>(nx);
-    const std::size_t y_size = static_cast<std::size_t>(ny);
-    const std::size_t z_size = static_cast<std::size_t>(nz);
-    if (x_size > std::numeric_limits<std::size_t>::max() / y_size
-        || x_size * y_size > std::numeric_limits<std::size_t>::max() / z_size
-        || bloch_values.size() != x_size * y_size * z_size)
-    {
-        throw std::invalid_argument("Sternheimer Bloch values do not match the complete FFT grid.");
-    }
-
-    std::vector<std::complex<double>> periodic_values(bloch_values.size());
-    for (int ix = 0; ix != nx; ++ix)
-    {
-        for (int iy = 0; iy != ny; ++iy)
-        {
-            for (int iz = 0; iz != nz; ++iz)
-            {
-                const std::size_t index = static_cast<std::size_t>((ix * ny + iy) * nz + iz);
-                const double reduced_phase = kpoint[0] * static_cast<double>(ix) / nx
-                                             + kpoint[1] * static_cast<double>(iy) / ny
-                                             + kpoint[2] * static_cast<double>(iz) / nz;
-                const double argument = -2.0 * std::acos(-1.0) * reduced_phase;
-                periodic_values[index]
-                    = bloch_values[index] * std::complex<double>(std::cos(argument), std::sin(argument));
-            }
-        }
-    }
-    return periodic_values;
+    return transform_sternheimer_bloch_phase(bloch_values, nx, ny, nz, kpoint, -1.0);
 }
 
 std::vector<SternheimerKQPair> build_sternheimer_kq_map(const std::vector<SternheimerReducedKPoint>& kpoints,

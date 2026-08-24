@@ -19,6 +19,8 @@ enum class ChunkKind : std::uint32_t
     response = 3,
     coulomb_metric = 4,
     coulomb_whitening = 5,
+    hamiltonian = 6,
+    occupied_projection = 7,
 };
 
 struct PeriodicChunkHeader
@@ -72,6 +74,7 @@ struct KPointRecord
     std::array<int, 3> reciprocal_shift{};
     double k_weight = 0.0;
     std::vector<double> occupations;
+    std::vector<double> eigenvalues_ry;
 };
 
 struct Manifest

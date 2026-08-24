@@ -179,5 +179,44 @@ std::vector<Complex> overlap_s_reciprocal(const PrimitiveGrid& primitive_coeffic
     return result;
 }
 
+std::vector<Complex> overlap_s_reciprocal_contiguous(
+    const GridVector& primitive_coefficients,
+    const int primitive_count,
+    const int reciprocal_count)
+{
+    if (primitive_count <= 0 || reciprocal_count <= 0
+        || static_cast<std::size_t>(primitive_count)
+               > std::numeric_limits<std::size_t>::max() / static_cast<std::size_t>(reciprocal_count)
+        || primitive_coefficients.size()
+               != static_cast<std::size_t>(primitive_count) * static_cast<std::size_t>(reciprocal_count))
+    {
+        throw std::invalid_argument("Sternheimer SIAB contiguous reciprocal primitive dimensions differ.");
+    }
+
+    std::vector<Complex> result(static_cast<std::size_t>(primitive_count)
+                                    * static_cast<std::size_t>(primitive_count),
+                                Complex(0.0, 0.0));
+    BlasConnector::gemm('N',
+                        'C',
+                        primitive_count,
+                        primitive_count,
+                        reciprocal_count,
+                        Complex(1.0, 0.0),
+                        primitive_coefficients.data(),
+                        reciprocal_count,
+                        primitive_coefficients.data(),
+                        reciprocal_count,
+                        Complex(0.0, 0.0),
+                        result.data(),
+                        primitive_count);
+    // The row-major N,C product is <B_j|B_i>; conjugation restores
+    // S_ij=<B_i|B_j>, matching overlap_s_reciprocal and the file contract.
+    for (Complex& value: result)
+    {
+        value = std::conj(value);
+    }
+    return result;
+}
+
 } // namespace sternheimer_siab
 } // namespace module_ri

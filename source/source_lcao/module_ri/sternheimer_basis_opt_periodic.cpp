@@ -53,6 +53,8 @@ bool valid_kind(const ChunkKind kind)
     case ChunkKind::response:
     case ChunkKind::coulomb_metric:
     case ChunkKind::coulomb_whitening:
+    case ChunkKind::hamiltonian:
+    case ChunkKind::occupied_projection:
         return true;
     }
     return false;
@@ -351,6 +353,7 @@ void validate_manifest(const Manifest& manifest)
         if (kpoint.source_ik <= 0 || kpoint.source_ik > manifest.k_count || kpoint.target_ik <= 0
             || kpoint.target_ik > manifest.k_count || seen_kpoints[static_cast<std::size_t>(kpoint.source_ik - 1)]
             || !std::isfinite(kpoint.k_weight) || kpoint.k_weight <= 0.0 || kpoint.occupations.empty()
+            || kpoint.eigenvalues_ry.size() != kpoint.occupations.size()
             || std::any_of(kpoint.source_kpoint.begin(), kpoint.source_kpoint.end(), [](const double value) {
                    return !std::isfinite(value);
                })
@@ -359,6 +362,9 @@ void validate_manifest(const Manifest& manifest)
                })
             || std::any_of(kpoint.occupations.begin(), kpoint.occupations.end(), [](const double value) {
                    return !std::isfinite(value) || value <= 0.0;
+               })
+            || std::any_of(kpoint.eigenvalues_ry.begin(), kpoint.eigenvalues_ry.end(), [](const double value) {
+                   return !std::isfinite(value);
                }))
         {
             throw std::invalid_argument("Periodic basis-optimization k-point record is invalid or duplicated.");
@@ -604,6 +610,12 @@ void write_manifest_atomic(const std::string& path, const Manifest& manifest)
             for (const double occupation: kpoint.occupations)
             {
                 output << ' ' << occupation;
+            }
+            output << '\n';
+            output << "eigenvalues_ry " << kpoint.source_ik << ' ' << kpoint.eigenvalues_ry.size();
+            for (const double eigenvalue: kpoint.eigenvalues_ry)
+            {
+                output << ' ' << eigenvalue;
             }
             output << '\n';
         }

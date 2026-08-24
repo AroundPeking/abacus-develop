@@ -30,6 +30,11 @@ std::vector<std::complex<double>> overlap_q_reciprocal_contiguous(
     int primitive_count,
     int reciprocal_count);
 
+std::vector<std::complex<double>> overlap_s_reciprocal_contiguous(
+    const std::vector<std::complex<double>>& primitive_coefficients,
+    int primitive_count,
+    int reciprocal_count);
+
 std::vector<std::complex<double>> overlap_s_reciprocal(
     const std::vector<std::vector<std::complex<double>>>& primitive_coefficients);
 
