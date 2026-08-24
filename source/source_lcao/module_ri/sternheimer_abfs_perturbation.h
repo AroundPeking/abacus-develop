@@ -90,6 +90,11 @@ std::vector<SternheimerABFBlochGridChannel> sample_sternheimer_abf_bloch_grid_ch
     const SternheimerReducedKPoint& qpoint,
     int max_channels = -1);
 
+std::vector<SternheimerABFBlochGridChannel> transform_sternheimer_abf_bloch_grid_channels(
+    const std::vector<SternheimerABFBlochGridChannel>& raw_channels,
+    const std::vector<std::complex<double>>& raw_to_output,
+    int output_channels);
+
 // Solve the periodic Poisson equation for Bloch auxiliary densities.
 // Input channel values are densities; output channel values are Hartree potentials in Ha.
 // gamma_inverse_k2 replaces 1/|G+q|^2 only for the Gamma zero mode and must be

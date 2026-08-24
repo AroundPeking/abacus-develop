@@ -80,9 +80,15 @@ void validate_header(const PeriodicChunkHeader& header)
     {
         throw std::invalid_argument("Periodic basis-optimization chunk header is not version 1.");
     }
-    if (header.iq <= 0 || header.ik <= 0)
+    if (header.iq <= 0)
     {
-        throw std::invalid_argument("Periodic basis-optimization q and k indices are one-based positive values.");
+        throw std::invalid_argument("Periodic basis-optimization q indices are one-based positive values.");
+    }
+    const bool global_q_chunk
+        = header.kind == ChunkKind::coulomb_metric || header.kind == ChunkKind::coulomb_whitening;
+    if ((global_q_chunk && header.ik != 0) || (!global_q_chunk && header.ik <= 0))
+    {
+        throw std::invalid_argument("Periodic basis-optimization k indices do not match the chunk kind.");
     }
     if (header.kind == ChunkKind::response)
     {
@@ -223,9 +229,9 @@ bool valid_hex(const std::string& value, const std::size_t count)
 void validate_manifest_entry(const ManifestEntry& entry, const Manifest& manifest)
 {
     validate_header(entry.header);
-    if (entry.header.iq > manifest.q_count || entry.header.ik > manifest.k_count)
+    if (entry.header.iq != manifest.selected_iq || entry.header.ik > manifest.k_count)
     {
-        throw std::invalid_argument("Periodic basis-optimization manifest entry index exceeds campaign dimensions.");
+        throw std::invalid_argument("Periodic basis-optimization manifest entry index does not match the dataset.");
     }
     if (entry.header.kind == ChunkKind::response && entry.header.ifrequency >= manifest.frequency_count)
     {
@@ -236,11 +242,37 @@ void validate_manifest_entry(const ManifestEntry& entry, const Manifest& manifes
     {
         throw std::invalid_argument("Periodic basis-optimization manifest weights must be finite and positive.");
     }
+    const double weight_tolerance = 1.0e-14;
+    if (std::abs(entry.q_weight - manifest.q_weight) > weight_tolerance)
+    {
+        throw std::invalid_argument("Periodic basis-optimization entry q weight differs from the dataset weight.");
+    }
+    const bool global_q_chunk = entry.header.kind == ChunkKind::coulomb_metric
+                                || entry.header.kind == ChunkKind::coulomb_whitening;
+    const auto kpoint_iter = std::find_if(
+        manifest.kpoints.begin(), manifest.kpoints.end(), [&](const KPointRecord& record) {
+            return record.source_ik == entry.header.ik;
+        });
+    if ((!global_q_chunk && kpoint_iter == manifest.kpoints.end())
+        || (global_q_chunk && std::abs(entry.k_weight - 1.0) > weight_tolerance))
+    {
+        throw std::invalid_argument("Periodic basis-optimization entry has invalid global or k-resolved weight metadata.");
+    }
+    if (!global_q_chunk && std::abs(entry.k_weight - kpoint_iter->k_weight) > weight_tolerance)
+    {
+        throw std::invalid_argument("Periodic basis-optimization entry k weight differs from its k-point record.");
+    }
     if (entry.header.kind == ChunkKind::response)
     {
         if (!std::isfinite(entry.frequency) || entry.frequency < 0.0)
         {
             throw std::invalid_argument("Periodic response manifest entries require a non-negative frequency.");
+        }
+        if (std::abs(entry.frequency
+                     - manifest.frequency_ha[static_cast<std::size_t>(entry.header.ifrequency)])
+            > weight_tolerance)
+        {
+            throw std::invalid_argument("Periodic response entry frequency differs from the dataset grid.");
         }
     }
     else if (entry.frequency != -1.0)
@@ -263,6 +295,8 @@ void validate_manifest(const Manifest& manifest)
     if ((!valid_hex(manifest.abacus_commit, 40) && !valid_hex(manifest.abacus_commit, 64))
         || !valid_hex(manifest.executable_sha256, 64) || !valid_hex(manifest.orbital_sha256, 64)
         || !valid_hex(manifest.pseudopotential_sha256, 64) || !valid_hex(manifest.auxiliary_basis_sha256, 64)
+        || !valid_hex(manifest.primitive_blocks_sha256, 64)
+        || !valid_hex(manifest.coulomb_transform_sha256, 64)
         || !valid_hex(manifest.physics_hash, 64))
     {
         throw std::invalid_argument("Periodic basis-optimization manifest provenance hashes are invalid.");
@@ -271,9 +305,65 @@ void validate_manifest(const Manifest& manifest)
     {
         throw std::invalid_argument("Periodic basis-optimization output requires the full_coulomb kernel.");
     }
-    if (manifest.q_count <= 0 || manifest.k_count <= 0 || manifest.frequency_count <= 0 || manifest.entries.empty())
+    if (manifest.q_count <= 0 || manifest.selected_iq <= 0 || manifest.selected_iq > manifest.q_count
+        || manifest.k_count <= 0 || manifest.frequency_count <= 0 || manifest.entries.empty())
     {
         throw std::invalid_argument("Periodic basis-optimization manifest dimensions and entries must be positive.");
+    }
+    if (!std::isfinite(manifest.q_weight) || manifest.q_weight <= 0.0 || manifest.q_weight > 1.0
+        || std::any_of(manifest.qpoint.begin(), manifest.qpoint.end(), [](const double value) {
+               return !std::isfinite(value);
+           }))
+    {
+        throw std::invalid_argument("Periodic basis-optimization q point and q weight are invalid.");
+    }
+    if (manifest.raw_auxiliary_dimension <= 0 || manifest.whitened_auxiliary_rank <= 0
+        || manifest.whitened_auxiliary_rank > manifest.raw_auxiliary_dimension
+        || manifest.discarded_auxiliary_rank != manifest.raw_auxiliary_dimension - manifest.whitened_auxiliary_rank
+        || !std::isfinite(manifest.coulomb_relative_threshold) || manifest.coulomb_relative_threshold <= 0.0
+        || manifest.coulomb_relative_threshold >= 1.0
+        || !std::isfinite(manifest.coulomb_max_orthonormality_error)
+        || manifest.coulomb_max_orthonormality_error < 0.0 || manifest.primitive_count <= 0)
+    {
+        throw std::invalid_argument("Periodic basis-optimization auxiliary and primitive dimensions are invalid.");
+    }
+    if (manifest.frequency_ha.size() != static_cast<std::size_t>(manifest.frequency_count)
+        || manifest.frequency_weights_ha.size() != static_cast<std::size_t>(manifest.frequency_count))
+    {
+        throw std::invalid_argument("Periodic basis-optimization frequency metadata have inconsistent dimensions.");
+    }
+    for (int ifrequency = 0; ifrequency != manifest.frequency_count; ++ifrequency)
+    {
+        const double frequency = manifest.frequency_ha[static_cast<std::size_t>(ifrequency)];
+        const double weight = manifest.frequency_weights_ha[static_cast<std::size_t>(ifrequency)];
+        if (!std::isfinite(frequency) || frequency < 0.0 || !std::isfinite(weight) || weight <= 0.0)
+        {
+            throw std::invalid_argument("Periodic basis-optimization frequency values and weights are invalid.");
+        }
+    }
+    if (manifest.kpoints.size() != static_cast<std::size_t>(manifest.k_count))
+    {
+        throw std::invalid_argument("Periodic basis-optimization k-point metadata are incomplete.");
+    }
+    std::vector<bool> seen_kpoints(static_cast<std::size_t>(manifest.k_count), false);
+    for (const KPointRecord& kpoint: manifest.kpoints)
+    {
+        if (kpoint.source_ik <= 0 || kpoint.source_ik > manifest.k_count || kpoint.target_ik <= 0
+            || kpoint.target_ik > manifest.k_count || seen_kpoints[static_cast<std::size_t>(kpoint.source_ik - 1)]
+            || !std::isfinite(kpoint.k_weight) || kpoint.k_weight <= 0.0 || kpoint.occupations.empty()
+            || std::any_of(kpoint.source_kpoint.begin(), kpoint.source_kpoint.end(), [](const double value) {
+                   return !std::isfinite(value);
+               })
+            || std::any_of(kpoint.target_kpoint.begin(), kpoint.target_kpoint.end(), [](const double value) {
+                   return !std::isfinite(value);
+               })
+            || std::any_of(kpoint.occupations.begin(), kpoint.occupations.end(), [](const double value) {
+                   return !std::isfinite(value) || value <= 0.0;
+               }))
+        {
+            throw std::invalid_argument("Periodic basis-optimization k-point record is invalid or duplicated.");
+        }
+        seen_kpoints[static_cast<std::size_t>(kpoint.source_ik - 1)] = true;
     }
 
     std::set<std::tuple<std::uint32_t, std::int32_t, std::int32_t, std::int32_t>> records;
@@ -451,6 +541,10 @@ void write_manifest_atomic(const std::string& path, const Manifest& manifest)
                                  right.header.ifrequency,
                                  right.relative_path);
     });
+    std::vector<KPointRecord> kpoints = manifest.kpoints;
+    std::sort(kpoints.begin(), kpoints.end(), [](const KPointRecord& left, const KPointRecord& right) {
+        return left.source_ik < right.source_ik;
+    });
 
     const std::string temporary = path + ".tmp";
     std::remove(temporary.c_str());
@@ -461,19 +555,58 @@ void write_manifest_atomic(const std::string& path, const Manifest& manifest)
         {
             throw std::runtime_error("Cannot open periodic basis-optimization temporary manifest.");
         }
-        output << "ABACUS_STERNHEIMER_BASIS_OPT_MANIFEST_V1\n"
+        output << std::scientific << std::setprecision(17)
+               << "ABACUS_STERNHEIMER_BASIS_OPT_MANIFEST_V1\n"
                << "abacus_commit " << manifest.abacus_commit << '\n'
                << "executable_sha256 " << manifest.executable_sha256 << '\n'
                << "orbital_sha256 " << manifest.orbital_sha256 << '\n'
                << "pseudopotential_sha256 " << manifest.pseudopotential_sha256 << '\n'
                << "auxiliary_basis_sha256 " << manifest.auxiliary_basis_sha256 << '\n'
+               << "primitive_blocks_sha256 " << manifest.primitive_blocks_sha256 << '\n'
                << "physics_hash " << manifest.physics_hash << '\n'
                << "kernel " << manifest.kernel << '\n'
                << "q_count " << manifest.q_count << '\n'
+               << "selected_iq " << manifest.selected_iq << '\n'
                << "k_count " << manifest.k_count << '\n'
                << "frequency_count " << manifest.frequency_count << '\n'
-               << "entry_count " << entries.size() << '\n'
-               << std::scientific << std::setprecision(17);
+               << "raw_auxiliary_dimension " << manifest.raw_auxiliary_dimension << '\n'
+               << "whitened_auxiliary_rank " << manifest.whitened_auxiliary_rank << '\n'
+               << "discarded_auxiliary_rank " << manifest.discarded_auxiliary_rank << '\n'
+               << "coulomb_relative_threshold " << manifest.coulomb_relative_threshold << '\n'
+               << "coulomb_max_orthonormality_error " << manifest.coulomb_max_orthonormality_error << '\n'
+               << "coulomb_transform_sha256 " << manifest.coulomb_transform_sha256 << '\n'
+               << "primitive_count " << manifest.primitive_count << '\n'
+               << "entry_count " << entries.size() << '\n';
+        output << "qpoint " << manifest.qpoint[0] << ' ' << manifest.qpoint[1] << ' ' << manifest.qpoint[2] << '\n'
+               << "q_weight " << manifest.q_weight << '\n';
+        for (int ifrequency = 0; ifrequency != manifest.frequency_count; ++ifrequency)
+        {
+            output << "frequency " << ifrequency << ' '
+                   << manifest.frequency_ha[static_cast<std::size_t>(ifrequency)] << ' '
+                   << manifest.frequency_weights_ha[static_cast<std::size_t>(ifrequency)] << '\n';
+        }
+        for (const KPointRecord& kpoint: kpoints)
+        {
+            output << "kpoint " << kpoint.source_ik << ' ' << kpoint.target_ik;
+            for (const double value: kpoint.source_kpoint)
+            {
+                output << ' ' << value;
+            }
+            for (const double value: kpoint.target_kpoint)
+            {
+                output << ' ' << value;
+            }
+            for (const int value: kpoint.reciprocal_shift)
+            {
+                output << ' ' << value;
+            }
+            output << ' ' << kpoint.k_weight << ' ' << kpoint.occupations.size();
+            for (const double occupation: kpoint.occupations)
+            {
+                output << ' ' << occupation;
+            }
+            output << '\n';
+        }
         for (const ManifestEntry& entry: entries)
         {
             output << "entry\t" << static_cast<std::uint32_t>(entry.header.kind) << '\t' << entry.header.iq << '\t'

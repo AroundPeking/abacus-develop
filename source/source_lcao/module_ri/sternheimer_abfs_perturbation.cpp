@@ -311,6 +311,74 @@ std::vector<SternheimerABFBlochGridChannel> sample_sternheimer_abf_bloch_grid_ch
     return channels;
 }
 
+std::vector<SternheimerABFBlochGridChannel> transform_sternheimer_abf_bloch_grid_channels(
+    const std::vector<SternheimerABFBlochGridChannel>& raw_channels,
+    const std::vector<std::complex<double>>& raw_to_output,
+    const int output_channels)
+{
+    if (raw_channels.empty() || output_channels <= 0
+        || raw_to_output.size() != raw_channels.size() * static_cast<std::size_t>(output_channels))
+    {
+        throw std::invalid_argument("Sternheimer Bloch-channel transform has inconsistent dimensions.");
+    }
+    const std::size_t grid_size = raw_channels.front().potential_r.size();
+    if (grid_size == 0
+        || std::any_of(raw_channels.begin(), raw_channels.end(), [grid_size](const auto& channel) {
+               return channel.potential_r.size() != grid_size
+                      || std::any_of(channel.potential_r.begin(), channel.potential_r.end(), [](const auto& value) {
+                             return !std::isfinite(value.real()) || !std::isfinite(value.imag());
+                         });
+           })
+        || std::any_of(raw_to_output.begin(), raw_to_output.end(), [](const auto& value) {
+               return !std::isfinite(value.real()) || !std::isfinite(value.imag());
+           }))
+    {
+        throw std::invalid_argument("Sternheimer Bloch-channel transform input is empty, ragged, or non-finite.");
+    }
+
+    std::vector<SternheimerABFBlochGridChannel> transformed(static_cast<std::size_t>(output_channels));
+    for (int output = 0; output != output_channels; ++output)
+    {
+        auto& channel = transformed[static_cast<std::size_t>(output)];
+        channel.channel_index = output;
+        channel.atom_index = -1;
+        channel.atom_local_index = output;
+        channel.type_index = -1;
+        channel.angular_momentum = -1;
+        channel.radial_index = -1;
+        channel.magnetic_index = -1;
+        channel.label = "full_coulomb_whitened_" + std::to_string(output);
+        channel.potential_r.assign(grid_size, std::complex<double>(0.0, 0.0));
+    }
+
+#pragma omp parallel for schedule(static)
+    for (std::size_t ir = 0; ir != grid_size; ++ir)
+    {
+        for (std::size_t raw = 0; raw != raw_channels.size(); ++raw)
+        {
+            const std::complex<double> value = raw_channels[raw].potential_r[ir];
+            for (int output = 0; output != output_channels; ++output)
+            {
+                transformed[static_cast<std::size_t>(output)].potential_r[ir]
+                    += value * raw_to_output[raw * static_cast<std::size_t>(output_channels)
+                                             + static_cast<std::size_t>(output)];
+            }
+        }
+    }
+    for (auto& channel: transformed)
+    {
+        for (const auto& value: channel.potential_r)
+        {
+            if (!std::isfinite(value.real()) || !std::isfinite(value.imag()))
+            {
+                throw std::invalid_argument("Sternheimer Bloch-channel transform produced a non-finite value.");
+            }
+            channel.max_abs = std::max(channel.max_abs, std::abs(value));
+        }
+    }
+    return transformed;
+}
+
 std::vector<SternheimerABFGridChannel> describe_sternheimer_abf_grid_channels(
     const std::vector<std::vector<SternheimerRadialPerturbation>>& radials_by_type,
     const std::vector<int>& atom_types,

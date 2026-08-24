@@ -370,6 +370,24 @@ TEST(SternheimerABACUSSTSmoke, ListsOneCanonicalFullQPointPerZeroOrderStar)
                  std::invalid_argument);
 }
 
+TEST(SternheimerABACUSSTSmoke, DerivesNormalizedQStarWeightsFromFullGridRecords)
+{
+    auto q0 = make_occupied_kpoint(0, 0, 0, {0.0, 0.0, 0.0}, 1.0 / 3.0);
+    auto q1 = make_occupied_kpoint(1, 1, 0, {0.5, 0.0, 0.0}, 1.0 / 3.0);
+    auto q1_partner = make_occupied_kpoint(2, 2, 0, {-0.5, 0.0, 0.0}, 1.0 / 3.0);
+    q1_partner.zero_order_k_index = 1;
+    q1_partner.symmetry_spatial_isym = 3;
+    const std::vector<ModuleRI::SternheimerLCAOOccupiedKPoint> records{q0, q1, q1_partner};
+
+    const double q0_weight = ModuleRI::sternheimer_qstar_weight(records, 1);
+    const double q1_weight = ModuleRI::sternheimer_qstar_weight(records, 2);
+    EXPECT_NEAR(q0_weight, 1.0 / 3.0, 1.0e-15);
+    EXPECT_NEAR(q1_weight, 2.0 / 3.0, 1.0e-15);
+    EXPECT_NEAR(q0_weight + q1_weight, 1.0, 1.0e-15);
+    EXPECT_THROW(ModuleRI::sternheimer_qstar_weight(records, 3), std::invalid_argument);
+    EXPECT_THROW(ModuleRI::sternheimer_qstar_weight(records, 0), std::invalid_argument);
+}
+
 TEST(SternheimerABACUSSTSmoke, SelectsEveryGammaSpinRecordForMolecularResponse)
 {
     const auto spin_up = make_occupied_kpoint(0, 0, 0, {0.0, 0.0, 0.0}, 1.0);

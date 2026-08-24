@@ -449,3 +449,36 @@ TEST(SternheimerABFSPerturbation, CoulombProjectionMismatchIsDiagnosticOnly)
     EXPECT_DOUBLE_EQ(potential0.potential_r[0].real(), 0.0);
     EXPECT_DOUBLE_EQ(potential1.potential_r[1].real(), 0.0);
 }
+
+TEST(SternheimerABFSPerturbation, TransformsComplexBlochChannelsInCanonicalOutputOrder)
+{
+    ModuleRI::SternheimerABFBlochGridChannel raw0;
+    raw0.potential_r = {{1.0, 2.0}, {3.0, 4.0}};
+    ModuleRI::SternheimerABFBlochGridChannel raw1;
+    raw1.potential_r = {{-1.0, 0.5}, {2.0, -3.0}};
+    const std::vector<std::complex<double>> transform = {
+        {1.0, 0.0}, {0.0, 1.0},
+        {0.5, -0.5}, {-1.0, 0.0},
+    };
+
+    const auto output = ModuleRI::transform_sternheimer_abf_bloch_grid_channels(
+        {raw0, raw1}, transform, 2);
+
+    ASSERT_EQ(output.size(), 2U);
+    EXPECT_EQ(output[0].channel_index, 0);
+    EXPECT_EQ(output[0].atom_index, -1);
+    EXPECT_EQ(output[0].label, "full_coulomb_whitened_0");
+    EXPECT_NEAR(std::abs(output[0].potential_r[0] - std::complex<double>(0.75, 2.75)), 0.0, 1.0e-14);
+    EXPECT_NEAR(std::abs(output[0].potential_r[1] - std::complex<double>(2.5, 1.5)), 0.0, 1.0e-14);
+    EXPECT_NEAR(std::abs(output[1].potential_r[0] - std::complex<double>(-1.0, 0.5)), 0.0, 1.0e-14);
+    EXPECT_NEAR(std::abs(output[1].potential_r[1] - std::complex<double>(-6.0, 6.0)), 0.0, 1.0e-14);
+    EXPECT_NEAR(output[1].max_abs, std::sqrt(72.0), 1.0e-14);
+
+    EXPECT_THROW(ModuleRI::transform_sternheimer_abf_bloch_grid_channels({}, transform, 2),
+                 std::invalid_argument);
+    EXPECT_THROW(ModuleRI::transform_sternheimer_abf_bloch_grid_channels({raw0, raw1}, transform, 0),
+                 std::invalid_argument);
+    raw1.potential_r.pop_back();
+    EXPECT_THROW(ModuleRI::transform_sternheimer_abf_bloch_grid_channels({raw0, raw1}, transform, 2),
+                 std::invalid_argument);
+}

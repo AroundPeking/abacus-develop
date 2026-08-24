@@ -63,6 +63,17 @@ struct ManifestEntry
     double frequency = -1.0;
 };
 
+struct KPointRecord
+{
+    int source_ik = 0;
+    int target_ik = 0;
+    std::array<double, 3> source_kpoint{};
+    std::array<double, 3> target_kpoint{};
+    std::array<int, 3> reciprocal_shift{};
+    double k_weight = 0.0;
+    std::vector<double> occupations;
+};
+
 struct Manifest
 {
     std::string abacus_commit;
@@ -70,11 +81,25 @@ struct Manifest
     std::string orbital_sha256;
     std::string pseudopotential_sha256;
     std::string auxiliary_basis_sha256;
+    std::string primitive_blocks_sha256;
     std::string physics_hash;
     std::string kernel;
     int q_count = 0;
+    int selected_iq = 0;
+    std::array<double, 3> qpoint{};
+    double q_weight = 0.0;
     int k_count = 0;
     int frequency_count = 0;
+    int raw_auxiliary_dimension = 0;
+    int whitened_auxiliary_rank = 0;
+    int discarded_auxiliary_rank = 0;
+    double coulomb_relative_threshold = 0.0;
+    double coulomb_max_orthonormality_error = 0.0;
+    std::string coulomb_transform_sha256;
+    int primitive_count = 0;
+    std::vector<double> frequency_ha;
+    std::vector<double> frequency_weights_ha;
+    std::vector<KPointRecord> kpoints;
     std::vector<ManifestEntry> entries;
 };
 

@@ -17,6 +17,7 @@ namespace
 using module_ri::sternheimer_basis_opt::ChunkKind;
 using module_ri::sternheimer_basis_opt::Manifest;
 using module_ri::sternheimer_basis_opt::ManifestEntry;
+using module_ri::sternheimer_basis_opt::KPointRecord;
 using module_ri::sternheimer_basis_opt::PeriodicChunk;
 using module_ri::sternheimer_basis_opt::PeriodicChunkHeader;
 
@@ -60,11 +61,28 @@ Manifest canonical_manifest(const std::vector<ManifestEntry>& entries)
     manifest.orbital_sha256 = "3333333333333333333333333333333333333333333333333333333333333333";
     manifest.pseudopotential_sha256 = "4444444444444444444444444444444444444444444444444444444444444444";
     manifest.auxiliary_basis_sha256 = "5555555555555555555555555555555555555555555555555555555555555555";
+    manifest.primitive_blocks_sha256 = "7777777777777777777777777777777777777777777777777777777777777777";
     manifest.physics_hash = "6666666666666666666666666666666666666666666666666666666666666666";
     manifest.kernel = "full_coulomb";
     manifest.q_count = 2;
+    manifest.selected_iq = 1;
+    manifest.qpoint = {0.0, 0.0, 0.0};
+    manifest.q_weight = 0.25;
     manifest.k_count = 2;
     manifest.frequency_count = 1;
+    manifest.raw_auxiliary_dimension = 3;
+    manifest.whitened_auxiliary_rank = 2;
+    manifest.discarded_auxiliary_rank = 1;
+    manifest.coulomb_relative_threshold = 1.0e-10;
+    manifest.coulomb_max_orthonormality_error = 2.0e-14;
+    manifest.coulomb_transform_sha256 = "8888888888888888888888888888888888888888888888888888888888888888";
+    manifest.primitive_count = 4;
+    manifest.frequency_ha = {0.75};
+    manifest.frequency_weights_ha = {0.125};
+    manifest.kpoints = {
+        KPointRecord{1, 2, {0.0, 0.0, 0.0}, {0.5, 0.0, 0.0}, {0, 0, 0}, 0.5, {2.0}},
+        KPointRecord{2, 1, {0.5, 0.0, 0.0}, {0.0, 0.0, 0.0}, {1, 0, 0}, 0.5, {2.0}},
+    };
     manifest.entries = entries;
     return manifest;
 }
@@ -163,6 +181,14 @@ TEST(SternheimerBasisOptPeriodic, ManifestRejectsDuplicateRecordsAndWritesDeterm
     EXPECT_FALSE(file_exists(manifest_a + ".tmp"));
     EXPECT_EQ(module_ri::sternheimer_siab::sha256_file(manifest_a),
               module_ri::sternheimer_siab::sha256_file(manifest_b));
+    const std::vector<char> manifest_bytes = read_bytes(manifest_a);
+    const std::string manifest_text(manifest_bytes.begin(), manifest_bytes.end());
+    EXPECT_NE(manifest_text.find("selected_iq 1\n"), std::string::npos);
+    EXPECT_NE(manifest_text.find("primitive_blocks_sha256 7777777777777777"), std::string::npos);
+    EXPECT_NE(manifest_text.find("qpoint 0.00000000000000000e+00"), std::string::npos);
+    EXPECT_NE(manifest_text.find("frequency 0 7.50000000000000000e-01 1.25000000000000000e-01"),
+              std::string::npos);
+    EXPECT_NE(manifest_text.find("kpoint 1 2"), std::string::npos);
 
     Manifest duplicate = canonical_manifest({entry, entry});
     EXPECT_THROW(module_ri::sternheimer_basis_opt::write_manifest_atomic(manifest_a, duplicate), std::invalid_argument);
@@ -171,6 +197,16 @@ TEST(SternheimerBasisOptPeriodic, ManifestRejectsDuplicateRecordsAndWritesDeterm
     mismatched.sha256 = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
     EXPECT_THROW(module_ri::sternheimer_basis_opt::write_manifest_atomic(manifest_a, canonical_manifest({mismatched})),
                  std::runtime_error);
+
+    Manifest invalid_q_weight = canonical_manifest({entry});
+    invalid_q_weight.q_weight = 0.0;
+    EXPECT_THROW(module_ri::sternheimer_basis_opt::write_manifest_atomic(manifest_a, invalid_q_weight),
+                 std::invalid_argument);
+
+    Manifest invalid_k_layout = canonical_manifest({entry});
+    invalid_k_layout.kpoints[1].source_ik = 1;
+    EXPECT_THROW(module_ri::sternheimer_basis_opt::write_manifest_atomic(manifest_a, invalid_k_layout),
+                 std::invalid_argument);
 }
 
 TEST(SternheimerBasisOptPeriodic, RejectsInvalidHeaderDimensionsAndIndices)
@@ -179,6 +215,8 @@ TEST(SternheimerBasisOptPeriodic, RejectsInvalidHeaderDimensionsAndIndices)
     const std::string path = files.add("sternheimer_basis_opt_periodic_invalid.bin");
     EXPECT_THROW(header(ChunkKind::response, 0, 1, 0, 1, 1), std::invalid_argument);
     EXPECT_THROW(header(ChunkKind::response, 1, -1, 0, 1, 1), std::invalid_argument);
+    EXPECT_NO_THROW(header(ChunkKind::coulomb_metric, 1, 0, -1, 1, 1));
+    EXPECT_THROW(header(ChunkKind::coulomb_metric, 1, 1, -1, 1, 1), std::invalid_argument);
     EXPECT_THROW(header(ChunkKind::response, 1, 1, -1, 1, 1), std::invalid_argument);
     EXPECT_THROW(header(ChunkKind::source, 1, 1, 0, 1, 1), std::invalid_argument);
     EXPECT_THROW(header(ChunkKind::overlap, 1, 1, -1, 0, 1), std::invalid_argument);

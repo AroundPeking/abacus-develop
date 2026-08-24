@@ -202,6 +202,35 @@ inline std::vector<int> sternheimer_canonical_q_indices_one_based(
     return representatives;
 }
 
+inline double sternheimer_qstar_weight(
+    const std::vector<SternheimerLCAOOccupiedKPoint>& records,
+    const int representative_iq_one_based)
+{
+    if (records.empty() || representative_iq_one_based <= 0
+        || representative_iq_one_based > static_cast<int>(records.size()))
+    {
+        throw std::invalid_argument("Invalid canonical Sternheimer q index for q-star weighting.");
+    }
+    const SternheimerLCAOOccupiedKPoint& representative
+        = records[static_cast<std::size_t>(representative_iq_one_based - 1)];
+    if (representative.global_k_index != representative_iq_one_based - 1
+        || representative.zero_order_k_index < 0
+        || representative.symmetry_spatial_isym != 0
+        || representative.symmetry_time_reversal)
+    {
+        throw std::invalid_argument("Sternheimer q-star weight requires its canonical full-q representative.");
+    }
+    const std::size_t multiplicity = static_cast<std::size_t>(std::count_if(
+        records.begin(), records.end(), [&](const SternheimerLCAOOccupiedKPoint& record) {
+            return record.zero_order_k_index == representative.zero_order_k_index;
+        }));
+    if (multiplicity == 0)
+    {
+        throw std::logic_error("A canonical Sternheimer q point has zero q-star multiplicity.");
+    }
+    return static_cast<double>(multiplicity) / static_cast<double>(records.size());
+}
+
 inline bool sternheimer_lcao_sos_diagnostic_enabled()
 {
     const char* raw = std::getenv("ABACUS_STERNHEIMER_LCAO_SOS_DIAG");
