@@ -96,6 +96,29 @@ TEST(SternheimerComplexCoulombWhitening, ProducesIdentityAndTruncatesNearNullDir
     }
 }
 
+TEST(SternheimerComplexCoulombWhitening, DropsNumericallyUnstableRetainedDirections)
+{
+    const std::vector<Complex> metric = {
+        Complex(2.89968841035329383e-01, 0.00000000000000000e+00),
+        Complex(5.13810984246140801e-02, -3.56548586400109113e-01),
+        Complex(2.55285078010785038e-01, -1.04622708599385730e-01),
+        Complex(5.13810984246140801e-02, 3.56548586400109113e-01),
+        Complex(4.47525361902515573e-01, 0.00000000000000000e+00),
+        Complex(1.73879952906985713e-01, 2.95372017819879651e-01),
+        Complex(2.55285078010785038e-01, 1.04622708599385730e-01),
+        Complex(1.73879952906985713e-01, -2.95372017819879651e-01),
+        Complex(2.62516285260637083e-01, 0.00000000000000000e+00),
+    };
+
+    const auto whitening = ModuleRI::make_sternheimer_complex_coulomb_whitening(metric, 3, 1.0e-10);
+
+    EXPECT_EQ(whitening.raw_dimension, 3);
+    EXPECT_EQ(whitening.retained_rank, 2);
+    EXPECT_EQ(whitening.discarded_rank, 1);
+    EXPECT_GT(whitening.smallest_retained_eigenvalue / whitening.largest_eigenvalue, 1.0e-6);
+    EXPECT_LE(whitening.max_orthonormality_error, 1.0e-8);
+}
+
 TEST(SternheimerComplexCoulombWhitening, RejectsNonHermitianAndMateriallyNegativeMetrics)
 {
     const std::vector<Complex> non_hermitian = {
