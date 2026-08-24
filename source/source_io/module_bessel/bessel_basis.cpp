@@ -224,7 +224,11 @@ void Bessel_Basis::init_TableOne(
 	//=========output .orb format=============
 	std::stringstream ss;
 	ss << PARAM.globalv.global_out_dir << "jle.orb";
-	std::ofstream ofs(ss.str().c_str());
+	std::ofstream ofs;
+	if (GlobalV::MY_RANK == 0)
+	{
+		ofs.open(ss.str().c_str());
+	}
 	ofs << "---------------------------------------------------------------------------"<< std::endl;
 	ofs << std::setiosflags(std::ios::left) << std::setw(28) << "Energy Cutoff(Ry)" << ecut << std::endl;
 	ofs << std::setiosflags(std::ios::left) << std::setw(28) << "Radius Cutoff(a.u.)" << rcut << std::endl;

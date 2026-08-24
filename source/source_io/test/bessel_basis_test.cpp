@@ -478,6 +478,33 @@ TEST_F(TestBesselBasis, NonRootRankDoesNotWriteJleOrb) {
     std::remove(output_path.c_str());
 }
 
+TEST_F(TestBesselBasis, RootRankWritesJleOrb) {
+    const int original_rank = GlobalV::MY_RANK;
+    const std::string output_path = PARAM.globalv.global_out_dir + "jle.orb";
+    GlobalV::MY_RANK = 0;
+    std::remove(output_path.c_str());
+
+    besselBasis.init(
+        false,
+        4.0,
+        1,
+        0,
+        false,
+        0.1,
+        2.0,
+        0.01,
+        ucell,
+        0.01,
+        2.0
+    );
+
+    std::ifstream output(output_path);
+    EXPECT_TRUE(output.good());
+    output.close();
+    GlobalV::MY_RANK = original_rank;
+    std::remove(output_path.c_str());
+}
+
 TEST_F(TestBesselBasis, PolynomialInterpolation2Test) {
     /* function Bessel_Basis::Polynomial_Interpolation2 is to do
     cubic interpolation on TableOne, this matrix has, dimension l*nq*nk */
