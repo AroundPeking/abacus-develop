@@ -197,7 +197,7 @@ TEST(SternheimerSIABOverlap, ContiguousReciprocalOverlapMatchesBraKetRowConventi
         EXPECT_NEAR(actual[index].imag(), expected[index].imag(), 1.0e-14);
     }
     EXPECT_GT(actual[1].imag(), 0.0);
-    EXPECT_THROW(siab::overlap_s_reciprocal_contiguous(contiguous, 3, 2), std::invalid_argument);
+    EXPECT_THROW(siab::overlap_s_reciprocal_contiguous(contiguous, 2, 2), std::invalid_argument);
 }
 
 TEST(SternheimerSIABOverlap, RejectsInvalidGridVolume)
