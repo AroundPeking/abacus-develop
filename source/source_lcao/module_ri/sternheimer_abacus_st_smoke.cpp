@@ -3943,7 +3943,7 @@ void run_sternheimer_periodic_lcao_chi0_output(
                                      << partial.filename << std::endl;
                 local_partial_records.push_back(std::move(partial));
 
-                if (write_kresolved_diagnostic)
+                if (write_kresolved_diagnostic || write_basis_opt)
                 {
                     auto& aggregate = chi0_branches[static_cast<std::size_t>(ifrequency)];
                     for (std::size_t entry = 0; entry != branch.size(); ++entry)
@@ -3989,12 +3989,12 @@ void run_sternheimer_periodic_lcao_chi0_output(
 
     if (use_kpoint_mpi)
     {
-        if (!use_symmetry_partial_response)
+        if (!use_symmetry_partial_response || write_basis_opt)
         {
             for (int ifrequency = 0; ifrequency != nfreq; ++ifrequency)
             {
                 reduce_kpoint_parallel_complex_vector(chi0_branches[static_cast<std::size_t>(ifrequency)], true);
-                if (write_delta_components)
+                if (!use_symmetry_partial_response && write_delta_components)
                 {
                     reduce_kpoint_parallel_complex_vector(
                         delta_sos_branches[static_cast<std::size_t>(ifrequency)], true);
@@ -4003,7 +4003,7 @@ void run_sternheimer_periodic_lcao_chi0_output(
                     reduce_kpoint_parallel_complex_vector(
                         delta_out_branches[static_cast<std::size_t>(ifrequency)], true);
                 }
-                if (write_lcao_sos)
+                if (!use_symmetry_partial_response && write_lcao_sos)
                 {
                     reduce_kpoint_parallel_complex_vector(
                         lcao_sos_branches[static_cast<std::size_t>(ifrequency)], true);
@@ -4031,6 +4031,34 @@ void run_sternheimer_periodic_lcao_chi0_output(
         std::fill(target_lcao_occ_unocc_overlap_max.begin(), target_lcao_occ_unocc_overlap_max.end(), -1.0);
     }
 
+    if (write_basis_opt)
+    {
+        for (int ifrequency = 0; ifrequency != nfreq; ++ifrequency)
+        {
+            if ((use_kpoint_mpi && GlobalV::MY_RANK != 0)
+                || (!use_kpoint_mpi
+                    && frequency_owners[static_cast<std::size_t>(ifrequency)] != GlobalV::MY_RANK))
+            {
+                continue;
+            }
+            const std::vector<SternheimerRPA::Complex> reference_response
+                = SternheimerRPA::symmetrize_chi0_imaginary_frequency(
+                    chi0_branches[static_cast<std::size_t>(ifrequency)], num_channels);
+            periodic_basis_opt::write_periodic_chunk_atomic(
+                join_path(basis_opt_dir,
+                          periodic_basis_opt_frequency_filename(
+                              "reference_response", ifrequency)),
+                periodic_basis_opt::make_periodic_chunk_header(
+                    periodic_basis_opt::ChunkKind::reference_response,
+                    response_plan.iq,
+                    0,
+                    ifrequency,
+                    static_cast<std::uint64_t>(num_channels),
+                    static_cast<std::uint64_t>(num_channels)),
+                reference_response);
+        }
+    }
+
     if (!use_symmetry_partial_response && write_periodic_v1)
     {
         for (int ifrequency = 0; ifrequency != nfreq; ++ifrequency)
@@ -4044,21 +4072,6 @@ void run_sternheimer_periodic_lcao_chi0_output(
             const std::vector<SternheimerRPA::Complex> chi0
                 = SternheimerRPA::symmetrize_chi0_imaginary_frequency(
                     chi0_branches[static_cast<std::size_t>(ifrequency)], num_channels);
-            if (write_basis_opt)
-            {
-                periodic_basis_opt::write_periodic_chunk_atomic(
-                    join_path(basis_opt_dir,
-                              periodic_basis_opt_frequency_filename(
-                                  "reference_response", ifrequency)),
-                    periodic_basis_opt::make_periodic_chunk_header(
-                        periodic_basis_opt::ChunkKind::reference_response,
-                        response_plan.iq,
-                        0,
-                        ifrequency,
-                        static_cast<std::uint64_t>(num_channels),
-                        static_cast<std::uint64_t>(num_channels)),
-                    chi0);
-            }
             const SternheimerRPA::Chi0V1Metadata metadata
                 = make_chi0_v1_metadata(ucell,
                                         channels,
