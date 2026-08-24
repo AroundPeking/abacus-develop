@@ -17,8 +17,8 @@ module load oneapi/2024.2
 root=/data/home/df_iopcas_ghj/app/abacus/unified-basis-opt-1474d95c2-20260825
 source_root=$root/source
 build_root=$root/build
-bundle=$root/9233ad49c.bundle
-commit=9233ad49c9cf1cc05936fa7e03751b417e36e15f
+bundle=$root/1ef3e909e.bundle
+commit=1ef3e909eeb8edfd1a32fa678b7447731a36bf3a
 test_binary=$build_root/source/source_io/test/MODULE_IO_bessel_basis_test
 
 test "$SLURM_JOB_PARTITION" = p1
