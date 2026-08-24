@@ -83,6 +83,8 @@ Manifest canonical_manifest(const std::vector<ManifestEntry>& entries)
         KPointRecord{1, 2, {0.0, 0.0, 0.0}, {0.5, 0.0, 0.0}, {0, 0, 0}, 0.5, {2.0}},
         KPointRecord{2, 1, {0.5, 0.0, 0.0}, {0.0, 0.0, 0.0}, {1, 0, 0}, 0.5, {2.0}},
     };
+    manifest.kpoints[0].eigenvalues_ry = {-0.75};
+    manifest.kpoints[1].eigenvalues_ry = {-0.50};
     manifest.entries = entries;
     return manifest;
 }
@@ -189,6 +191,8 @@ TEST(SternheimerBasisOptPeriodic, ManifestRejectsDuplicateRecordsAndWritesDeterm
     EXPECT_NE(manifest_text.find("frequency 0 7.50000000000000000e-01 1.25000000000000000e-01"),
               std::string::npos);
     EXPECT_NE(manifest_text.find("kpoint 1 2"), std::string::npos);
+    EXPECT_NE(manifest_text.find("eigenvalues_ry 1 1 -7.50000000000000000e-01"),
+              std::string::npos);
 
     Manifest duplicate = canonical_manifest({entry, entry});
     EXPECT_THROW(module_ri::sternheimer_basis_opt::write_manifest_atomic(manifest_a, duplicate), std::invalid_argument);
@@ -216,6 +220,8 @@ TEST(SternheimerBasisOptPeriodic, RejectsInvalidHeaderDimensionsAndIndices)
     EXPECT_THROW(header(ChunkKind::response, 0, 1, 0, 1, 1), std::invalid_argument);
     EXPECT_THROW(header(ChunkKind::response, 1, -1, 0, 1, 1), std::invalid_argument);
     EXPECT_NO_THROW(header(ChunkKind::coulomb_metric, 1, 0, -1, 1, 1));
+    EXPECT_NO_THROW(header(ChunkKind::hamiltonian, 1, 1, -1, 2, 2));
+    EXPECT_NO_THROW(header(ChunkKind::occupied_projection, 1, 1, -1, 1, 2));
     EXPECT_THROW(header(ChunkKind::coulomb_metric, 1, 1, -1, 1, 1), std::invalid_argument);
     EXPECT_THROW(header(ChunkKind::response, 1, 1, -1, 1, 1), std::invalid_argument);
     EXPECT_THROW(header(ChunkKind::source, 1, 1, 0, 1, 1), std::invalid_argument);
