@@ -175,6 +175,31 @@ TEST(SternheimerSIABOverlap, ContiguousReciprocalContractionPreservesBraConjugat
                  std::invalid_argument);
 }
 
+TEST(SternheimerSIABOverlap, ContiguousReciprocalOverlapMatchesBraKetRowConvention)
+{
+    const PrimitiveGrid primitives = {
+        {{1.0, 1.0}, {0.5, -0.25}, {0.0, -1.0}},
+        {{0.0, 1.0}, {1.0, 0.0}, {0.25, 0.5}},
+    };
+    std::vector<Complex> contiguous;
+    for (const auto& primitive: primitives)
+    {
+        contiguous.insert(contiguous.end(), primitive.begin(), primitive.end());
+    }
+
+    const auto expected = siab::overlap_s_reciprocal(primitives);
+    const auto actual = siab::overlap_s_reciprocal_contiguous(contiguous, 2, 3);
+
+    ASSERT_EQ(actual.size(), expected.size());
+    for (std::size_t index = 0; index != actual.size(); ++index)
+    {
+        EXPECT_NEAR(actual[index].real(), expected[index].real(), 1.0e-14);
+        EXPECT_NEAR(actual[index].imag(), expected[index].imag(), 1.0e-14);
+    }
+    EXPECT_GT(actual[1].imag(), 0.0);
+    EXPECT_THROW(siab::overlap_s_reciprocal_contiguous(contiguous, 3, 2), std::invalid_argument);
+}
+
 TEST(SternheimerSIABOverlap, RejectsInvalidGridVolume)
 {
     EXPECT_THROW(siab::norm(reference_wavefunction, 0.0), std::invalid_argument);

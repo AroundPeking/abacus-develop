@@ -165,9 +165,34 @@ TEST(SternheimerKQ, RemovesBlochPhaseToRecoverThePeriodicGridPart)
     }
 }
 
+TEST(SternheimerKQ, ApplyingAndRemovingBlochPhaseAreInverseOperations)
+{
+    const KPoint kpoint{0.125, -0.25, 0.375};
+    constexpr int nx = 3;
+    constexpr int ny = 4;
+    constexpr int nz = 2;
+    std::vector<std::complex<double>> periodic(static_cast<std::size_t>(nx * ny * nz));
+    for (std::size_t index = 0; index != periodic.size(); ++index)
+    {
+        periodic[index] = {0.3 + 0.17 * index, -0.2 + 0.11 * index};
+    }
+
+    const auto bloch = ModuleRI::apply_sternheimer_bloch_phase(periodic, nx, ny, nz, kpoint);
+    const auto recovered = ModuleRI::remove_sternheimer_bloch_phase(bloch, nx, ny, nz, kpoint);
+
+    ASSERT_EQ(recovered.size(), periodic.size());
+    for (std::size_t index = 0; index != periodic.size(); ++index)
+    {
+        EXPECT_NEAR(recovered[index].real(), periodic[index].real(), 1.0e-13);
+        EXPECT_NEAR(recovered[index].imag(), periodic[index].imag(), 1.0e-13);
+    }
+}
+
 TEST(SternheimerKQ, RejectsInconsistentBlochGridDimensions)
 {
     const std::vector<std::complex<double>> values(7, {1.0, 0.0});
+    EXPECT_THROW(ModuleRI::apply_sternheimer_bloch_phase(values, 2, 2, 2, {0.1, 0.0, 0.0}),
+                 std::invalid_argument);
     EXPECT_THROW(ModuleRI::remove_sternheimer_bloch_phase(values, 2, 2, 2, {0.1, 0.0, 0.0}), std::invalid_argument);
     EXPECT_THROW(ModuleRI::remove_sternheimer_bloch_phase(values, 0, 2, 2, {0.1, 0.0, 0.0}), std::invalid_argument);
 }
