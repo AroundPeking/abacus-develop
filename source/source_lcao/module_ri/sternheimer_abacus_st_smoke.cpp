@@ -1167,13 +1167,15 @@ struct SIABPrimitiveExportData
     std::vector<std::complex<double>> reciprocal_matrix;
     std::vector<std::complex<double>> overlap_s;
     std::unique_ptr<ModulePW::PW_Basis_K> serial_pw_basis;
+    SternheimerReducedKPoint destination_kpoint{0.0, 0.0, 0.0};
     int primitive_count = 0;
     int reciprocal_count = 0;
 };
 
 SIABPrimitiveExportData build_siab_primitive_export_data(const ModulePW::PW_Basis& response_pw_basis,
                                                          const Structure_Factor& structure_factor,
-                                                         const UnitCell& ucell)
+                                                         const UnitCell& ucell,
+                                                         const SternheimerReducedKPoint& destination_kpoint)
 {
     siab::require_single_primitive_rcut(PARAM.inp.bessel_nao_rcuts);
     SIABPrimitiveExportData result;
@@ -1186,8 +1188,10 @@ SIABPrimitiveExportData build_siab_primitive_export_data(const ModulePW::PW_Basi
                                       response_pw_basis.nx,
                                       response_pw_basis.ny,
                                       response_pw_basis.nz);
-    const ModuleBase::Vector3<double> gamma(0.0, 0.0, 0.0);
-    result.serial_pw_basis->initparameters(false, PARAM.inp.ecutwfc, 1, &gamma);
+    const ModuleBase::Vector3<double> bloch_kpoint(destination_kpoint[0],
+                                                   destination_kpoint[1],
+                                                   destination_kpoint[2]);
+    result.serial_pw_basis->initparameters(false, PARAM.inp.ecutwfc, 1, &bloch_kpoint);
     result.serial_pw_basis->fft_bundle.initfftmode(PARAM.inp.fft_mode);
     result.serial_pw_basis->setuptransform();
     result.serial_pw_basis->collect_local_pw(PARAM.inp.erf_ecut, PARAM.inp.erf_height, PARAM.inp.erf_sigma);
@@ -1196,6 +1200,7 @@ SIABPrimitiveExportData build_siab_primitive_export_data(const ModulePW::PW_Basi
     {
         throw std::runtime_error("Sternheimer SIAB serial primitive FFT basis does not cover the complete response grid.");
     }
+    result.destination_kpoint = destination_kpoint;
     const Numerical_Basis::SIABPrimitiveParameters parameters
         = Numerical_Basis::siab_parameters_from_input(0, PARAM.inp.sternheimer_siab_lmax);
     Numerical_Basis numerical_basis;
@@ -1266,11 +1271,17 @@ std::vector<std::complex<double>> project_siab_response_to_primitives(
     }
     std::vector<std::complex<double>> response_coefficients(
         static_cast<std::size_t>(primitives.serial_pw_basis->npwk[0]), ModuleBase::ZERO);
+    const std::vector<std::complex<double>> periodic_response
+        = remove_sternheimer_bloch_phase(complete_response,
+                                         primitives.serial_pw_basis->nx,
+                                         primitives.serial_pw_basis->ny,
+                                         primitives.serial_pw_basis->nz,
+                                         primitives.destination_kpoint);
 #ifdef _OPENMP
 #pragma omp critical(sternheimer_siab_real2recip)
 #endif
     {
-        primitives.serial_pw_basis->real2recip(complete_response.data(), response_coefficients.data(), 0);
+        primitives.serial_pw_basis->real2recip(periodic_response.data(), response_coefficients.data(), 0);
     }
     const double coefficient_scale = std::sqrt(ucell.omega);
     for (std::complex<double>& value: response_coefficients)
@@ -4494,7 +4505,8 @@ void run_sternheimer_abacus_chi0_output_impl(
         {
             siab_primitives = build_siab_primitive_export_data(pw_basis,
                                                                *siab_structure_factor,
-                                                               ucell);
+                                                               ucell,
+                                                               SternheimerReducedKPoint{0.0, 0.0, 0.0});
             append_chi0_progress_event("siab_primitives_ready",
                                        0,
                                        -1,

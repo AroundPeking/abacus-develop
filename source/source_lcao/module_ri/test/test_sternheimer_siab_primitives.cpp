@@ -106,13 +106,14 @@ std::vector<Complex> reciprocal_primitive(const Bessel_Basis& bessel,
                                           const UnitCell& ucell,
                                           const int l,
                                           const int conventional_m,
-                                          const int ie)
+                                          const int ie,
+                                          const int k_index = ik)
 {
-    const int npw = pw.npwk[ik];
+    const int npw = pw.npwk[k_index];
     std::vector<ModuleBase::Vector3<double>> gk(npw);
     for (int ig = 0; ig < npw; ++ig)
     {
-        gk[ig] = pw.getgpluskcar(ik, ig) * ucell.tpiba;
+        gk[ig] = pw.getgpluskcar(k_index, ig) * ucell.tpiba;
     }
 
     const int target_lmax = std::max(ucell.lmax, l);
@@ -128,8 +129,10 @@ std::vector<Complex> reciprocal_primitive(const Bessel_Basis& bessel,
     std::vector<Complex> values(npw);
     for (int ig = 0; ig < npw; ++ig)
     {
-        const ModuleBase::Vector3<double> gdirect = pw.getgdirect(ik, ig);
-        const Complex sk = std::exp(Complex(0.0, -ModuleBase::TWO_PI * (gdirect * atom_tau)));
+        const ModuleBase::Vector3<double> gplusk_direct
+            = pw.getgdirect(k_index, ig) + pw.kvec_d[k_index];
+        const Complex sk
+            = std::exp(Complex(0.0, -ModuleBase::TWO_PI * (gplusk_direct * atom_tau)));
         values[ig] = lphase * sk * ylm(lm, ig)
                      * bessel.Polynomial_Interpolation2(l, ie, gk[ig].norm());
     }
@@ -138,11 +141,12 @@ std::vector<Complex> reciprocal_primitive(const Bessel_Basis& bessel,
 
 std::vector<Complex> physical_complex_grid(const ModulePW::PW_Basis_K& pw,
                                            const UnitCell& ucell,
-                                           const std::vector<Complex>& reciprocal)
+                                           const std::vector<Complex>& reciprocal,
+                                           const int k_index = ik)
 {
     EXPECT_FALSE(pw.gamma_only);
     std::vector<Complex> grid(std::max(1, pw.nrxx), Complex(0.0, 0.0));
-    pw.recip2real(reciprocal.data(), grid.data(), ik);
+    pw.recip2real(reciprocal.data(), grid.data(), k_index);
     grid.resize(pw.nrxx);
     const double scale = 1.0 / std::sqrt(ucell.omega);
     for (Complex& value : grid)
@@ -152,12 +156,12 @@ std::vector<Complex> physical_complex_grid(const ModulePW::PW_Basis_K& pw,
     return grid;
 }
 
-std::vector<Complex> deterministic_complex_pw(const ModulePW::PW_Basis_K& pw)
+std::vector<Complex> deterministic_complex_pw(const ModulePW::PW_Basis_K& pw, const int k_index = ik)
 {
-    std::vector<Complex> values(pw.npwk[ik]);
-    for (int ig = 0; ig < pw.npwk[ik]; ++ig)
+    std::vector<Complex> values(pw.npwk[k_index]);
+    for (int ig = 0; ig < pw.npwk[k_index]; ++ig)
     {
-        const ModuleBase::Vector3<double> g = pw.getgdirect(ik, ig);
+        const ModuleBase::Vector3<double> g = pw.getgdirect(k_index, ig);
         const double denominator = 1.0 + g.norm2();
         values[ig] = Complex((1.0 + 0.17 * g.x - 0.11 * g.z) / denominator,
                              (0.23 + 0.13 * g.y + 0.07 * g.z) / denominator);
@@ -187,6 +191,7 @@ class SternheimerSIABPrimitivesTest : public ::testing::Test
     UnitCell ucell;
     ModulePW::PW_Basis_K gamma_pw;
     ModulePW::PW_Basis_K full_pw;
+    ModulePW::PW_Basis_K bloch_pw;
     Structure_Factor structure_factor;
 
     void SetUp() override
@@ -200,6 +205,7 @@ class SternheimerSIABPrimitivesTest : public ::testing::Test
         MPI_Comm_size(MPI_COMM_WORLD, &size);
         gamma_pw.initmpi(size, rank, MPI_COMM_WORLD);
         full_pw.initmpi(size, rank, MPI_COMM_WORLD);
+        bloch_pw.initmpi(size, rank, MPI_COMM_WORLD);
 #endif
         gamma_pw.initgrids(ucell.lat0, ucell.latvec, 4.0 * ecut_ry);
         gamma_pw.initparameters(true, ecut_ry, 1, &gamma, 2, true);
@@ -211,6 +217,15 @@ class SternheimerSIABPrimitivesTest : public ::testing::Test
         full_pw.setuptransform();
         full_pw.collect_local_pw();
 
+        const ModuleBase::Vector3<double> bloch_kpoints[2] = {
+            {0.125, 0.0, 0.0},
+            {-0.25, 0.25, 0.0},
+        };
+        bloch_pw.initgrids(ucell.lat0, ucell.latvec, gamma_pw.nx, gamma_pw.ny, gamma_pw.nz);
+        bloch_pw.initparameters(false, ecut_ry, 2, bloch_kpoints, 2, true);
+        bloch_pw.setuptransform();
+        bloch_pw.collect_local_pw();
+
         ASSERT_TRUE(gamma_pw.gamma_only);
         ASSERT_FALSE(full_pw.gamma_only);
         ASSERT_EQ(gamma_pw.nx, full_pw.nx);
@@ -220,6 +235,9 @@ class SternheimerSIABPrimitivesTest : public ::testing::Test
         ASSERT_EQ(gamma_pw.nplane, full_pw.nplane);
         ASSERT_EQ(gamma_pw.startz_current, full_pw.startz_current);
         ASSERT_EQ(gamma_pw.nrxx, full_pw.nrxx);
+        ASSERT_EQ(bloch_pw.nks, 2);
+        ASSERT_EQ(bloch_pw.nxyz, full_pw.nxyz);
+        ASSERT_EQ(bloch_pw.nrxx, full_pw.nrxx);
     }
 
     void TearDown() override
@@ -340,6 +358,74 @@ TEST_F(SternheimerSIABPrimitivesTest, ExposesTheSamePhysicallyNormalizedReciproc
             }
         }
     }
+}
+
+TEST_F(SternheimerSIABPrimitivesTest, NonGammaPrimitiveMetricsMatchGridIntegralsAndDependOnK)
+{
+    const Numerical_Basis::SIABPrimitiveParameters parameters{
+        ecut_ry,
+        rcut_bohr,
+        false,
+        0.1,
+        tolerance,
+        1,
+    };
+    Numerical_Basis numerical_basis;
+    std::vector<std::vector<Complex>> metrics;
+    for (int k_index = 0; k_index != bloch_pw.nks; ++k_index)
+    {
+        const auto reciprocal_blocks = numerical_basis.siab_primitive_reciprocal_values(
+            k_index, &bloch_pw, structure_factor, ucell, parameters);
+        const auto grid_blocks = numerical_basis.siab_primitive_grid_values(
+            k_index, &bloch_pw, structure_factor, ucell, parameters);
+        ASSERT_EQ(reciprocal_blocks.size(), grid_blocks.size());
+
+        std::vector<std::vector<Complex>> reciprocal_values;
+        std::vector<std::vector<Complex>> grid_values;
+        for (std::size_t block_index = 0; block_index != reciprocal_blocks.size(); ++block_index)
+        {
+            ASSERT_EQ(reciprocal_blocks[block_index].values.size(), grid_blocks[block_index].values.size());
+            reciprocal_values.insert(reciprocal_values.end(),
+                                     reciprocal_blocks[block_index].values.begin(),
+                                     reciprocal_blocks[block_index].values.end());
+            grid_values.insert(grid_values.end(),
+                               grid_blocks[block_index].values.begin(),
+                               grid_blocks[block_index].values.end());
+        }
+        ASSERT_FALSE(reciprocal_values.empty());
+        const std::size_t dimension = reciprocal_values.size();
+        std::vector<Complex> metric(dimension * dimension, Complex(0.0, 0.0));
+        const double delta_omega = ucell.omega / static_cast<double>(bloch_pw.nxyz);
+        for (std::size_t left = 0; left != dimension; ++left)
+        {
+            for (std::size_t right = 0; right != dimension; ++right)
+            {
+                const Complex reciprocal_overlap
+                    = inner_product(reciprocal_values[left], reciprocal_values[right], 1.0);
+                const Complex grid_overlap = inner_product(grid_values[left], grid_values[right], delta_omega);
+                expect_complex_near(grid_overlap, reciprocal_overlap);
+                metric[left * dimension + right] = reciprocal_overlap;
+            }
+        }
+        for (std::size_t left = 0; left != dimension; ++left)
+        {
+            for (std::size_t right = 0; right != dimension; ++right)
+            {
+                expect_complex_near(metric[left * dimension + right],
+                                    std::conj(metric[right * dimension + left]));
+            }
+        }
+        metrics.push_back(std::move(metric));
+    }
+
+    ASSERT_EQ(metrics.size(), 2U);
+    ASSERT_EQ(metrics[0].size(), metrics[1].size());
+    double maximum_difference = 0.0;
+    for (std::size_t index = 0; index != metrics[0].size(); ++index)
+    {
+        maximum_difference = std::max(maximum_difference, std::abs(metrics[0][index] - metrics[1][index]));
+    }
+    EXPECT_GT(maximum_difference, 1.0e-8);
 }
 
 TEST_F(SternheimerSIABPrimitivesTest, RecoversNormalizedCoefficientsFromPhysicalGridValues)
@@ -641,10 +727,11 @@ std::complex<double>* Structure_Factor::get_sk(const int ik_in,
     std::complex<double>* sk = new std::complex<double>[npw];
     for (int ig = 0; ig < npw; ++ig)
     {
-        const ModuleBase::Vector3<double> gdirect = wfc_basis->getgdirect(ik_in, ig);
+        const ModuleBase::Vector3<double> gplusk_direct
+            = wfc_basis->getgdirect(ik_in, ig) + wfc_basis->kvec_d[ik_in];
         const ModuleBase::Vector3<double> shifted_tau
             = atom_tau + ModuleBase::Vector3<double>(0.013 * it, 0.017 * ia, 0.0);
-        sk[ig] = std::exp(Complex(0.0, -ModuleBase::TWO_PI * (gdirect * shifted_tau)));
+        sk[ig] = std::exp(Complex(0.0, -ModuleBase::TWO_PI * (gplusk_direct * shifted_tau)));
     }
     return sk;
 }

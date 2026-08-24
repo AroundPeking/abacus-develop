@@ -32,6 +32,14 @@ double periodic_sternheimer_kpoint_distance(const SternheimerReducedKPoint& lhs,
 std::complex<double> sternheimer_bloch_phase(const SternheimerReducedKPoint& kpoint,
                                              const std::array<int, 3>& lattice_translation);
 
+// PW_Basis_K transforms the cell-periodic part u_k(r), while the FD solver
+// stores the full Bloch function psi_k(r) with twisted boundary conditions.
+std::vector<std::complex<double>> remove_sternheimer_bloch_phase(const std::vector<std::complex<double>>& bloch_values,
+                                                                 int nx,
+                                                                 int ny,
+                                                                 int nz,
+                                                                 const SternheimerReducedKPoint& kpoint);
+
 std::vector<SternheimerKQPair> build_sternheimer_kq_map(const std::vector<SternheimerReducedKPoint>& kpoints,
                                                         const SternheimerReducedKPoint& qpoint,
                                                         double tolerance = 1.0e-10);
