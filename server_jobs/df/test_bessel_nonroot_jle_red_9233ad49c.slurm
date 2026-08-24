@@ -24,9 +24,9 @@ test_binary=$build_root/source/source_io/test/MODULE_IO_bessel_basis_test
 test "$SLURM_JOB_PARTITION" = p1
 test "$SLURM_CPUS_PER_TASK" = 40
 test -s "$bundle"
-git -C "$source_root" fetch "$bundle" "$commit"
-git -C "$source_root" checkout --detach "$commit"
-test "$(git -C "$source_root" rev-parse HEAD)" = "$commit"
+/usr/bin/git -C "$source_root" fetch "$bundle" "$commit"
+/usr/bin/git -C "$source_root" checkout --detach "$commit"
+test "$(/usr/bin/git -C "$source_root" rev-parse HEAD)" = "$commit"
 
 cmake --build "$build_root" --target MODULE_IO_bessel_basis_test -j "$SLURM_CPUS_PER_TASK"
 test -x "$test_binary"
