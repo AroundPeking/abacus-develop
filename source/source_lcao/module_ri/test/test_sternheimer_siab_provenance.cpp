@@ -77,6 +77,41 @@ TEST(SternheimerSIABProvenance, UniqueFileManifestIgnoresRepeatedAuxiliaryBasisC
     EXPECT_THROW(siab::sha256_unique_file_manifest({}), std::invalid_argument);
 }
 
+TEST(SternheimerSIABProvenance, HashesProductPcaAuxiliaryBasisWithoutExplicitFiles)
+{
+    const std::string orbital_sha256(64, 'a');
+    const std::string hash
+        = siab::sha256_auxiliary_basis_definition(orbital_sha256, 1.0e-4, 2.0, {});
+
+    EXPECT_EQ(hash.size(), 64U);
+    EXPECT_EQ(hash,
+              siab::sha256_auxiliary_basis_definition(orbital_sha256, 1.0e-4, 2.0, {}));
+    EXPECT_NE(hash,
+              siab::sha256_auxiliary_basis_definition(std::string(64, 'b'), 1.0e-4, 2.0, {}));
+    EXPECT_NE(hash,
+              siab::sha256_auxiliary_basis_definition(orbital_sha256, 1.0e-5, 2.0, {}));
+    EXPECT_NE(hash,
+              siab::sha256_auxiliary_basis_definition(orbital_sha256, 1.0e-4, 3.0, {}));
+}
+
+TEST(SternheimerSIABProvenance, IncludesOnlySuppliedExplicitAuxiliaryFiles)
+{
+    const TemporaryFile explicit_abfs("sternheimer_siab_explicit_abfs.tmp", "explicit auxiliary basis");
+    const std::string orbital_sha256(64, 'a');
+    const std::string product_only
+        = siab::sha256_auxiliary_basis_definition(orbital_sha256, 1.0e-4, 2.0, {});
+    const std::string product_plus_explicit
+        = siab::sha256_auxiliary_basis_definition(orbital_sha256, 1.0e-4, 2.0, {explicit_abfs.path()});
+
+    EXPECT_NE(product_only, product_plus_explicit);
+    EXPECT_THROW(siab::sha256_auxiliary_basis_definition("not-a-sha256", 1.0e-4, 2.0, {}),
+                 std::invalid_argument);
+    EXPECT_THROW(siab::sha256_auxiliary_basis_definition(orbital_sha256, -1.0, 2.0, {}),
+                 std::invalid_argument);
+    EXPECT_THROW(siab::sha256_auxiliary_basis_definition(orbital_sha256, 1.0e-4, 0.0, {}),
+                 std::invalid_argument);
+}
+
 TEST(SternheimerSIABProvenance, ResolvesExplicitFilesWithoutPlaceholders)
 {
     const TemporaryFile file("sternheimer_siab_resolve.tmp", "x");

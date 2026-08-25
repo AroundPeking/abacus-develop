@@ -34,6 +34,10 @@ std::string sha256_bytes(const std::vector<unsigned char>& bytes);
 std::string sha256_file(const std::string& path);
 std::string sha256_file_manifest(const std::vector<std::string>& paths);
 std::string sha256_unique_file_manifest(const std::vector<std::string>& paths);
+std::string sha256_auxiliary_basis_definition(const std::string& orbital_sha256,
+                                              double pca_threshold,
+                                              double kmesh_times,
+                                              const std::vector<std::string>& explicit_abfs_paths);
 
 std::vector<std::string> resolve_required_input_files(const std::string& directory,
                                                       const std::vector<std::string>& filenames,
