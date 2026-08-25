@@ -1,6 +1,3 @@
-Exit code: 0
-Wall time: 0.1 seconds
-Output:
 #!/bin/bash
 #SBATCH --job-name=st_gridv_build
 #SBATCH --partition=p1
