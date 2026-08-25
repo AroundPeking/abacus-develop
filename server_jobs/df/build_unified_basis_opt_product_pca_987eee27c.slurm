@@ -13,6 +13,7 @@ set -euo pipefail
 trap 'status=$?; echo "UNIFIED_BASIS_OPT_PRODUCT_PCA_BUILD_FAILED line=$LINENO command=$BASH_COMMAND status=$status" >&2; exit $status' ERR
 
 module load cmake/3.31.7
+module load git/2.50.0
 module load oneapi/2024.2
 
 root=/data/home/df_iopcas_ghj/app/abacus/unified-basis-opt-product-pca-987eee27c-20260825
