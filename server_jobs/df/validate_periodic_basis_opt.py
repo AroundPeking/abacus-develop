@@ -153,6 +153,14 @@ def sampled_whitening_error(metric, transform, raw_dimension, retained_rank):
     return maximum
 
 
+def whitening_probe_limit(retained_rank, declared_max_element_error):
+    # For E = T^*VT-I, ||Ev||_inf <= rank * max_ij|E_ij| * ||v||_inf.
+    return max(
+        1.0e-8,
+        retained_rank * declared_max_element_error + 1.0e-12,
+    )
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("dataset")
@@ -191,13 +199,12 @@ def main():
     metric_hermitian_error = hermitian_relative_error(metric, raw_dimension)
     whitening_error = sampled_whitening_error(metric, transform, raw_dimension, retained_rank)
     declared_whitening_error = float(metadata["coulomb_max_orthonormality_error"][0])
-    whitening_probe_limit = max(
-        1.0e-8,
-        math.sqrt(retained_rank) * declared_whitening_error + 1.0e-12,
+    whitening_probe_limit_value = whitening_probe_limit(
+        retained_rank, declared_whitening_error
     )
     if (metric_hermitian_error > 1.0e-10
             or declared_whitening_error > 1.0e-8
-            or whitening_error > whitening_probe_limit):
+            or whitening_error > whitening_probe_limit_value):
         raise RuntimeError("full-Coulomb whitening gate failed")
 
     reference_response_hermitian_error = 0.0
@@ -266,7 +273,7 @@ def main():
         "metric_hermitian_relative_error": metric_hermitian_error,
         "declared_whitening_max_error": declared_whitening_error,
         "sampled_whitening_max_error": whitening_error,
-        "sampled_whitening_limit": whitening_probe_limit,
+        "sampled_whitening_limit": whitening_probe_limit_value,
         "reference_response_hermitian_relative_error": reference_response_hermitian_error,
         "overlap_hermitian_relative_error": overlap_hermitian_error,
         "hamiltonian_hermitian_relative_error": hamiltonian_hermitian_error,
