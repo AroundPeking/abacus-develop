@@ -29,6 +29,8 @@ test "$SLURM_CPUS_PER_TASK" = 40
 test -x "$abacus"
 test "$(sha256sum "$abacus" | awk '{print $1}')" = "$executable_sha256"
 test "$(sha256sum "$root/validate_periodic_basis_opt.py" | awk '{print $1}')" = "$validator_sha256"
+grep -Eq 'double kmesh_times[[:space:]]*=[[:space:]]*4;' \
+  "$root/source/source/source_hamilt/module_xc/exx_info.h"
 test ! -e "$work"
 mkdir -p "$work"
 cp -a "$root/gate-template-product-pca/." "$work/"
@@ -87,7 +89,7 @@ digest = hashlib.sha256()
 digest.update(b"ABACUS_STERNHEIMER_AUXILIARY_BASIS_DEFINITION_V1")
 digest.update(orbital_sha256.encode("ascii"))
 digest.update(struct.pack(">d", 1.0e-4))
-digest.update(struct.pack(">d", 1.0))
+digest.update(struct.pack(">d", 4.0))
 digest.update(struct.pack(">Q", 0))
 expected_auxiliary_sha256 = digest.hexdigest()
 
@@ -117,6 +119,7 @@ print(json.dumps({
     "auxiliary_basis_source": scalar("auxiliary_basis_source"),
     "auxiliary_basis_sha256": scalar("auxiliary_basis_sha256"),
     "expected_auxiliary_basis_sha256": expected_auxiliary_sha256,
+    "auxiliary_construction_kmesh_times": 4.0,
     "raw_auxiliary_dimension": raw_dimension,
     "whitened_auxiliary_rank": retained_rank,
 }, sort_keys=True))
