@@ -21,6 +21,8 @@ build_job=3117942
 abacus=$root/artifacts/job$build_job/abacus_3p
 source_commit=711af860c125b9757c344a1961b63524c550cfe4
 expected_abacus_sha=5a7ab8f2fc14424c8b47c5a9cbe22d1784016140cc9fa302f7e032662eed58b2
+validator_commit=fa71b5a62dfd4ccb3b57c2907201d8c4bc3adae1
+expected_validator_sha=75584eeca1471e1121e1c3de000439029e3917decdf674c29ffa0846054f28e3
 orbital_sha256=7ba114ee382d50ed831a0c90919ce291f97a08075e0e18851977d3217597289d
 pseudopotential_sha256=e95d682a8b918557fb57e2e0ec11b2f48cf693cb72a11d078cf07ec489a8fa99
 storage_probe_job=3118401
@@ -42,6 +44,7 @@ test "$SLURM_NTASKS_PER_NODE" = 1
 test "$SLURM_CPUS_PER_TASK" = 40
 test -x "$abacus"
 test "$(sha256sum "$abacus" | awk '{print $1}')" = "$expected_abacus_sha"
+test "$(sha256sum "$root/validate_periodic_basis_opt.py" | awk '{print $1}')" = "$expected_validator_sha"
 grep -Fq "$source_commit" "$root/artifacts/job$build_job/commit_metadata.txt"
 grep -Eq 'double kmesh_times[[:space:]]*=[[:space:]]*4;' \
   "$root/source/source/source_hamilt/module_xc/exx_info.h"
@@ -104,6 +107,7 @@ unset ABACUS_STERNHEIMER_FD_ST_SOLVER_TOL
   echo purpose=$purpose
   echo abacus_commit=$source_commit
   echo build_job=$build_job
+  echo validator_commit=$validator_commit
   echo storage_filesystem=data_gpfs
   echo storage_probe_job=$storage_probe_job
   echo run_tag=$run_tag
