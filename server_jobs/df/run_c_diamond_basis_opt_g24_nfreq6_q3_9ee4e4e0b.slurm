@@ -1,0 +1,123 @@
+#!/bin/bash
+#SBATCH --job-name=c24_pi_nf6_q3
+#SBATCH --partition=p1
+#SBATCH --nodes=48
+#SBATCH --ntasks=48
+#SBATCH --ntasks-per-node=1
+#SBATCH --cpus-per-task=40
+#SBATCH --mem=190000
+#SBATCH --time=1-00:00:00
+#SBATCH --output=/data/home/df_iopcas_ghj/app/abacus/unified-basis-opt-1474d95c2-20260825/logs/c24-pi-nf6-q3-%j.out
+#SBATCH --error=/data/home/df_iopcas_ghj/app/abacus/unified-basis-opt-1474d95c2-20260825/logs/c24-pi-nf6-q3-%j.err
+
+set -euo pipefail
+trap 'status=$?; echo "C_DIAMOND_G24_NFREQ6_Q3_FAILED line=$LINENO command=$BASH_COMMAND status=$status" >&2; exit $status' ERR
+
+module load oneapi/2024.2
+
+root=/data/home/df_iopcas_ghj/app/abacus/unified-basis-opt-1474d95c2-20260825
+build_job=3110409
+abacus=$root/artifacts/job$build_job/abacus_3p
+source_commit=9ee4e4e0b72dd1c9441a688fb57712f714e33e5b
+expected_abacus_sha=67beeb675fd80ff21160d874352b2e5b075562b9db07df83a1a9c57675539b3a
+case_root=/ssd/work/df_iopcas_ghj/c-periodic-basis-opt-20260825
+work=$case_root/c-diamond-g24-fd8-nfreq6-q3-9ee4e4e0b-kpar8
+suffix=C_DIAMOND_G24_FD8_NFREQ6_Q3
+
+test "$SLURM_JOB_PARTITION" = p1
+test "$SLURM_NTASKS" = 48
+test "$SLURM_NTASKS_PER_NODE" = 1
+test "$SLURM_CPUS_PER_TASK" = 40
+test -x "$abacus"
+test "$(sha256sum "$abacus" | awk '{print $1}')" = "$expected_abacus_sha"
+grep -Fq "$source_commit" "$root/artifacts/job$build_job/commit.h"
+test ! -e "$work"
+mkdir -p "$work"
+cp -a "$root/gate-template/." "$work/"
+cd "$work"
+
+set_input_key() {
+  local key=$1 value=$2
+  if awk -v key="$key" '$1 == key {found=1} END {exit !found}' INPUT; then
+    sed -i -E "s|^[[:space:]]*${key}[[:space:]]+.*|${key} ${value}|" INPUT
+  else
+    printf '%-36s %s\n' "$key" "$value" >> INPUT
+  fi
+}
+
+sed -i -E 's|^[[:space:]]*2[[:space:]]+2[[:space:]]+2[[:space:]]+0[[:space:]]+0[[:space:]]+0[[:space:]]*$|4 4 4 0 0 0|' KPT
+set_input_key suffix "$suffix"
+set_input_key ecutwfc 45
+set_input_key nx 24
+set_input_key ny 24
+set_input_key nz 24
+set_input_key kpar 8
+set_input_key sternheimer_fd_order 8
+set_input_key sternheimer_nfreq 6
+set_input_key sternheimer_frequency_mpi 1
+set_input_key sternheimer_channel_mpi 0
+set_input_key sternheimer_mpi_layout frequency_grouped
+set_input_key sternheimer_q_index 3
+set_input_key exx_pca_threshold 1e-4
+set_input_key exx_ccp_rmesh_times 1
+set_input_key rpa_ccp_rmesh_times 2
+sed -i -E '/^[[:space:]]*sternheimer_frequency_grid_file[[:space:]]+/d' INPUT
+
+export OMP_NUM_THREADS=$SLURM_CPUS_PER_TASK
+export MKL_NUM_THREADS=1
+export OPENBLAS_NUM_THREADS=1
+export OMP_DYNAMIC=FALSE
+export OMP_PROC_BIND=spread
+export OMP_PLACES=cores
+export OMP_STACKSIZE=2G
+export I_MPI_PIN=1
+export I_MPI_PIN_DOMAIN=omp
+export I_MPI_FABRICS=shm:ofi
+export ABACUS_STERNHEIMER_CHANNEL_THREADS=$OMP_NUM_THREADS
+unset ABACUS_STERNHEIMER_FD_ST_SOLVER_TOL
+
+{
+  echo status=running
+  echo purpose=periodic_c_basis_opt_independent_q_validation
+  echo abacus_commit=$source_commit
+  echo build_job=$build_job
+  echo grid=24,24,24
+  echo ecut_ry=45
+  echo fd_order=8
+  echo kmesh=4,4,4
+  echo response_kpoint_groups=8
+  echo q_index=3
+  echo nfreq=6
+  echo frequency_grid=greenx_minimax
+  echo pca_threshold=1e-4
+  echo exx_ccp_rmesh_times=1
+  echo rpa_ccp_rmesh_times=2
+  echo mpi_layout=frequency_grouped
+  echo mpi_ranks=$SLURM_NTASKS
+  echo omp_threads=$SLURM_CPUS_PER_TASK
+  sha256sum "$abacus" INPUT STRU KPT \
+    C_ONCV_PBE-1.0.upf C_gga_10au_100Ry_3s3p2d.orb C_10au_3s3p2d1f1g_1e-4.abfs
+} > RUN_PROVENANCE.txt
+
+/usr/bin/time -v -o abacus.time \
+  mpirun -np "$SLURM_NTASKS" -ppn "$SLURM_NTASKS_PER_NODE" \
+  "$abacus" > abacus.out 2>&1
+
+dataset=OUT.${suffix}/STERNHEIMER_BASIS_OPT_V1
+test -s OUT.${suffix}/STERNHEIMER_SIAB_STATUS.dat
+grep -qx 'status success' OUT.${suffix}/STERNHEIMER_SIAB_STATUS.dat
+grep -qx 'format basis_opt_v1' OUT.${suffix}/STERNHEIMER_SIAB_STATUS.dat
+grep -qx 'status success' "$dataset/status.dat"
+grep -qx 'all_converged yes' "$dataset/status.dat"
+grep -q '^frequency_count 6$' "$dataset/manifest.dat"
+grep -q '^selected_iq 3$' "$dataset/manifest.dat"
+python3 "$root/validate_periodic_basis_opt.py" \
+  "$dataset" --commit "$source_commit" | tee BASIS_OPT_VALIDATION.json
+find "$dataset" -maxdepth 1 -type f -print0 | sort -z | xargs -0 sha256sum > OUTPUT_SHA256.txt
+{
+  echo status=success
+  sed -n 's/^[[:space:]]*Elapsed (wall clock) time (h:mm:ss or m:ss):[[:space:]]*/wall_clock=/p' abacus.time
+  du -sh "$dataset"
+} >> RUN_PROVENANCE.txt
+
+echo "C_DIAMOND_G24_NFREQ6_Q3_OK work=$work"
