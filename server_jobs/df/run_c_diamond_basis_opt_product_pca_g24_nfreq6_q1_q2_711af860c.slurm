@@ -29,15 +29,20 @@ storage_probe_job=3118401
 storage_probe=$root/gates/gpfs-write-probe/job$storage_probe_job
 run_tag=${STERNHEIMER_RUN_TAG:-retry1}
 case_root=$root/runs/c-periodic-basis-opt-product-pca-20260825/$run_tag
-iq=${SLURM_ARRAY_TASK_ID:?missing q index}
-work=$case_root/c-diamond-g24-fd8-nfreq6-q${iq}-product-pca-711af860c-kpar8-$run_tag
-suffix=C_DIAMOND_G24_FD8_NFREQ6_Q${iq}_PRODUCT_PCA
+qstar_ordinal=${SLURM_ARRAY_TASK_ID:?missing q-star ordinal}
 
-case "$iq" in
+case "$qstar_ordinal" in
+  1) full_q_index=1 ;;
+  2) full_q_index=22 ;;
+  3) full_q_index=43 ;;
+  *) echo "unsupported q-star ordinal: $qstar_ordinal" >&2; exit 2 ;;
+esac
+case "$qstar_ordinal" in
   1|2) purpose=periodic_c_basis_opt_product_pca_multifrequency_q_training ;;
   3) purpose=periodic_c_basis_opt_product_pca_independent_q_holdout ;;
-  *) echo "unsupported q index: $iq" >&2; exit 2 ;;
 esac
+work=$case_root/c-diamond-g24-fd8-nfreq6-q${qstar_ordinal}-product-pca-711af860c-kpar8-$run_tag
+suffix=C_DIAMOND_G24_FD8_NFREQ6_Q${qstar_ordinal}_PRODUCT_PCA
 test "$SLURM_JOB_PARTITION" = p1
 test "$SLURM_NTASKS" = 48
 test "$SLURM_NTASKS_PER_NODE" = 1
@@ -76,7 +81,7 @@ set_input_key sternheimer_nfreq 6
 set_input_key sternheimer_frequency_mpi 1
 set_input_key sternheimer_channel_mpi 0
 set_input_key sternheimer_mpi_layout frequency_grouped
-set_input_key sternheimer_q_index "$iq"
+set_input_key sternheimer_q_index "$full_q_index"
 set_input_key exx_pca_threshold 1e-4
 set_input_key exx_ccp_rmesh_times 1
 set_input_key rpa_ccp_rmesh_times 2
@@ -116,7 +121,9 @@ unset ABACUS_STERNHEIMER_FD_ST_SOLVER_TOL
   echo fd_order=8
   echo kmesh=4,4,4
   echo response_kpoint_groups=8
-  echo q_index=$iq
+  echo q_star_ordinal=$qstar_ordinal
+  echo full_q_index=$full_q_index
+  echo canonical_full_q_indices=1,22,43,6,27,23,11,55
   echo nfreq=6
   echo frequency_grid=greenx_minimax
   echo auxiliary_basis_source=product_pca
@@ -150,7 +157,7 @@ grep -qx 'status success' "$dataset/status.dat"
 grep -qx 'all_converged yes' "$dataset/status.dat"
 grep -qx 'auxiliary_basis_source product_pca' "$dataset/manifest.dat"
 grep -qx 'frequency_count 6' "$dataset/manifest.dat"
-grep -qx "selected_iq $iq" "$dataset/manifest.dat"
+grep -qx "selected_iq $full_q_index" "$dataset/manifest.dat"
 
 python3 "$root/validate_periodic_basis_opt.py" \
   "$dataset" --commit "$source_commit" | tee BASIS_OPT_VALIDATION.json
@@ -216,4 +223,4 @@ find "$dataset" -maxdepth 1 -type f -print0 | sort -z | xargs -0 sha256sum > OUT
   du -sh "$dataset"
 } >> RUN_PROVENANCE.txt
 
-echo "C_DIAMOND_PRODUCT_PCA_G24_NFREQ6_OK q=$iq work=$work"
+echo "C_DIAMOND_PRODUCT_PCA_G24_NFREQ6_OK qstar=$qstar_ordinal full_q=$full_q_index work=$work"
