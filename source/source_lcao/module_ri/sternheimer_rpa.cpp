@@ -31,6 +31,7 @@ namespace
 constexpr std::int32_t kChi0V1Marker = -41073291;
 constexpr std::int32_t kChi0V1ComplexFlag = 1;
 constexpr std::int32_t kCoulombV1Marker = -20129433;
+constexpr std::int32_t kCoulombV1ComplexFlag = 1;
 
 void assert_same_size(const SternheimerRPA::Vector& lhs, const SternheimerRPA::Vector& rhs, const char* context)
 {
@@ -366,6 +367,128 @@ struct CoulombFileBlock
 };
 
 } // namespace
+
+void SternheimerRPA::write_coulomb_v1_file(const std::string& filename,
+                                           const int iq,
+                                           const std::vector<int>& atom_naux,
+                                           const std::vector<Complex>& coulomb_matrix)
+{
+    if (filename.empty() || iq <= 0 || atom_naux.empty())
+    {
+        throw std::invalid_argument(
+            "Sternheimer Coulomb v1 output requires a filename, positive iq, and atom auxiliary sizes.");
+    }
+    const int naux = sum_positive_sizes(atom_naux, "Sternheimer Coulomb v1 atom_naux");
+    const std::size_t matrix_size = checked_mul_size(static_cast<std::size_t>(naux),
+                                                     static_cast<std::size_t>(naux),
+                                                     "Sternheimer Coulomb v1 matrix size");
+    if (coulomb_matrix.size() != matrix_size)
+    {
+        throw std::invalid_argument("Sternheimer Coulomb v1 matrix size mismatch.");
+    }
+
+    std::vector<Complex> hermitian_matrix(matrix_size, Complex(0.0, 0.0));
+    double norm_squared = 0.0;
+    double antihermitian_norm_squared = 0.0;
+    for (int row = 0; row != naux; ++row)
+    {
+        for (int col = 0; col != naux; ++col)
+        {
+            const Complex value = coulomb_matrix[static_cast<std::size_t>(row) * naux + col];
+            const Complex adjoint = std::conj(coulomb_matrix[static_cast<std::size_t>(col) * naux + row]);
+            if (!std::isfinite(value.real()) || !std::isfinite(value.imag()))
+            {
+                throw std::invalid_argument("Sternheimer Coulomb v1 matrix contains a non-finite value.");
+            }
+            norm_squared += std::norm(value);
+            antihermitian_norm_squared += std::norm(value - adjoint);
+            hermitian_matrix[static_cast<std::size_t>(row) * naux + col] = 0.5 * (value + adjoint);
+        }
+    }
+    const double relative_antihermitian_error
+        = std::sqrt(antihermitian_norm_squared / std::max(norm_squared, std::numeric_limits<double>::min()));
+    if (relative_antihermitian_error > 1.0e-10)
+    {
+        throw std::invalid_argument("Sternheimer Coulomb v1 matrix is not Hermitian within tolerance.");
+    }
+
+    std::vector<int> atom_starts(atom_naux.size(), 0);
+    for (std::size_t atom = 1; atom != atom_naux.size(); ++atom)
+    {
+        atom_starts[atom] = atom_starts[atom - 1] + atom_naux[atom - 1];
+    }
+    const std::size_t natom = atom_naux.size();
+    std::vector<Chi0Block> blocks;
+    blocks.reserve(natom * (natom + 1) / 2);
+    for (std::size_t iatom = 0; iatom != natom; ++iatom)
+    {
+        for (std::size_t jatom = iatom; jatom != natom; ++jatom)
+        {
+            Chi0Block block;
+            block.pair_index = checked_i32_from_size(upper_triangular_pair_index(iatom, jatom, natom),
+                                                     "Sternheimer Coulomb v1 atom-pair index");
+            const int inaux = atom_naux[iatom];
+            const int jnaux = atom_naux[jatom];
+            block.payload.reserve(static_cast<std::size_t>(inaux) * static_cast<std::size_t>(jnaux));
+            for (int imu = 0; imu != inaux; ++imu)
+            {
+                const int iglobal = atom_starts[iatom] + imu;
+                for (int jmu = 0; jmu != jnaux; ++jmu)
+                {
+                    const int jglobal = atom_starts[jatom] + jmu;
+                    block.payload.push_back(hermitian_matrix[static_cast<std::size_t>(iglobal) * naux + jglobal]);
+                }
+            }
+            blocks.push_back(std::move(block));
+        }
+    }
+
+    const std::int32_t nblocks = checked_i32_from_size(blocks.size(), "Sternheimer Coulomb v1 block count");
+    std::int64_t offset = 6 * static_cast<std::int64_t>(sizeof(std::int32_t))
+                          + static_cast<std::int64_t>(atom_naux.size() * sizeof(std::int32_t))
+                          + static_cast<std::int64_t>(blocks.size())
+                                * static_cast<std::int64_t>(sizeof(std::int32_t) + sizeof(std::int64_t));
+    for (Chi0Block& block: blocks)
+    {
+        block.offset = offset;
+        const std::size_t bytes
+            = checked_mul_size(block.payload.size(), sizeof(Complex), "Sternheimer Coulomb v1 block payload");
+        offset += checked_i64_from_size(bytes, "Sternheimer Coulomb v1 block payload");
+    }
+
+    static_assert(sizeof(Complex) == 2 * sizeof(double),
+                  "Sternheimer Coulomb v1 output expects complex<double> as two doubles.");
+    std::ofstream out(filename.c_str(), std::ios::out | std::ios::binary | std::ios::trunc);
+    if (!out.good())
+    {
+        throw std::runtime_error("Failed to open " + filename);
+    }
+    const std::int32_t iq_i32 = iq;
+    const std::int32_t naux_i32 = naux;
+    const std::int32_t natom_i32 = checked_i32_from_size(natom, "Sternheimer Coulomb v1 atom count");
+    write_scalar(out, kCoulombV1Marker, filename);
+    write_scalar(out, iq_i32, filename);
+    write_scalar(out, naux_i32, filename);
+    write_scalar(out, kCoulombV1ComplexFlag, filename);
+    write_scalar(out, natom_i32, filename);
+    write_scalar(out, nblocks, filename);
+    for (const int atom_aux: atom_naux)
+    {
+        const std::int32_t atom_aux_i32 = atom_aux;
+        write_scalar(out, atom_aux_i32, filename);
+    }
+    for (const Chi0Block& block: blocks)
+    {
+        const std::int32_t pair_index = block.pair_index;
+        write_scalar(out, pair_index, filename);
+        write_scalar(out, block.offset, filename);
+    }
+    for (const Chi0Block& block: blocks)
+    {
+        checked_write(out, block.payload.data(), block.payload.size() * sizeof(Complex), filename);
+    }
+    out.close();
+}
 
 SternheimerRPA::CoulombV1Matrix SternheimerRPA::read_coulomb_v1_files(
     const std::vector<std::string>& filenames)

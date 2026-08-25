@@ -191,6 +191,11 @@ class SternheimerRPA
                                    const std::vector<AuxiliaryChannel>& channels,
                                    const std::vector<Complex>& chi0_matrix);
 
+    static void write_coulomb_v1_file(const std::string& filename,
+                                      int iq,
+                                      const std::vector<int>& atom_naux,
+                                      const std::vector<Complex>& coulomb_matrix);
+
     static CoulombV1Matrix read_coulomb_v1_files(const std::vector<std::string>& filenames);
 
     static Complex local_grid_dot(const Vector& lhs, const Vector& rhs, double grid_weight);

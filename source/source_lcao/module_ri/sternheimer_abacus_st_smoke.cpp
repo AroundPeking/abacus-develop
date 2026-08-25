@@ -2947,6 +2947,14 @@ void run_sternheimer_periodic_lcao_chi0_output(
             periodic_abfs.potentials,
             complex_whitening.transform,
             complex_whitening.retained_rank);
+        if (GlobalV::MY_RANK == 0 && !use_supercell_translation_sum)
+        {
+            SternheimerRPA::write_coulomb_v1_file("v1_coulomb_grid_iq_" + std::to_string(response_plan.iq)
+                                                      + "_rank0.dat",
+                                                  response_plan.iq,
+                                                  atom_auxiliary_sizes(periodic_abfs.densities, ucell.nat),
+                                                  full_coulomb_metric);
+        }
     }
     const std::vector<SternheimerABFBlochGridChannel>& channels
         = write_basis_opt ? whitened_channels : periodic_abfs.potentials;
@@ -3029,6 +3037,11 @@ void run_sternheimer_periodic_lcao_chi0_output(
             out << "periodic_gamma_projection_relative_error " << gamma_projection_relative_error << '\n';
             out << "periodic_gamma_limit constant_mode_only_no_headwing\n";
             out << "perturbation_ccp_rmesh_times_used no\n";
+            if (write_basis_opt && !use_supercell_translation_sum)
+            {
+                out << "grid_coulomb_v1_file v1_coulomb_grid_iq_" << response_plan.iq << "_rank0.dat\n";
+                out << "grid_coulomb_v1_kernel exact_rhs_full_periodic_poisson\n";
+            }
         }
     }
     if (sternheimer_abfs_diag_only_enabled())
@@ -4629,6 +4642,11 @@ void run_sternheimer_periodic_lcao_chi0_output(
     out << "periodic_gamma_limit "
         << (gamma_qpoint ? "constant_mode_only_no_headwing" : "not_applicable") << '\n';
     out << "perturbation_ccp_rmesh_times_used no\n";
+    if (write_basis_opt && !use_supercell_translation_sum)
+    {
+        out << "grid_coulomb_v1_file v1_coulomb_grid_iq_" << response_plan.iq << "_rank0.dat\n";
+        out << "grid_coulomb_v1_kernel exact_rhs_full_periodic_poisson\n";
+    }
     out << "supercell_translation_perturbation " << (use_supercell_translation_sum ? "yes" : "no") << '\n';
     out << "supercell_translation_full_response " << (full_supercell_response ? "yes" : "no") << '\n';
     out << "supercell_abfs_root_build_broadcast "

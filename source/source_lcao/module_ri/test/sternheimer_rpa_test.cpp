@@ -253,6 +253,41 @@ TEST(SternheimerRPA, ReadsCoulombV1BlocksAcrossRankFiles)
     }
 }
 
+TEST(SternheimerRPA, WritesGridCoulombV1RoundTrip)
+{
+    const std::string filename = ::testing::TempDir() + "/sternheimer_grid_coulomb_v1.dat";
+    const std::vector<Complex> matrix = {Complex(4.0, 0.0),
+                                         Complex(1.0, 2.0),
+                                         Complex(2.0, -0.5),
+                                         Complex(1.0, -2.0),
+                                         Complex(3.0, 0.0),
+                                         Complex(-1.0, 1.5),
+                                         Complex(2.0, 0.5),
+                                         Complex(-1.0, -1.5),
+                                         Complex(5.0, 0.0)};
+
+    ModuleRI::SternheimerRPA::write_coulomb_v1_file(filename, 22, {1, 2}, matrix);
+    const auto roundtrip = ModuleRI::SternheimerRPA::read_coulomb_v1_files({filename});
+
+    EXPECT_EQ(roundtrip.iq, 22);
+    EXPECT_EQ(roundtrip.atom_naux, std::vector<int>({1, 2}));
+    ASSERT_EQ(roundtrip.values.size(), matrix.size());
+    for (std::size_t index = 0; index != matrix.size(); ++index)
+    {
+        EXPECT_NEAR(roundtrip.values[index].real(), matrix[index].real(), 1.0e-14);
+        EXPECT_NEAR(roundtrip.values[index].imag(), matrix[index].imag(), 1.0e-14);
+    }
+    std::remove(filename.c_str());
+}
+
+TEST(SternheimerRPA, RejectsNonHermitianGridCoulombV1)
+{
+    const std::string filename = ::testing::TempDir() + "/sternheimer_bad_grid_coulomb_v1.dat";
+    const std::vector<Complex> matrix = {Complex(1.0, 0.0), Complex(1.0, 0.0), Complex(0.0, 0.0), Complex(1.0, 0.0)};
+    EXPECT_THROW(ModuleRI::SternheimerRPA::write_coulomb_v1_file(filename, 1, {2}, matrix), std::invalid_argument);
+    std::remove(filename.c_str());
+}
+
 TEST(SternheimerRPA, ProjectOutSubspace)
 {
     const std::vector<Vector> occupied
