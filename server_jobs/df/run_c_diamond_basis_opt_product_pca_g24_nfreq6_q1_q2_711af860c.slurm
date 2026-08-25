@@ -29,7 +29,8 @@ work=$case_root/c-diamond-g24-fd8-nfreq6-q${iq}-product-pca-711af860c-kpar8
 suffix=C_DIAMOND_G24_FD8_NFREQ6_Q${iq}_PRODUCT_PCA
 
 case "$iq" in
-  1|2) ;;
+  1|2) purpose=periodic_c_basis_opt_product_pca_multifrequency_q_training ;;
+  3) purpose=periodic_c_basis_opt_product_pca_independent_q_holdout ;;
   *) echo "unsupported q index: $iq" >&2; exit 2 ;;
 esac
 test "$SLURM_JOB_PARTITION" = p1
@@ -95,7 +96,7 @@ unset ABACUS_STERNHEIMER_FD_ST_SOLVER_TOL
 
 {
   echo status=running
-  echo purpose=periodic_c_basis_opt_product_pca_multifrequency_q_training
+  echo purpose=$purpose
   echo abacus_commit=$source_commit
   echo build_job=$build_job
   echo grid=24,24,24
