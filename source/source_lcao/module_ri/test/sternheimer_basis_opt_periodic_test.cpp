@@ -186,6 +186,7 @@ TEST(SternheimerBasisOptPeriodic, ManifestRejectsDuplicateRecordsAndWritesDeterm
     const std::vector<char> manifest_bytes = read_bytes(manifest_a);
     const std::string manifest_text(manifest_bytes.begin(), manifest_bytes.end());
     EXPECT_NE(manifest_text.find("selected_iq 1\n"), std::string::npos);
+    EXPECT_NE(manifest_text.find("auxiliary_basis_source product_pca\n"), std::string::npos);
     EXPECT_NE(manifest_text.find("primitive_blocks_sha256 7777777777777777"), std::string::npos);
     EXPECT_NE(manifest_text.find("qpoint 0.00000000000000000e+00"), std::string::npos);
     EXPECT_NE(manifest_text.find("frequency 0 7.50000000000000000e-01 1.25000000000000000e-01"),
