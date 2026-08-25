@@ -914,7 +914,8 @@ std::string make_periodic_basis_opt_physics_hash(
            << "ABACUS_STERNHEIMER_BASIS_OPT_PHYSICS_V1\n"
            << manifest.abacus_commit << '\n' << manifest.executable_sha256 << '\n'
            << manifest.orbital_sha256 << '\n' << manifest.pseudopotential_sha256 << '\n'
-           << manifest.auxiliary_basis_sha256 << '\n' << manifest.primitive_blocks_sha256 << '\n'
+           << manifest.auxiliary_basis_source << '\n' << manifest.auxiliary_basis_sha256 << '\n'
+           << manifest.primitive_blocks_sha256 << '\n'
            << manifest.coulomb_transform_sha256 << '\n'
            << PARAM.inp.ecutwfc << ' ' << PARAM.inp.sternheimer_fd_order << ' '
            << pca_threshold << ' ' << solver_tolerance << ' ' << solver_max_iter << ' '
@@ -2776,6 +2777,8 @@ void run_sternheimer_periodic_lcao_chi0_output(
         = positive_double_from_env(kSolverToleranceEnv, default_sternheimer_solver_tolerance());
     const int solver_max_iter = positive_int_from_env(kSolverMaxIterEnv, 300);
     const double pca_threshold = nonnegative_double_from_env(kPCAThresholdEnv, PARAM.inp.exx_pca_threshold);
+    const std::string abfs_source
+        = sternheimer_abfs_perturbation_source(GlobalC::exx_info.info_ri.files_abfs);
     const double ccp_rmesh_times = positive_double_from_env(kCCPRmeshTimesEnv, PARAM.inp.rpa_ccp_rmesh_times);
     const int max_channels = positive_int_from_env(kChannelsEnv, -1);
     const int max_bands = positive_int_from_env(kBandsEnv, -1);
@@ -3013,6 +3016,7 @@ void run_sternheimer_periodic_lcao_chi0_output(
                 << response_plan.qpoint[2] << '\n';
             out << "grid " << grid_data.grid.nx << ' ' << grid_data.grid.ny << ' ' << grid_data.grid.nz
                 << " size " << grid_data.grid.size() << " dV " << grid_data.volume_element << '\n';
+            out << "abfs_source " << abfs_source << '\n';
             out << "abfs_channels " << num_channels << '\n';
             out << "perturbation_coulomb_kernel full_periodic_poisson\n";
             out << "periodic_kmesh " << response_kmesh[0] << ' ' << response_kmesh[1] << ' '
@@ -4231,6 +4235,7 @@ void run_sternheimer_periodic_lcao_chi0_output(
             PARAM.inp.pseudo_dir, ucell.pseudo_fn, "pseudopotential");
         manifest.orbital_sha256 = siab::sha256_file_manifest(orbital_paths);
         manifest.pseudopotential_sha256 = siab::sha256_file_manifest(pseudopotential_paths);
+        manifest.auxiliary_basis_source = abfs_source;
         manifest.auxiliary_basis_sha256 = siab::sha256_auxiliary_basis_definition(
             manifest.orbital_sha256,
             pca_threshold,
@@ -4609,6 +4614,7 @@ void run_sternheimer_periodic_lcao_chi0_output(
     }
     out << "transition_window_Ha " << transition_window.emin_ha << ' ' << transition_window.emax_ha << '\n';
     out << "pca_threshold " << pca_threshold << '\n';
+    out << "abfs_source " << abfs_source << '\n';
     out << "ccp_rmesh_times_input " << ccp_rmesh_times << '\n';
     out << "perturbation_coulomb_kernel full_periodic_poisson\n";
     out << "periodic_kmesh " << response_kmesh[0] << ' ' << response_kmesh[1] << ' '

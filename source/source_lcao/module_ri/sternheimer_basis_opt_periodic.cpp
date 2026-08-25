@@ -573,6 +573,7 @@ void write_manifest_atomic(const std::string& path, const Manifest& manifest)
                << "executable_sha256 " << manifest.executable_sha256 << '\n'
                << "orbital_sha256 " << manifest.orbital_sha256 << '\n'
                << "pseudopotential_sha256 " << manifest.pseudopotential_sha256 << '\n'
+               << "auxiliary_basis_source " << manifest.auxiliary_basis_source << '\n'
                << "auxiliary_basis_sha256 " << manifest.auxiliary_basis_sha256 << '\n'
                << "primitive_blocks_sha256 " << manifest.primitive_blocks_sha256 << '\n'
                << "physics_hash " << manifest.physics_hash << '\n'

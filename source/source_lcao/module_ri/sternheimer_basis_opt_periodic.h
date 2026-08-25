@@ -84,6 +84,7 @@ struct Manifest
     std::string executable_sha256;
     std::string orbital_sha256;
     std::string pseudopotential_sha256;
+    std::string auxiliary_basis_source = "product_pca";
     std::string auxiliary_basis_sha256;
     std::string primitive_blocks_sha256;
     std::string physics_hash;
