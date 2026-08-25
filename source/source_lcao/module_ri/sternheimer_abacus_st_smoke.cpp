@@ -1007,14 +1007,12 @@ std::string orbital_dir_from_env_or_input()
 }
 
 siab::Provenance make_siab_production_provenance(const UnitCell& ucell,
-                                                 const std::string& auxiliary_basis_sha256,
                                                  const SternheimerRPA::FrequencyGrid& frequency_grid,
                                                  const double pca_threshold,
                                                  const SternheimerCoulombWhitening& whitening)
 {
     siab::Provenance provenance;
     provenance.abacus_commit = siab::require_source_commit(compiled_commit_metadata());
-    provenance.auxiliary_basis_sha256 = auxiliary_basis_sha256;
     provenance.cell_bohr = cell_vectors_bohr(ucell);
     provenance.ecut_ry = PARAM.inp.ecutwfc;
     provenance.kernel = "full_coulomb";
@@ -1025,6 +1023,11 @@ siab::Provenance make_siab_production_provenance(const UnitCell& ucell,
     const std::vector<std::string> pseudopotential_files
         = siab::resolve_required_input_files(PARAM.inp.pseudo_dir, ucell.pseudo_fn, "pseudopotential");
     provenance.orbital_sha256 = siab::sha256_file_manifest(orbital_files);
+    provenance.auxiliary_basis_sha256 = siab::sha256_auxiliary_basis_definition(
+        provenance.orbital_sha256,
+        pca_threshold,
+        GlobalC::exx_info.info_ri.kmesh_times,
+        GlobalC::exx_info.info_ri.files_abfs);
     provenance.pseudopotential_sha256 = siab::sha256_file_manifest(pseudopotential_files);
     provenance.spin_convention = "spin_resolved_occupation_in_reference_rows";
     provenance.executable_sha256 = siab::sha256_file(siab::resolve_executable_path());
@@ -2925,11 +2928,6 @@ void run_sternheimer_periodic_lcao_chi0_output(
         throw std::runtime_error("No periodic ABFS full-Coulomb perturbation channels were generated.");
     }
     const int raw_num_channels = static_cast<int>(periodic_abfs.potentials.size());
-    if (write_basis_opt && GlobalC::exx_info.info_ri.files_abfs.empty())
-    {
-        throw std::runtime_error(
-            "Periodic basis-optimization output requires explicit ABFS_ORBITAL files for immutable provenance.");
-    }
     std::vector<std::complex<double>> full_coulomb_metric;
     SternheimerComplexCoulombWhitening complex_whitening;
     std::vector<SternheimerABFBlochGridChannel> whitened_channels;
@@ -4233,8 +4231,11 @@ void run_sternheimer_periodic_lcao_chi0_output(
             PARAM.inp.pseudo_dir, ucell.pseudo_fn, "pseudopotential");
         manifest.orbital_sha256 = siab::sha256_file_manifest(orbital_paths);
         manifest.pseudopotential_sha256 = siab::sha256_file_manifest(pseudopotential_paths);
-        manifest.auxiliary_basis_sha256
-            = siab::sha256_unique_file_manifest(GlobalC::exx_info.info_ri.files_abfs);
+        manifest.auxiliary_basis_sha256 = siab::sha256_auxiliary_basis_definition(
+            manifest.orbital_sha256,
+            pca_threshold,
+            GlobalC::exx_info.info_ri.kmesh_times,
+            GlobalC::exx_info.info_ri.files_abfs);
         manifest.primitive_blocks_sha256
             = siab::sha256_file(join_path(basis_opt_dir, "primitive_blocks.dat"));
         manifest.kernel = "full_coulomb";
@@ -5210,15 +5211,6 @@ void run_sternheimer_abacus_chi0_output_impl(
         }
 
         const int raw_num_channels = static_cast<int>(channels.size());
-        if (write_siab && GlobalC::exx_info.info_ri.files_abfs.empty())
-        {
-            throw std::runtime_error(
-                "out_sternheimer_basis_opt requires explicit ABFS_ORBITAL files for immutable target provenance.");
-        }
-        const std::string auxiliary_basis_sha256
-            = write_siab && GlobalV::MY_RANK == 0
-                  ? siab::sha256_unique_file_manifest(GlobalC::exx_info.info_ri.files_abfs)
-                  : std::string();
         SternheimerCoulombWhitening coulomb_whitening;
         if (write_siab)
         {
@@ -6009,7 +6001,6 @@ void run_sternheimer_abacus_chi0_output_impl(
                             "Sternheimer SIAB global source row assembly has missing or duplicate rows.");
                     }
                     siab_provenance = make_siab_production_provenance(ucell,
-                                                                      auxiliary_basis_sha256,
                                                                       frequency_grid,
                                                                       pca_threshold,
                                                                       coulomb_whitening);

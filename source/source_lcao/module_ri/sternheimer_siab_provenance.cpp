@@ -79,6 +79,14 @@ void update_u64(Sha256& digest, const std::uint64_t value)
     digest.update(bytes.data(), bytes.size());
 }
 
+void update_double(Sha256& digest, const double value)
+{
+    static_assert(sizeof(double) == sizeof(std::uint64_t), "Sternheimer SIAB provenance requires binary64 doubles.");
+    std::uint64_t bits = 0;
+    std::memcpy(&bits, &value, sizeof(bits));
+    update_u64(digest, bits);
+}
+
 void update_file(Sha256& digest, const std::string& path)
 {
     std::ifstream input(path.c_str(), std::ios::binary);
@@ -312,6 +320,46 @@ std::string sha256_unique_file_manifest(const std::vector<std::string>& paths)
         }
     }
     return sha256_file_manifest(unique_paths);
+}
+
+std::string sha256_auxiliary_basis_definition(const std::string& orbital_sha256,
+                                              const double pca_threshold,
+                                              const double kmesh_times,
+                                              const std::vector<std::string>& explicit_abfs_paths)
+{
+    if (!is_hex_string(orbital_sha256, 64))
+    {
+        throw std::invalid_argument("Sternheimer auxiliary-basis provenance requires a 64-digit orbital SHA256 value.");
+    }
+    if (!std::isfinite(pca_threshold) || pca_threshold < 0.0)
+    {
+        throw std::invalid_argument(
+            "Sternheimer auxiliary-basis provenance requires a finite nonnegative PCA threshold.");
+    }
+    if (!std::isfinite(kmesh_times) || kmesh_times <= 0.0)
+    {
+        throw std::invalid_argument(
+            "Sternheimer auxiliary-basis provenance requires a finite positive construction-grid multiplier.");
+    }
+
+    Sha256 digest;
+    const std::string marker = "ABACUS_STERNHEIMER_AUXILIARY_BASIS_DEFINITION_V1";
+    digest.update(reinterpret_cast<const unsigned char*>(marker.data()), marker.size());
+    digest.update(reinterpret_cast<const unsigned char*>(orbital_sha256.data()), orbital_sha256.size());
+    update_double(digest, pca_threshold);
+    update_double(digest, kmesh_times);
+    update_u64(digest, static_cast<std::uint64_t>(explicit_abfs_paths.size()));
+    for (const std::string& path: explicit_abfs_paths)
+    {
+        if (path.empty())
+        {
+            throw std::invalid_argument(
+                "Sternheimer auxiliary-basis provenance requires nonempty explicit ABFS paths.");
+        }
+        update_u64(digest, file_size(path));
+        update_file(digest, path);
+    }
+    return digest.finish();
 }
 
 std::vector<std::string> resolve_required_input_files(const std::string& directory,
