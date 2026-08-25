@@ -23,9 +23,12 @@ source_commit=711af860c125b9757c344a1961b63524c550cfe4
 expected_abacus_sha=5a7ab8f2fc14424c8b47c5a9cbe22d1784016140cc9fa302f7e032662eed58b2
 orbital_sha256=7ba114ee382d50ed831a0c90919ce291f97a08075e0e18851977d3217597289d
 pseudopotential_sha256=e95d682a8b918557fb57e2e0ec11b2f48cf693cb72a11d078cf07ec489a8fa99
-case_root=/ssd/work/df_iopcas_ghj/c-periodic-basis-opt-product-pca-20260825
+storage_probe_job=3118401
+storage_probe=$root/gates/gpfs-write-probe/job$storage_probe_job
+run_tag=${STERNHEIMER_RUN_TAG:-retry1}
+case_root=$root/runs/c-periodic-basis-opt-product-pca-20260825/$run_tag
 iq=${SLURM_ARRAY_TASK_ID:?missing q index}
-work=$case_root/c-diamond-g24-fd8-nfreq6-q${iq}-product-pca-711af860c-kpar8
+work=$case_root/c-diamond-g24-fd8-nfreq6-q${iq}-product-pca-711af860c-kpar8-$run_tag
 suffix=C_DIAMOND_G24_FD8_NFREQ6_Q${iq}_PRODUCT_PCA
 
 case "$iq" in
@@ -42,10 +45,12 @@ test "$(sha256sum "$abacus" | awk '{print $1}')" = "$expected_abacus_sha"
 grep -Fq "$source_commit" "$root/artifacts/job$build_job/commit_metadata.txt"
 grep -Eq 'double kmesh_times[[:space:]]*=[[:space:]]*4;' \
   "$root/source/source/source_hamilt/module_xc/exx_info.h"
+test "$(find "$storage_probe" -maxdepth 1 -type f -name 'rank-*.bin' -size 8M | wc -l)" -eq 2
 test ! -e "$work"
 mkdir -p "$work"
 cp -a "$root/gate-template-product-pca/." "$work/"
 cd "$work"
+/usr/lpp/mmfs/bin/mmlsquota -g renxg data > STORAGE_QUOTA_START.txt
 
 set_input_key() {
   local key=$1 value=$2
@@ -99,6 +104,9 @@ unset ABACUS_STERNHEIMER_FD_ST_SOLVER_TOL
   echo purpose=$purpose
   echo abacus_commit=$source_commit
   echo build_job=$build_job
+  echo storage_filesystem=data_gpfs
+  echo storage_probe_job=$storage_probe_job
+  echo run_tag=$run_tag
   echo grid=24,24,24
   echo ecut_ry=45
   echo fd_order=8
