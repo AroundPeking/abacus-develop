@@ -370,6 +370,17 @@ TEST(SternheimerABACUSSTSmoke, ListsOneCanonicalFullQPointPerZeroOrderStar)
                  std::invalid_argument);
 }
 
+TEST(SternheimerABACUSSTSmoke, MapsCanonicalFullQIndexToLibRPAOrdinal)
+{
+    const std::vector<int> canonical_q_indices{1, 22, 43, 6, 27, 23, 11, 55};
+
+    EXPECT_EQ(ModuleRI::sternheimer_librpa_q_ordinal_one_based(canonical_q_indices, 1), 1);
+    EXPECT_EQ(ModuleRI::sternheimer_librpa_q_ordinal_one_based(canonical_q_indices, 22), 2);
+    EXPECT_EQ(ModuleRI::sternheimer_librpa_q_ordinal_one_based(canonical_q_indices, 55), 8);
+    EXPECT_THROW(ModuleRI::sternheimer_librpa_q_ordinal_one_based(canonical_q_indices, 2),
+                 std::invalid_argument);
+}
+
 TEST(SternheimerABACUSSTSmoke, DerivesNormalizedQStarWeightsFromFullGridRecords)
 {
     auto q0 = make_occupied_kpoint(0, 0, 0, {0.0, 0.0, 0.0}, 1.0 / 3.0);

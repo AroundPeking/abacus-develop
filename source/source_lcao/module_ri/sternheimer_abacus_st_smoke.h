@@ -202,6 +202,18 @@ inline std::vector<int> sternheimer_canonical_q_indices_one_based(
     return representatives;
 }
 
+inline int sternheimer_librpa_q_ordinal_one_based(const std::vector<int>& canonical_q_indices,
+                                                  const int full_q_index)
+{
+    const auto position = std::find(canonical_q_indices.begin(), canonical_q_indices.end(), full_q_index);
+    if (position == canonical_q_indices.end())
+    {
+        throw std::invalid_argument(
+            "The selected full-grid Sternheimer q point is not a canonical irreducible q representative.");
+    }
+    return static_cast<int>(std::distance(canonical_q_indices.begin(), position)) + 1;
+}
+
 inline double sternheimer_qstar_weight(
     const std::vector<SternheimerLCAOOccupiedKPoint>& records,
     const int representative_iq_one_based)

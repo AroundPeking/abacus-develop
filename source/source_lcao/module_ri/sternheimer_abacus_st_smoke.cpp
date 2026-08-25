@@ -2934,6 +2934,7 @@ void run_sternheimer_periodic_lcao_chi0_output(
     std::vector<std::complex<double>> full_coulomb_metric;
     SternheimerComplexCoulombWhitening complex_whitening;
     std::vector<SternheimerABFBlochGridChannel> whitened_channels;
+    int grid_coulomb_librpa_iq = 0;
     if (write_basis_opt)
     {
         full_coulomb_metric = sternheimer_grid_projected_matrix(periodic_abfs.densities,
@@ -2949,9 +2950,11 @@ void run_sternheimer_periodic_lcao_chi0_output(
             complex_whitening.retained_rank);
         if (GlobalV::MY_RANK == 0 && !use_supercell_translation_sum)
         {
-            SternheimerRPA::write_coulomb_v1_file("v1_coulomb_grid_iq_" + std::to_string(response_plan.iq)
+            grid_coulomb_librpa_iq
+                = sternheimer_librpa_q_ordinal_one_based(canonical_q_indices, response_plan.iq);
+            SternheimerRPA::write_coulomb_v1_file("v1_coulomb_grid_iq_" + std::to_string(grid_coulomb_librpa_iq)
                                                       + "_rank0.dat",
-                                                  response_plan.iq,
+                                                  grid_coulomb_librpa_iq,
                                                   atom_auxiliary_sizes(periodic_abfs.densities, ucell.nat),
                                                   full_coulomb_metric);
         }
@@ -3039,7 +3042,10 @@ void run_sternheimer_periodic_lcao_chi0_output(
             out << "perturbation_ccp_rmesh_times_used no\n";
             if (write_basis_opt && !use_supercell_translation_sum)
             {
-                out << "grid_coulomb_v1_file v1_coulomb_grid_iq_" << response_plan.iq << "_rank0.dat\n";
+                out << "grid_coulomb_v1_file v1_coulomb_grid_iq_" << grid_coulomb_librpa_iq
+                    << "_rank0.dat\n";
+                out << "grid_coulomb_v1_librpa_iq " << grid_coulomb_librpa_iq << '\n';
+                out << "grid_coulomb_v1_full_q_index " << response_plan.iq << '\n';
                 out << "grid_coulomb_v1_kernel exact_rhs_full_periodic_poisson\n";
             }
         }
@@ -4644,7 +4650,9 @@ void run_sternheimer_periodic_lcao_chi0_output(
     out << "perturbation_ccp_rmesh_times_used no\n";
     if (write_basis_opt && !use_supercell_translation_sum)
     {
-        out << "grid_coulomb_v1_file v1_coulomb_grid_iq_" << response_plan.iq << "_rank0.dat\n";
+        out << "grid_coulomb_v1_file v1_coulomb_grid_iq_" << grid_coulomb_librpa_iq << "_rank0.dat\n";
+        out << "grid_coulomb_v1_librpa_iq " << grid_coulomb_librpa_iq << '\n';
+        out << "grid_coulomb_v1_full_q_index " << response_plan.iq << '\n';
         out << "grid_coulomb_v1_kernel exact_rhs_full_periodic_poisson\n";
     }
     out << "supercell_translation_perturbation " << (use_supercell_translation_sum ? "yes" : "no") << '\n';
