@@ -422,13 +422,19 @@ inline std::vector<std::vector<std::vector<Numerical_Orbital_Lm>>> prepare_abfs(
     const double pca_threshold,
     const std::vector<std::string>& files_abfs)
 {
+    if (!info.rpa_pca_fixed_nu.empty() && GlobalV::MY_RANK == 0)
+    {
+        std::cout << "Response-aware RPA product PCA fixed radial profiles: "
+                  << info.rpa_pca_fixed_nu << std::endl;
+    }
     std::vector<std::vector<std::vector<Numerical_Orbital_Lm>>> abfs
         = Exx_Abfs::Construct_Orbs::abfs_same_atom(
             ucell,
             orb,
             lcaos,
             info.kmesh_times,
-            pca_threshold);
+            pca_threshold,
+            info.rpa_pca_fixed_nu);
     if (!files_abfs.empty())
     {
         abfs = Exx_Abfs::IO::construct_abfs(abfs, orb, files_abfs, info.kmesh_times);

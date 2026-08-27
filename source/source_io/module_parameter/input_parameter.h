@@ -542,6 +542,7 @@ struct Input_para
     double exx_mixing_beta = 1.0;                ///< mixing_beta for outer-loop when exx_separate_loop=1
     std::string exx_real_number = "default";     ///< exx calculated in real or complex
     double exx_pca_threshold = 0.0001;           ///< threshold to screen on-site ABFs in exx
+    std::string rpa_pca_fixed_nu = "";           ///< fixed AO radial counts for response-aware RPA product PCA
     double exx_c_threshold = 0.0001;             ///< threshold to screen C matrix in exx
     double exx_v_threshold = 0.1;                ///< threshold to screen C matrix in exx
     double exx_v_threshold_long = 0.0;           ///< threshold to screen long-range V matrix in exx

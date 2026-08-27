@@ -254,6 +254,22 @@ void ReadInput::item_exx()
         this->add_item(item);
     }
     {
+        Input_Item item("rpa_pca_fixed_nu");
+        item.annotation = "fixed AO radial counts for response-aware RPA product PCA";
+        item.category = "RPA (LCAO)";
+        item.type = "String";
+        item.description = "Restrict on-site auxiliary-basis construction to AO products in which at least one "
+                           "factor belongs to a fixed radial prefix. Give comma-separated radial counts in "
+                           "increasing angular momentum for each atom type; separate atom types with semicolons. "
+                           "For example, 2,2,1,0,0 keeps products touching the first 2s, 2p, and 1d radial "
+                           "functions. An empty value preserves the legacy all-AO product PCA.";
+        item.default_value = "";
+        item.unit = "";
+        item.availability = "basis_type=lcao and rpa=1";
+        read_sync_string(input.rpa_pca_fixed_nu);
+        this->add_item(item);
+    }
+    {
         Input_Item item("exx_c_threshold");
         item.annotation = "threshold to screen C matrix in exx";
         item.category = "Exact Exchange (LCAO)";

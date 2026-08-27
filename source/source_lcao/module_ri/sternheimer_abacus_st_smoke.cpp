@@ -1114,7 +1114,8 @@ SternheimerOrbitalSet build_sternheimer_abfs(const UnitCell& ucell, const double
                                                                          orb,
                                                                          lcaos,
                                                                          GlobalC::exx_info.info_ri.kmesh_times,
-                                                                         pca_threshold);
+                                                                         pca_threshold,
+                                                                         GlobalC::exx_info.info_ri.rpa_pca_fixed_nu);
     if (!GlobalC::exx_info.info_ri.files_abfs.empty())
     {
         abfs = Exx_Abfs::IO::construct_abfs(abfs,
@@ -1280,7 +1281,8 @@ SternheimerABFBuildData build_abfs_ccp_data(const UnitCell& ucell,
                                                     orb,
                                                     lcaos,
                                                     GlobalC::exx_info.info_ri.kmesh_times,
-                                                    pca_threshold);
+                                                    pca_threshold,
+                                                    GlobalC::exx_info.info_ri.rpa_pca_fixed_nu);
     if (!GlobalC::exx_info.info_ri.files_abfs.empty())
     {
         abfs = Exx_Abfs::IO::construct_abfs(abfs,

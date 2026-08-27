@@ -6,6 +6,7 @@
 #include "source_base/gram_schmidt_orth.h"
 #include "source_basis/module_ao/ORB_read.h"
 #include "source_lcao/module_ri/test_code/exx_abfs-construct_orbs-test.h" // Peize Lin test
+#include "response_pca_profile.h"
 
 std::vector<std::vector<std::vector<Numerical_Orbital_Lm>>> Exx_Abfs::Construct_Orbs::change_orbs(
 	const LCAO_Orbitals &orbs_in,
@@ -82,19 +83,40 @@ std::vector<std::vector<std::vector<Numerical_Orbital_Lm>>> Exx_Abfs::Construct_
     const LCAO_Orbitals& orb,
 	const std::vector<std::vector<std::vector<Numerical_Orbital_Lm>>> &orbs,
 	const double kmesh_times_mot,
-	const double times_threshold )
+	const double times_threshold,
+	const std::string& rpa_pca_fixed_nu )
 {
 	ModuleBase::TITLE("Exx_Abfs::Construct_Orbs::abfs_same_atom");
 	if(times_threshold>1)
 		{ return std::vector<std::vector<std::vector<Numerical_Orbital_Lm>>>(orb.get_ntype()); }
 
+	const ResponsePCA::FixedNuProfiles fixed_nu_profiles
+		= ResponsePCA::parse_fixed_nu_profiles(rpa_pca_fixed_nu);
+	if (!fixed_nu_profiles.empty())
+	{
+		std::vector<std::vector<std::size_t>> available_nu(orbs.size());
+		for (std::size_t type = 0; type != orbs.size(); ++type)
+		{
+			available_nu[type].reserve(orbs[type].size());
+			for (const auto& angular_channel : orbs[type])
+			{
+				available_nu[type].push_back(angular_channel.size());
+			}
+		}
+		ResponsePCA::validate_fixed_nu_profiles(fixed_nu_profiles, available_nu);
+	}
+
 	const std::vector<std::vector<std::vector<std::vector<double>>>>
-		abfs_same_atom_psi = psi_mult_psi( orbs );
+		abfs_same_atom_psi = psi_mult_psi(orbs, fixed_nu_profiles);
 
 	const std::vector<std::vector<std::vector<std::vector<double>>>>
 		abfs_same_atom_orth_psi = orth( abfs_same_atom_psi, orbs );
-	const std::vector<std::vector<std::vector<Numerical_Orbital_Lm>>>
+	std::vector<std::vector<std::vector<Numerical_Orbital_Lm>>>
 		abfs_same_atom = orbital( abfs_same_atom_orth_psi, orbs, 1 );
+	if (!fixed_nu_profiles.empty())
+	{
+		filter_empty_orbs(abfs_same_atom);
+	}
 
 	#if TEST_EXX_LCAO==1
 		print_orbs(abfs_same_atom_psi,"abfs_same_atom_psi.dat");
@@ -104,7 +126,8 @@ std::vector<std::vector<std::vector<Numerical_Orbital_Lm>>> Exx_Abfs::Construct_
 	#endif
 
 	const std::vector<std::vector<std::vector<std::vector<double>>>>
-		abfs_same_atom_pca_psi = pca(ucell,orb, abfs_same_atom, orbs, kmesh_times_mot, times_threshold );
+		abfs_same_atom_pca_psi
+			= pca(ucell, orb, abfs_same_atom, orbs, kmesh_times_mot, times_threshold, fixed_nu_profiles);
 
 	#if TEST_EXX_LCAO==1
 		print_orbs(abfs_same_atom_pca_psi,"abfs_same_atom_pca_psi.dat");
@@ -155,7 +178,8 @@ std::vector<std::vector<std::vector<std::vector<double>>>> Exx_Abfs::Construct_O
 */
 
 std::vector<std::vector<std::vector<std::vector<double>>>> Exx_Abfs::Construct_Orbs::psi_mult_psi(
-	const std::vector<std::vector<std::vector<Numerical_Orbital_Lm>>> &orbs )
+	const std::vector<std::vector<std::vector<Numerical_Orbital_Lm>>> &orbs,
+	const std::vector<std::vector<std::size_t>>& fixed_nu_profiles )
 {
 	std::vector<std::vector<std::vector<std::vector<double>>>> psi_mult_psi( orbs.size() );
 	for( int T=0; T!=orbs.size(); ++T )
@@ -169,6 +193,12 @@ std::vector<std::vector<std::vector<std::vector<double>>>> Exx_Abfs::Construct_O
 				{
 					for( int N2=((L2==L1)?N1:0); N2!=orbs[T][L2].size(); ++N2 )
 					{
+						if (!fixed_nu_profiles.empty()
+							&& !ResponsePCA::keep_radial_product(
+								fixed_nu_profiles[T], L1, N1, L2, N2))
+						{
+							continue;
+						}
 						assert( orbs[T][L1][N1].getNr()==orbs[T][L2][N2].getNr() );
 
 						std::vector<double> mult_psir( orbs[T][L1][N1].getNr() );
@@ -265,13 +295,15 @@ std::vector<std::vector<std::vector<std::vector<double>>>> Exx_Abfs::Construct_O
 	const std::vector<std::vector<std::vector<Numerical_Orbital_Lm>>> &abfs,
 	const std::vector<std::vector<std::vector<Numerical_Orbital_Lm>>> &orbs,
 	const double kmesh_times_mot,
-	const double times_threshold )
+	const double times_threshold,
+	const std::vector<std::vector<std::size_t>>& fixed_nu_profiles )
 {
 	if(times_threshold>1)
 		return std::vector<std::vector<std::vector<std::vector<double>>>>(abfs.size());
 
 	const std::vector<std::vector<std::pair<std::vector<double>,RI::Tensor<double>>>>
-		eig = ABFs_Construct::PCA::cal_PCA(ucell, orb, orbs, abfs, kmesh_times_mot );
+		eig = ABFs_Construct::PCA::cal_PCA(
+			ucell, orb, orbs, abfs, kmesh_times_mot, fixed_nu_profiles);
 
 	const std::vector<std::vector<std::vector<std::vector<double>>>> psis = get_psi( abfs );
 	std::vector<std::vector<std::vector<std::vector<double>>>> psis_new( psis.size() );

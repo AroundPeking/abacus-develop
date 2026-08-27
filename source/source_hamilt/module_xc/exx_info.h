@@ -58,6 +58,7 @@ struct Exx_Info
         bool rotate_abfs = false;
 
         double pca_threshold = 0;
+        std::string rpa_pca_fixed_nu;
         std::vector<std::string> files_abfs;
         std::vector<std::string> files_shrink_abfs;
         double C_threshold = 0;

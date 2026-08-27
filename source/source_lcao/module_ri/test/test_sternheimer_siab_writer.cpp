@@ -715,6 +715,21 @@ TEST(SternheimerSIABInput, CoulombWhiteningThresholdIsExplicitAndPositive)
     EXPECT_EXIT(item.check_value(item, parameter), ::testing::ExitedWithCode(1), "");
 }
 
+TEST(SternheimerSIABInput, RegistersResponseAwareProductPCAProfile)
+{
+    ModuleIO::ReadInput read_input(0);
+    const std::vector<std::pair<std::string, ModuleIO::Input_Item>>& items = read_input.get_input_lists();
+    const auto found = std::find_if(items.begin(), items.end(), [](const auto& item) {
+        return item.first == "rpa_pca_fixed_nu";
+    });
+    ASSERT_NE(found, items.end());
+    EXPECT_NE(found->second.description.find("at least one"), std::string::npos);
+    EXPECT_NE(found->second.description.find("2,2,1,0,0"), std::string::npos);
+
+    Parameter parameter;
+    EXPECT_TRUE(parameter.inp.rpa_pca_fixed_nu.empty());
+}
+
 namespace
 {
 

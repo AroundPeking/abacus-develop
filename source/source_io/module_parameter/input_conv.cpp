@@ -482,6 +482,7 @@ void Input_Conv::Convert()
 
         GlobalC::exx_info.info_ri.real_number = std::stoi(PARAM.inp.exx_real_number);
         GlobalC::exx_info.info_ri.pca_threshold = PARAM.inp.exx_pca_threshold;
+        GlobalC::exx_info.info_ri.rpa_pca_fixed_nu = PARAM.inp.rpa_pca_fixed_nu;
         GlobalC::exx_info.info_ri.C_threshold = PARAM.inp.exx_c_threshold;
         GlobalC::exx_info.info_ri.V_threshold = PARAM.inp.exx_v_threshold;
         GlobalC::exx_info.info_ri.V_threshold_long = PARAM.inp.exx_v_threshold_long;

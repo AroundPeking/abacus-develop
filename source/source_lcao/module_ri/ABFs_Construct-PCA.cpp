@@ -116,22 +116,51 @@ RI::Tensor<double> get_sub_matrix(const RI::Tensor<double>& m, // size: (lcaos, 
                                   const std::size_t& T,
                                   const std::size_t& L,
                                   const ModuleBase::Element_Basis_Index::Range& range,
-                                  const ModuleBase::Element_Basis_Index::IndexLNM& index)
+                                  const ModuleBase::Element_Basis_Index::IndexLNM& index,
+                                  const std::vector<bool>& fixed_ao_mask)
 	{
 		ModuleBase::TITLE("ABFs_Construct::PCA::get_sub_matrix");		
 		assert(m.shape.size() == 3);
-    RI::Tensor<double> m_sub({m.shape[0], m.shape[1], range[T][L].N});
+    if (fixed_ao_mask.empty())
+    {
+        RI::Tensor<double> m_sub({m.shape[0], m.shape[1], range[T][L].N});
+        for (std::size_t ir = 0; ir != m.shape[0]; ++ir)
+        {
+            for (std::size_t jr = 0; jr != m.shape[1]; ++jr)
+            {
+                for (std::size_t N = 0; N != range[T][L].N; ++N)
+                {
+                    m_sub(ir, jr, N) = m(ir, jr, index[T][L][N][0]);
+                }
+            }
+        }
+        return m_sub.reshape({m.shape[0] * m.shape[1], range[T][L].N});
+    }
+
+    if (fixed_ao_mask.size() != m.shape[0] || fixed_ao_mask.size() != m.shape[1])
+    {
+        throw std::invalid_argument("Response-aware PCA AO mask size does not match the overlap matrix.");
+    }
+
+    const std::size_t kept_pair_count = ResponsePCA::count_kept_ordered_pairs(fixed_ao_mask);
+    RI::Tensor<double> m_sub({kept_pair_count, range[T][L].N});
+    std::size_t kept_pair = 0;
     for (std::size_t ir = 0; ir != m.shape[0]; ++ir)
     {
         for (std::size_t jr = 0; jr != m.shape[1]; ++jr)
         {
+            if (!fixed_ao_mask[ir] && !fixed_ao_mask[jr])
+            {
+                continue;
+            }
             for (std::size_t N = 0; N != range[T][L].N; ++N)
             {
-					m_sub(ir, jr, N) = m(ir, jr, index[T][L][N][0]);
-}
-}
-}
-    m_sub = m_sub.reshape({m.shape[0] * m.shape[1], range[T][L].N});
+					m_sub(kept_pair, N) = m(ir, jr, index[T][L][N][0]);
+            }
+            ++kept_pair;
+        }
+    }
+		assert(kept_pair == kept_pair_count);
 		return m_sub;
 	}
 
@@ -160,7 +189,8 @@ RI::Tensor<double> get_column_mean0_matrix(const RI::Tensor<double>& m)
         const LCAO_Orbitals& orb,
     const std::vector<std::vector<std::vector<Numerical_Orbital_Lm>>>& lcaos,
     const std::vector<std::vector<std::vector<Numerical_Orbital_Lm>>>& abfs,
-    const double kmesh_times)
+    const double kmesh_times,
+    const ResponsePCA::FixedNuProfiles& fixed_nu_profiles)
 	{
 		ModuleBase::TITLE("ABFs_Construct::PCA::cal_PCA");
 		
@@ -183,6 +213,17 @@ RI::Tensor<double> get_column_mean0_matrix(const RI::Tensor<double>& m)
     std::vector<std::vector<std::pair<std::vector<double>, RI::Tensor<double>>>> eig(abfs.size());
     for (std::size_t T = 0; T != abfs.size(); ++T)
 		{
+		std::vector<bool> fixed_ao_mask;
+		if (!fixed_nu_profiles.empty())
+		{
+			std::vector<std::size_t> available_nu;
+			available_nu.reserve(lcaos[T].size());
+			for (const auto& angular_channel : lcaos[T])
+			{
+				available_nu.push_back(angular_channel.size());
+			}
+			fixed_ao_mask = ResponsePCA::make_fixed_ao_mask(fixed_nu_profiles[T], available_nu);
+		}
         const RI::Tensor<double> A = m_abfslcaos_lcaos.cal_overlap_matrix<double>(T,
 				T, 
                                                                                   ModuleBase::Vector3<double>{0, 0, 0},
@@ -195,7 +236,8 @@ RI::Tensor<double> get_column_mean0_matrix(const RI::Tensor<double>& m)
 			eig[T].resize(abfs[T].size());
         for (std::size_t L = 0; L != abfs[T].size(); ++L)
 			{
-            const RI::Tensor<double> A_sub = get_sub_matrix(A, T, L, range_abfs, index_abfs);
+            const RI::Tensor<double> A_sub
+                = get_sub_matrix(A, T, L, range_abfs, index_abfs, fixed_ao_mask);
 				RI::Tensor<double> mm = A_sub.transpose() * A_sub;
 				std::vector<double> eig_value(mm.shape[0]);
 				

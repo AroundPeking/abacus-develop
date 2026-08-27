@@ -5,6 +5,7 @@
 
 #include <limits>
 #include <algorithm>
+#include <string>
 #include "source_cell/unitcell.h"
 #include "../../source_basis/module_ao/ORB_atomic_lm.h"
 
@@ -25,7 +26,8 @@ public:
 		const LCAO_Orbitals& orb,
 		const std::vector<std::vector<std::vector<Numerical_Orbital_Lm>>> &lcaos,
 		const double kmesh_times_mot,
-		const double times_threshold=0);
+		const double times_threshold=0,
+		const std::string& rpa_pca_fixed_nu="");
 		
 	static void print_orbs_size(
 		const UnitCell& ucell,
@@ -68,7 +70,8 @@ public:
 
   private:
 	static std::vector<std::vector<std::vector<std::vector<double>>>> psi_mult_psi( 
-		const std::vector<std::vector<std::vector<Numerical_Orbital_Lm>>> &lcaos );
+		const std::vector<std::vector<std::vector<Numerical_Orbital_Lm>>> &lcaos,
+		const std::vector<std::vector<std::size_t>>& fixed_nu_profiles );
 		
 	static std::vector<std::vector<std::vector<std::vector<double>>>> psir_mult_psir( 
 		const std::vector<std::vector<std::vector<Numerical_Orbital_Lm>>> &lcaos );
@@ -84,7 +87,8 @@ public:
 		const std::vector<std::vector<std::vector<Numerical_Orbital_Lm>>> &abfs,
 		const std::vector<std::vector<std::vector<Numerical_Orbital_Lm>>> &orbs,
 		const double kmesh_times_mot,
-		const double times_threshold );
+		const double times_threshold,
+		const std::vector<std::vector<std::size_t>>& fixed_nu_profiles );
 		
 	static std::vector<std::vector<std::vector<std::vector<double>>>> div_r( 
 		const std::vector<std::vector<std::vector<std::vector<double>>>> &psirs,

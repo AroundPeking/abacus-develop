@@ -32,6 +32,10 @@ add_test(
   COMMAND ./MODULE_RI_gaussian_abfs_2d_integrals_test
   WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
 )
+AddTest(
+  TARGET MODULE_RI_response_pca_profile_test
+  SOURCES response_pca_profile_test.cpp
+)
 add_executable(MODULE_RI_librpa_stru_units_test librpa_stru_units_test.cpp)
 install(TARGETS MODULE_RI_librpa_stru_units_test DESTINATION ${CMAKE_BINARY_DIR}/tests)
 add_test(

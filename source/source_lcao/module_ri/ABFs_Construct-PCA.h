@@ -6,6 +6,8 @@
 #include <vector>
 #include <RI/global/Tensor.h>
 
+#include "response_pca_profile.h"
+
 //	training data: lcaos[i] * lcaos[j]
 //	old basis:     abfs
 //	new basis:     to be constructed
@@ -20,7 +22,8 @@ extern std::vector<std::vector<std::pair<std::vector<double>, RI::Tensor<double>
     const LCAO_Orbitals& orb,
     const std::vector<std::vector<std::vector<Numerical_Orbital_Lm>>>& lcaos,
     const std::vector<std::vector<std::vector<Numerical_Orbital_Lm>>>& abfs, // abfs must be orthonormal
-    const double kmesh_times);
+    const double kmesh_times,
+    const ResponsePCA::FixedNuProfiles& fixed_nu_profiles);
 
 template <typename T>
 void tensor_syev(char jobz, char uplo, RI::Tensor<T>& a, RI::Global_Func::To_Real_t<T>* w, int& info);
