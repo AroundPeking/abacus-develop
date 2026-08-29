@@ -810,6 +810,88 @@ If EXX(exact exchange) is calculated (i.e. dft_fuctional==hse/hf/pbe0/scan0 or r
         this->add_item(item);
     }
     {
+        Input_Item item("out_librpa_2d_coulomb_method");
+        item.annotation = "strict-2D full Coulomb construction used by LibRPA reader-v1 output";
+        item.category = "Output information";
+        item.type = "String";
+        item.description = "Use ewald for the established split-Ewald output, or direct_mixed_fourier "
+                           "to construct the strict-2D full auxiliary Coulomb matrix as a positive Gram matrix. "
+                           "The direct method is default-off and has no automatic fallback.";
+        item.default_value = "ewald";
+        item.unit = "";
+        item.availability = "rpa=True, out_librpa_reader_version=1, exx_ewald_dimension=2";
+        read_sync_string(input.out_librpa_2d_coulomb_method);
+        item.check_value = [](const Input_Item& item, const Parameter& para) {
+            const auto& method = para.input.out_librpa_2d_coulomb_method;
+            if (method != "ewald" && method != "direct_mixed_fourier")
+            {
+                ModuleBase::WARNING_QUIT("ReadInput",
+                                         item.label + " supports only ewald or direct_mixed_fourier.");
+            }
+            if (method == "direct_mixed_fourier")
+            {
+                if (!para.input.rpa || para.input.out_librpa_reader_version != 1
+                    || para.input.exx_ewald_dimension != 2)
+                {
+                    ModuleBase::WARNING_QUIT(
+                        "ReadInput",
+                        item.label + "=direct_mixed_fourier requires rpa=1, "
+                                     "out_librpa_reader_version=1, and exx_ewald_dimension=2.");
+                }
+                if (!(para.input.out_librpa_2d_direct_ecut > 0.0)
+                    || para.input.out_librpa_2d_direct_kz_order <= 0
+                    || para.input.out_librpa_2d_direct_gamma_order <= 0
+                    || para.input.out_librpa_2d_direct_gamma_order % 2 != 0)
+                {
+                    ModuleBase::WARNING_QUIT(
+                        "ReadInput",
+                        item.label + "=direct_mixed_fourier requires positive out_librpa_2d_direct_ecut, "
+                                     "positive out_librpa_2d_direct_kz_order, and a positive even "
+                                     "out_librpa_2d_direct_gamma_order.");
+                }
+            }
+        };
+        this->add_item(item);
+    }
+    {
+        Input_Item item("out_librpa_2d_direct_ecut");
+        item.annotation = "reciprocal cutoff for direct mixed-Fourier strict-2D Coulomb output";
+        item.category = "Output information";
+        item.type = "Real";
+        item.description = "Reciprocal cutoff in Ry for out_librpa_2d_coulomb_method=direct_mixed_fourier. "
+                           "This value must be converged for each auxiliary basis.";
+        item.default_value = "0";
+        item.unit = "Ry";
+        item.availability = "out_librpa_2d_coulomb_method=direct_mixed_fourier";
+        read_sync_double(input.out_librpa_2d_direct_ecut);
+        this->add_item(item);
+    }
+    {
+        Input_Item item("out_librpa_2d_direct_kz_order");
+        item.annotation = "kz quadrature order for direct mixed-Fourier strict-2D Coulomb output";
+        item.category = "Output information";
+        item.type = "Integer";
+        item.description = "Positive transformed-kz quadrature order for the direct strict-2D Coulomb matrix. "
+                           "It must be converged independently of the reciprocal cutoff.";
+        item.default_value = "0";
+        item.unit = "";
+        item.availability = "out_librpa_2d_coulomb_method=direct_mixed_fourier";
+        read_sync_int(input.out_librpa_2d_direct_kz_order);
+        this->add_item(item);
+    }
+    {
+        Input_Item item("out_librpa_2d_direct_gamma_order");
+        item.annotation = "Gamma-plane quadrature order for direct mixed-Fourier strict-2D Coulomb output";
+        item.category = "Output information";
+        item.type = "Integer";
+        item.description = "Positive even in-plane quadrature order for the Gamma-cell Coulomb average.";
+        item.default_value = "8";
+        item.unit = "";
+        item.availability = "out_librpa_2d_coulomb_method=direct_mixed_fourier";
+        read_sync_int(input.out_librpa_2d_direct_gamma_order);
+        this->add_item(item);
+    }
+    {
         Input_Item item("out_sternheimer_librpa");
         item.annotation = "true: output Sternheimer chi0 files for LibRPA; false: default";
         item.category = "Output information";
