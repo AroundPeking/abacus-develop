@@ -94,24 +94,29 @@ AddTest(
   SOURCES sternheimer_fd_hamiltonian_test.cpp ../sternheimer_fd_hamiltonian.cpp ../sternheimer_fd_nonlocal_projector.cpp ../sternheimer_kq.cpp
 )
 AddTest(
+  TARGET MODULE_RI_sternheimer_fd_preconditioner_test
+  LIBS ${math_libs}
+  SOURCES sternheimer_fd_preconditioner_test.cpp ../sternheimer_fd_preconditioner.cpp ../sternheimer_fd_hamiltonian.cpp ../sternheimer_fd_nonlocal_projector.cpp ../sternheimer_kq.cpp
+)
+AddTest(
   TARGET MODULE_RI_sternheimer_fd_solver_test
   LIBS ${STERNHEIMER_RPA_TEST_LIBS}
-  SOURCES sternheimer_fd_solver_test.cpp ../sternheimer_fd_solver.cpp ../sternheimer_fd_hamiltonian.cpp ../sternheimer_fd_nonlocal_projector.cpp ../sternheimer_kq.cpp ../sternheimer_rpa.cpp
+  SOURCES sternheimer_fd_solver_test.cpp ../sternheimer_fd_solver.cpp ../sternheimer_fd_hamiltonian.cpp ../sternheimer_fd_preconditioner.cpp ../sternheimer_fd_nonlocal_projector.cpp ../sternheimer_kq.cpp ../sternheimer_rpa.cpp
 )
 AddTest(
   TARGET MODULE_RI_sternheimer_delta_test
   LIBS ${STERNHEIMER_RPA_TEST_LIBS}
-  SOURCES sternheimer_delta_test.cpp ../sternheimer_delta.cpp ../sternheimer_kq.cpp ../sternheimer_fd_solver.cpp ../sternheimer_fd_hamiltonian.cpp ../sternheimer_fd_nonlocal_projector.cpp ../sternheimer_rpa.cpp
+  SOURCES sternheimer_delta_test.cpp ../sternheimer_delta.cpp ../sternheimer_kq.cpp ../sternheimer_fd_solver.cpp ../sternheimer_fd_hamiltonian.cpp ../sternheimer_fd_preconditioner.cpp ../sternheimer_fd_nonlocal_projector.cpp ../sternheimer_rpa.cpp
 )
 AddTest(
   TARGET MODULE_RI_sternheimer_grid_diagnostics_test
   LIBS ${STERNHEIMER_RPA_TEST_LIBS}
-  SOURCES sternheimer_grid_diagnostics_test.cpp ../sternheimer_grid_diagnostics.cpp ../sternheimer_delta.cpp ../sternheimer_fd_solver.cpp ../sternheimer_fd_hamiltonian.cpp ../sternheimer_fd_nonlocal_projector.cpp ../sternheimer_rpa.cpp
+  SOURCES sternheimer_grid_diagnostics_test.cpp ../sternheimer_grid_diagnostics.cpp ../sternheimer_delta.cpp ../sternheimer_fd_solver.cpp ../sternheimer_fd_hamiltonian.cpp ../sternheimer_fd_preconditioner.cpp ../sternheimer_fd_nonlocal_projector.cpp ../sternheimer_rpa.cpp
 )
 AddTest(
   TARGET MODULE_RI_sternheimer_dft_zero_order_test
   LIBS ${STERNHEIMER_RPA_TEST_LIBS}
-  SOURCES sternheimer_dft_zero_order_test.cpp ../sternheimer_dft_zero_order.cpp ../sternheimer_fd_solver.cpp ../sternheimer_fd_hamiltonian.cpp ../sternheimer_fd_nonlocal_projector.cpp ../sternheimer_kq.cpp ../sternheimer_rpa.cpp
+  SOURCES sternheimer_dft_zero_order_test.cpp ../sternheimer_dft_zero_order.cpp ../sternheimer_fd_solver.cpp ../sternheimer_fd_hamiltonian.cpp ../sternheimer_fd_preconditioner.cpp ../sternheimer_fd_nonlocal_projector.cpp ../sternheimer_kq.cpp ../sternheimer_rpa.cpp
 )
 AddTest(
   TARGET MODULE_RI_sternheimer_fd_nonlocal_projector_test
@@ -157,6 +162,17 @@ AddTest(
   LIBS ${math_libs}
   SOURCES sternheimer_abacus_st_smoke_test.cpp ../sternheimer_kq.cpp
 )
+add_executable(
+  MODULE_RI_sternheimer_owned_channel_workers_test
+  sternheimer_owned_channel_workers_test.cpp
+  ../sternheimer_channel_resources.cpp
+)
+install(TARGETS MODULE_RI_sternheimer_owned_channel_workers_test DESTINATION ${CMAKE_BINARY_DIR}/tests)
+add_test(
+  NAME MODULE_RI_sternheimer_owned_channel_workers_test
+  COMMAND ./MODULE_RI_sternheimer_owned_channel_workers_test
+  WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+)
 AddTest(
   TARGET MODULE_RI_sternheimer_periodic_solver_test
   LIBS ${STERNHEIMER_RPA_TEST_LIBS}
@@ -164,6 +180,7 @@ AddTest(
           ../sternheimer_periodic_solver.cpp
           ../sternheimer_fd_solver.cpp
           ../sternheimer_fd_hamiltonian.cpp
+          ../sternheimer_fd_preconditioner.cpp
           ../sternheimer_fd_nonlocal_projector.cpp
           ../sternheimer_delta.cpp
           ../sternheimer_kq.cpp

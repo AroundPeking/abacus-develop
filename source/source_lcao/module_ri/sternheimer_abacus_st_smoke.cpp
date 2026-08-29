@@ -98,6 +98,9 @@ constexpr const char* kLanczosSubspaceEnv = "ABACUS_STERNHEIMER_FD_ST_LANCZOS_SU
 constexpr const char* kOmegaEnv = "ABACUS_STERNHEIMER_FD_ST_OMEGA";
 constexpr const char* kSolverToleranceEnv = "ABACUS_STERNHEIMER_FD_ST_SOLVER_TOL";
 constexpr const char* kSolverMaxIterEnv = "ABACUS_STERNHEIMER_FD_ST_MAX_ITER";
+constexpr const char* kSpectralPreconditionerEnv = "ABACUS_STERNHEIMER_FD_ST_SPECTRAL_PRECONDITIONER";
+constexpr const char* kSpectralPreconditionerRegularizationEnv
+    = "ABACUS_STERNHEIMER_FD_ST_SPECTRAL_PRECONDITIONER_REGULARIZATION";
 constexpr const char* kPCAThresholdEnv = "ABACUS_STERNHEIMER_FD_ST_PCA_THRESHOLD";
 constexpr const char* kCCPRmeshTimesEnv = "ABACUS_STERNHEIMER_FD_ST_CCP_RMESH_TIMES";
 constexpr const char* kOrbitalDirEnv = "ABACUS_STERNHEIMER_FD_ST_ORBITAL_DIR";
@@ -2751,6 +2754,9 @@ void run_sternheimer_periodic_lcao_chi0_output(
     SternheimerRPA::SolverOptions solver_options;
     solver_options.max_iter = solver_max_iter;
     solver_options.residual_tol = solver_tolerance;
+    solver_options.use_fd_spectral_preconditioner = env_is_true(kSpectralPreconditionerEnv);
+    solver_options.fd_spectral_preconditioner_regularization
+        = nonnegative_double_from_env(kSpectralPreconditionerRegularizationEnv, 0.2);
     SternheimerDeltaSubspaceOptions delta_options;
     delta_options.max_virtual_states = PARAM.inp.sternheimer_delta_max_states;
     delta_options.norm_tolerance = PARAM.inp.sternheimer_delta_norm_tol;
@@ -3895,6 +3901,10 @@ void run_sternheimer_periodic_lcao_chi0_output(
                 : "frequency_group_assignment")
         << '\n';
     out << "sternheimer_fd_order " << PARAM.inp.sternheimer_fd_order << '\n';
+    out << "sternheimer_preconditioner "
+        << (solver_options.use_fd_spectral_preconditioner ? "fd_spectral" : "none") << '\n';
+    out << "sternheimer_preconditioner_regularization_Ry "
+        << solver_options.fd_spectral_preconditioner_regularization << '\n';
     out << "sternheimer_kpoint_mpi " << (use_kpoint_mpi ? "yes" : "no") << '\n';
     out << "sternheimer_nested_k_frequency_mpi " << (use_nested_response_mpi ? "yes" : "no") << '\n';
     out << "sternheimer_kpoint_groups " << (use_kpoint_mpi ? kpoint_groups : 1) << '\n';
@@ -4007,6 +4017,9 @@ void run_sternheimer_abacus_st_smoke(const elecstate::Potential& potential,
         SternheimerRPA::SolverOptions solver_options;
         solver_options.max_iter = solver_max_iter;
         solver_options.residual_tol = solver_tolerance;
+        solver_options.use_fd_spectral_preconditioner = env_is_true(kSpectralPreconditionerEnv);
+        solver_options.fd_spectral_preconditioner_regularization
+            = nonnegative_double_from_env(kSpectralPreconditionerRegularizationEnv, 0.2);
 
         for (int ib = 0; ib != static_cast<int>(states.wavefunctions.size()); ++ib)
         {
@@ -4790,6 +4803,9 @@ void run_sternheimer_abacus_chi0_output_impl(
         SternheimerRPA::SolverOptions solver_options;
         solver_options.max_iter = solver_max_iter;
         solver_options.residual_tol = solver_tolerance;
+        solver_options.use_fd_spectral_preconditioner = env_is_true(kSpectralPreconditionerEnv);
+        solver_options.fd_spectral_preconditioner_regularization
+            = nonnegative_double_from_env(kSpectralPreconditionerRegularizationEnv, 0.2);
 
         bool all_converged = true;
         int solved_equations = 0;
@@ -4862,25 +4878,8 @@ void run_sternheimer_abacus_chi0_output_impl(
         }
         std::vector<siab::ReferenceRow> local_siab_rows;
         const SternheimerMemorySnapshot channel_memory = detect_sternheimer_memory_snapshot();
-        const SternheimerChannelWorkerPlan channel_worker_plan
-            = plan_sternheimer_channel_workers(num_channels,
-                                               sternheimer_channel_openmp_threads(),
-                                               grid_data.grid.size(),
-                                               channel_worker_user_cap,
-                                               channel_memory);
-        append_chi0_progress_event("channel_workers_ready",
-                                   0,
-                                   -1,
-                                   -1,
-                                   -1,
-                                   solved_equations,
-                                   nullptr,
-                                   -1.0,
-                                   elapsed_seconds_since(chi0_start_time),
-                                   format_sternheimer_channel_worker_diagnostic(channel_memory,
-                                                                                channel_worker_plan,
-                                                                                grid_data.grid.size(),
-                                                                                channel_worker_user_cap));
+        SternheimerChannelWorkerPlan channel_worker_plan;
+        bool channel_worker_plan_reported = false;
 
         for (int ifrequency = 0; ifrequency != nfreq; ++ifrequency)
         {
@@ -4971,6 +4970,39 @@ void run_sternheimer_abacus_chi0_output_impl(
                         }
                         owned_channels.push_back(ichannel);
                         equation_owner_ranks.push_back(equation_owner_rank);
+                    }
+
+                    if (owned_channels.empty())
+                    {
+                        continue;
+                    }
+                    const SternheimerChannelWorkerPlan local_channel_worker_plan
+                        = plan_sternheimer_owned_channel_workers(num_channels,
+                                                                static_cast<int>(owned_channels.size()),
+                                                                sternheimer_channel_openmp_threads(),
+                                                                grid_data.grid.size(),
+                                                                channel_worker_user_cap,
+                                                                channel_memory);
+                    if (!channel_worker_plan_reported)
+                    {
+                        channel_worker_plan = local_channel_worker_plan;
+                        channel_worker_plan_reported = true;
+                        append_chi0_progress_event(
+                            "channel_workers_ready",
+                            0,
+                            -1,
+                            -1,
+                            -1,
+                            solved_equations,
+                            nullptr,
+                            -1.0,
+                            elapsed_seconds_since(chi0_start_time),
+                            "global_channels=" + std::to_string(num_channels)
+                                + " local_channels=" + std::to_string(owned_channels.size()) + " "
+                                + format_sternheimer_channel_worker_diagnostic(channel_memory,
+                                                                               local_channel_worker_plan,
+                                                                               grid_data.grid.size(),
+                                                                               channel_worker_user_cap));
                     }
 
                     std::vector<ChannelEquationResult> channel_results
@@ -5086,7 +5118,7 @@ void run_sternheimer_abacus_chi0_output_impl(
                                 }
                                 return result;
                             },
-                            channel_worker_plan.effective_workers);
+                            local_channel_worker_plan.effective_workers);
 
                     for (ChannelEquationResult& result: channel_results)
                     {
@@ -5455,6 +5487,10 @@ void run_sternheimer_abacus_chi0_output_impl(
         out << "sternheimer_delta " << (use_delta_sternheimer ? "yes" : "no") << '\n';
         out << "sternheimer_grid_diagnostics " << (write_grid_diagnostics ? "yes" : "no") << '\n';
         out << "sternheimer_fd_order " << PARAM.inp.sternheimer_fd_order << '\n';
+        out << "sternheimer_preconditioner "
+            << (solver_options.use_fd_spectral_preconditioner ? "fd_spectral" : "none") << '\n';
+        out << "sternheimer_preconditioner_regularization_Ry "
+            << solver_options.fd_spectral_preconditioner_regularization << '\n';
         if (write_grid_diagnostics)
         {
             out << "sternheimer_component_reconstruction_error_max " << max_component_reconstruction_error << '\n';
