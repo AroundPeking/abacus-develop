@@ -52,6 +52,8 @@ struct SternheimerABFBlochGridChannel
     double max_abs = 0.0;
 };
 
+using SternheimerOrbitalSet = std::vector<std::vector<std::vector<Numerical_Orbital_Lm>>>;
+
 struct SternheimerCoulombProjectionDiagnostic
 {
     double relative_error = 0.0;
@@ -90,6 +92,14 @@ std::vector<SternheimerABFBlochGridChannel> solve_sternheimer_abf_periodic_full_
     const SternheimerFDHamiltonian::Grid& grid,
     const SternheimerReducedKPoint& qpoint,
     double gamma_inverse_k2);
+
+// Replace each input density by its periodic Hartree potential. This is the
+// production interface for large auxiliary spaces because it does not retain
+// a second full-grid channel set.
+void solve_sternheimer_abf_periodic_full_coulomb_in_place(std::vector<SternheimerABFBlochGridChannel>& density_channels,
+                                                          const SternheimerFDHamiltonian::Grid& grid,
+                                                          const SternheimerReducedKPoint& qpoint,
+                                                          double gamma_inverse_k2);
 
 std::vector<std::complex<double>> sternheimer_grid_projected_matrix(
     const std::vector<SternheimerABFBlochGridChannel>& densities,
