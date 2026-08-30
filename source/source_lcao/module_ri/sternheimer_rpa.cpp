@@ -31,6 +31,7 @@ namespace
 constexpr std::int32_t kChi0V1Marker = -41073291;
 constexpr std::int32_t kChi0V1ComplexFlag = 1;
 constexpr std::int32_t kCoulombV1Marker = -20129433;
+constexpr std::int32_t kCoulombV1ComplexFlag = 1;
 
 void assert_same_size(const SternheimerRPA::Vector& lhs, const SternheimerRPA::Vector& rhs, const char* context)
 {
@@ -318,23 +319,23 @@ std::vector<std::vector<int>> map_atom_local_to_global(
         const SternheimerRPA::AuxiliaryChannel& channel = channels[iglobal];
         if (channel.channel_index != static_cast<int>(iglobal))
         {
-            throw std::invalid_argument("Sternheimer chi0 v1 channel indices must match matrix ordering.");
+            throw std::invalid_argument("Sternheimer v1 channel indices must match matrix ordering.");
         }
         if (channel.atom_index < 0 || channel.atom_index >= static_cast<int>(atom_naux.size()))
         {
-            throw std::invalid_argument("Sternheimer chi0 v1 channel atom index is out of range.");
+            throw std::invalid_argument("Sternheimer v1 channel atom index is out of range.");
         }
         const int naux = atom_naux[static_cast<std::size_t>(channel.atom_index)];
         if (channel.atom_local_index < 0 || channel.atom_local_index >= naux)
         {
-            throw std::invalid_argument("Sternheimer chi0 v1 channel local auxiliary index is out of range.");
+            throw std::invalid_argument("Sternheimer v1 channel local auxiliary index is out of range.");
         }
         int& mapped_index
             = global_index[static_cast<std::size_t>(channel.atom_index)][static_cast<std::size_t>(
                 channel.atom_local_index)];
         if (mapped_index != -1)
         {
-            throw std::invalid_argument("Sternheimer chi0 v1 channel mapping contains a duplicate local index.");
+            throw std::invalid_argument("Sternheimer v1 channel mapping contains a duplicate local index.");
         }
         mapped_index = static_cast<int>(iglobal);
     }
@@ -345,7 +346,7 @@ std::vector<std::vector<int>> map_atom_local_to_global(
         {
             if (mapped_index < 0)
             {
-                throw std::invalid_argument("Sternheimer chi0 v1 channel mapping is incomplete.");
+                throw std::invalid_argument("Sternheimer v1 channel mapping is incomplete.");
             }
         }
     }
@@ -1676,6 +1677,134 @@ void SternheimerRPA::write_chi0_v1_file(const std::string& filename,
     {
         const std::int32_t pair_index = block.pair_index;
         write_scalar(out, pair_index, filename);
+        write_scalar(out, block.offset, filename);
+    }
+    for (const Chi0Block& block: blocks)
+    {
+        checked_write(out, block.payload.data(), block.payload.size() * sizeof(Complex), filename);
+    }
+    out.close();
+}
+
+void SternheimerRPA::write_coulomb_v1_file(const std::string& filename,
+                                           const CoulombV1Matrix& coulomb,
+                                           const std::vector<AuxiliaryChannel>& channels)
+{
+    if (coulomb.iq <= 0)
+    {
+        throw std::invalid_argument("Sternheimer Coulomb v1 metadata requires a positive iq index.");
+    }
+    if (coulomb.atom_naux.empty())
+    {
+        throw std::invalid_argument("Sternheimer Coulomb v1 metadata requires atom auxiliary sizes.");
+    }
+    const int naux = sum_positive_sizes(coulomb.atom_naux, "Sternheimer Coulomb v1 atom_naux");
+    if (channels.size() != static_cast<std::size_t>(naux))
+    {
+        throw std::invalid_argument("Sternheimer Coulomb v1 channel count does not match atom_naux.");
+    }
+    const std::size_t matrix_size = checked_mul_size(static_cast<std::size_t>(naux),
+                                                     static_cast<std::size_t>(naux),
+                                                     "Sternheimer Coulomb v1 matrix size");
+    if (coulomb.values.size() != matrix_size)
+    {
+        throw std::invalid_argument("Sternheimer Coulomb v1 matrix size mismatch.");
+    }
+
+    double matrix_scale = 0.0;
+    double hermiticity_residual = 0.0;
+    for (int row = 0; row != naux; ++row)
+    {
+        for (int col = 0; col != naux; ++col)
+        {
+            const Complex value = coulomb.values[static_cast<std::size_t>(row) * static_cast<std::size_t>(naux)
+                                                  + static_cast<std::size_t>(col)];
+            if (!std::isfinite(value.real()) || !std::isfinite(value.imag()))
+            {
+                throw std::invalid_argument("Sternheimer Coulomb v1 matrix contains a non-finite value.");
+            }
+            matrix_scale = std::max(matrix_scale, std::abs(value));
+            hermiticity_residual = std::max(
+                hermiticity_residual,
+                std::abs(value
+                         - std::conj(coulomb.values[static_cast<std::size_t>(col)
+                                                        * static_cast<std::size_t>(naux)
+                                                    + static_cast<std::size_t>(row)])));
+        }
+    }
+    if (hermiticity_residual > 1.0e-10 * std::max(1.0, matrix_scale))
+    {
+        throw std::invalid_argument("Sternheimer Coulomb v1 matrix is not Hermitian.");
+    }
+
+    const std::vector<std::vector<int>> atom_local_to_global
+        = map_atom_local_to_global(channels, coulomb.atom_naux);
+    const std::size_t natom = coulomb.atom_naux.size();
+    std::vector<Chi0Block> blocks;
+    blocks.reserve(natom * (natom + 1) / 2);
+    for (std::size_t iatom = 0; iatom != natom; ++iatom)
+    {
+        for (std::size_t jatom = iatom; jatom != natom; ++jatom)
+        {
+            Chi0Block block;
+            block.pair_index = checked_i32_from_size(upper_triangular_pair_index(iatom, jatom, natom),
+                                                     "Sternheimer Coulomb v1 atom-pair index");
+            const int inaux = coulomb.atom_naux[iatom];
+            const int jnaux = coulomb.atom_naux[jatom];
+            block.payload.reserve(static_cast<std::size_t>(inaux) * static_cast<std::size_t>(jnaux));
+            for (int imu = 0; imu != inaux; ++imu)
+            {
+                const int iglobal = atom_local_to_global[iatom][static_cast<std::size_t>(imu)];
+                for (int jmu = 0; jmu != jnaux; ++jmu)
+                {
+                    const int jglobal = atom_local_to_global[jatom][static_cast<std::size_t>(jmu)];
+                    block.payload.push_back(coulomb.values[static_cast<std::size_t>(iglobal)
+                                                               * static_cast<std::size_t>(naux)
+                                                           + static_cast<std::size_t>(jglobal)]);
+                }
+            }
+            blocks.push_back(std::move(block));
+        }
+    }
+
+    const std::int32_t nblocks = checked_i32_from_size(blocks.size(), "Sternheimer Coulomb v1 block count");
+    std::int64_t offset = 6 * static_cast<std::int64_t>(sizeof(std::int32_t))
+        + static_cast<std::int64_t>(coulomb.atom_naux.size() * sizeof(std::int32_t))
+        + static_cast<std::int64_t>(blocks.size())
+              * static_cast<std::int64_t>(sizeof(std::int32_t) + sizeof(std::int64_t));
+    for (Chi0Block& block: blocks)
+    {
+        block.offset = offset;
+        const std::size_t bytes = checked_mul_size(block.payload.size(),
+                                                   sizeof(Complex),
+                                                   "Sternheimer Coulomb v1 block payload");
+        offset += checked_i64_from_size(bytes, "Sternheimer Coulomb v1 block payload");
+    }
+
+    static_assert(sizeof(Complex) == 2 * sizeof(double),
+                  "Sternheimer Coulomb v1 output expects complex<double> as two doubles.");
+    std::ofstream out(filename.c_str(), std::ios::out | std::ios::binary | std::ios::trunc);
+    if (!out.good())
+    {
+        throw std::runtime_error("Failed to open " + filename);
+    }
+
+    const std::int32_t iq = coulomb.iq;
+    const std::int32_t naux_i32 = naux;
+    const std::int32_t natom_i32 = checked_i32_from_size(natom, "Sternheimer Coulomb v1 atom count");
+    write_scalar(out, kCoulombV1Marker, filename);
+    write_scalar(out, iq, filename);
+    write_scalar(out, naux_i32, filename);
+    write_scalar(out, kCoulombV1ComplexFlag, filename);
+    write_scalar(out, natom_i32, filename);
+    write_scalar(out, nblocks, filename);
+    for (const int atom_aux: coulomb.atom_naux)
+    {
+        write_scalar(out, static_cast<std::int32_t>(atom_aux), filename);
+    }
+    for (const Chi0Block& block: blocks)
+    {
+        write_scalar(out, static_cast<std::int32_t>(block.pair_index), filename);
         write_scalar(out, block.offset, filename);
     }
     for (const Chi0Block& block: blocks)

@@ -227,6 +227,41 @@ TEST(SternheimerRPA, WriteChi0V1FileUsesAtomPairBlocks)
     std::remove(filename.c_str());
 }
 
+TEST(SternheimerRPA, WriteCoulombV1FileMapsChannelsIntoAtomPairBlocks)
+{
+    ModuleRI::SternheimerRPA::CoulombV1Matrix coulomb;
+    coulomb.iq = 7;
+    coulomb.atom_naux = {2, 1};
+    coulomb.values = {
+        Complex(30.0, 0.0), Complex(20.0, 2.0), Complex(10.0, 1.0),
+        Complex(20.0, -2.0), Complex(22.0, 0.0), Complex(12.0, 3.0),
+        Complex(10.0, -1.0), Complex(12.0, -3.0), Complex(11.0, 0.0)};
+
+    const std::vector<ModuleRI::SternheimerRPA::AuxiliaryChannel> channels = {
+        {0, 1, 0},
+        {1, 0, 1},
+        {2, 0, 0}};
+    const std::string filename = ::testing::TempDir() + "/sternheimer_coulomb_v1_write_test.dat";
+
+    ModuleRI::SternheimerRPA::write_coulomb_v1_file(filename, coulomb, channels);
+    const auto written = ModuleRI::SternheimerRPA::read_coulomb_v1_files({filename});
+
+    EXPECT_EQ(written.iq, 7);
+    EXPECT_EQ(written.atom_naux, std::vector<int>({2, 1}));
+    EXPECT_EQ(written.values,
+              std::vector<Complex>({Complex(11.0, 0.0),
+                                    Complex(12.0, -3.0),
+                                    Complex(10.0, -1.0),
+                                    Complex(12.0, 3.0),
+                                    Complex(22.0, 0.0),
+                                    Complex(20.0, -2.0),
+                                    Complex(10.0, 1.0),
+                                    Complex(20.0, 2.0),
+                                    Complex(30.0, 0.0)}));
+
+    std::remove(filename.c_str());
+}
+
 TEST(SternheimerRPA, ReadsCoulombV1BlocksAcrossRankFiles)
 {
     const std::string prefix = ::testing::TempDir() + "/sternheimer_coulomb_v1_rank";

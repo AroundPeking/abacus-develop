@@ -346,6 +346,13 @@ std::string chi0_v1_filename(const int iq, const int ifrequency, const int rank 
     return out.str();
 }
 
+std::string sternheimer_coulomb_v1_filename(const int iq, const int rank = 0)
+{
+    std::ostringstream out;
+    out << "v1_sternheimer_coulomb_iq_" << iq << "_rank" << rank << ".dat";
+    return out.str();
+}
+
 std::string delta_component_v1_filename(const std::string& component,
                                         const int iq,
                                         const int ifrequency,
@@ -1104,7 +1111,8 @@ SternheimerABFBuildData build_abfs_ccp_data(const UnitCell& ucell,
                                              const int max_channels,
                                              const double pca_threshold,
                                              const double ccp_rmesh_times,
-                                             const bool build_coulomb_metric)
+                                             const bool build_coulomb_metric,
+                                             const bool sample_grid_channels)
 {
     LCAO_Orbitals orb;
     read_sternheimer_orbitals(ucell, orb);
@@ -1154,16 +1162,16 @@ SternheimerABFBuildData build_abfs_ccp_data(const UnitCell& ucell,
     result.atom_types = std::move(atom_types);
     result.atom_positions = std::move(atom_positions);
     result.preorth_report = preorth_report;
-    result.channels = build_coulomb_metric
-                          ? describe_sternheimer_abf_grid_channels(result.radials_by_type,
-                                                                   result.atom_types,
-                                                                   result.atom_positions,
-                                                                   max_channels)
-                          : sample_sternheimer_abf_grid_channels(result.radials_by_type,
+    result.channels = sample_grid_channels
+                          ? sample_sternheimer_abf_grid_channels(result.radials_by_type,
                                                                  result.atom_types,
                                                                  result.atom_positions,
                                                                  grid,
-                                                                 max_channels);
+                                                                 max_channels)
+                          : describe_sternheimer_abf_grid_channels(result.radials_by_type,
+                                                                   result.atom_types,
+                                                                   result.atom_positions,
+                                                                   max_channels);
     if (build_coulomb_metric)
     {
         if (max_channels > 0)
@@ -2672,6 +2680,8 @@ void run_sternheimer_periodic_lcao_chi0_output(
                   .relative_error;
     }
     const std::vector<SternheimerABFBlochGridChannel>& channels = periodic_abfs.potentials;
+    const std::vector<SternheimerRPA::AuxiliaryChannel> auxiliary_channels
+        = make_chi0_auxiliary_channels(channels);
     append_chi0_progress_event("channels_ready",
                                0,
                                -1,
@@ -2685,6 +2695,27 @@ void run_sternheimer_periodic_lcao_chi0_output(
     if (GlobalV::MY_RANK == 0)
     {
         write_abfs_channel_diagnostic("STERNHEIMER_ABFS_CHANNELS.dat", channels);
+        if (write_periodic_v1)
+        {
+            const SternheimerRPA::Chi0V1Metadata metadata
+                = make_chi0_v1_metadata(ucell,
+                                        channels,
+                                        response_plan.iq,
+                                        1,
+                                        frequency_grid.omega_ha.front(),
+                                        frequency_grid.weights_ha.front(),
+                                        output_atom_count);
+            SternheimerRPA::CoulombV1Matrix response_coulomb;
+            response_coulomb.iq = response_plan.iq;
+            response_coulomb.atom_naux = metadata.atom_naux;
+            response_coulomb.values = sternheimer_grid_projected_matrix(periodic_abfs.densities,
+                                                                        periodic_abfs.potentials,
+                                                                        grid_data.volume_element);
+            const std::string coulomb_file = sternheimer_coulomb_v1_filename(response_plan.iq);
+            SternheimerRPA::write_coulomb_v1_file(coulomb_file, response_coulomb, auxiliary_channels);
+            GlobalV::ofs_running << " Sternheimer periodic response Coulomb v1 output: "
+                                 << coulomb_file << std::endl;
+        }
         if (sternheimer_grid_coulomb_diagnostic_enabled(num_channels))
         {
             write_sternheimer_grid_coulomb_diagnostic("STERNHEIMER_GRID_COULOMB.dat",
@@ -2712,6 +2743,8 @@ void run_sternheimer_periodic_lcao_chi0_output(
                 << " size " << grid_data.grid.size() << " dV " << grid_data.volume_element << '\n';
             out << "abfs_channels " << num_channels << '\n';
             out << "perturbation_coulomb_kernel full_periodic_poisson\n";
+            out << "response_coulomb_prefix v1_sternheimer_coulomb_iq_\n";
+            out << "response_coulomb_file " << sternheimer_coulomb_v1_filename(response_plan.iq) << '\n';
             out << "periodic_kmesh " << response_kmesh[0] << ' ' << response_kmesh[1] << ' '
                 << response_kmesh[2] << '\n';
             out << "periodic_gamma_massidda_chi " << massidda_chi << '\n';
@@ -2732,8 +2765,6 @@ void run_sternheimer_periodic_lcao_chi0_output(
     const std::vector<SternheimerFDHamiltonian::Vector> potentials = collect_channel_potentials(channels);
     const std::vector<SternheimerFDHamiltonian::Vector> perturbations_ry
         = scale_potentials(potentials, kHartreeToRydberg);
-    const std::vector<SternheimerRPA::AuxiliaryChannel> auxiliary_channels
-        = make_chi0_auxiliary_channels(channels);
 
     std::vector<int> frequency_owners(static_cast<std::size_t>(nfreq), 0);
     std::vector<std::vector<SternheimerRPA::Complex>> chi0_branches(static_cast<std::size_t>(nfreq));
@@ -3847,6 +3878,10 @@ void run_sternheimer_periodic_lcao_chi0_output(
                                      ? "v1_partial"
                                      : (write_kresolved_diagnostic ? "v1_kresolved" : "v1")))
         << '\n';
+    out << "response_coulomb_kernel full_periodic_poisson\n";
+    out << "response_coulomb_prefix " << (write_periodic_v1 ? "v1_sternheimer_coulomb_iq_" : "none") << '\n';
+    out << "response_coulomb_file "
+        << (write_periodic_v1 ? sternheimer_coulomb_v1_filename(response_plan.iq) : "none") << '\n';
     if (!write_periodic_v1)
     {
         out << "data_files 0\n";
@@ -4507,7 +4542,13 @@ void run_sternheimer_abacus_chi0_output_impl(
         const SternheimerABACUSFDGridData grid_data
             = use_frequency_mpi ? make_sternheimer_fd_full_grid(pw_basis) : make_sternheimer_fd_grid(pw_basis);
         SternheimerABFBuildData abfs_data
-            = build_abfs_ccp_data(ucell, grid_data.grid, -1, pca_threshold, ccp_rmesh_times, write_siab);
+            = build_abfs_ccp_data(ucell,
+                                  grid_data.grid,
+                                  -1,
+                                  pca_threshold,
+                                  ccp_rmesh_times,
+                                  write_siab || write_librpa,
+                                  !write_siab);
         std::vector<SternheimerABFGridChannel>& channels = abfs_data.channels;
         const std::string abfs_source
             = sternheimer_abfs_perturbation_source(GlobalC::exx_info.info_ri.files_abfs);
@@ -4535,6 +4576,9 @@ void run_sternheimer_abacus_chi0_output_impl(
                 PARAM.inp.sternheimer_siab_coulomb_threshold);
         }
         const int num_channels = write_siab ? coulomb_whitening.retained_rank : raw_num_channels;
+        const std::vector<SternheimerRPA::AuxiliaryChannel> auxiliary_channels
+            = write_librpa ? make_chi0_auxiliary_channels(channels)
+                           : std::vector<SternheimerRPA::AuxiliaryChannel>();
         append_chi0_progress_event("channels_ready",
                                    0,
                                    -1,
@@ -4623,6 +4667,30 @@ void run_sternheimer_abacus_chi0_output_impl(
         if (GlobalV::MY_RANK == 0)
         {
             write_abfs_channel_diagnostic("STERNHEIMER_ABFS_CHANNELS.dat", channels);
+            if (write_librpa)
+            {
+                const SternheimerRPA::Chi0V1Metadata metadata
+                    = make_chi0_v1_metadata(ucell,
+                                            channels,
+                                            1,
+                                            1,
+                                            frequency_grid.omega_ha.front(),
+                                            frequency_grid.weights_ha.front());
+                SternheimerRPA::CoulombV1Matrix response_coulomb;
+                response_coulomb.iq = 1;
+                response_coulomb.atom_naux = metadata.atom_naux;
+                response_coulomb.values.reserve(abfs_data.full_coulomb_metric.size());
+                for (const double value: abfs_data.full_coulomb_metric)
+                {
+                    response_coulomb.values.emplace_back(value, 0.0);
+                }
+                const std::string coulomb_file = sternheimer_coulomb_v1_filename(response_coulomb.iq);
+                SternheimerRPA::write_coulomb_v1_file(coulomb_file,
+                                                       response_coulomb,
+                                                       auxiliary_channels);
+                GlobalV::ofs_running << " Sternheimer molecular response Coulomb v1 output: "
+                                     << coulomb_file << std::endl;
+            }
             if (write_siab)
             {
                 write_coulomb_whitening_diagnostic("STERNHEIMER_SIAB_COULOMB_WHITENING.dat",
@@ -4906,10 +4974,6 @@ void run_sternheimer_abacus_chi0_output_impl(
         double max_solver_relative_residual = 0.0;
         double max_equation_residual_norm = 0.0;
         double max_component_reconstruction_error = 0.0;
-        const std::vector<SternheimerRPA::AuxiliaryChannel> auxiliary_channels
-            = write_librpa ? make_chi0_auxiliary_channels(channels)
-                           : std::vector<SternheimerRPA::AuxiliaryChannel>();
-
         const std::size_t response_matrix_size
             = write_librpa ? static_cast<std::size_t>(num_channels) * static_cast<std::size_t>(num_channels) : 0;
         std::vector<std::vector<SternheimerRPA::Complex>> chi0_branches(static_cast<std::size_t>(nfreq));
@@ -5554,6 +5618,10 @@ void run_sternheimer_abacus_chi0_output_impl(
         out << "format " << (write_siab ? "siab_v1" : "librpa_v1") << '\n';
         out << "data_files " << (write_siab ? 1 : index_entries.size()) << '\n';
         out << "index_file " << (write_siab ? "none" : "v1_sternheimer_chi0_index.dat") << '\n';
+        out << "response_coulomb_kernel " << (write_librpa ? "molecular_full_space_ccp" : "none") << '\n';
+        out << "response_coulomb_prefix " << (write_librpa ? "v1_sternheimer_coulomb_iq_" : "none") << '\n';
+        out << "response_coulomb_file "
+            << (write_librpa ? sternheimer_coulomb_v1_filename(1) : "none") << '\n';
         out << "grid " << grid_data.grid.nx << ' ' << grid_data.grid.ny << ' ' << grid_data.grid.nz << " size "
             << grid_size << " dV " << grid_data.volume_element << '\n';
         out << "nfreq " << nfreq << '\n';
