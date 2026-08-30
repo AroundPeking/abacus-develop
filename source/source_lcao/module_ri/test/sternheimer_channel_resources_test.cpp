@@ -11,6 +11,28 @@ TEST(SternheimerChannelResources, EstimatesOneHundredTwentyComplexGridVectors)
               120ULL * 1000ULL * sizeof(std::complex<double>));
 }
 
+TEST(SternheimerChannelResources, EstimatesFrequencyRecyclingBasisAndOperatorImages)
+{
+    constexpr std::uint64_t complex_bytes = sizeof(std::complex<double>);
+    constexpr std::uint64_t expected_vectors = 48 * (3 + 1) + 4 * 3;
+
+    EXPECT_EQ(ModuleRI::estimate_sternheimer_frequency_recycling_bytes(1000, 3, 48),
+              1000 * expected_vectors * complex_bytes);
+}
+
+TEST(SternheimerChannelResources, RejectsInvalidFrequencyRecyclingMemoryInputs)
+{
+    EXPECT_THROW(ModuleRI::estimate_sternheimer_frequency_recycling_bytes(0, 3, 48),
+                 std::invalid_argument);
+    EXPECT_THROW(ModuleRI::estimate_sternheimer_frequency_recycling_bytes(1000, 0, 48),
+                 std::invalid_argument);
+    EXPECT_THROW(ModuleRI::estimate_sternheimer_frequency_recycling_bytes(1000, 3, 0),
+                 std::invalid_argument);
+    EXPECT_THROW(ModuleRI::estimate_sternheimer_frequency_recycling_bytes(
+                     std::numeric_limits<std::size_t>::max(), 64, 512),
+                 std::overflow_error);
+}
+
 TEST(SternheimerChannelResources, GroupsChannelsIntoStableMicroBatches)
 {
     const auto batches = ModuleRI::make_sternheimer_channel_batches(10, 4);

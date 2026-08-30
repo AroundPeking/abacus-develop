@@ -70,6 +70,14 @@ The first Delta-ST integration is deliberately narrow:
 - a hard common-basis dimension cap;
 - explicit experimental enablement and provenance output.
 
+The experiment is disabled unless
+`ABACUS_STERNHEIMER_FREQUENCY_RECYCLING=true` is set.  The initial group size
+and basis cap are controlled by
+`ABACUS_STERNHEIMER_FREQUENCY_RECYCLING_GROUP_SIZE` and
+`ABACUS_STERNHEIMER_FREQUENCY_RECYCLING_MAX_BASIS_DIMENSION`; their defaults
+are 3 and 48.  Invalid or unsupported layouts are rejected rather than silently
+running an unshared path.
+
 The existing frequency-MPI decomposition assigns frequencies to different
 ranks.  The prototype must not add all-to-all basis traffic.  A physical pilot
 therefore co-locates only the selected three frequencies for measurement.  A
@@ -82,6 +90,11 @@ vector family before operator images and solver workspaces.  The prototype
 defaults to a conservative dimension cap of 48 and refuses activation when
 the rank memory estimate exceeds the existing channel-worker budget.  It does
 not multiply the outer channel-worker count by the frequency-group size.
+
+The conservative estimator counts `(nfreq + 1) * basis_dimension + 4 * nfreq`
+complex grid vectors: one common basis, all frequency-specific operator images,
+and frequency RHS/solution/residual workspaces.  It is a gate estimate, not a
+replacement for measured MaxRSS.
 
 Operator applications are counted separately for every frequency.  Reduced
 dense solves are not treated as the bottleneck.  The pilot must report total

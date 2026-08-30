@@ -47,6 +47,10 @@ std::vector<SternheimerChannelBatch> make_sternheimer_channel_batches(int num_ch
 
 std::uint64_t estimate_sternheimer_channel_worker_bytes(std::size_t grid_size);
 
+std::uint64_t estimate_sternheimer_frequency_recycling_bytes(std::size_t grid_size,
+                                                             int frequency_count,
+                                                             int basis_dimension);
+
 SternheimerChannelWorkerPlan plan_sternheimer_channel_workers(int num_channels,
                                                               int omp_threads,
                                                               std::size_t grid_size,

@@ -10,6 +10,10 @@ namespace
 
 constexpr const char* kTestFlag = "ABACUS_STERNHEIMER_TEST_FLAG";
 constexpr const char* kBatchWidth = "ABACUS_STERNHEIMER_CHANNEL_BATCH_WIDTH";
+constexpr const char* kFrequencyRecycling = "ABACUS_STERNHEIMER_FREQUENCY_RECYCLING";
+constexpr const char* kFrequencyGroupSize = "ABACUS_STERNHEIMER_FREQUENCY_RECYCLING_GROUP_SIZE";
+constexpr const char* kFrequencyBasisDimension
+    = "ABACUS_STERNHEIMER_FREQUENCY_RECYCLING_MAX_BASIS_DIMENSION";
 
 class SternheimerRuntimeOptionsTest : public ::testing::Test
 {
@@ -18,6 +22,9 @@ class SternheimerRuntimeOptionsTest : public ::testing::Test
     {
         unsetenv(kTestFlag);
         unsetenv(kBatchWidth);
+        unsetenv(kFrequencyRecycling);
+        unsetenv(kFrequencyGroupSize);
+        unsetenv(kFrequencyBasisDimension);
     }
 };
 
@@ -71,5 +78,46 @@ TEST_F(SternheimerRuntimeOptionsTest, RejectsEmptyAndUnknownBooleanText)
     {
         setenv(kTestFlag, value, 1);
         EXPECT_THROW(ModuleRI::sternheimer_environment_flag(kTestFlag, true), std::invalid_argument) << value;
+    }
+}
+
+TEST_F(SternheimerRuntimeOptionsTest, DisablesFrequencyRecyclingByDefault)
+{
+    const auto options = ModuleRI::sternheimer_frequency_recycling_runtime_options();
+
+    EXPECT_FALSE(options.enabled);
+    EXPECT_EQ(options.group_size, 3);
+    EXPECT_EQ(options.max_basis_dimension, 48);
+}
+
+TEST_F(SternheimerRuntimeOptionsTest, ParsesFrequencyRecyclingExperimentOptions)
+{
+    setenv(kFrequencyRecycling, "true", 1);
+    setenv(kFrequencyGroupSize, "4", 1);
+    setenv(kFrequencyBasisDimension, "32", 1);
+
+    const auto options = ModuleRI::sternheimer_frequency_recycling_runtime_options();
+
+    EXPECT_TRUE(options.enabled);
+    EXPECT_EQ(options.group_size, 4);
+    EXPECT_EQ(options.max_basis_dimension, 32);
+}
+
+TEST_F(SternheimerRuntimeOptionsTest, RejectsInvalidFrequencyRecyclingDimensions)
+{
+    for (const char* value: {"", "0", "-1", "three", "65"})
+    {
+        setenv(kFrequencyGroupSize, value, 1);
+        EXPECT_THROW(ModuleRI::sternheimer_frequency_recycling_runtime_options(),
+                     std::invalid_argument)
+            << value;
+    }
+    unsetenv(kFrequencyGroupSize);
+    for (const char* value: {"", "0", "-1", "wide", "513"})
+    {
+        setenv(kFrequencyBasisDimension, value, 1);
+        EXPECT_THROW(ModuleRI::sternheimer_frequency_recycling_runtime_options(),
+                     std::invalid_argument)
+            << value;
     }
 }

@@ -214,6 +214,23 @@ std::uint64_t estimate_sternheimer_channel_worker_bytes(const std::size_t grid_s
                             sizeof(std::complex<double>));
 }
 
+std::uint64_t estimate_sternheimer_frequency_recycling_bytes(const std::size_t grid_size,
+                                                             const int frequency_count,
+                                                             const int basis_dimension)
+{
+    if (grid_size == 0 || frequency_count <= 0 || basis_dimension <= 0)
+    {
+        throw std::invalid_argument(
+            "Sternheimer frequency recycling memory estimate requires positive dimensions.");
+    }
+    const std::uint64_t frequencies = static_cast<std::uint64_t>(frequency_count);
+    const std::uint64_t basis = static_cast<std::uint64_t>(basis_dimension);
+    const std::uint64_t grid_vectors = basis * (frequencies + 1) + 4 * frequencies;
+    return checked_multiply(
+        checked_multiply(grid_vectors, static_cast<std::uint64_t>(grid_size)),
+        sizeof(std::complex<double>));
+}
+
 std::vector<SternheimerChannelBatch> make_sternheimer_channel_batches(const int num_channels, const int batch_width)
 {
     if (num_channels < 0)

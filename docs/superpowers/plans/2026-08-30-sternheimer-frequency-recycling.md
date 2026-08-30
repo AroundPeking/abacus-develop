@@ -71,11 +71,11 @@ ABACUS Delta-Sternheimer, LibRPA.
 - Modify: periodic producer/smoke files selected after source tracing.
 - Modify: matching runtime/resource/smoke tests.
 
-- [ ] Add failing parser tests for disabled default, explicit enablement,
+- [x] Add failing parser tests for disabled default, explicit enablement,
   frequency-group size, basis cap, and invalid values.
 - [ ] Reject layouts that would require cross-group basis communication in the
   first implementation.
-- [ ] Add basis/operator-image memory accounting to the existing worker budget.
+- [x] Add basis/operator-image memory accounting to the existing worker budget.
 - [ ] Emit effective settings, operator counts, basis size, fallback state, and
   reason in provenance.
 - [ ] Preserve output ordering and the current independent-frequency default.
