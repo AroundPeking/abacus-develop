@@ -133,15 +133,20 @@ std::vector<ModuleRI::SternheimerLCAOOccupiedKPoint> gather_sternheimer_lcao_occ
                           MPI_COMM_WORLD);
 #endif
         }
-        if (ModuleRI::sternheimer_lcao_virtual_state_gathering_enabled())
+        const int available_unoccupied_count = elec_state.ekb.nc - occupied_count;
+        const int unoccupied_count = ModuleRI::sternheimer_lcao_virtual_state_gather_count(
+            available_unoccupied_count,
+            PARAM.inp.sternheimer_delta,
+            PARAM.inp.sternheimer_delta_virtual_source,
+            PARAM.inp.sternheimer_delta_max_states);
+        if (unoccupied_count > 0)
         {
-            const int unoccupied_count = elec_state.ekb.nc - occupied_count;
             record.unoccupied_eigenvalues.reserve(static_cast<std::size_t>(unoccupied_count));
             record.unoccupied_coefficients.assign(
                 static_cast<std::size_t>(unoccupied_count),
                 std::vector<std::complex<double>>(static_cast<std::size_t>(PARAM.globalv.nlocal),
                                                   std::complex<double>(0.0, 0.0)));
-            for (int ib = occupied_count; ib != elec_state.ekb.nc; ++ib)
+            for (int ib = occupied_count; ib != occupied_count + unoccupied_count; ++ib)
             {
                 const std::size_t virtual_index = static_cast<std::size_t>(ib - occupied_count);
                 record.unoccupied_eigenvalues.push_back(elec_state.ekb(local_k_index, ib));

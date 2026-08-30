@@ -1096,10 +1096,10 @@ If EXX(exact exchange) is calculated (i.e. dft_fuctional==hse/hf/pbe0/scan0 or r
     }
     {
         Input_Item item("sternheimer_delta_max_states");
-        item.annotation = "maximum number of fixed AO virtual states for Delta-Sternheimer";
+        item.annotation = "maximum number of fixed KS/AO virtual states for Delta-Sternheimer";
         item.category = "Output information";
         item.type = "Integer";
-        item.description = "Limit the number of fixed AO/NAO virtual states used by sternheimer_delta. "
+        item.description = "Limit the number of fixed KS-band or projected-AO virtual states used by sternheimer_delta. "
                            "The value 0 keeps all accepted candidates after occupied-state projection and "
                            "orthogonalization.";
         item.default_value = "0";
