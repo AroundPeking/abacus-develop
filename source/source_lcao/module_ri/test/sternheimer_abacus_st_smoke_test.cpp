@@ -467,6 +467,19 @@ TEST(SternheimerABACUSSTSmoke, PlansVirtualSamplingWithoutMakingTheOptionalSOSDi
     EXPECT_THROW(ModuleRI::sternheimer_lcao_sampling_plan(false, true, false), std::invalid_argument);
 }
 
+TEST(SternheimerABACUSSTSmoke, ReusesTargetSamplingWhenItContainsTheSameSourceRecord)
+{
+    const auto occupied_only = ModuleRI::sternheimer_lcao_sampling_plan(false, false, false);
+    const auto target_virtuals = ModuleRI::sternheimer_lcao_sampling_plan(true, false, true);
+    ModuleRI::SternheimerLCAOSamplingPlan missing_source_virtuals;
+    missing_source_virtuals.sample_source_unoccupied = true;
+
+    EXPECT_TRUE(ModuleRI::can_reuse_sternheimer_target_lcao_sampling(true, occupied_only));
+    EXPECT_TRUE(ModuleRI::can_reuse_sternheimer_target_lcao_sampling(true, target_virtuals));
+    EXPECT_FALSE(ModuleRI::can_reuse_sternheimer_target_lcao_sampling(false, target_virtuals));
+    EXPECT_FALSE(ModuleRI::can_reuse_sternheimer_target_lcao_sampling(true, missing_source_virtuals));
+}
+
 TEST(SternheimerABACUSSTSmoke, RejectsNonInsulatingSupercellSectorOccupations)
 {
     EXPECT_NO_THROW(ModuleRI::validate_sternheimer_supercell_sector_occupations({1.0, 1.0}, 2));
