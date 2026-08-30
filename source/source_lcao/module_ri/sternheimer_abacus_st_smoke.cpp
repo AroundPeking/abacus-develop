@@ -2836,6 +2836,7 @@ void run_sternheimer_periodic_lcao_chi0_output(
     int solved_equations = 0;
     long long hamiltonian_applications = 0;
     long long frequency_recycling_family_applications = 0;
+    long long frequency_recycling_projection_dot_products = 0;
     long long frequency_recycling_groups = 0;
     long long frequency_recycling_fallback_groups = 0;
     int frequency_recycling_max_basis_used = 0;
@@ -3222,6 +3223,7 @@ void run_sternheimer_periodic_lcao_chi0_output(
                         std::vector<double> full_grid_equation_residual_norms;
                         int hamiltonian_applications = 0;
                         int family_hamiltonian_applications = 0;
+                        long long projection_dot_products = 0;
                         int basis_dimension = 0;
                         bool used_fallback = false;
                         std::string fallback_reason;
@@ -3267,6 +3269,8 @@ void run_sternheimer_periodic_lcao_chi0_output(
                                     = responses.hamiltonian_applications;
                                 result.family_hamiltonian_applications
                                     = responses.recycling.family_operator_applications;
+                                result.projection_dot_products
+                                    = responses.recycling.projection_dot_products;
                                 result.basis_dimension = responses.recycling.basis_dimension;
                                 result.used_fallback = responses.recycling.used_fallback;
                                 result.fallback_reason = responses.recycling.fallback_reason;
@@ -3313,6 +3317,8 @@ void run_sternheimer_periodic_lcao_chi0_output(
                         hamiltonian_applications += result.hamiltonian_applications;
                         frequency_recycling_family_applications
                             += result.family_hamiltonian_applications;
+                        frequency_recycling_projection_dot_products
+                            += result.projection_dot_products;
                         frequency_recycling_max_basis_used
                             = std::max(frequency_recycling_max_basis_used,
                                        result.basis_dimension);
@@ -3958,20 +3964,22 @@ void run_sternheimer_periodic_lcao_chi0_output(
                       MPI_DOUBLE,
                       MPI_MAX,
                       MPI_COMM_WORLD);
-        long long recycling_sums[4] = {hamiltonian_applications,
+        long long recycling_sums[5] = {hamiltonian_applications,
                                        frequency_recycling_family_applications,
+                                       frequency_recycling_projection_dot_products,
                                        frequency_recycling_groups,
                                        frequency_recycling_fallback_groups};
         MPI_Allreduce(MPI_IN_PLACE,
                       recycling_sums,
-                      4,
+                      5,
                       MPI_LONG_LONG,
                       MPI_SUM,
                       MPI_COMM_WORLD);
         hamiltonian_applications = recycling_sums[0];
         frequency_recycling_family_applications = recycling_sums[1];
-        frequency_recycling_groups = recycling_sums[2];
-        frequency_recycling_fallback_groups = recycling_sums[3];
+        frequency_recycling_projection_dot_products = recycling_sums[2];
+        frequency_recycling_groups = recycling_sums[3];
+        frequency_recycling_fallback_groups = recycling_sums[4];
         MPI_Allreduce(MPI_IN_PLACE,
                       &frequency_recycling_max_basis_used,
                       1,
@@ -4226,6 +4234,8 @@ void run_sternheimer_periodic_lcao_chi0_output(
     out << "sternheimer_frequency_recycling_groups " << frequency_recycling_groups << '\n';
     out << "sternheimer_frequency_recycling_family_hamiltonian_applications "
         << frequency_recycling_family_applications << '\n';
+    out << "sternheimer_frequency_recycling_projection_dot_products "
+        << frequency_recycling_projection_dot_products << '\n';
     out << "sternheimer_frequency_recycling_fallback_groups "
         << frequency_recycling_fallback_groups << '\n';
     out << "sternheimer_frequency_recycling_max_basis_used "

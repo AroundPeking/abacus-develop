@@ -1078,6 +1078,8 @@ SternheimerRPA::FrequencyRecyclingResult SternheimerRPA::solve_frequency_recycli
 
     std::vector<Vector> basis;
     std::vector<Matrix> operator_images(problems.size());
+    std::vector<std::vector<std::vector<Complex>>> reduced_matrices(problems.size());
+    std::vector<std::vector<Complex>> reduced_rhs(problems.size());
     std::vector<Vector> residuals(problems.size(), Vector(vector_size, Complex(0.0, 0.0)));
     std::vector<double> norm_floors(problems.size(), 1.0);
     for (std::size_t ifrequency = 0; ifrequency != problems.size(); ++ifrequency)
@@ -1141,6 +1143,36 @@ SternheimerRPA::FrequencyRecyclingResult SternheimerRPA::solve_frequency_recycli
                 result.operator_applications[ifrequency] += 1;
             }
         }
+        const std::size_t dimension = basis.size();
+        const std::size_t new_index = dimension - 1;
+        for (std::size_t ifrequency = 0; ifrequency != problems.size(); ++ifrequency)
+        {
+            std::vector<std::vector<Complex>>& reduced_matrix
+                = reduced_matrices[ifrequency];
+            for (std::vector<Complex>& row: reduced_matrix)
+            {
+                row.resize(dimension, Complex(0.0, 0.0));
+            }
+            reduced_matrix.emplace_back(dimension, Complex(0.0, 0.0));
+            reduced_rhs[ifrequency].push_back(
+                metric_problem.dot(operator_images[ifrequency][new_index],
+                                   problems[ifrequency].rhs));
+            result.projection_dot_products += 1;
+            for (std::size_t col = 0; col != dimension; ++col)
+            {
+                reduced_matrix[new_index][col]
+                    = metric_problem.dot(operator_images[ifrequency][new_index],
+                                         operator_images[ifrequency][col]);
+                result.projection_dot_products += 1;
+            }
+            for (std::size_t row = 0; row != new_index; ++row)
+            {
+                reduced_matrix[row][new_index]
+                    = metric_problem.dot(operator_images[ifrequency][row],
+                                         operator_images[ifrequency][new_index]);
+                result.projection_dot_products += 1;
+            }
+        }
         result.basis_dimension = static_cast<int>(basis.size());
         return true;
     };
@@ -1150,25 +1182,15 @@ SternheimerRPA::FrequencyRecyclingResult SternheimerRPA::solve_frequency_recycli
         for (std::size_t ifrequency = 0; ifrequency != problems.size(); ++ifrequency)
         {
             const std::size_t dimension = basis.size();
-            std::vector<std::vector<Complex>> reduced_matrix(
-                dimension, std::vector<Complex>(dimension, Complex(0.0, 0.0)));
-            std::vector<Complex> reduced_rhs(dimension, Complex(0.0, 0.0));
-            for (std::size_t row = 0; row != dimension; ++row)
-            {
-                reduced_rhs[row]
-                    = metric_problem.dot(operator_images[ifrequency][row], problems[ifrequency].rhs);
-                for (std::size_t col = 0; col != dimension; ++col)
-                {
-                    reduced_matrix[row][col]
-                        = metric_problem.dot(operator_images[ifrequency][row],
-                                             operator_images[ifrequency][col]);
-                }
-            }
+            std::vector<std::vector<Complex>> reduced_matrix
+                = reduced_matrices[ifrequency];
+            std::vector<Complex> projected_rhs = reduced_rhs[ifrequency];
 
             std::vector<Complex> coefficients;
             if (dimension != 0)
             {
-                coefficients = solve_small_dense_system(std::move(reduced_matrix), std::move(reduced_rhs));
+                coefficients = solve_small_dense_system(std::move(reduced_matrix),
+                                                        std::move(projected_rhs));
             }
             solutions[ifrequency].assign(vector_size, Complex(0.0, 0.0));
             Vector applied_solution(vector_size, Complex(0.0, 0.0));

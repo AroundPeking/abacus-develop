@@ -147,6 +147,7 @@ class SternheimerRPA
         std::vector<SolverResult> frequency_results;
         std::vector<int> operator_applications;
         int family_operator_applications = 0;
+        long long projection_dot_products = 0;
         int basis_dimension = 0;
         bool used_fallback = false;
         std::string fallback_reason;

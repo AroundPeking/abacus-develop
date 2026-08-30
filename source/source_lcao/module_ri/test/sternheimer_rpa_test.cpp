@@ -1029,3 +1029,38 @@ TEST(SternheimerRPA, FrequencyRecyclingUsesOneFamilyApplyPerBasisVector)
         }
     }
 }
+
+TEST(SternheimerRPA, FrequencyRecyclingBuildsReducedProjectionIncrementally)
+{
+    const Vector diagonal
+        = {Complex(1.0, 0.0), Complex(2.0, 0.0), Complex(3.0, 0.0), Complex(4.0, 0.0)};
+    const Vector exact(diagonal.size(), Complex(1.0, 0.0));
+    ModuleRI::SternheimerRPA::FrequencyLinearProblem entry;
+    entry.problem.apply = [&diagonal](const Vector& input, Vector& output) {
+        output.resize(input.size());
+        for (std::size_t i = 0; i != input.size(); ++i)
+        {
+            output[i] = diagonal[i] * input[i];
+        }
+    };
+    entry.problem.dot = dot;
+    entry.rhs.resize(exact.size());
+    entry.problem.apply(exact, entry.rhs);
+
+    ModuleRI::SternheimerRPA::SolverOptions solver_options;
+    solver_options.max_iter = 10;
+    solver_options.residual_tol = 1.0e-12;
+    ModuleRI::SternheimerRPA::FrequencyRecyclingOptions recycling_options;
+    recycling_options.max_basis_dimension = 4;
+    recycling_options.fallback_to_independent = false;
+
+    ModuleRI::SternheimerRPA::Matrix solutions;
+    const auto result = ModuleRI::SternheimerRPA::solve_frequency_recycling(
+        {entry}, solutions, solver_options, recycling_options);
+
+    EXPECT_FALSE(result.used_fallback);
+    EXPECT_EQ(result.basis_dimension, 4);
+    EXPECT_EQ(result.projection_dot_products, 20);
+    ASSERT_EQ(result.frequency_results.size(), 1U);
+    EXPECT_TRUE(result.frequency_results.front().converged);
+}
