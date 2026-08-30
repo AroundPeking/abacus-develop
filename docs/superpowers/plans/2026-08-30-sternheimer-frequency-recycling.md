@@ -84,11 +84,11 @@ ABACUS Delta-Sternheimer, LibRPA.
 
 **Files:** Modify only when tests expose defects.
 
-- [ ] Build and run all affected RPA, Delta-ST, preconditioner, runtime,
+- [x] Build and run all affected RPA, Delta-ST, preconditioner, runtime,
   resource, periodic, and smoke tests.
-- [ ] Run `git diff --check origin/master_ghj...HEAD` and audit that no physical
+- [x] Run `git diff --check origin/master_ghj...HEAD` and audit that no physical
   defaults, tolerances, frequency grids, FD order, or output definitions moved.
-- [ ] Build one immutable RelWithDebInfo artifact on df_dcu `/work1` and require
+- [x] Build one immutable RelWithDebInfo artifact on df_dcu `/work1` and require
   the complete affected test set to pass.
 
 ### Task 6: Run the Si three-frequency physical A/B
@@ -98,13 +98,13 @@ ABACUS Delta-Sternheimer, LibRPA.
   `server_jobs/sternheimer_performance_20260830/`.
 - Create: `STERNHEIMER_FREQUENCY_RECYCLING_BENCHMARK_20260830.md`.
 
-- [ ] Reuse the accepted Si q case and select actual low, middle, and high
+- [x] Reuse the accepted Si q case and select actual low, middle, and high
   GreenX frequencies; do not run any physics locally.
-- [ ] Run independent and recycled paths with identical executable, inputs,
+- [x] Run independent and recycled paths with identical executable, inputs,
   MPI/OMP resources, channel batch width, and convergence tolerance.
-- [ ] Require complete physical output, full residuals, response-matrix gate,
+- [x] Require complete physical output, full residuals, response-matrix gate,
   Hamiltonian-application count, wall time, MaxRSS, and node-hours.
-- [ ] Stop without production integration unless both numerical and performance
+- [x] Stop without production integration unless both numerical and performance
   gates in the design are met.
 
 ### Task 7: Decide whether to continue or stop
@@ -113,7 +113,7 @@ ABACUS Delta-Sternheimer, LibRPA.
 - Modify benchmark/development documentation and production skill only after a
   verified physical result.
 
-- [ ] If the pilot fails, record the cause and keep the feature branch opt-in.
+- [x] If the pilot fails, record the cause and keep the feature branch opt-in.
 - [ ] If the pilot passes, design the MPI-local grouping needed for a full Si
   workload and run a complete energy/resource A/B.
 - [ ] Merge and consider default enablement only after the complete workload is

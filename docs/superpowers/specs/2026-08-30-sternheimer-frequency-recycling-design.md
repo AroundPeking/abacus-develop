@@ -139,3 +139,25 @@ The feature branch is `codex/sternheimer-frequency-recycling-20260830` from
 the current `origin/master_ghj`.  The experiment stays opt-in until the full Si
 energy and resource A/B also passes.  Only a result-preserving, measured
 end-to-end improvement may be merged and later enabled by default.
+
+## Final Pilot Outcome
+
+The df_dcu Si q=7 low/middle/high-frequency pilot completed all 256,512
+equations with no fallback. The incremental projected-matrix update reduced
+the recycling wall time from `1:08:16` to `37:13.28`; the two recycling
+implementations agree within relative Frobenius `1.71194e-11`.
+
+The optimized recycling path did not pass the independent-frequency gates:
+
+- maximum response relative Frobenius difference: `2.12206e-10` (`1e-10`
+  limit);
+- Hamiltonian-application reduction: 12.81% (40% minimum);
+- wall: `37:13.28` versus `33:32.86`, or `0.9013x` (1.5x minimum);
+- node-hours: 4.9628 versus 4.4730;
+- projected dot products: 248,723,874.
+
+Therefore the full 12-frequency A/B was not submitted. The feature remains
+opt-in on this branch and is not merged or enabled by default. The complete
+physical and resource record is stored in
+`server_jobs/sternheimer_performance_20260830/STERNHEIMER_FREQUENCY_RECYCLING_BENCHMARK_20260830.md`
+in the calculation workspace.
