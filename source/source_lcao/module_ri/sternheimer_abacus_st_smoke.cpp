@@ -16,6 +16,7 @@
 #include "source_lcao/module_ri/conv_coulomb_pot_k.h"
 #include "source_lcao/module_ri/exx_abfs-construct_orbs.h"
 #include "source_lcao/module_ri/exx_abfs-io.h"
+#include "source_lcao/module_ri/rpa_abfs_preorthogonalization.h"
 #include "source_lcao/module_ri/sternheimer_abfs_perturbation.h"
 #include "source_lcao/module_ri/sternheimer_channel_parallel.h"
 #include "source_lcao/module_ri/sternheimer_channel_resources.h"
@@ -950,6 +951,12 @@ SternheimerOrbitalSet build_sternheimer_abfs(const UnitCell& ucell, const double
                                             GlobalC::exx_info.info_ri.kmesh_times);
     }
     Exx_Abfs::Construct_Orbs::filter_empty_orbs(abfs);
+    const RpaAbfsPreorthReport preorth_report
+        = finalize_rpa_abfs_from_input(abfs, PARAM.inp, PARAM.inp.cal_force);
+    if (GlobalV::MY_RANK == 0)
+    {
+        GlobalV::ofs_running << format_rpa_abfs_preorth_report(preorth_report);
+    }
     return abfs;
 }
 
@@ -994,6 +1001,7 @@ struct SternheimerABFBuildData
     std::vector<std::vector<SternheimerRadialPerturbation>> radials_by_type;
     std::vector<int> atom_types;
     std::vector<ModuleBase::Vector3<double>> atom_positions;
+    RpaAbfsPreorthReport preorth_report;
 };
 
 std::vector<double> build_molecular_coulomb_metric(
@@ -1118,6 +1126,12 @@ SternheimerABFBuildData build_abfs_ccp_data(const UnitCell& ucell,
                                             GlobalC::exx_info.info_ri.kmesh_times);
     }
     Exx_Abfs::Construct_Orbs::filter_empty_orbs(abfs);
+    const RpaAbfsPreorthReport preorth_report
+        = finalize_rpa_abfs_from_input(abfs, PARAM.inp, PARAM.inp.cal_force);
+    if (GlobalV::MY_RANK == 0)
+    {
+        GlobalV::ofs_running << format_rpa_abfs_preorth_report(preorth_report);
+    }
     const auto abfs_ccp = Conv_Coulomb_Pot_K::cal_orbs_ccp(abfs, make_fock_hartree_coulomb_param(), ccp_rmesh_times);
     auto radials_by_type = make_sternheimer_radial_perturbations_from_orbitals(abfs_ccp);
 
@@ -1139,6 +1153,7 @@ SternheimerABFBuildData build_abfs_ccp_data(const UnitCell& ucell,
     result.radials_by_type = std::move(radials_by_type);
     result.atom_types = std::move(atom_types);
     result.atom_positions = std::move(atom_positions);
+    result.preorth_report = preorth_report;
     result.channels = build_coulomb_metric
                           ? describe_sternheimer_abf_grid_channels(result.radials_by_type,
                                                                    result.atom_types,
@@ -5535,6 +5550,7 @@ void run_sternheimer_abacus_chi0_output_impl(
         }
 
         out << "status success\n";
+        out << format_rpa_abfs_preorth_report(abfs_data.preorth_report);
         out << "format " << (write_siab ? "siab_v1" : "librpa_v1") << '\n';
         out << "data_files " << (write_siab ? 1 : index_entries.size()) << '\n';
         out << "index_file " << (write_siab ? "none" : "v1_sternheimer_chi0_index.dat") << '\n';
