@@ -265,6 +265,38 @@ TEST(SternheimerRPA, ProjectOutSubspace)
     EXPECT_NEAR(std::abs(dot(occupied[1], vec)), 0.0, 1.0e-14);
 }
 
+TEST(SternheimerRPA, CachedSubspaceProjectorReusesBasisNorms)
+{
+    int dot_calls = 0;
+    const auto counting_dot = [&dot_calls](const Vector& lhs, const Vector& rhs) {
+        ++dot_calls;
+        return dot(lhs, rhs);
+    };
+    const std::vector<Vector> occupied
+        = {{Complex(2.0, 0.0), Complex(0.0, 0.0)}, {Complex(0.0, 0.0), Complex(0.0, 3.0)}};
+    const ModuleRI::SternheimerSubspaceProjector projector(occupied, counting_dot);
+
+    EXPECT_EQ(dot_calls, 2);
+    Vector first = {Complex(2.0, 1.0), Complex(3.0, -4.0)};
+    projector.project(first);
+    EXPECT_EQ(dot_calls, 4);
+    Vector second = {Complex(-1.0, 2.0), Complex(0.5, 0.25)};
+    projector.project(second);
+    EXPECT_EQ(dot_calls, 6);
+    EXPECT_NEAR(std::abs(dot(occupied[0], first)), 0.0, 1.0e-14);
+    EXPECT_NEAR(std::abs(dot(occupied[1], first)), 0.0, 1.0e-14);
+    EXPECT_NEAR(std::abs(dot(occupied[0], second)), 0.0, 1.0e-14);
+    EXPECT_NEAR(std::abs(dot(occupied[1], second)), 0.0, 1.0e-14);
+}
+
+TEST(SternheimerRPA, SpectralPreconditionerIsDefault)
+{
+    const ModuleRI::SternheimerRPA::SolverOptions options{};
+
+    EXPECT_TRUE(options.use_fd_spectral_preconditioner);
+    EXPECT_DOUBLE_EQ(options.fd_spectral_preconditioner_regularization, 0.0);
+}
+
 TEST(SternheimerRPA, ApplyKineticPreconditioner)
 {
     const std::vector<double> kinetic = {1.0, 3.0};

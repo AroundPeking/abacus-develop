@@ -10,6 +10,23 @@
 namespace ModuleRI
 {
 
+class SternheimerSubspaceProjector
+{
+  public:
+    using Complex = std::complex<double>;
+    using Vector = std::vector<Complex>;
+    using Dot = std::function<Complex(const Vector&, const Vector&)>;
+
+    SternheimerSubspaceProjector(const std::vector<Vector>& subspace, Dot dot);
+
+    void project(Vector& vec) const;
+
+  private:
+    const std::vector<Vector>* subspace_ = nullptr;
+    Dot dot_;
+    std::vector<Complex> basis_norms_;
+};
+
 class SternheimerRPA
 {
   public:
@@ -21,8 +38,8 @@ class SternheimerRPA
         int max_iter = 300;
         double residual_tol = 1.0e-10;
         double breakdown_tol = 1.0e-14;
-        bool use_fd_spectral_preconditioner = false;
-        double fd_spectral_preconditioner_regularization = 0.2;
+        bool use_fd_spectral_preconditioner = true;
+        double fd_spectral_preconditioner_regularization = 0.0;
     };
 
     struct SolverResult
