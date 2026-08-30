@@ -123,7 +123,7 @@ AddTest(
 AddTest(
   TARGET MODULE_RI_sternheimer_grid_diagnostics_test
   LIBS ${STERNHEIMER_RPA_TEST_LIBS}
-  SOURCES sternheimer_grid_diagnostics_test.cpp ../sternheimer_grid_diagnostics.cpp ../sternheimer_delta.cpp ../sternheimer_fd_solver.cpp ../sternheimer_fd_hamiltonian.cpp ../sternheimer_fd_preconditioner.cpp ../sternheimer_fd_nonlocal_projector.cpp ../sternheimer_rpa.cpp
+  SOURCES sternheimer_grid_diagnostics_test.cpp ../sternheimer_grid_diagnostics.cpp ../sternheimer_delta.cpp ../sternheimer_fd_solver.cpp ../sternheimer_fd_hamiltonian.cpp ../sternheimer_fd_preconditioner.cpp ../sternheimer_fd_nonlocal_projector.cpp ../sternheimer_kq.cpp ../sternheimer_rpa.cpp
 )
 AddTest(
   TARGET MODULE_RI_sternheimer_dft_zero_order_test

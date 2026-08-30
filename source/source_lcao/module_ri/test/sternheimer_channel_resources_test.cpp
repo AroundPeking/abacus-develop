@@ -33,6 +33,31 @@ TEST(SternheimerChannelResources, RejectsInvalidFrequencyRecyclingMemoryInputs)
                  std::overflow_error);
 }
 
+TEST(SternheimerChannelResources, AcceptsFrequencyRecyclingWithinWorkerMemoryBudget)
+{
+    ModuleRI::SternheimerChannelWorkerPlan plan;
+    plan.effective_workers = 4;
+    plan.increment_bytes_per_rank = 1200;
+    plan.memory_per_worker_bytes = 100;
+
+    EXPECT_NO_THROW(ModuleRI::validate_sternheimer_frequency_recycling_memory(plan, 150));
+}
+
+TEST(SternheimerChannelResources, RejectsFrequencyRecyclingOutsideWorkerMemoryBudget)
+{
+    ModuleRI::SternheimerChannelWorkerPlan plan;
+    plan.effective_workers = 4;
+    plan.increment_bytes_per_rank = 999;
+    plan.memory_per_worker_bytes = 100;
+
+    EXPECT_THROW(ModuleRI::validate_sternheimer_frequency_recycling_memory(plan, 150),
+                 std::runtime_error);
+
+    plan.increment_bytes_per_rank = 0;
+    EXPECT_THROW(ModuleRI::validate_sternheimer_frequency_recycling_memory(plan, 1),
+                 std::runtime_error);
+}
+
 TEST(SternheimerChannelResources, GroupsChannelsIntoStableMicroBatches)
 {
     const auto batches = ModuleRI::make_sternheimer_channel_batches(10, 4);

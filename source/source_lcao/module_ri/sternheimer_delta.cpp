@@ -1438,15 +1438,22 @@ SternheimerDeltaLinearResponse solve_delta_sternheimer_linear_response(
         axpy(-perturbation_matrix_elements[ia] / denominators[ia], virtual_states[ia].residual, projected_rhs);
     }
 
+    int hamiltonian_applications = 0;
     SternheimerRPA::LinearProblem problem;
     problem.dot = dot;
-    problem.apply = [&hamiltonian, &fixed_projector, &virtual_states, &denominators, reference_eigenvalue, omega, dot](
-                        const Vector& input,
-                        Vector& output) {
+    problem.apply = [&hamiltonian,
+                     &fixed_projector,
+                     &virtual_states,
+                     &denominators,
+                     &hamiltonian_applications,
+                     reference_eigenvalue,
+                     omega,
+                     dot](const Vector& input, Vector& output) {
         Vector q_input = input;
         fixed_projector.project(q_input);
 
         hamiltonian.apply(q_input, output);
+        ++hamiltonian_applications;
         const Complex shift(-reference_eigenvalue, omega);
 #pragma omp parallel for schedule(static)
         for (std::size_t ir = 0; ir != output.size(); ++ir)
@@ -1515,6 +1522,7 @@ SternheimerDeltaLinearResponse solve_delta_sternheimer_linear_response(
 
     Vector q_residual;
     hamiltonian.apply(result.response.out_wavefunction, q_residual);
+    ++hamiltonian_applications;
     const Complex shift(-reference_eigenvalue, omega);
 #pragma omp parallel for schedule(static)
     for (std::size_t ir = 0; ir != q_residual.size(); ++ir)
@@ -1547,6 +1555,7 @@ SternheimerDeltaLinearResponse solve_delta_sternheimer_linear_response(
     }
     result.residual_norm = std::sqrt(residual_norm_squared);
     result.response.reconstruction_error = result.residual_norm;
+    result.hamiltonian_applications = hamiltonian_applications;
     return result;
 }
 

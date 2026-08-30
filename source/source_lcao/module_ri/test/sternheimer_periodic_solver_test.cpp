@@ -338,3 +338,119 @@ TEST(SternheimerPeriodicSolver, DeltaBatchMatchesIndependentChannels)
         }
     }
 }
+
+TEST(SternheimerPeriodicSolver, DeltaFrequencyRecyclingMatchesIndependentFrequencies)
+{
+    using Hamiltonian = ModuleRI::SternheimerFDHamiltonian;
+    using Complex = Hamiltonian::Complex;
+    using Vector = Hamiltonian::Vector;
+
+    Hamiltonian::Grid grid{16, 1, 1, 0.35, 1.0, 1.0, true};
+    grid.kpoint = {0.13, 0.0, 0.0};
+    constexpr double volume_element = 0.35;
+    std::vector<double> potential(static_cast<std::size_t>(grid.size()));
+    const double pi = std::acos(-1.0);
+    for (int ix = 0; ix != grid.nx; ++ix)
+    {
+        potential[static_cast<std::size_t>(ix)]
+            = 0.11 * std::cos(2.0 * pi * ix / grid.nx)
+              - 0.04 * std::sin(4.0 * pi * ix / grid.nx);
+    }
+    Hamiltonian hamiltonian(grid, potential, 1.0, nullptr, 8);
+    const auto states = ModuleRI::solve_sternheimer_fd_zero_order_dense(
+        hamiltonian, grid.size(), volume_element);
+    const std::vector<Vector> occupied = {states.wavefunctions[0]};
+
+    std::vector<ModuleRI::SternheimerDeltaVirtualState> virtual_states;
+    for (int index = 1; index != 4; ++index)
+    {
+        ModuleRI::SternheimerDeltaVirtualState state;
+        state.orbital = states.wavefunctions[static_cast<std::size_t>(index)];
+        state.residual = states.wavefunctions[static_cast<std::size_t>(index + 4)];
+        for (Complex& value: state.residual)
+        {
+            value *= Complex(0.01 * index, -0.004 * index);
+        }
+        state.eigenvalue
+            = states.eigenvalues[static_cast<std::size_t>(index)] + 0.015 * index;
+        virtual_states.push_back(std::move(state));
+    }
+    Vector rhs = states.wavefunctions[10];
+    for (std::size_t ir = 0; ir != rhs.size(); ++ir)
+    {
+        rhs[ir] += Complex(0.07, -0.03) * states.wavefunctions[12][ir];
+    }
+    std::vector<Complex> perturbation_matrix_elements;
+    for (const auto& state: virtual_states)
+    {
+        perturbation_matrix_elements.push_back(
+            ModuleRI::sternheimer_fd_grid_dot(state.orbital, rhs, volume_element));
+    }
+    const std::vector<double> frequencies = {0.08, 0.57, 1.35};
+
+    ModuleRI::SternheimerRPA::SolverOptions solver_options;
+    solver_options.max_iter = 120;
+    solver_options.residual_tol = 1.0e-10;
+    solver_options.use_fd_spectral_preconditioner = true;
+    ModuleRI::SternheimerRPA::FrequencyRecyclingOptions recycling_options;
+    recycling_options.max_basis_dimension = 40;
+
+    std::vector<ModuleRI::SternheimerPeriodicLinearResponse> independent;
+    for (const double frequency: frequencies)
+    {
+        independent.push_back(ModuleRI::solve_sternheimer_periodic_linear_response(
+            true,
+            hamiltonian,
+            occupied,
+            states.eigenvalues[0],
+            rhs,
+            virtual_states,
+            perturbation_matrix_elements,
+            frequency,
+            volume_element,
+            solver_options));
+    }
+    const auto recycled = ModuleRI::solve_sternheimer_periodic_frequency_recycling(
+        hamiltonian,
+        occupied,
+        states.eigenvalues[0],
+        rhs,
+        virtual_states,
+        perturbation_matrix_elements,
+        frequencies,
+        volume_element,
+        solver_options,
+        recycling_options);
+
+    ASSERT_EQ(recycled.responses.size(), independent.size());
+    ASSERT_FALSE(recycled.recycling.used_fallback);
+    int independent_hamiltonian_applications = 0;
+    for (const auto& response: independent)
+    {
+        independent_hamiltonian_applications += response.hamiltonian_applications;
+    }
+    EXPECT_LT(recycled.hamiltonian_applications, independent_hamiltonian_applications);
+    EXPECT_EQ(recycled.hamiltonian_applications,
+              recycled.recycling.family_operator_applications
+                  + 2 * static_cast<int>(frequencies.size()));
+    for (std::size_t ifrequency = 0; ifrequency != independent.size(); ++ifrequency)
+    {
+        ASSERT_TRUE(independent[ifrequency].solver.converged);
+        ASSERT_TRUE(recycled.responses[ifrequency].solver.converged);
+        EXPECT_LT(recycled.responses[ifrequency].residual_norm, 1.0e-8);
+        EXPECT_NEAR(recycled.responses[ifrequency].full_grid_equation_residual_norm,
+                    independent[ifrequency].full_grid_equation_residual_norm,
+                    1.0e-8);
+        ASSERT_EQ(recycled.responses[ifrequency].wavefunction.size(),
+                  independent[ifrequency].wavefunction.size());
+        for (std::size_t ir = 0; ir != independent[ifrequency].wavefunction.size(); ++ir)
+        {
+            EXPECT_NEAR(recycled.responses[ifrequency].wavefunction[ir].real(),
+                        independent[ifrequency].wavefunction[ir].real(),
+                        1.0e-8);
+            EXPECT_NEAR(recycled.responses[ifrequency].wavefunction[ir].imag(),
+                        independent[ifrequency].wavefunction[ir].imag(),
+                        1.0e-8);
+        }
+    }
+}

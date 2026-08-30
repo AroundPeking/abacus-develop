@@ -7,6 +7,7 @@
 #include <limits>
 #include <stdexcept>
 #include <string>
+#include <utility>
 
 namespace ModuleRI
 {
@@ -87,6 +88,62 @@ SternheimerFrequencyRecyclingRuntimeOptions sternheimer_frequency_recycling_runt
         512,
         "frequency recycling maximum basis dimension");
     return options;
+}
+
+SternheimerFrequencyRecyclingLayout make_sternheimer_frequency_recycling_layout(
+    const SternheimerFrequencyRecyclingRuntimeOptions& options,
+    const int frequency_count,
+    const bool use_delta_sternheimer,
+    const bool use_frequency_mpi,
+    const bool use_channel_mpi,
+    const bool use_global_equation_mpi,
+    const int channel_batch_width,
+    const int mpi_ranks,
+    const int kpoint_groups)
+{
+    if (frequency_count <= 0)
+    {
+        throw std::invalid_argument("Sternheimer frequency count must be positive.");
+    }
+
+    SternheimerFrequencyRecyclingLayout layout;
+    if (!options.enabled)
+    {
+        layout.groups.reserve(static_cast<std::size_t>(frequency_count));
+        for (int frequency = 0; frequency != frequency_count; ++frequency)
+        {
+            layout.groups.push_back({frequency});
+        }
+        return layout;
+    }
+
+    const bool compatible_layout
+        = use_delta_sternheimer && !use_frequency_mpi && !use_channel_mpi
+          && !use_global_equation_mpi && channel_batch_width == 1 && mpi_ranks > 0
+          && kpoint_groups == mpi_ranks && options.group_size >= 2
+          && frequency_count >= options.group_size
+          && frequency_count % options.group_size == 0;
+    if (!compatible_layout)
+    {
+        throw std::invalid_argument(
+            "Sternheimer frequency recycling requires Delta-ST, frequency/channel/global-equation "
+            "MPI disabled, channel batch width 1, one k-point group per MPI rank, and a frequency "
+            "count divisible by the recycling group size.");
+    }
+
+    layout.enabled = true;
+    layout.groups.reserve(static_cast<std::size_t>(frequency_count / options.group_size));
+    for (int begin = 0; begin != frequency_count; begin += options.group_size)
+    {
+        std::vector<int> group;
+        group.reserve(static_cast<std::size_t>(options.group_size));
+        for (int offset = 0; offset != options.group_size; ++offset)
+        {
+            group.push_back(begin + offset);
+        }
+        layout.groups.push_back(std::move(group));
+    }
+    return layout;
 }
 
 } // namespace ModuleRI

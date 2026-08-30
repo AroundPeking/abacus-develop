@@ -121,3 +121,61 @@ TEST_F(SternheimerRuntimeOptionsTest, RejectsInvalidFrequencyRecyclingDimensions
             << value;
     }
 }
+
+TEST_F(SternheimerRuntimeOptionsTest, BuildsCoLocatedFrequencyGroupsForKPointParallelLayout)
+{
+    ModuleRI::SternheimerFrequencyRecyclingRuntimeOptions options;
+    options.enabled = true;
+    options.group_size = 3;
+    options.max_basis_dimension = 48;
+
+    const auto layout = ModuleRI::make_sternheimer_frequency_recycling_layout(
+        options, 12, true, false, false, false, 1, 8, 8);
+
+    ASSERT_TRUE(layout.enabled);
+    ASSERT_EQ(layout.groups.size(), 4U);
+    EXPECT_EQ(layout.groups[0], (std::vector<int>{0, 1, 2}));
+    EXPECT_EQ(layout.groups[1], (std::vector<int>{3, 4, 5}));
+    EXPECT_EQ(layout.groups[2], (std::vector<int>{6, 7, 8}));
+    EXPECT_EQ(layout.groups[3], (std::vector<int>{9, 10, 11}));
+}
+
+TEST_F(SternheimerRuntimeOptionsTest, KeepsIndependentSingletonGroupsWhenDisabled)
+{
+    ModuleRI::SternheimerFrequencyRecyclingRuntimeOptions options;
+
+    const auto layout = ModuleRI::make_sternheimer_frequency_recycling_layout(
+        options, 3, true, true, false, false, 2, 3, 1);
+
+    ASSERT_FALSE(layout.enabled);
+    EXPECT_EQ(layout.groups, (std::vector<std::vector<int>>{{0}, {1}, {2}}));
+}
+
+TEST_F(SternheimerRuntimeOptionsTest, RejectsFrequencyRecyclingLayoutsThatCannotShareLocally)
+{
+    ModuleRI::SternheimerFrequencyRecyclingRuntimeOptions options;
+    options.enabled = true;
+    options.group_size = 3;
+
+    EXPECT_THROW(ModuleRI::make_sternheimer_frequency_recycling_layout(
+                     options, 3, false, false, false, false, 1, 1, 1),
+                 std::invalid_argument);
+    EXPECT_THROW(ModuleRI::make_sternheimer_frequency_recycling_layout(
+                     options, 3, true, true, false, false, 1, 3, 1),
+                 std::invalid_argument);
+    EXPECT_THROW(ModuleRI::make_sternheimer_frequency_recycling_layout(
+                     options, 3, true, false, true, false, 1, 3, 3),
+                 std::invalid_argument);
+    EXPECT_THROW(ModuleRI::make_sternheimer_frequency_recycling_layout(
+                     options, 3, true, false, false, true, 1, 3, 3),
+                 std::invalid_argument);
+    EXPECT_THROW(ModuleRI::make_sternheimer_frequency_recycling_layout(
+                     options, 3, true, false, false, false, 2, 3, 3),
+                 std::invalid_argument);
+    EXPECT_THROW(ModuleRI::make_sternheimer_frequency_recycling_layout(
+                     options, 4, true, false, false, false, 1, 3, 3),
+                 std::invalid_argument);
+    EXPECT_THROW(ModuleRI::make_sternheimer_frequency_recycling_layout(
+                     options, 3, true, false, false, false, 1, 4, 2),
+                 std::invalid_argument);
+}

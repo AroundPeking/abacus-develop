@@ -162,6 +162,7 @@ struct SternheimerDeltaLinearResponse
     SternheimerDeltaPostprocessResult response;
     SternheimerRPA::SolverResult solver;
     double residual_norm = 0.0;
+    int hamiltonian_applications = 0;
 };
 
 struct SternheimerDeltaFrequencyRecyclingResult

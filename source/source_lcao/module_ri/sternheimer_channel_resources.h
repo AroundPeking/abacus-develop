@@ -51,6 +51,10 @@ std::uint64_t estimate_sternheimer_frequency_recycling_bytes(std::size_t grid_si
                                                              int frequency_count,
                                                              int basis_dimension);
 
+void validate_sternheimer_frequency_recycling_memory(
+    const SternheimerChannelWorkerPlan& worker_plan,
+    std::uint64_t extra_bytes_per_worker);
+
 SternheimerChannelWorkerPlan plan_sternheimer_channel_workers(int num_channels,
                                                               int omp_threads,
                                                               std::size_t grid_size,

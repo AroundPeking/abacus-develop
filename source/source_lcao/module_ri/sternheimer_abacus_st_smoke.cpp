@@ -2636,6 +2636,35 @@ void run_sternheimer_periodic_lcao_chi0_output(
                                             channel_threads,
                                             channel_memory,
                                             channel_batch_width);
+    const SternheimerFrequencyRecyclingRuntimeOptions frequency_recycling_runtime
+        = sternheimer_frequency_recycling_runtime_options();
+    const SternheimerFrequencyRecyclingLayout frequency_recycling_layout
+        = make_sternheimer_frequency_recycling_layout(
+            frequency_recycling_runtime,
+            nfreq,
+            use_delta_sternheimer,
+            use_frequency_mpi,
+            PARAM.inp.sternheimer_channel_mpi,
+            PARAM.inp.sternheimer_mpi_layout == "global_equation",
+            channel_batch_width,
+            GlobalV::NPROC,
+            use_kpoint_mpi ? kpoint_groups : 1);
+    std::uint64_t frequency_recycling_extra_bytes_per_worker = 0;
+    if (frequency_recycling_layout.enabled)
+    {
+        if (write_delta_components || write_lcao_sos || write_wavefunction_diagnostic)
+        {
+            throw std::runtime_error(
+                "Sternheimer frequency recycling does not yet support component or wavefunction diagnostics.");
+        }
+        frequency_recycling_extra_bytes_per_worker
+            = estimate_sternheimer_frequency_recycling_bytes(
+                grid_data.grid.size(),
+                frequency_recycling_runtime.group_size,
+                frequency_recycling_runtime.max_basis_dimension);
+        validate_sternheimer_frequency_recycling_memory(
+            channel_worker_plan, frequency_recycling_extra_bytes_per_worker);
+    }
     append_chi0_progress_event(
         "channel_workers_ready",
         0,
@@ -2805,6 +2834,11 @@ void run_sternheimer_periodic_lcao_chi0_output(
 
     bool all_converged = true;
     int solved_equations = 0;
+    long long hamiltonian_applications = 0;
+    long long frequency_recycling_family_applications = 0;
+    long long frequency_recycling_groups = 0;
+    long long frequency_recycling_fallback_groups = 0;
+    int frequency_recycling_max_basis_used = 0;
     double max_solver_relative_residual = 0.0;
     double max_equation_residual_norm = 0.0;
     double max_full_grid_equation_residual_norm = 0.0;
@@ -3145,8 +3179,199 @@ void run_sternheimer_periodic_lcao_chi0_output(
             target_lcao_occ_unocc_overlap_max[pair_index] = max_overlap;
         }
 
-        for (int ifrequency = 0; ifrequency != nfreq; ++ifrequency)
+        if (frequency_recycling_layout.enabled)
         {
+            SternheimerRPA::FrequencyRecyclingOptions recycling_options;
+            recycling_options.max_basis_dimension
+                = frequency_recycling_runtime.max_basis_dimension;
+            const int source_band_count = sternheimer_periodic_band_count(
+                static_cast<int>(source.states.wavefunctions.size()), max_bands);
+            for (const std::vector<int>& frequency_group: frequency_recycling_layout.groups)
+            {
+                const int owner_rank
+                    = response_owner_rank(pair.source_index, frequency_group.front());
+                for (const int ifrequency: frequency_group)
+                {
+                    if (response_owner_rank(pair.source_index, ifrequency) != owner_rank)
+                    {
+                        throw std::runtime_error(
+                            "A Sternheimer frequency-recycling group spans multiple MPI owners.");
+                    }
+                }
+                if (owner_rank != GlobalV::MY_RANK)
+                {
+                    continue;
+                }
+
+                std::vector<double> frequencies_ry;
+                frequencies_ry.reserve(frequency_group.size());
+                for (const int ifrequency: frequency_group)
+                {
+                    frequencies_ry.push_back(
+                        2.0 * frequency_grid.omega_ha[static_cast<std::size_t>(ifrequency)]);
+                }
+                for (int ib = 0; ib != source_band_count; ++ib)
+                {
+                    const double occupation
+                        = sternheimer_lcao_weighted_occupation(source_record, ib);
+                    const double matrix_occupation = response_matrix_scale * occupation;
+                    struct RecycledChannelGroupResult
+                    {
+                        std::vector<SternheimerRPA::SolverResult> solvers;
+                        std::vector<double> equation_residual_norms;
+                        std::vector<double> full_grid_equation_residual_norms;
+                        int hamiltonian_applications = 0;
+                        int family_hamiltonian_applications = 0;
+                        int basis_dimension = 0;
+                        bool used_fallback = false;
+                        std::string fallback_reason;
+                    };
+                    const std::vector<RecycledChannelGroupResult> channel_results
+                        = run_sternheimer_channel_tasks<RecycledChannelGroupResult>(
+                            num_channels,
+                            [&](const int ichannel) {
+                                const std::size_t channel_index
+                                    = static_cast<std::size_t>(ichannel);
+                                SternheimerFDHamiltonian::Vector rhs;
+                                SternheimerRPA::build_rhs_from_hartree_perturbation(
+                                    perturbations_ry[channel_index],
+                                    source.states.wavefunctions[ib],
+                                    rhs);
+                                const std::vector<SternheimerFDHamiltonian::Complex>
+                                    perturbation_matrix_elements
+                                    = delta_sternheimer_perturbation_matrix_elements(
+                                        delta_subspace.virtual_states,
+                                        perturbations_ry[channel_index],
+                                        source.states.wavefunctions[ib],
+                                        grid_data.volume_element);
+                                SternheimerPeriodicFrequencyRecyclingResult responses
+                                    = solve_sternheimer_periodic_frequency_recycling(
+                                        hamiltonian,
+                                        target_occupied_projector,
+                                        source.states.eigenvalues[ib],
+                                        rhs,
+                                        delta_subspace.virtual_states,
+                                        perturbation_matrix_elements,
+                                        frequencies_ry,
+                                        grid_data.volume_element,
+                                        solver_options,
+                                        recycling_options);
+                                if (responses.responses.size() != frequency_group.size())
+                                {
+                                    throw std::runtime_error(
+                                        "Sternheimer frequency recycling returned an incomplete frequency group.");
+                                }
+
+                                RecycledChannelGroupResult result;
+                                result.hamiltonian_applications
+                                    = responses.hamiltonian_applications;
+                                result.family_hamiltonian_applications
+                                    = responses.recycling.family_operator_applications;
+                                result.basis_dimension = responses.recycling.basis_dimension;
+                                result.used_fallback = responses.recycling.used_fallback;
+                                result.fallback_reason = responses.recycling.fallback_reason;
+                                result.solvers.reserve(frequency_group.size());
+                                result.equation_residual_norms.reserve(frequency_group.size());
+                                result.full_grid_equation_residual_norms.reserve(
+                                    frequency_group.size());
+                                for (std::size_t offset = 0;
+                                     offset != frequency_group.size();
+                                     ++offset)
+                                {
+                                    const int ifrequency = frequency_group[offset];
+                                    const SternheimerPeriodicLinearResponse& response
+                                        = responses.responses[offset];
+                                    std::vector<SternheimerRPA::Complex>& chi0_branch
+                                        = write_partial_kresolved
+                                              ? partial_pair_branches[static_cast<std::size_t>(
+                                                    ifrequency)]
+                                              : chi0_branches[static_cast<std::size_t>(
+                                                    ifrequency)];
+                                    SternheimerRPA::accumulate_chi0_branch_column(
+                                        potentials,
+                                        source.states.wavefunctions[ib],
+                                        response.wavefunction,
+                                        grid_data.volume_element,
+                                        matrix_occupation,
+                                        ichannel,
+                                        chi0_branch);
+                                    result.solvers.push_back(response.solver);
+                                    result.equation_residual_norms.push_back(
+                                        response.residual_norm);
+                                    result.full_grid_equation_residual_norms.push_back(
+                                        response.full_grid_equation_residual_norm);
+                                }
+                                return result;
+                            },
+                            channel_worker_plan.effective_workers);
+
+                    for (int ichannel = 0; ichannel != num_channels; ++ichannel)
+                    {
+                        const RecycledChannelGroupResult& result
+                            = channel_results[static_cast<std::size_t>(ichannel)];
+                        ++frequency_recycling_groups;
+                        hamiltonian_applications += result.hamiltonian_applications;
+                        frequency_recycling_family_applications
+                            += result.family_hamiltonian_applications;
+                        frequency_recycling_max_basis_used
+                            = std::max(frequency_recycling_max_basis_used,
+                                       result.basis_dimension);
+                        if (result.used_fallback)
+                        {
+                            ++frequency_recycling_fallback_groups;
+                            append_chi0_progress_event(
+                                "frequency_recycling_fallback",
+                                frequency_group.front() + 1,
+                                owner_rank,
+                                ib,
+                                ichannel,
+                                solved_equations,
+                                nullptr,
+                                -1.0,
+                                elapsed_seconds_since(chi0_start_time),
+                                result.fallback_reason);
+                        }
+                        for (std::size_t offset = 0;
+                             offset != frequency_group.size();
+                             ++offset)
+                        {
+                            const int ifrequency = frequency_group[offset];
+                            const SternheimerRPA::SolverResult& solver
+                                = result.solvers[offset];
+                            all_converged = all_converged && solver.converged;
+                            ++solved_equations;
+                            max_solver_relative_residual
+                                = std::max(max_solver_relative_residual,
+                                           solver.relative_residual);
+                            max_equation_residual_norm
+                                = std::max(max_equation_residual_norm,
+                                           result.equation_residual_norms[offset]);
+                            max_full_grid_equation_residual_norm
+                                = std::max(max_full_grid_equation_residual_norm,
+                                           result.full_grid_equation_residual_norms[offset]);
+                            append_chi0_progress_event(
+                                "equation",
+                                ifrequency + 1,
+                                owner_rank,
+                                ib,
+                                ichannel,
+                                solved_equations,
+                                &solver,
+                                result.equation_residual_norms[offset],
+                                elapsed_seconds_since(chi0_start_time),
+                                "source_k=" + std::to_string(pair.source_index + 1)
+                                    + ",target_k="
+                                    + std::to_string(pair.target_index + 1)
+                                    + ",frequency_recycling=yes");
+                        }
+                    }
+                }
+            }
+        }
+        else
+        {
+            for (int ifrequency = 0; ifrequency != nfreq; ++ifrequency)
+            {
             const int owner_rank = response_owner_rank(pair.source_index, ifrequency);
             if (owner_rank != GlobalV::MY_RANK)
             {
@@ -3177,6 +3402,7 @@ void run_sternheimer_periodic_lcao_chi0_output(
                     SternheimerRPA::SolverResult solver;
                     double equation_residual_norm = 0.0;
                     double full_grid_equation_residual_norm = 0.0;
+                    int hamiltonian_applications = 0;
                     bool has_wavefunction_diagnostic = false;
                     SternheimerWavefunctionDiagnostic::Record wavefunction_diagnostic;
                 };
@@ -3308,6 +3534,8 @@ void run_sternheimer_periodic_lcao_chi0_output(
                                 result.equation_residual_norm = response.residual_norm;
                                 result.full_grid_equation_residual_norm
                                     = response.full_grid_equation_residual_norm;
+                                result.hamiltonian_applications
+                                    = response.hamiltonian_applications;
                                 if (write_wavefunction_diagnostic
                                     && wavefunction_diagnostic_config.selector.matches(response_plan.iq,
                                                                                        pair.source_index,
@@ -3427,6 +3655,7 @@ void run_sternheimer_periodic_lcao_chi0_output(
                         = channel_results[static_cast<std::size_t>(ichannel)];
                     all_converged = all_converged && result.solver.converged;
                     ++solved_equations;
+                    hamiltonian_applications += result.hamiltonian_applications;
                     max_solver_relative_residual
                         = std::max(max_solver_relative_residual, result.solver.relative_residual);
                     max_equation_residual_norm
@@ -3455,6 +3684,7 @@ void run_sternheimer_periodic_lcao_chi0_output(
                                                "source_k=" + std::to_string(pair.source_index + 1)
                                                    + ",target_k=" + std::to_string(pair.target_index + 1));
                 }
+            }
             }
         }
         if (write_partial_kresolved)
@@ -3728,6 +3958,26 @@ void run_sternheimer_periodic_lcao_chi0_output(
                       MPI_DOUBLE,
                       MPI_MAX,
                       MPI_COMM_WORLD);
+        long long recycling_sums[4] = {hamiltonian_applications,
+                                       frequency_recycling_family_applications,
+                                       frequency_recycling_groups,
+                                       frequency_recycling_fallback_groups};
+        MPI_Allreduce(MPI_IN_PLACE,
+                      recycling_sums,
+                      4,
+                      MPI_LONG_LONG,
+                      MPI_SUM,
+                      MPI_COMM_WORLD);
+        hamiltonian_applications = recycling_sums[0];
+        frequency_recycling_family_applications = recycling_sums[1];
+        frequency_recycling_groups = recycling_sums[2];
+        frequency_recycling_fallback_groups = recycling_sums[3];
+        MPI_Allreduce(MPI_IN_PLACE,
+                      &frequency_recycling_max_basis_used,
+                      1,
+                      MPI_INT,
+                      MPI_MAX,
+                      MPI_COMM_WORLD);
         MPI_Barrier(MPI_COMM_WORLD);
     }
 #endif
@@ -3965,6 +4215,28 @@ void run_sternheimer_periodic_lcao_chi0_output(
     }
     out << "sternheimer_channel_threads " << channel_worker_plan.effective_workers << '\n';
     out << "sternheimer_channel_batch_width " << channel_worker_plan.channel_batch_width << '\n';
+    out << "sternheimer_frequency_recycling "
+        << (frequency_recycling_layout.enabled ? "yes" : "no") << '\n';
+    out << "sternheimer_frequency_recycling_group_size "
+        << frequency_recycling_runtime.group_size << '\n';
+    out << "sternheimer_frequency_recycling_max_basis_dimension "
+        << frequency_recycling_runtime.max_basis_dimension << '\n';
+    out << "sternheimer_frequency_recycling_extra_bytes_per_worker "
+        << frequency_recycling_extra_bytes_per_worker << '\n';
+    out << "sternheimer_frequency_recycling_groups " << frequency_recycling_groups << '\n';
+    out << "sternheimer_frequency_recycling_family_hamiltonian_applications "
+        << frequency_recycling_family_applications << '\n';
+    out << "sternheimer_frequency_recycling_fallback_groups "
+        << frequency_recycling_fallback_groups << '\n';
+    out << "sternheimer_frequency_recycling_max_basis_used "
+        << frequency_recycling_max_basis_used << '\n';
+    out << "sternheimer_hamiltonian_applications_exact "
+        << ((frequency_recycling_layout.enabled
+             || (use_delta_sternheimer && channel_batch_width == 1))
+                ? "yes"
+                : "no")
+        << '\n';
+    out << "sternheimer_hamiltonian_applications " << hamiltonian_applications << '\n';
     out << "sternheimer_mode " << (use_delta_sternheimer ? "delta" : "standard") << '\n';
     if (use_delta_sternheimer)
     {

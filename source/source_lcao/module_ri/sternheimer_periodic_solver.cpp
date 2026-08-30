@@ -48,6 +48,7 @@ SternheimerPeriodicLinearResponse solve_sternheimer_periodic_linear_response(
                                                             result.wavefunction,
                                                             omega,
                                                             volume_element);
+        result.hamiltonian_applications = response.hamiltonian_applications + 1;
         result.has_delta_components = true;
         result.delta_components = std::move(response.response);
         return result;
@@ -65,6 +66,66 @@ SternheimerPeriodicLinearResponse solve_sternheimer_periodic_linear_response(
     result.solver = response.solver;
     result.residual_norm = response.residual_norm;
     result.full_grid_equation_residual_norm = response.residual_norm;
+    return result;
+}
+
+SternheimerPeriodicFrequencyRecyclingResult solve_sternheimer_periodic_frequency_recycling(
+    const SternheimerFDHamiltonian& hamiltonian,
+    const std::vector<SternheimerFDHamiltonian::Vector>& occupied_wavefunctions,
+    const double reference_eigenvalue,
+    const SternheimerFDHamiltonian::Vector& rhs,
+    const std::vector<SternheimerDeltaVirtualState>& virtual_states,
+    const std::vector<SternheimerFDHamiltonian::Complex>& perturbation_matrix_elements,
+    const std::vector<double>& frequencies,
+    const double volume_element,
+    const SternheimerRPA::SolverOptions& solver_options,
+    const SternheimerRPA::FrequencyRecyclingOptions& recycling_options)
+{
+    SternheimerPeriodicFrequencyRecyclingResult result;
+    const auto dot = [volume_element](const SternheimerFDHamiltonian::Vector& lhs,
+                                      const SternheimerFDHamiltonian::Vector& rhs_vector) {
+        return sternheimer_fd_grid_dot(lhs, rhs_vector, volume_element);
+    };
+    SternheimerFDHamiltonian::Vector projected_rhs = rhs;
+    SternheimerRPA::project_out_subspace(occupied_wavefunctions, dot, projected_rhs);
+
+    const SternheimerDeltaFixedSubspace fixed_subspace
+        = build_delta_sternheimer_fixed_subspace(occupied_wavefunctions, virtual_states);
+    SternheimerDeltaFrequencyRecyclingResult delta_result
+        = solve_delta_sternheimer_frequency_recycling(hamiltonian,
+                                                       fixed_subspace,
+                                                       reference_eigenvalue,
+                                                       rhs,
+                                                       virtual_states,
+                                                       perturbation_matrix_elements,
+                                                       frequencies,
+                                                       volume_element,
+                                                       solver_options,
+                                                       recycling_options);
+    result.recycling = std::move(delta_result.recycling);
+    result.hamiltonian_applications = delta_result.hamiltonian_applications;
+    result.responses.resize(delta_result.responses.size());
+    for (std::size_t ifrequency = 0; ifrequency != delta_result.responses.size(); ++ifrequency)
+    {
+        SternheimerDeltaLinearResponse& delta_response = delta_result.responses[ifrequency];
+        SternheimerPeriodicLinearResponse& response = result.responses[ifrequency];
+        response.projected_rhs = projected_rhs;
+        response.wavefunction = delta_response.response.reconstructed_wavefunction;
+        response.solver = delta_response.solver;
+        response.residual_norm = delta_response.residual_norm;
+        response.full_grid_equation_residual_norm
+            = sternheimer_fd_linear_response_residual_norm(hamiltonian,
+                                                            occupied_wavefunctions,
+                                                            reference_eigenvalue,
+                                                            rhs,
+                                                            response.wavefunction,
+                                                            frequencies[ifrequency],
+                                                            volume_element);
+        response.hamiltonian_applications = delta_response.hamiltonian_applications + 1;
+        result.hamiltonian_applications += 1;
+        response.has_delta_components = true;
+        response.delta_components = std::move(delta_response.response);
+    }
     return result;
 }
 

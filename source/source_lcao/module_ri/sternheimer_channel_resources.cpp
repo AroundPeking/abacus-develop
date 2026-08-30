@@ -231,6 +231,37 @@ std::uint64_t estimate_sternheimer_frequency_recycling_bytes(const std::size_t g
         sizeof(std::complex<double>));
 }
 
+void validate_sternheimer_frequency_recycling_memory(
+    const SternheimerChannelWorkerPlan& worker_plan,
+    const std::uint64_t extra_bytes_per_worker)
+{
+    if (worker_plan.effective_workers <= 0 || extra_bytes_per_worker == 0)
+    {
+        throw std::invalid_argument(
+            "Sternheimer frequency recycling memory validation requires positive worker dimensions.");
+    }
+    if (worker_plan.increment_bytes_per_rank == 0)
+    {
+        throw std::runtime_error(
+            "Sternheimer frequency recycling requires an explicit detected memory budget.");
+    }
+    if (worker_plan.memory_per_worker_bytes
+        > std::numeric_limits<std::uint64_t>::max() - extra_bytes_per_worker)
+    {
+        throw std::overflow_error("Sternheimer frequency recycling worker memory estimate overflow.");
+    }
+    const std::uint64_t total_per_worker
+        = worker_plan.memory_per_worker_bytes + extra_bytes_per_worker;
+    const std::uint64_t required
+        = checked_multiply(static_cast<std::uint64_t>(worker_plan.effective_workers),
+                           total_per_worker);
+    if (required > worker_plan.increment_bytes_per_rank)
+    {
+        throw std::runtime_error(
+            "Sternheimer frequency recycling exceeds the per-rank 75 percent memory budget.");
+    }
+}
+
 std::vector<SternheimerChannelBatch> make_sternheimer_channel_batches(const int num_channels, const int batch_width)
 {
     if (num_channels < 0)
