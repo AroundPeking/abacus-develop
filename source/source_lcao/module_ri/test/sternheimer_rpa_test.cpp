@@ -810,3 +810,222 @@ TEST(SternheimerRPA, SolveGMRESBatchMatchesIndependentScalarHistories)
         }
     }
 }
+
+TEST(SternheimerRPA, FrequencyRecyclingSolvesNonShiftedFrequencyFamily)
+{
+    using Matrix = std::vector<Vector>;
+    const std::vector<Matrix> operators
+        = {{{Complex(4.0, 0.2), Complex(1.0, -0.1), Complex(0.0, 0.0)},
+            {Complex(0.5, 0.3), Complex(3.0, -0.4), Complex(1.0, 0.0)},
+            {Complex(1.0, 0.0), Complex(0.0, 0.2), Complex(2.5, 0.1)}},
+           {{Complex(3.0, -0.1), Complex(0.0, 0.5), Complex(1.0, 0.0)},
+            {Complex(1.0, 0.0), Complex(4.5, 0.2), Complex(0.0, -0.3)},
+            {Complex(0.2, 0.1), Complex(1.0, 0.0), Complex(2.0, 0.4)}},
+           {{Complex(2.5, 0.3), Complex(1.0, 0.0), Complex(0.5, -0.2)},
+            {Complex(0.0, 0.4), Complex(3.5, -0.1), Complex(1.0, 0.0)},
+            {Complex(1.0, 0.0), Complex(0.3, 0.2), Complex(4.0, 0.1)}}};
+    const Matrix exact
+        = {{Complex(1.0, -0.5), Complex(-0.25, 0.75), Complex(0.4, 0.2)},
+           {Complex(-0.6, 0.3), Complex(0.8, -0.1), Complex(1.1, 0.4)},
+           {Complex(0.2, 0.9), Complex(-1.0, 0.2), Complex(0.5, -0.7)}};
+
+    const auto apply_matrix = [](const Matrix& matrix, const Vector& input, Vector& output) {
+        output.assign(matrix.size(), Complex(0.0, 0.0));
+        for (std::size_t row = 0; row != matrix.size(); ++row)
+        {
+            for (std::size_t col = 0; col != input.size(); ++col)
+            {
+                output[row] += matrix[row][col] * input[col];
+            }
+        }
+    };
+
+    std::vector<ModuleRI::SternheimerRPA::FrequencyLinearProblem> problems;
+    for (std::size_t ifrequency = 0; ifrequency != operators.size(); ++ifrequency)
+    {
+        ModuleRI::SternheimerRPA::FrequencyLinearProblem entry;
+        entry.problem.apply = [&, ifrequency](const Vector& input, Vector& output) {
+            apply_matrix(operators[ifrequency], input, output);
+        };
+        entry.problem.precondition = [&, ifrequency](const Vector& input, Vector& output) {
+            output.resize(input.size());
+            for (std::size_t i = 0; i != input.size(); ++i)
+            {
+                output[i] = input[i] / operators[ifrequency][i][i];
+            }
+        };
+        entry.problem.dot = dot;
+        apply_matrix(operators[ifrequency], exact[ifrequency], entry.rhs);
+        problems.push_back(std::move(entry));
+    }
+
+    ModuleRI::SternheimerRPA::SolverOptions solver_options;
+    solver_options.max_iter = 20;
+    solver_options.residual_tol = 1.0e-12;
+    ModuleRI::SternheimerRPA::FrequencyRecyclingOptions recycling_options;
+    recycling_options.max_basis_dimension = 3;
+    recycling_options.fallback_to_independent = false;
+
+    Matrix solutions;
+    const auto result = ModuleRI::SternheimerRPA::solve_frequency_recycling(
+        problems, solutions, solver_options, recycling_options);
+
+    EXPECT_FALSE(result.used_fallback);
+    EXPECT_EQ(result.basis_dimension, 3);
+    ASSERT_EQ(result.frequency_results.size(), exact.size());
+    ASSERT_EQ(result.operator_applications.size(), exact.size());
+    ASSERT_EQ(solutions.size(), exact.size());
+    for (std::size_t ifrequency = 0; ifrequency != exact.size(); ++ifrequency)
+    {
+        EXPECT_TRUE(result.frequency_results[ifrequency].converged);
+        EXPECT_LE(result.frequency_results[ifrequency].relative_residual,
+                  solver_options.residual_tol);
+        EXPECT_EQ(result.operator_applications[ifrequency], 3);
+        ASSERT_EQ(solutions[ifrequency].size(), exact[ifrequency].size());
+        for (std::size_t i = 0; i != exact[ifrequency].size(); ++i)
+        {
+            EXPECT_NEAR(solutions[ifrequency][i].real(), exact[ifrequency][i].real(), 1.0e-11);
+            EXPECT_NEAR(solutions[ifrequency][i].imag(), exact[ifrequency][i].imag(), 1.0e-11);
+        }
+    }
+}
+
+TEST(SternheimerRPA, FrequencyRecyclingFallsBackAtBasisLimit)
+{
+    const Vector diagonal = {Complex(2.0, 0.2), Complex(3.0, -0.1), Complex(5.0, 0.4)};
+    const Vector exact = {Complex(0.5, -0.2), Complex(-0.7, 0.3), Complex(1.1, 0.4)};
+    ModuleRI::SternheimerRPA::FrequencyLinearProblem entry;
+    entry.problem.apply = [&diagonal](const Vector& input, Vector& output) {
+        output.resize(input.size());
+        for (std::size_t i = 0; i != input.size(); ++i)
+        {
+            output[i] = diagonal[i] * input[i];
+        }
+    };
+    entry.problem.dot = dot;
+    entry.rhs.resize(exact.size());
+    for (std::size_t i = 0; i != exact.size(); ++i)
+    {
+        entry.rhs[i] = diagonal[i] * exact[i];
+    }
+
+    ModuleRI::SternheimerRPA::SolverOptions solver_options;
+    solver_options.max_iter = 20;
+    solver_options.residual_tol = 1.0e-12;
+    ModuleRI::SternheimerRPA::FrequencyRecyclingOptions recycling_options;
+    recycling_options.max_basis_dimension = 1;
+    recycling_options.fallback_to_independent = true;
+    recycling_options.fallback_restart_dimension = 3;
+
+    ModuleRI::SternheimerRPA::Matrix solutions;
+    const auto result = ModuleRI::SternheimerRPA::solve_frequency_recycling(
+        {entry}, solutions, solver_options, recycling_options);
+
+    EXPECT_TRUE(result.used_fallback);
+    EXPECT_EQ(result.fallback_reason, "basis_dimension_limit");
+    EXPECT_EQ(result.basis_dimension, 1);
+    ASSERT_EQ(result.frequency_results.size(), 1U);
+    EXPECT_TRUE(result.frequency_results.front().converged);
+    ASSERT_EQ(solutions.size(), 1U);
+    for (std::size_t i = 0; i != exact.size(); ++i)
+    {
+        EXPECT_NEAR(solutions.front()[i].real(), exact[i].real(), 1.0e-11);
+        EXPECT_NEAR(solutions.front()[i].imag(), exact[i].imag(), 1.0e-11);
+    }
+}
+
+TEST(SternheimerRPA, FrequencyRecyclingAcceptsZeroRightHandSideWithoutOperatorWork)
+{
+    ModuleRI::SternheimerRPA::FrequencyLinearProblem entry;
+    entry.problem.apply = [](const Vector& input, Vector& output) { output = input; };
+    entry.problem.dot = dot;
+    entry.rhs.assign(4, Complex(0.0, 0.0));
+
+    ModuleRI::SternheimerRPA::SolverOptions solver_options;
+    ModuleRI::SternheimerRPA::FrequencyRecyclingOptions recycling_options;
+    ModuleRI::SternheimerRPA::Matrix solutions;
+    const auto result = ModuleRI::SternheimerRPA::solve_frequency_recycling(
+        {entry}, solutions, solver_options, recycling_options);
+
+    EXPECT_FALSE(result.used_fallback);
+    EXPECT_EQ(result.basis_dimension, 0);
+    ASSERT_EQ(result.operator_applications.size(), 1U);
+    EXPECT_EQ(result.operator_applications.front(), 0);
+    ASSERT_EQ(result.frequency_results.size(), 1U);
+    EXPECT_TRUE(result.frequency_results.front().converged);
+    EXPECT_DOUBLE_EQ(result.frequency_results.front().relative_residual, 0.0);
+}
+
+TEST(SternheimerRPA, FrequencyRecyclingUsesOneFamilyApplyPerBasisVector)
+{
+    using Matrix = std::vector<Vector>;
+    const std::vector<Matrix> operators
+        = {{{Complex(3.0, 0.2), Complex(0.5, -0.1)},
+            {Complex(0.2, 0.3), Complex(2.0, -0.2)}},
+           {{Complex(2.5, -0.1), Complex(0.4, 0.2)},
+            {Complex(-0.3, 0.1), Complex(3.5, 0.3)}}};
+    const Matrix exact
+        = {{Complex(0.8, -0.2), Complex(-0.4, 0.6)},
+           {Complex(-0.3, 0.7), Complex(0.9, -0.1)}};
+    const auto apply_matrix = [](const Matrix& matrix, const Vector& input, Vector& output) {
+        output.assign(matrix.size(), Complex(0.0, 0.0));
+        for (std::size_t row = 0; row != matrix.size(); ++row)
+        {
+            for (std::size_t col = 0; col != input.size(); ++col)
+            {
+                output[row] += matrix[row][col] * input[col];
+            }
+        }
+    };
+
+    std::vector<int> individual_apply_calls(operators.size(), 0);
+    int family_apply_calls = 0;
+    ModuleRI::SternheimerRPA::FrequencyLinearProblemFamily family;
+    for (std::size_t ifrequency = 0; ifrequency != operators.size(); ++ifrequency)
+    {
+        ModuleRI::SternheimerRPA::FrequencyLinearProblem entry;
+        entry.problem.apply = [&, ifrequency](const Vector& input, Vector& output) {
+            individual_apply_calls[ifrequency] += 1;
+            apply_matrix(operators[ifrequency], input, output);
+        };
+        entry.problem.dot = dot;
+        apply_matrix(operators[ifrequency], exact[ifrequency], entry.rhs);
+        family.problems.push_back(std::move(entry));
+    }
+    family.apply = [&](const Vector& input, Matrix& outputs) {
+        family_apply_calls += 1;
+        outputs.resize(operators.size());
+        for (std::size_t ifrequency = 0; ifrequency != operators.size(); ++ifrequency)
+        {
+            apply_matrix(operators[ifrequency], input, outputs[ifrequency]);
+        }
+    };
+
+    ModuleRI::SternheimerRPA::SolverOptions solver_options;
+    solver_options.max_iter = 10;
+    solver_options.residual_tol = 1.0e-12;
+    ModuleRI::SternheimerRPA::FrequencyRecyclingOptions recycling_options;
+    recycling_options.max_basis_dimension = 2;
+    recycling_options.fallback_to_independent = false;
+
+    Matrix solutions;
+    const auto result = ModuleRI::SternheimerRPA::solve_frequency_recycling(
+        family, solutions, solver_options, recycling_options);
+
+    EXPECT_FALSE(result.used_fallback);
+    EXPECT_EQ(result.basis_dimension, 2);
+    EXPECT_EQ(result.family_operator_applications, result.basis_dimension);
+    EXPECT_EQ(family_apply_calls, result.basis_dimension);
+    EXPECT_EQ(individual_apply_calls, std::vector<int>({0, 0}));
+    EXPECT_EQ(result.operator_applications, std::vector<int>({2, 2}));
+    ASSERT_EQ(solutions.size(), exact.size());
+    for (std::size_t ifrequency = 0; ifrequency != exact.size(); ++ifrequency)
+    {
+        EXPECT_TRUE(result.frequency_results[ifrequency].converged);
+        for (std::size_t i = 0; i != exact[ifrequency].size(); ++i)
+        {
+            EXPECT_NEAR(solutions[ifrequency][i].real(), exact[ifrequency][i].real(), 1.0e-11);
+            EXPECT_NEAR(solutions[ifrequency][i].imag(), exact[ifrequency][i].imag(), 1.0e-11);
+        }
+    }
+}

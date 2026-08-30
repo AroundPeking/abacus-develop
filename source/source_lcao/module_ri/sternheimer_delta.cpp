@@ -1550,6 +1550,242 @@ SternheimerDeltaLinearResponse solve_delta_sternheimer_linear_response(
     return result;
 }
 
+SternheimerDeltaFrequencyRecyclingResult solve_delta_sternheimer_frequency_recycling(
+    const SternheimerFDHamiltonian& hamiltonian,
+    const SternheimerDeltaFixedSubspace& fixed_subspace,
+    const double reference_eigenvalue,
+    const SternheimerFDHamiltonian::Vector& rhs,
+    const std::vector<SternheimerDeltaVirtualState>& virtual_states,
+    const std::vector<SternheimerFDHamiltonian::Complex>& perturbation_matrix_elements,
+    const std::vector<double>& frequencies,
+    const double volume_element,
+    const SternheimerRPA::SolverOptions& solver_options,
+    const SternheimerRPA::FrequencyRecyclingOptions& recycling_options)
+{
+    SternheimerDeltaFrequencyRecyclingResult result;
+    if (frequencies.empty())
+    {
+        return result;
+    }
+
+    const int grid_size = hamiltonian.grid().size();
+    check_vector_size(rhs, static_cast<std::size_t>(grid_size), "Sternheimer delta frequency rhs");
+    if (virtual_states.size() != perturbation_matrix_elements.size())
+    {
+        throw std::invalid_argument(
+            "Sternheimer delta frequency recycling requires one perturbation matrix element per virtual state.");
+    }
+    if (volume_element <= 0.0)
+    {
+        throw std::invalid_argument(
+            "Sternheimer delta frequency recycling requires a positive grid volume element.");
+    }
+    for (const Vector& function: fixed_subspace.functions)
+    {
+        check_vector_size(function,
+                          static_cast<std::size_t>(grid_size),
+                          "Sternheimer delta frequency fixed-subspace state");
+    }
+    validate_virtual_states(virtual_states, static_cast<std::size_t>(grid_size));
+
+    const auto dot = [volume_element](const Vector& lhs, const Vector& rhs_vec) {
+        return sternheimer_fd_grid_dot(lhs, rhs_vec, volume_element);
+    };
+    const std::vector<Vector>& fixed_functions = fixed_subspace.functions;
+    const SternheimerSubspaceProjector fixed_projector(fixed_functions, dot);
+    std::vector<std::vector<Complex>> denominators(
+        frequencies.size(), std::vector<Complex>(virtual_states.size(), Complex(0.0, 0.0)));
+    SternheimerFDHamiltonian::Matrix projected_rhs(frequencies.size(), rhs);
+    for (std::size_t ifrequency = 0; ifrequency != frequencies.size(); ++ifrequency)
+    {
+        fixed_projector.project(projected_rhs[ifrequency]);
+        for (std::size_t ia = 0; ia != virtual_states.size(); ++ia)
+        {
+            denominators[ifrequency][ia]
+                = Complex(reference_eigenvalue - virtual_states[ia].eigenvalue,
+                          -frequencies[ifrequency]);
+            if (std::abs(denominators[ifrequency][ia]) < 1.0e-30)
+            {
+                throw std::runtime_error(
+                    "Sternheimer delta frequency recycling found a singular virtual-state denominator.");
+            }
+            axpy(-perturbation_matrix_elements[ia] / denominators[ifrequency][ia],
+                 virtual_states[ia].residual,
+                 projected_rhs[ifrequency]);
+        }
+    }
+
+    SternheimerRPA::FrequencyLinearProblemFamily family;
+    family.problems.resize(frequencies.size());
+    std::vector<std::shared_ptr<SternheimerFDSpectralPreconditioner>> spectral_preconditioners(
+        frequencies.size());
+    for (std::size_t ifrequency = 0; ifrequency != frequencies.size(); ++ifrequency)
+    {
+        SternheimerRPA::FrequencyLinearProblem& entry = family.problems[ifrequency];
+        entry.rhs = projected_rhs[ifrequency];
+        entry.problem.dot = dot;
+        entry.problem.apply
+            = [&, ifrequency](const Vector& input, Vector& output) {
+                  Vector q_input = input;
+                  fixed_projector.project(q_input);
+                  hamiltonian.apply(q_input, output);
+                  const Complex shift(-reference_eigenvalue, frequencies[ifrequency]);
+#pragma omp parallel for schedule(static)
+                  for (std::size_t ir = 0; ir != output.size(); ++ir)
+                  {
+                      output[ir] += shift * q_input[ir];
+                  }
+                  fixed_projector.project(output);
+                  for (std::size_t ia = 0; ia != virtual_states.size(); ++ia)
+                  {
+                      const Complex coupling
+                          = dot(virtual_states[ia].residual, q_input)
+                            / denominators[ifrequency][ia];
+                      axpy(coupling, virtual_states[ia].residual, output);
+                  }
+              };
+        if (solver_options.use_fd_spectral_preconditioner)
+        {
+            spectral_preconditioners[ifrequency]
+                = get_thread_local_sternheimer_fd_spectral_preconditioner(
+                    hamiltonian,
+                    reference_eigenvalue,
+                    frequencies[ifrequency],
+                    solver_options.fd_spectral_preconditioner_regularization);
+            entry.problem.precondition
+                = [&, ifrequency](const Vector& input, Vector& output) {
+                      spectral_preconditioners[ifrequency]->apply(input, output);
+                      fixed_projector.project(output);
+                  };
+        }
+    }
+    family.apply = [&](const Vector& input, SternheimerFDHamiltonian::Matrix& output) {
+        Vector q_input = input;
+        fixed_projector.project(q_input);
+        Vector h_q_input;
+        hamiltonian.apply(q_input, h_q_input);
+        output.assign(frequencies.size(), h_q_input);
+        for (std::size_t ifrequency = 0; ifrequency != frequencies.size(); ++ifrequency)
+        {
+            const Complex shift(-reference_eigenvalue, frequencies[ifrequency]);
+#pragma omp parallel for schedule(static)
+            for (std::size_t ir = 0; ir != output[ifrequency].size(); ++ir)
+            {
+                output[ifrequency][ir] += shift * q_input[ir];
+            }
+            fixed_projector.project(output[ifrequency]);
+            for (std::size_t ia = 0; ia != virtual_states.size(); ++ia)
+            {
+                const Complex coupling
+                    = dot(virtual_states[ia].residual, q_input) / denominators[ifrequency][ia];
+                axpy(coupling, virtual_states[ia].residual, output[ifrequency]);
+            }
+        }
+    };
+
+    result.responses.resize(frequencies.size());
+    SternheimerFDHamiltonian::Matrix out_wavefunctions(
+        frequencies.size(),
+        Vector(static_cast<std::size_t>(grid_size), Complex(0.0, 0.0)));
+    if (fixed_functions.size() >= static_cast<std::size_t>(grid_size))
+    {
+        result.recycling.frequency_results.resize(frequencies.size());
+        result.recycling.operator_applications.assign(frequencies.size(), 0);
+        for (std::size_t ifrequency = 0; ifrequency != frequencies.size(); ++ifrequency)
+        {
+            const double projected_rhs_norm
+                = sternheimer_fd_grid_norm(projected_rhs[ifrequency], volume_element);
+            const double rhs_norm = sternheimer_fd_grid_norm(rhs, volume_element);
+            const double zero_tolerance
+                = std::max(solver_options.breakdown_tol, solver_options.residual_tol)
+                  * std::max(1.0, rhs_norm);
+            if (projected_rhs_norm > zero_tolerance)
+            {
+                throw std::runtime_error(
+                    "Sternheimer delta frequency fixed subspace fills the grid but leaves a nonzero Q-space rhs.");
+            }
+            SternheimerRPA::SolverResult& solver
+                = result.recycling.frequency_results[ifrequency];
+            solver.converged = true;
+            solver.absolute_residual = projected_rhs_norm;
+            solver.relative_residual = projected_rhs_norm / std::max(1.0, rhs_norm);
+        }
+    }
+    else
+    {
+        result.recycling = SternheimerRPA::solve_frequency_recycling(
+            family, out_wavefunctions, solver_options, recycling_options);
+    }
+    result.hamiltonian_applications = result.recycling.family_operator_applications;
+    for (const int operator_applications: result.recycling.operator_applications)
+    {
+        result.hamiltonian_applications
+            += operator_applications - result.recycling.family_operator_applications;
+    }
+
+    for (std::size_t ifrequency = 0; ifrequency != frequencies.size(); ++ifrequency)
+    {
+        SternheimerDeltaLinearResponse& response = result.responses[ifrequency];
+        response.solver = result.recycling.frequency_results[ifrequency];
+        response.response.out_wavefunction = std::move(out_wavefunctions[ifrequency]);
+        fixed_projector.project(response.response.out_wavefunction);
+
+        const SternheimerDeltaCoefficientComponents components
+            = compute_delta_coefficient_components(virtual_states,
+                                                   perturbation_matrix_elements,
+                                                   response.response.out_wavefunction,
+                                                   reference_eigenvalue,
+                                                   frequencies[ifrequency],
+                                                   volume_element);
+        response.response.sos_coefficients = components.sos;
+        response.response.pulay_coefficients = components.pulay;
+        response.response.coefficients = components.total;
+        assemble_delta_wavefunction_components(virtual_states, response.response);
+        response.response.out_norm
+            = sternheimer_fd_grid_norm(response.response.out_wavefunction, volume_element);
+
+        Vector q_residual;
+        hamiltonian.apply(response.response.out_wavefunction, q_residual);
+        result.hamiltonian_applications += 1;
+        const Complex shift(-reference_eigenvalue, frequencies[ifrequency]);
+#pragma omp parallel for schedule(static)
+        for (std::size_t ir = 0; ir != q_residual.size(); ++ir)
+        {
+            q_residual[ir] += shift * response.response.out_wavefunction[ir];
+        }
+        fixed_projector.project(q_residual);
+        for (std::size_t ia = 0; ia != virtual_states.size(); ++ia)
+        {
+            axpy(response.response.coefficients[ia],
+                 virtual_states[ia].residual,
+                 q_residual);
+        }
+
+        Vector q_rhs = rhs;
+        fixed_projector.project(q_rhs);
+#pragma omp parallel for schedule(static)
+        for (std::size_t ir = 0; ir != q_residual.size(); ++ir)
+        {
+            q_residual[ir] -= q_rhs[ir];
+        }
+        const double q_residual_norm = sternheimer_fd_grid_norm(q_residual, volume_element);
+        double residual_norm_squared = q_residual_norm * q_residual_norm;
+        for (std::size_t ia = 0; ia != virtual_states.size(); ++ia)
+        {
+            const Complex delta_block(virtual_states[ia].eigenvalue - reference_eigenvalue,
+                                      frequencies[ifrequency]);
+            const Complex eta_residual
+                = delta_block * response.response.coefficients[ia]
+                  + dot(virtual_states[ia].residual, response.response.out_wavefunction)
+                  - dot(virtual_states[ia].orbital, rhs);
+            residual_norm_squared += std::norm(eta_residual);
+        }
+        response.residual_norm = std::sqrt(residual_norm_squared);
+        response.response.reconstruction_error = response.residual_norm;
+    }
+    return result;
+}
+
 std::vector<SternheimerDeltaLinearResponse> solve_delta_sternheimer_linear_response_batch(
     const SternheimerFDHamiltonian& hamiltonian,
     const SternheimerDeltaFixedSubspace& fixed_subspace,

@@ -120,6 +120,38 @@ class SternheimerRPA
         std::function<Complex(const Vector&, const Vector&)> dot;
     };
 
+    struct FrequencyLinearProblem
+    {
+        LinearProblem problem;
+        Vector rhs;
+    };
+
+    struct FrequencyLinearProblemFamily
+    {
+        std::vector<FrequencyLinearProblem> problems;
+
+        // Applies all frequency-specific operators while allowing common work
+        // such as one Hamiltonian application to be shared by the callback.
+        std::function<void(const Vector&, Matrix&)> apply;
+    };
+
+    struct FrequencyRecyclingOptions
+    {
+        int max_basis_dimension = 48;
+        bool fallback_to_independent = true;
+        int fallback_restart_dimension = 50;
+    };
+
+    struct FrequencyRecyclingResult
+    {
+        std::vector<SolverResult> frequency_results;
+        std::vector<int> operator_applications;
+        int family_operator_applications = 0;
+        int basis_dimension = 0;
+        bool used_fallback = false;
+        std::string fallback_reason;
+    };
+
     static SolverResult solve_bicgstab(const LinearProblem& problem, const Vector& rhs, Vector& solution);
 
     static SolverResult solve_bicgstab(const LinearProblem& problem,
@@ -138,6 +170,18 @@ class SternheimerRPA
                                                        Matrix& solution,
                                                        const SolverOptions& options,
                                                        int restart_dimension = 50);
+
+    static FrequencyRecyclingResult solve_frequency_recycling(
+        const std::vector<FrequencyLinearProblem>& problems,
+        Matrix& solutions,
+        const SolverOptions& solver_options,
+        const FrequencyRecyclingOptions& recycling_options);
+
+    static FrequencyRecyclingResult solve_frequency_recycling(
+        const FrequencyLinearProblemFamily& family,
+        Matrix& solutions,
+        const SolverOptions& solver_options,
+        const FrequencyRecyclingOptions& recycling_options);
 
     static void build_rhs_from_hartree_perturbation(const std::vector<double>& hartree_potential_r,
                                                     const Vector& psi_r,

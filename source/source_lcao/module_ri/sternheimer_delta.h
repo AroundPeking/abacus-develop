@@ -164,6 +164,13 @@ struct SternheimerDeltaLinearResponse
     double residual_norm = 0.0;
 };
 
+struct SternheimerDeltaFrequencyRecyclingResult
+{
+    std::vector<SternheimerDeltaLinearResponse> responses;
+    SternheimerRPA::FrequencyRecyclingResult recycling;
+    int hamiltonian_applications = 0;
+};
+
 struct SternheimerDeltaFixedSubspace
 {
     std::vector<SternheimerFDHamiltonian::Vector> functions;
@@ -261,6 +268,18 @@ SternheimerDeltaLinearResponse solve_delta_sternheimer_linear_response(
     double omega,
     double volume_element,
     const SternheimerRPA::SolverOptions& options = SternheimerRPA::SolverOptions());
+
+SternheimerDeltaFrequencyRecyclingResult solve_delta_sternheimer_frequency_recycling(
+    const SternheimerFDHamiltonian& hamiltonian,
+    const SternheimerDeltaFixedSubspace& fixed_subspace,
+    double reference_eigenvalue,
+    const SternheimerFDHamiltonian::Vector& rhs,
+    const std::vector<SternheimerDeltaVirtualState>& virtual_states,
+    const std::vector<SternheimerFDHamiltonian::Complex>& perturbation_matrix_elements,
+    const std::vector<double>& frequencies,
+    double volume_element,
+    const SternheimerRPA::SolverOptions& solver_options,
+    const SternheimerRPA::FrequencyRecyclingOptions& recycling_options);
 
 std::vector<SternheimerDeltaLinearResponse> solve_delta_sternheimer_linear_response_batch(
     const SternheimerFDHamiltonian& hamiltonian,

@@ -1246,6 +1246,119 @@ TEST(SternheimerDelta, BatchLinearResponseMatchesIndependentFD8Channels)
     }
 }
 
+TEST(SternheimerDelta, FrequencyRecyclingMatchesIndependentFD8Responses)
+{
+    using Hamiltonian = ModuleRI::SternheimerFDHamiltonian;
+    Hamiltonian::Grid grid{9, 1, 1, 0.55, 1.0, 1.0, true};
+    constexpr double volume_element = 0.55;
+    std::vector<double> local_potential(static_cast<std::size_t>(grid.size()));
+    for (int ir = 0; ir != grid.size(); ++ir)
+    {
+        local_potential[static_cast<std::size_t>(ir)] = 0.08 * (ir % 4) - 0.03 * (ir % 7);
+    }
+    const Hamiltonian hamiltonian(grid, local_potential, 1.0, nullptr, 8);
+    const auto states = ModuleRI::solve_sternheimer_fd_zero_order_dense(
+        hamiltonian, grid.size(), volume_element);
+
+    Vector candidate = states.wavefunctions[2];
+    for (std::size_t ir = 0; ir != candidate.size(); ++ir)
+    {
+        candidate[ir] += Complex(0.2, -0.15) * states.wavefunctions[3][ir];
+    }
+    ModuleRI::SternheimerDeltaSubspaceOptions subspace_options;
+    subspace_options.max_virtual_states = 1;
+    const auto subspace = ModuleRI::build_delta_sternheimer_subspace(
+        hamiltonian,
+        {states.wavefunctions[0]},
+        {candidate},
+        volume_element,
+        subspace_options);
+    ASSERT_EQ(subspace.virtual_states.size(), 1U);
+    const auto fixed_subspace = ModuleRI::build_delta_sternheimer_fixed_subspace(
+        {states.wavefunctions[0]}, subspace.virtual_states);
+
+    const std::vector<double> perturbation
+        = {0.7, -0.3, 0.2, 0.5, -0.4, 0.1, 0.6, -0.2, 0.35};
+    Vector rhs;
+    ModuleRI::SternheimerRPA::build_rhs_from_hartree_perturbation(
+        perturbation, states.wavefunctions[0], rhs);
+    const auto perturbation_matrix_elements
+        = ModuleRI::delta_sternheimer_perturbation_matrix_elements(
+            subspace.virtual_states, perturbation, states.wavefunctions[0], volume_element);
+    const std::vector<double> frequencies = {0.05, 0.45, 2.0};
+
+    ModuleRI::SternheimerRPA::SolverOptions solver_options;
+    solver_options.max_iter = 120;
+    solver_options.residual_tol = 1.0e-10;
+    std::vector<ModuleRI::SternheimerDeltaLinearResponse> independent;
+    for (const double omega: frequencies)
+    {
+        independent.push_back(ModuleRI::solve_delta_sternheimer_linear_response(
+            hamiltonian,
+            fixed_subspace,
+            states.eigenvalues[0],
+            rhs,
+            subspace.virtual_states,
+            perturbation_matrix_elements,
+            omega,
+            volume_element,
+            solver_options));
+    }
+
+    ModuleRI::SternheimerRPA::FrequencyRecyclingOptions recycling_options;
+    recycling_options.max_basis_dimension = 7;
+    recycling_options.fallback_to_independent = false;
+    const auto recycled = ModuleRI::solve_delta_sternheimer_frequency_recycling(
+        hamiltonian,
+        fixed_subspace,
+        states.eigenvalues[0],
+        rhs,
+        subspace.virtual_states,
+        perturbation_matrix_elements,
+        frequencies,
+        volume_element,
+        solver_options,
+        recycling_options);
+
+    ASSERT_EQ(recycled.responses.size(), independent.size());
+    EXPECT_FALSE(recycled.recycling.used_fallback);
+    EXPECT_GT(recycled.recycling.family_operator_applications, 0);
+    EXPECT_EQ(recycled.recycling.family_operator_applications,
+              recycled.recycling.basis_dimension);
+    EXPECT_EQ(recycled.hamiltonian_applications,
+              recycled.recycling.family_operator_applications
+                  + static_cast<int>(frequencies.size()));
+    for (std::size_t ifrequency = 0; ifrequency != independent.size(); ++ifrequency)
+    {
+        ASSERT_TRUE(independent[ifrequency].solver.converged);
+        ASSERT_TRUE(recycled.responses[ifrequency].solver.converged);
+        EXPECT_LE(recycled.responses[ifrequency].solver.relative_residual,
+                  solver_options.residual_tol);
+        EXPECT_NEAR(recycled.responses[ifrequency].residual_norm,
+                    independent[ifrequency].residual_norm,
+                    1.0e-8);
+        expect_vector_near(recycled.responses[ifrequency].response.out_wavefunction,
+                           independent[ifrequency].response.out_wavefunction,
+                           1.0e-8);
+        expect_vector_near(recycled.responses[ifrequency].response.reconstructed_wavefunction,
+                           independent[ifrequency].response.reconstructed_wavefunction,
+                           1.0e-8);
+        ASSERT_EQ(recycled.responses[ifrequency].response.coefficients.size(),
+                  independent[ifrequency].response.coefficients.size());
+        for (std::size_t ia = 0;
+             ia != independent[ifrequency].response.coefficients.size();
+             ++ia)
+        {
+            EXPECT_NEAR(recycled.responses[ifrequency].response.coefficients[ia].real(),
+                        independent[ifrequency].response.coefficients[ia].real(),
+                        1.0e-8);
+            EXPECT_NEAR(recycled.responses[ifrequency].response.coefficients[ia].imag(),
+                        independent[ifrequency].response.coefficients[ia].imag(),
+                        1.0e-8);
+        }
+    }
+}
+
 TEST(SternheimerDelta, StrictIndependentDeltaHamiltonianMatchesExplicitHybridBlockEquation)
 {
     ModuleRI::SternheimerFDHamiltonian::Grid grid{5, 1, 1, 0.6, 1.0, 1.0, true};

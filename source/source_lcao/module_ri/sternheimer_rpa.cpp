@@ -1008,6 +1008,274 @@ std::vector<SternheimerRPA::SolverResult> SternheimerRPA::solve_gmres_batch(
     return results;
 }
 
+SternheimerRPA::FrequencyRecyclingResult SternheimerRPA::solve_frequency_recycling(
+    const std::vector<FrequencyLinearProblem>& problems,
+    Matrix& solutions,
+    const SolverOptions& solver_options,
+    const FrequencyRecyclingOptions& recycling_options)
+{
+    FrequencyLinearProblemFamily family;
+    family.problems = problems;
+    return solve_frequency_recycling(family, solutions, solver_options, recycling_options);
+}
+
+SternheimerRPA::FrequencyRecyclingResult SternheimerRPA::solve_frequency_recycling(
+    const FrequencyLinearProblemFamily& family,
+    Matrix& solutions,
+    const SolverOptions& solver_options,
+    const FrequencyRecyclingOptions& recycling_options)
+{
+    const std::vector<FrequencyLinearProblem>& problems = family.problems;
+    if (recycling_options.max_basis_dimension <= 0)
+    {
+        throw std::invalid_argument(
+            "SternheimerRPA::solve_frequency_recycling requires a positive basis dimension.");
+    }
+    if (recycling_options.fallback_restart_dimension <= 0)
+    {
+        throw std::invalid_argument(
+            "SternheimerRPA::solve_frequency_recycling requires a positive fallback restart dimension.");
+    }
+
+    FrequencyRecyclingResult result;
+    result.frequency_results.resize(problems.size());
+    result.operator_applications.assign(problems.size(), 0);
+    if (problems.empty())
+    {
+        solutions.clear();
+        return result;
+    }
+
+    const std::size_t vector_size = problems.front().rhs.size();
+    for (const FrequencyLinearProblem& entry: problems)
+    {
+        if (!entry.problem.apply)
+        {
+            throw std::invalid_argument(
+                "SternheimerRPA::solve_frequency_recycling requires an apply callback for every frequency.");
+        }
+        if (!entry.problem.dot)
+        {
+            throw std::invalid_argument(
+                "SternheimerRPA::solve_frequency_recycling requires a dot callback for every frequency.");
+        }
+        if (entry.rhs.size() != vector_size)
+        {
+            throw std::invalid_argument(
+                "SternheimerRPA::solve_frequency_recycling right-hand-side vector sizes differ.");
+        }
+    }
+
+    solutions.assign(problems.size(), Vector(vector_size, Complex(0.0, 0.0)));
+    const LinearProblem& metric_problem = problems.front().problem;
+    const int max_basis_dimension
+        = std::min(recycling_options.max_basis_dimension, solver_options.max_iter);
+    if (max_basis_dimension <= 0)
+    {
+        throw std::invalid_argument(
+            "SternheimerRPA::solve_frequency_recycling requires positive solver iterations.");
+    }
+
+    std::vector<Vector> basis;
+    std::vector<Matrix> operator_images(problems.size());
+    std::vector<Vector> residuals(problems.size(), Vector(vector_size, Complex(0.0, 0.0)));
+    std::vector<double> norm_floors(problems.size(), 1.0);
+    for (std::size_t ifrequency = 0; ifrequency != problems.size(); ++ifrequency)
+    {
+        const double rhs_norm = vector_norm(problems[ifrequency].problem, problems[ifrequency].rhs);
+        norm_floors[ifrequency] = rhs_norm > 0.0 ? rhs_norm : 1.0;
+    }
+
+    const auto append_basis_vector = [&](Vector candidate) {
+        if (basis.size() >= static_cast<std::size_t>(max_basis_dimension))
+        {
+            return false;
+        }
+        assert_same_size(candidate,
+                         problems.front().rhs,
+                         "SternheimerRPA::solve_frequency_recycling candidate");
+        for (int pass = 0; pass != 2; ++pass)
+        {
+            for (const Vector& basis_vector: basis)
+            {
+                const Complex overlap = metric_problem.dot(basis_vector, candidate);
+                axpy(-overlap, basis_vector, candidate);
+            }
+        }
+        const double candidate_norm = vector_norm(metric_problem, candidate);
+        if (candidate_norm <= solver_options.breakdown_tol)
+        {
+            return false;
+        }
+        scale(Complex(1.0 / candidate_norm, 0.0), candidate);
+        basis.push_back(std::move(candidate));
+        if (family.apply)
+        {
+            Matrix images;
+            family.apply(basis.back(), images);
+            if (images.size() != problems.size())
+            {
+                throw std::invalid_argument(
+                    "SternheimerRPA::solve_frequency_recycling family apply output count differs.");
+            }
+            result.family_operator_applications += 1;
+            for (std::size_t ifrequency = 0; ifrequency != problems.size(); ++ifrequency)
+            {
+                assert_same_size(images[ifrequency],
+                                 problems[ifrequency].rhs,
+                                 "SternheimerRPA::solve_frequency_recycling family apply");
+                operator_images[ifrequency].push_back(std::move(images[ifrequency]));
+                result.operator_applications[ifrequency] += 1;
+            }
+        }
+        else
+        {
+            for (std::size_t ifrequency = 0; ifrequency != problems.size(); ++ifrequency)
+            {
+                Vector image;
+                problems[ifrequency].problem.apply(basis.back(), image);
+                assert_same_size(image,
+                                 problems[ifrequency].rhs,
+                                 "SternheimerRPA::solve_frequency_recycling apply");
+                operator_images[ifrequency].push_back(std::move(image));
+                result.operator_applications[ifrequency] += 1;
+            }
+        }
+        result.basis_dimension = static_cast<int>(basis.size());
+        return true;
+    };
+
+    const auto evaluate_reduced_solutions = [&]() {
+        bool all_converged = true;
+        for (std::size_t ifrequency = 0; ifrequency != problems.size(); ++ifrequency)
+        {
+            const std::size_t dimension = basis.size();
+            std::vector<std::vector<Complex>> reduced_matrix(
+                dimension, std::vector<Complex>(dimension, Complex(0.0, 0.0)));
+            std::vector<Complex> reduced_rhs(dimension, Complex(0.0, 0.0));
+            for (std::size_t row = 0; row != dimension; ++row)
+            {
+                reduced_rhs[row]
+                    = metric_problem.dot(operator_images[ifrequency][row], problems[ifrequency].rhs);
+                for (std::size_t col = 0; col != dimension; ++col)
+                {
+                    reduced_matrix[row][col]
+                        = metric_problem.dot(operator_images[ifrequency][row],
+                                             operator_images[ifrequency][col]);
+                }
+            }
+
+            std::vector<Complex> coefficients;
+            if (dimension != 0)
+            {
+                coefficients = solve_small_dense_system(std::move(reduced_matrix), std::move(reduced_rhs));
+            }
+            solutions[ifrequency].assign(vector_size, Complex(0.0, 0.0));
+            Vector applied_solution(vector_size, Complex(0.0, 0.0));
+            for (std::size_t ibasis = 0; ibasis != dimension; ++ibasis)
+            {
+                axpy(coefficients[ibasis], basis[ibasis], solutions[ifrequency]);
+                axpy(coefficients[ibasis], operator_images[ifrequency][ibasis], applied_solution);
+            }
+            for (std::size_t i = 0; i != vector_size; ++i)
+            {
+                residuals[ifrequency][i] = problems[ifrequency].rhs[i] - applied_solution[i];
+            }
+
+            SolverResult& frequency_result = result.frequency_results[ifrequency];
+            frequency_result.iterations = static_cast<int>(dimension);
+            frequency_result.absolute_residual
+                = vector_norm(problems[ifrequency].problem, residuals[ifrequency]);
+            frequency_result.relative_residual
+                = frequency_result.absolute_residual / norm_floors[ifrequency];
+            frequency_result.converged
+                = frequency_result.relative_residual <= solver_options.residual_tol;
+            all_converged = all_converged && frequency_result.converged;
+        }
+        return all_converged;
+    };
+
+    const auto fallback_to_independent = [&](const std::string& reason) {
+        result.fallback_reason = reason;
+        if (!recycling_options.fallback_to_independent)
+        {
+            return;
+        }
+        result.used_fallback = true;
+        for (std::size_t ifrequency = 0; ifrequency != problems.size(); ++ifrequency)
+        {
+            LinearProblem counted_problem = problems[ifrequency].problem;
+            counted_problem.apply = [&, ifrequency](const Vector& input, Vector& output) {
+                problems[ifrequency].problem.apply(input, output);
+                result.operator_applications[ifrequency] += 1;
+            };
+            solutions[ifrequency].assign(vector_size, Complex(0.0, 0.0));
+            result.frequency_results[ifrequency]
+                = solve_gmres(counted_problem,
+                              problems[ifrequency].rhs,
+                              solutions[ifrequency],
+                              solver_options,
+                              recycling_options.fallback_restart_dimension);
+        }
+    };
+
+    for (std::size_t ifrequency = 0;
+         ifrequency != problems.size() && basis.size() < static_cast<std::size_t>(max_basis_dimension);
+         ++ifrequency)
+    {
+        Vector candidate;
+        apply_preconditioner(problems[ifrequency].problem, problems[ifrequency].rhs, candidate);
+        assert_same_size(candidate,
+                         problems[ifrequency].rhs,
+                         "SternheimerRPA::solve_frequency_recycling precondition");
+        append_basis_vector(std::move(candidate));
+    }
+
+    while (true)
+    {
+        try
+        {
+            if (evaluate_reduced_solutions())
+            {
+                return result;
+            }
+        }
+        catch (const std::runtime_error&)
+        {
+            fallback_to_independent("projected_system_failure");
+            return result;
+        }
+
+        if (basis.size() >= static_cast<std::size_t>(max_basis_dimension))
+        {
+            fallback_to_independent("basis_dimension_limit");
+            return result;
+        }
+
+        std::size_t worst_frequency = 0;
+        for (std::size_t ifrequency = 1; ifrequency != problems.size(); ++ifrequency)
+        {
+            if (result.frequency_results[ifrequency].relative_residual
+                > result.frequency_results[worst_frequency].relative_residual)
+            {
+                worst_frequency = ifrequency;
+            }
+        }
+        Vector candidate;
+        apply_preconditioner(problems[worst_frequency].problem,
+                             residuals[worst_frequency],
+                             candidate);
+        assert_same_size(candidate,
+                         problems[worst_frequency].rhs,
+                         "SternheimerRPA::solve_frequency_recycling precondition");
+        if (!append_basis_vector(std::move(candidate)))
+        {
+            fallback_to_independent("dependent_enrichment");
+            return result;
+        }
+    }
+}
+
 void SternheimerRPA::build_rhs_from_hartree_perturbation(const std::vector<double>& hartree_potential_r,
                                                          const Vector& psi_r,
                                                          Vector& rhs_r)

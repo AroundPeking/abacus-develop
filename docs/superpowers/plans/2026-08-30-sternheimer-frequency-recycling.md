@@ -18,11 +18,11 @@ ABACUS Delta-Sternheimer, LibRPA.
 
 **Files:** No source changes.
 
-- [ ] Configure a clean Debug test build from current `origin/master_ghj`.
-- [ ] Build and run `MODULE_RI_sternheimer_rpa_test`,
+- [x] Configure a clean Debug test build from current `origin/master_ghj`.
+- [x] Build and run `MODULE_RI_sternheimer_rpa_test`,
   `MODULE_RI_sternheimer_delta_test`, and
   `MODULE_RI_sternheimer_periodic_solver_test`.
-- [ ] Record any environment-only limitation separately from source failures.
+- [x] Record any environment-only limitation separately from source failures.
 
 ### Task 2: Add the generic adaptive frequency-family solver
 
@@ -31,16 +31,18 @@ ABACUS Delta-Sternheimer, LibRPA.
 - Modify: `source/source_lcao/module_ri/sternheimer_rpa.cpp`
 - Modify: `source/source_lcao/module_ri/test/sternheimer_rpa_test.cpp`
 
-- [ ] Add failing tests for two noncommuting frequency-dependent operators,
+- [x] Add failing tests for two noncommuting frequency-dependent operators,
   different RHS vectors, and different preconditioners.
 - [ ] Add failing tests for empty RHS, dependent enrichment, dimension-cap
   fallback, and exact full-residual reporting.
-- [ ] Introduce `FrequencyLinearProblem`, `FrequencyRecyclingOptions`, and a
+- [x] Introduce `FrequencyLinearProblem`, `FrequencyRecyclingOptions`, and a
   result containing per-frequency solver records, operator counts, basis size,
   and fallback reason.
-- [ ] Implement orthonormal enrichment, explicit `V^H A_j V`, dense projected
-  solves, and full-residual checks.
-- [ ] Run the focused RPA test after each red-green-refactor step.
+- [x] Implement orthonormal enrichment, explicit `W_j=A_jV`, dense
+  minimum-residual solves, and full-residual checks.
+- [x] Add a family callback that shares one expensive Hamiltonian application
+  while retaining per-frequency fallback callbacks.
+- [x] Run the focused RPA test after each red-green-refactor step.
 
 ### Task 3: Build frequency-specific Delta-ST systems without changing physics
 
@@ -49,14 +51,14 @@ ABACUS Delta-Sternheimer, LibRPA.
 - Modify: `source/source_lcao/module_ri/sternheimer_delta.cpp`
 - Modify: `source/source_lcao/module_ri/test/sternheimer_delta_test.cpp`
 
-- [ ] Add a failing low/middle/high-frequency test comparing recycled and
+- [x] Add a failing low/middle/high-frequency test comparing recycled and
   independent solves for frequency-dependent denominators, low-rank operator
   corrections, RHS vectors, and spectral preconditioners.
 - [ ] Refactor one-frequency closure construction into a reusable helper whose
   scalar behavior is unchanged.
-- [ ] Add an experimental small-frequency-group entry point and deterministic
+- [x] Add an experimental small-frequency-group entry point and deterministic
   fallback to existing GMRES.
-- [ ] Compare reconstructed response, coefficients, solver records, and full
+- [x] Compare reconstructed response, coefficients, solver records, and full
   physical residuals within the design tolerances.
 
 ### Task 4: Add guarded runtime integration and resource accounting

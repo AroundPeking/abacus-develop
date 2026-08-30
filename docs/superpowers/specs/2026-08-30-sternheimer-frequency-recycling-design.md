@@ -26,26 +26,41 @@ would therefore be mathematically unjustified.
 
 Use an adaptive common reduced space for a small frequency group.  Let `V` be
 an orthonormal grid-vector basis.  For each frequency, explicitly apply its own
-operator to every new basis vector and form
+operator to every new basis vector and form `W_j = A_j V`.  Determine the
+reduced coefficients from the minimum-residual problem
 
-`Abar_j = V^H A_j V`, `bbar_j = V^H b_j`.
+`min_y ||b_j - W_j y||`.
 
-Solve the small dense systems for provisional `x_j = V y_j`, then evaluate the
-full-space residual `r_j = b_j - A_j x_j`.  If every relative residual meets
-the existing tolerance, the group is accepted.  Otherwise select the largest
-relative residual, apply that frequency's existing preconditioner, project out
-`V`, normalize, and append the result.  This enrichment continues until all
-frequencies converge or a dimension/iteration limit is reached.
+The normal equations use `W_j^H W_j` and `W_j^H b_j`, matching the existing
+GMRES least-squares convention.  Form provisional `x_j = V y_j`, then evaluate
+the full-space residual `r_j = b_j - W_j y_j`.  If every relative residual
+meets the existing tolerance, the group is accepted.  Otherwise select the
+largest relative residual, apply that frequency's existing preconditioner,
+project out `V`, normalize, and append the result.  This enrichment continues
+until all frequencies converge or a dimension/iteration limit is reached.
 
 This is recycled reduced-basis iteration, not multi-shift GMRES.  Every
 frequency retains its own operator, RHS, preconditioner, residual, and stopping
 decision.
 
+The operator-family interface exposes the frequency-independent expensive
+work explicitly.  For each new basis vector it projects the input and evaluates
+the grid Hamiltonian once, then forms every `A_j V` column by adding that
+frequency's shift and residual low-rank correction.  Independent per-frequency
+operator callbacks remain available for deterministic fallback.  The result
+records both conceptual per-frequency operator columns and the number of shared
+family applications so a benchmark cannot mistake subspace reuse for actual
+Hamiltonian reuse.  The Delta-ST result also counts independent fallback calls
+and the final per-frequency physical-residual applications in its total
+Hamiltonian-application field.
+
 ## First Scope
 
 The first code layer is a general `FrequencyLinearProblem` solver in
 `sternheimer_rpa`.  Unit tests use non-shifted, noncommuting frequency families
-so an accidental multi-shift assumption cannot pass.
+so an accidental multi-shift assumption cannot pass.  A separate family apply
+test requires one callback per common basis vector and zero independent apply
+calls before fallback.
 
 The first Delta-ST integration is deliberately narrow:
 
