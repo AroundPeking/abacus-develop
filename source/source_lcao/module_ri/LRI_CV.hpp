@@ -8,6 +8,7 @@
 
 #include "LRI_CV.h"
 #include "LRI_CV_Tools.h"
+#include "lri_hermitian_pair.h"
 #include "exx_abfs-construct_orbs.h"
 #include "RI_Util.h"
 #include "../../source_basis/module_ao/element_basis_index-ORB.h"
@@ -232,46 +233,33 @@ To11 LRI_CV<Tdata>::DPcal_o11(
 	std::map<int,std::map<int,std::map<Abfs::Vector3_Order<double>,To11>>> &o11ws,
 	const Tfunc &func_cal_o11)
 {
-	const Abfs::Vector3_Order<double> Rm = -R;
+	const auto pair = LRI_CV_Tools::canonical_hermitian_pair(it0, it1, R);
 	pthread_rwlock_rdlock(&rwlock_o11);
-	const To11 o11_read = RI::Global_Func::find(o11ws, it0, it1, R);
+	const To11 o11_read
+		= RI::Global_Func::find(o11ws, pair.atom_i, pair.atom_j, pair.displacement);
 	pthread_rwlock_unlock(&rwlock_o11);
 
 	if(LRI_CV_Tools::exist(o11_read))
 	{
-		return o11_read;
+		return pair.transform_result ? LRI_CV_Tools::transform_Rm(o11_read) : o11_read;
 	}
 	else
 	{
-		pthread_rwlock_rdlock(&rwlock_o11);
-		const To11 o11_transform_read = RI::Global_Func::find(o11ws, it1, it0, Rm);
-		pthread_rwlock_unlock(&rwlock_o11);
-
-		if(LRI_CV_Tools::exist(o11_transform_read))
+		const To11 o11 = func_cal_o11(
+			pair.atom_i,
+			pair.atom_j,
+			ModuleBase::Vector3<double>{0,0,0},
+			pair.displacement,
+			this->index_abfs,
+			this->index_abfs,
+			Matrix_Orbs11::Matrix_Order::AB);
+		if(flag_writable_o11ws)
 		{
-			const To11 o11 = LRI_CV_Tools::transform_Rm(o11_transform_read);
-			if(flag_writable_o11ws)							// such write may be deleted for memory saving with transform_Rm() every time
-			{
-				pthread_rwlock_wrlock(&rwlock_o11);
-				o11ws[it0][it1][R] = o11;
-				pthread_rwlock_unlock(&rwlock_o11);
-			}
-			return o11;
+			pthread_rwlock_wrlock(&rwlock_o11);
+			o11ws[pair.atom_i][pair.atom_j][pair.displacement] = o11;
+			pthread_rwlock_unlock(&rwlock_o11);
 		}
-		else
-		{
-			const To11 o11 = func_cal_o11(
-				it0, it1, ModuleBase::Vector3<double>{0,0,0}, R,
-				this->index_abfs, this->index_abfs,
-				Matrix_Orbs11::Matrix_Order::AB);
-			if(flag_writable_o11ws)
-			{
-				pthread_rwlock_wrlock(&rwlock_o11);
-				o11ws[it0][it1][R] = o11;
-				pthread_rwlock_unlock(&rwlock_o11);
-			}
-			return o11;
-		} // end else (!exist(o11_transform_read))
+		return pair.transform_result ? LRI_CV_Tools::transform_Rm(o11) : o11;
 	} // end else (!exist(o11_read))
 }
 

@@ -18,6 +18,13 @@ add_test(
   COMMAND ./MODULE_RI_ewald_tail_utils_test
   WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
 )
+add_executable(MODULE_RI_lri_hermitian_pair_test lri_hermitian_pair_test.cpp)
+install(TARGETS MODULE_RI_lri_hermitian_pair_test DESTINATION ${CMAKE_BINARY_DIR}/tests)
+add_test(
+  NAME MODULE_RI_lri_hermitian_pair_test
+  COMMAND ./MODULE_RI_lri_hermitian_pair_test
+  WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+)
 add_executable(MODULE_RI_gaussian_abfs_cutoff_test gaussian_abfs_cutoff_test.cpp)
 install(TARGETS MODULE_RI_gaussian_abfs_cutoff_test DESTINATION ${CMAKE_BINARY_DIR}/tests)
 add_test(
