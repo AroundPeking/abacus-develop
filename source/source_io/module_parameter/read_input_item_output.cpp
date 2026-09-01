@@ -1202,6 +1202,25 @@ If EXX(exact exchange) is calculated (i.e. dft_fuctional==hse/hf/pbe0/scan0 or r
         this->add_item(item);
     }
     {
+        Input_Item item("sternheimer_response_ecutwfc");
+        item.annotation = "independent Delta-Sternheimer response-grid cutoff";
+        item.category = "Output information";
+        item.type = "Real";
+        item.description = "Use an independent real-space response grid generated from this wave-function cutoff. "
+                           "The value 0 reuses the converged PBE grid. A positive value must not exceed ecutwfc.";
+        item.default_value = "0.0";
+        item.unit = "Ry";
+        item.availability = "LCAO calculation with out_sternheimer_librpa=True and sternheimer_delta=True.";
+        read_sync_double(input.sternheimer_response_ecutwfc);
+        item.check_value = [](const Input_Item& item, const Parameter& para) {
+            if (para.input.sternheimer_response_ecutwfc < 0.0)
+            {
+                ModuleBase::WARNING_QUIT("ReadInput", item.label + " must be zero or positive.");
+            }
+        };
+        this->add_item(item);
+    }
+    {
         Input_Item item("sternheimer_delta_virtual_source");
         item.annotation = "ks_bands: complete LCAO KS virtual space; projected_ao: diagnostic AO projection";
         item.category = "Output information";
