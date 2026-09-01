@@ -2,6 +2,8 @@
 
 #include "source_io/module_parameter/parameter.h"
 #include "ABFs_Construct-PCA.h"
+#include "product_pca_spectrum.h"
+#include "source_base/global_variable.h"
 #include "source_base/gram_schmidt_orth-inl.h"
 #include "source_base/gram_schmidt_orth.h"
 #include "source_basis/module_ao/ORB_read.h"
@@ -272,6 +274,23 @@ std::vector<std::vector<std::vector<std::vector<double>>>> Exx_Abfs::Construct_O
 
 	const std::vector<std::vector<std::pair<std::vector<double>,RI::Tensor<double>>>>
 		eig = ABFs_Construct::PCA::cal_PCA(ucell, orb, orbs, abfs, kmesh_times_mot );
+
+    if (ABFs_Construct::PCA::product_pca_spectrum_diagnostic_enabled() && GlobalV::MY_RANK == 0)
+    {
+        ABFs_Construct::PCA::ProductPcaEigenvalues eigenvalues(eig.size());
+        for (std::size_t T = 0; T != eig.size(); ++T)
+        {
+            eigenvalues[T].resize(eig[T].size());
+            for (std::size_t L = 0; L != eig[T].size(); ++L)
+            {
+                eigenvalues[T][L] = eig[T][L].first;
+            }
+        }
+        ABFs_Construct::PCA::write_product_pca_spectrum_file(
+            ABFs_Construct::PCA::product_pca_spectrum_output_path(),
+            eigenvalues,
+            times_threshold);
+    }
 
 	const std::vector<std::vector<std::vector<std::vector<double>>>> psis = get_psi( abfs );
 	std::vector<std::vector<std::vector<std::vector<double>>>> psis_new( psis.size() );

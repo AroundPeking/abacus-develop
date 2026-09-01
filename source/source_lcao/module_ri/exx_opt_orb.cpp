@@ -10,6 +10,7 @@
 #include "source_lcao/module_ri/Matrix_Orbs21.h"
 #include "source_lcao/module_ri/Matrix_Orbs22.h"
 #include "source_lcao/module_ri/LRI_CV_Tools.h"
+#include "source_lcao/module_ri/product_pca_spectrum.h"
 #include <RI/global/Tensor_Multiply.h>
 
 void Exx_Opt_Orb::generate_matrix(
@@ -36,6 +37,10 @@ void Exx_Opt_Orb::generate_matrix(
 
 	std::vector<std::vector<std::vector<Numerical_Orbital_Lm>>>
 		abfs = Exx_Abfs::Construct_Orbs::abfs_same_atom(ucell,orb, lcaos, info.kmesh_times, info.pca_threshold );
+	if (ABFs_Construct::PCA::product_pca_spectrum_should_stop_after_generation(PARAM.inp.calculation))
+	{
+		return;
+	}
 	if(!info.files_abfs.empty())
 		{ abfs = Exx_Abfs::IO::construct_abfs( abfs, orb, info.files_abfs, info.kmesh_times ); 	}
 	Exx_Abfs::Construct_Orbs::filter_empty_orbs(abfs);

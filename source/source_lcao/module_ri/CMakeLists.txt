@@ -50,6 +50,7 @@ if (ENABLE_LIBRI)
         exx_abfs-io.cpp
         exx_abfs-jle.cpp
         ABFs_Construct-PCA.cpp
+        product_pca_spectrum.cpp
         exx_opt_orb-print.cpp
         exx_opt_orb.cpp
         gaussian_abfs.cpp

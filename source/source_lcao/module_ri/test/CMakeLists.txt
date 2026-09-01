@@ -11,6 +11,11 @@ AddTest(
   LIBS base ${math_libs} device parameter
   SOURCES ri_cv_io_test.cpp
 )
+AddTest(
+  TARGET MODULE_RI_product_pca_spectrum_test
+  LIBS ${math_libs}
+  SOURCES product_pca_spectrum_test.cpp ../product_pca_spectrum.cpp
+)
 add_executable(MODULE_RI_ewald_tail_utils_test ewald_tail_utils_test.cpp)
 install(TARGETS MODULE_RI_ewald_tail_utils_test DESTINATION ${CMAKE_BINARY_DIR}/tests)
 add_test(
