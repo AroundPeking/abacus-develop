@@ -277,6 +277,17 @@ void ESolver_KS_LCAO<TK, TR>::after_all_runners(UnitCell& ucell)
     ModuleBase::TITLE("ESolver_KS_LCAO", "after_all_runners");
     ModuleBase::timer::tick("ESolver_KS_LCAO", "after_all_runners");
 
+    if (PARAM.inp.calculation == "gen_opt_abfs")
+    {
+#ifdef __MPI
+#ifdef __LCAO
+        Cblacs_exit(1);
+#endif
+#endif
+        ModuleBase::timer::tick("ESolver_KS_LCAO", "after_all_runners");
+        return;
+    }
+
     ESolver_KS<TK>::after_all_runners(ucell);
 
     auto* hamilt_lcao = dynamic_cast<hamilt::HamiltLCAO<TK, TR>*>(this->p_hamilt);
