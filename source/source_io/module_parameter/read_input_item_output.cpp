@@ -1221,6 +1221,63 @@ If EXX(exact exchange) is calculated (i.e. dft_fuctional==hse/hf/pbe0/scan0 or r
         this->add_item(item);
     }
     {
+        Input_Item item("sternheimer_response_nx");
+        item.annotation = "explicit Delta-Sternheimer response-grid x dimension";
+        item.category = "Output information";
+        item.type = "Integer";
+        item.description = "Set the x dimension of an explicit Delta-Sternheimer response grid without changing "
+                           "the PBE grid. Use all three response dimensions together; zero disables this route.";
+        item.default_value = "0";
+        item.unit = "";
+        item.availability = "LCAO calculation with out_sternheimer_librpa=True and sternheimer_delta=True.";
+        read_sync_int(input.sternheimer_response_nx);
+        item.check_value = [](const Input_Item& item, const Parameter& para) {
+            if (para.input.sternheimer_response_nx < 0)
+            {
+                ModuleBase::WARNING_QUIT("ReadInput", item.label + " must be zero or positive.");
+            }
+        };
+        this->add_item(item);
+    }
+    {
+        Input_Item item("sternheimer_response_ny");
+        item.annotation = "explicit Delta-Sternheimer response-grid y dimension";
+        item.category = "Output information";
+        item.type = "Integer";
+        item.description = "Set the y dimension of an explicit Delta-Sternheimer response grid without changing "
+                           "the PBE grid. Use all three response dimensions together; zero disables this route.";
+        item.default_value = "0";
+        item.unit = "";
+        item.availability = "LCAO calculation with out_sternheimer_librpa=True and sternheimer_delta=True.";
+        read_sync_int(input.sternheimer_response_ny);
+        item.check_value = [](const Input_Item& item, const Parameter& para) {
+            if (para.input.sternheimer_response_ny < 0)
+            {
+                ModuleBase::WARNING_QUIT("ReadInput", item.label + " must be zero or positive.");
+            }
+        };
+        this->add_item(item);
+    }
+    {
+        Input_Item item("sternheimer_response_nz");
+        item.annotation = "explicit Delta-Sternheimer response-grid z dimension";
+        item.category = "Output information";
+        item.type = "Integer";
+        item.description = "Set the z dimension of an explicit Delta-Sternheimer response grid without changing "
+                           "the PBE grid. Use all three response dimensions together; zero disables this route.";
+        item.default_value = "0";
+        item.unit = "";
+        item.availability = "LCAO calculation with out_sternheimer_librpa=True and sternheimer_delta=True.";
+        read_sync_int(input.sternheimer_response_nz);
+        item.check_value = [](const Input_Item& item, const Parameter& para) {
+            if (para.input.sternheimer_response_nz < 0)
+            {
+                ModuleBase::WARNING_QUIT("ReadInput", item.label + " must be zero or positive.");
+            }
+        };
+        this->add_item(item);
+    }
+    {
         Input_Item item("sternheimer_delta_virtual_source");
         item.annotation = "ks_bands: complete LCAO KS virtual space; projected_ao: diagnostic AO projection";
         item.category = "Output information";
