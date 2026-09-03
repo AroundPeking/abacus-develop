@@ -622,6 +622,21 @@ TEST(SternheimerABACUSSTSmoke, BuildsDiscreteQStarRoutesFromAllowedGridPermutati
               "4 4 0 0 0 0 0\n");
 }
 
+TEST(SternheimerABACUSSTSmoke, DerivesQStarWeightFromDiscreteRoutes)
+{
+    const std::vector<ModuleRI::SternheimerQStarRoute> routes = {
+        {1, 1, 0, false, {0, 0, 0}},
+        {2, 2, 0, false, {0, 0, 0}},
+        {2, 3, 4, false, {1, 0, 0}},
+        {4, 4, 0, false, {0, 0, 0}},
+    };
+
+    EXPECT_DOUBLE_EQ(ModuleRI::sternheimer_discrete_qstar_weight(routes, 1), 0.25);
+    EXPECT_DOUBLE_EQ(ModuleRI::sternheimer_discrete_qstar_weight(routes, 2), 0.5);
+    EXPECT_THROW(ModuleRI::sternheimer_discrete_qstar_weight(routes, 3), std::invalid_argument);
+    EXPECT_THROW(ModuleRI::sternheimer_discrete_qstar_weight(routes, 0), std::invalid_argument);
+}
+
 TEST(SternheimerABACUSSTSmoke, HermitianizesEachPartialResponseBeforeOutput)
 {
     using Complex = std::complex<double>;

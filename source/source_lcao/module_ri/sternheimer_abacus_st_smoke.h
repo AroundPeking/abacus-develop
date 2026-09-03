@@ -500,6 +500,31 @@ inline std::vector<SternheimerQStarRoute> build_sternheimer_qstar_routes_from_pe
     return routes;
 }
 
+inline double sternheimer_discrete_qstar_weight(
+    const std::vector<SternheimerQStarRoute>& routes,
+    const int representative_iq_one_based)
+{
+    if (routes.empty() || representative_iq_one_based <= 0)
+    {
+        throw std::invalid_argument("Invalid discrete Sternheimer q index for q-star weighting.");
+    }
+    const auto representative = std::find_if(
+        routes.begin(), routes.end(), [&](const SternheimerQStarRoute& route) {
+            return route.member_iq == representative_iq_one_based;
+        });
+    if (representative == routes.end()
+        || representative->representative_iq != representative_iq_one_based)
+    {
+        throw std::invalid_argument(
+            "Discrete Sternheimer q-star weight requires a representative q point.");
+    }
+    const std::size_t multiplicity = static_cast<std::size_t>(std::count_if(
+        routes.begin(), routes.end(), [&](const SternheimerQStarRoute& route) {
+            return route.representative_iq == representative_iq_one_based;
+        }));
+    return static_cast<double>(multiplicity) / static_cast<double>(routes.size());
+}
+
 inline std::string format_sternheimer_qstar_routes(
     const std::vector<SternheimerQStarRoute>& routes)
 {

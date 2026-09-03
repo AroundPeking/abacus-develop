@@ -2664,6 +2664,8 @@ void run_sternheimer_periodic_lcao_chi0_output(
         = use_parallel_grid_mpi ? make_sternheimer_fd_full_grid(pw_basis)
                                 : make_sternheimer_fd_grid(pw_basis);
     const bool use_symmetry_partial_response = PARAM.inp.symmetry == "1" && !write_basis_opt;
+    const bool use_discrete_qstar_routes
+        = use_symmetry_partial_response || (PARAM.inp.symmetry == "1" && write_basis_opt);
     const bool write_kresolved_diagnostic
         = !use_symmetry_partial_response && env_is_true(kKResolvedDiagnosticEnv);
     const bool write_partial_kresolved = use_symmetry_partial_response || write_kresolved_diagnostic;
@@ -2675,7 +2677,7 @@ void run_sternheimer_periodic_lcao_chi0_output(
     int fixed_q_little_group_order = 1;
     int fixed_q_discrete_spatial_order = 1;
     std::vector<bool> fixed_q_representative(response_kpoints.size(), true);
-    if (use_symmetry_partial_response)
+    if (use_discrete_qstar_routes)
     {
         std::vector<SternheimerFDReducedRotation> reduced_rotations;
         reduced_rotations.reserve(static_cast<std::size_t>(ucell.symm.nrotk));
@@ -3062,7 +3064,10 @@ void run_sternheimer_periodic_lcao_chi0_output(
     int basis_opt_primitive_count = 0;
     if (write_basis_opt)
     {
-        basis_opt_q_weight = sternheimer_qstar_weight(response_kpoints, response_plan.iq);
+        basis_opt_q_weight
+            = use_discrete_qstar_routes
+                  ? sternheimer_discrete_qstar_weight(qstar_routes, response_plan.iq)
+                  : sternheimer_qstar_weight(response_kpoints, response_plan.iq);
         basis_opt_dir = periodic_basis_opt_directory(output_dir);
         if (GlobalV::MY_RANK == 0)
         {
