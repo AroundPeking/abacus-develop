@@ -649,8 +649,8 @@ parameters:
     category: Electronic structure
     type: Real
     description: |
-      Energy range for smearing, smearing_sigma = 1/2 kB smearing_sigma_temp.
-    default_value: "2 * smearing_sigma / kB."
+      Electronic temperature, converted to smearing_sigma = kB T in Ry.
+    default_value: "smearing_sigma / kB."
     unit: K
     availability: ""
   - name: mixing_type

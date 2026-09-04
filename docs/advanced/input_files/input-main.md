@@ -1227,8 +1227,8 @@
 ### smearing_sigma_temp
 
 - **Type**: Real
-- **Description**: Energy range for smearing, smearing_sigma = 1/2 kB smearing_sigma_temp.
-- **Default**: 2 * smearing_sigma / kB.
+- **Description**: Electronic temperature, converted to smearing_sigma = kB T in Ry.
+- **Default**: smearing_sigma / kB.
 - **Unit**: K
 
 ### mixing_type

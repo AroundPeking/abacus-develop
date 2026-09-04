@@ -1,3 +1,4 @@
+#include "source_base/constants.h"
 #include "source_base/global_function.h"
 #include "source_base/tool_quit.h"
 #include "read_input.h"
@@ -534,18 +535,18 @@ The other way is only available when compiling with LIBXC, and it allows for sup
         this->add_item(item);
     }
     {
-        // Energy range for smearing,
-        //`smearing_sigma` = 1/2 *kB* `smearing_sigma_temp`.
+        // For Fermi-Dirac smearing, smearing_sigma is k_B T in Ry.
         // NOTE: Use 'item' as the variable name for automatic documentation generation.
         Input_Item item("smearing_sigma_temp");
         item.category = "Electronic structure";
         item.type = "Real";
-        item.description = "Energy range for smearing, smearing_sigma = 1/2 kB smearing_sigma_temp.";
-        item.default_value = "2 * smearing_sigma / kB.";
+        item.description = "Electronic temperature, converted to smearing_sigma = kB T in Ry.";
+        item.default_value = "smearing_sigma / kB.";
         item.unit = "K";
         item.availability = "";
-        item.read_value
-            = [](const Input_Item& item, Parameter& para) { para.input.smearing_sigma = 3.166815e-6 * doublevalue; };
+        item.read_value = [](const Input_Item& item, Parameter& para) {
+            para.input.smearing_sigma = 2.0 * ModuleBase::K_BOLTZMAN_AU * doublevalue;
+        };
         // only to set smearing_sigma, so no need to write to output INPUT file
         // or bcast.
         this->add_item(item);

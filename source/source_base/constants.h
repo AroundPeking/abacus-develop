@@ -40,7 +40,7 @@ const std::complex<double> NEG_IMAG_UNIT(0.0,-1.0);
 // EXPLAIN : physical constants
 //==========================================================
 const double K_BOLTZMAN_SI    = 1.3806504e-23;// J K^-1
-const double K_BOLTZMAN_AU    = 3.1667e-6;// Hartree K^-1
+const double K_BOLTZMAN_AU    = 3.166811563e-6;// Hartree K^-1
 const double Hartree_to_K     = 3.1577464e5; // Hartree to K
 //const double K_BOLTZMAN_RY    = 6.3335e-6;// Rydberg K^-1; mohan add 2010-09-03
 //const double K_BOLTZMAN_EV    = 8.6173e-5; // eV; mohan add 2010-09-03

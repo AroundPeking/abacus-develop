@@ -25,6 +25,7 @@
 #include "librpa_2d_coulomb_head.h"
 #include "librpa_bz_sampling.h"
 #include "librpa_stru_units.h"
+#include "librpa_thermal_metadata.h"
 #include "rpa_abfs_preorthogonalization.h"
 #include "source_basis/module_ao/element_basis_index-ORB.h"
 #include "source_estate/elecstate_lcao.h"
@@ -2226,6 +2227,17 @@ void RPA_LRI<T, Tdata>::out_bands(const elecstate::ElecState* pelec)
         }
     }
     ofs.close();
+
+    RpaLriDetail::LibrpaThermalMetadata thermal_metadata;
+    thermal_metadata.chemical_potential_ha = pelec->eferm.ef / 2.0;
+    thermal_metadata.kbt_ha = PARAM.inp.smearing_sigma / 2.0;
+    thermal_metadata.smearing_sigma_ry = PARAM.inp.smearing_sigma;
+    thermal_metadata.max_occupation_per_band = PARAM.inp.nspin == 1 ? 2.0 : 1.0;
+    thermal_metadata.spin_channels = nspin_tmp;
+    thermal_metadata.kpoints_per_spin = nks_tot;
+    thermal_metadata.bands = PARAM.inp.nbands;
+    RpaLriDetail::write_librpa_thermal_metadata(
+        "thermal_occupation_v1.dat", PARAM.inp.smearing_method, thermal_metadata);
     return;
 }
 

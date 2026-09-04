@@ -27,6 +27,7 @@ if (ENABLE_LIBRI)
         sternheimer_dft_zero_order.cpp
         sternheimer_delta.cpp
         sternheimer_grid_diagnostics.cpp
+        librpa_thermal_metadata.cpp
         sternheimer_fd_hamiltonian.cpp
         sternheimer_fd_preconditioner.cpp
         sternheimer_fd_nonlocal_projector.cpp

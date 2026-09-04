@@ -108,6 +108,12 @@ TEST_F(InputTest, Item_test)
         output = testing::internal::GetCapturedStdout();
         EXPECT_THAT(output, testing::HasSubstr("NOTICE"));
     }
+    { // smearing_sigma_temp
+        auto it = find_label("smearing_sigma_temp", readinput.input_lists);
+        it->second.str_values = {"300.0"};
+        it->second.read_value(it->second, param);
+        EXPECT_NEAR(param.input.smearing_sigma, 300.0 * 6.333623126e-6, 1.0e-15);
+    }
     { // kspacing
         auto it = find_label("kspacing", readinput.input_lists);
         it->second.str_values = {"1"};

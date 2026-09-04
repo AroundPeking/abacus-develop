@@ -53,6 +53,17 @@ add_test(
   COMMAND ./MODULE_RI_librpa_bz_sampling_test
   WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
 )
+add_executable(
+  MODULE_RI_librpa_thermal_metadata_test
+  librpa_thermal_metadata_test.cpp
+  ../librpa_thermal_metadata.cpp
+)
+install(TARGETS MODULE_RI_librpa_thermal_metadata_test DESTINATION ${CMAKE_BINARY_DIR}/tests)
+add_test(
+  NAME MODULE_RI_librpa_thermal_metadata_test
+  COMMAND ./MODULE_RI_librpa_thermal_metadata_test
+  WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+)
 add_executable(MODULE_RI_librpa_2d_coulomb_head_test librpa_2d_coulomb_head_test.cpp)
 install(TARGETS MODULE_RI_librpa_2d_coulomb_head_test DESTINATION ${CMAKE_BINARY_DIR}/tests)
 add_test(
