@@ -2153,7 +2153,7 @@ void RPA_LRI<T, Tdata>::out_bz_sampling()
     }
 
     ModuleBase::TITLE("DFT_RPA_interface", "out_bz_sampling");
-    const double TWOPI_Bohr2A = ModuleBase::TWO_PI * ModuleBase::BOHR_TO_A;
+    const double reciprocal_scale = RpaLriDetail::librpa_bz_cartesian_scale(ucell.lat0);
     const int nks_tot = PARAM.inp.nspin == 2 ? static_cast<int>(p_kv->get_nks()) / 2 : p_kv->get_nks();
     const int n_coulomb_irreducible = RpaLriDetail::librpa_stored_coulomb_q_count(nks_tot);
 
@@ -2182,9 +2182,9 @@ void RPA_LRI<T, Tdata>::out_bz_sampling()
             << std::setw(24) << std::scientific << std::setprecision(15) << p_kv->kvec_d[ik].x
             << std::setw(24) << std::scientific << std::setprecision(15) << p_kv->kvec_d[ik].y
             << std::setw(24) << std::scientific << std::setprecision(15) << p_kv->kvec_d[ik].z
-            << std::setw(24) << std::scientific << std::setprecision(15) << p_kv->kvec_c[ik].x * TWOPI_Bohr2A
-            << std::setw(24) << std::scientific << std::setprecision(15) << p_kv->kvec_c[ik].y * TWOPI_Bohr2A
-            << std::setw(24) << std::scientific << std::setprecision(15) << p_kv->kvec_c[ik].z * TWOPI_Bohr2A
+            << std::setw(24) << std::scientific << std::setprecision(15) << p_kv->kvec_c[ik].x * reciprocal_scale
+            << std::setw(24) << std::scientific << std::setprecision(15) << p_kv->kvec_c[ik].y * reciprocal_scale
+            << std::setw(24) << std::scientific << std::setprecision(15) << p_kv->kvec_c[ik].z * reciprocal_scale
             << std::setw(8) << stored_q_index.coulomb_irreducible_index
             << std::setw(8) << stored_q_index.representative_scf_index
             << std::endl;

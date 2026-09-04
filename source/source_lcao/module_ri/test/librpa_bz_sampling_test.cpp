@@ -1,7 +1,11 @@
 #include "../librpa_bz_sampling.h"
 
+#include "source_base/constants.h"
+
+#include <cmath>
 #include <cstdlib>
 #include <iostream>
+#include <limits>
 #include <stdexcept>
 
 namespace
@@ -28,6 +32,20 @@ void test_stored_irreducible_points_keep_identity_labels()
         require(index.representative_scf_index == ik + 1,
                 "stored SCF representative labels must refer to their own rows");
     }
+}
+
+void test_cartesian_scale_uses_actual_lattice_constant()
+{
+    constexpr double lat0_bohr = 7.993541507167009;
+    const double actual = RpaLriDetail::librpa_bz_cartesian_scale(lat0_bohr);
+    const double expected = ModuleBase::TWO_PI / lat0_bohr;
+    require(std::abs(actual - expected) <= 4.0 * std::numeric_limits<double>::epsilon(),
+            "BZ Cartesian coordinates must be written in Bohr^-1 using 2*pi/lat0");
+
+    const double one_angstrom_bohr = 1.0 / ModuleBase::BOHR_TO_A;
+    require(RpaLriDetail::librpa_bz_cartesian_scale(one_angstrom_bohr)
+                == ModuleBase::TWO_PI * ModuleBase::BOHR_TO_A,
+            "the one-Angstrom convention must retain its legacy numerical values");
 }
 
 void test_invalid_counts_and_indices_are_rejected()
@@ -62,6 +80,7 @@ void test_invalid_counts_and_indices_are_rejected()
 int main()
 {
     test_stored_irreducible_points_keep_identity_labels();
+    test_cartesian_scale_uses_actual_lattice_constant();
     test_invalid_counts_and_indices_are_rejected();
     std::cout << "LibRPA BZ sampling tests passed\n";
     return 0;
