@@ -465,7 +465,7 @@ void RPA_LRI<T, Tdata>::postSCF(const UnitCell& ucell,
     this->out_bands(pelec);
     this->out_eigen_vector(parav, psi);
     this->out_struc(ucell);
-    this->out_bz_sampling();
+    this->out_bz_sampling(ucell);
 
     std::cout << "rpa_pca_threshold: " << this->info.pca_threshold << std::endl;
     std::cout << "rpa_ccp_rmesh_times: " << this->info.ccp_rmesh_times << std::endl;
@@ -2145,7 +2145,7 @@ void RPA_LRI<T, Tdata>::out_struc(const UnitCell& ucell)
 }
 
 template <typename T, typename Tdata>
-void RPA_LRI<T, Tdata>::out_bz_sampling()
+void RPA_LRI<T, Tdata>::out_bz_sampling(const UnitCell& ucell)
 {
     if (GlobalV::MY_RANK != 0)
     {
