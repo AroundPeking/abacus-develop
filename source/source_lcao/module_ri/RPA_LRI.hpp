@@ -2206,6 +2206,7 @@ void RPA_LRI<T, Tdata>::out_bands(const elecstate::ElecState* pelec)
     ss << "band_out";
     std::ofstream ofs;
     ofs.open(ss.str().c_str(), std::ios::out);
+    ofs << std::scientific << std::setprecision(17);
     ofs << nks_tot << std::endl;
     ofs << nspin_tmp << std::endl;
     ofs << PARAM.inp.nbands << std::endl;
@@ -2219,9 +2220,9 @@ void RPA_LRI<T, Tdata>::out_bands(const elecstate::ElecState* pelec)
             ofs << std::setw(6) << ik + 1 << std::setw(6) << is + 1 << std::endl;
             for (int ib = 0; ib != PARAM.inp.nbands; ib++)
             {
-                ofs << std::setw(5) << ib + 1 << "   " << std::setw(8) << pelec->wg(ik + is * nks_tot, ib) * nks_tot
-                    << std::setw(25) << std::fixed << std::setprecision(15) << pelec->ekb(ik + is * nks_tot, ib) / 2.0
-                    << std::setw(25) << std::fixed << std::setprecision(15)
+                ofs << std::setw(5) << ib + 1 << "   " << std::setw(25) << pelec->wg(ik + is * nks_tot, ib) * nks_tot
+                    << std::setw(25) << pelec->ekb(ik + is * nks_tot, ib) / 2.0
+                    << std::setw(25)
                     << pelec->ekb(ik + is * nks_tot, ib) * ModuleBase::Ry_to_eV << std::endl;
             }
         }
