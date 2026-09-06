@@ -1169,6 +1169,67 @@ If EXX(exact exchange) is calculated (i.e. dft_fuctional==hse/hf/pbe0/scan0 or r
         this->add_item(item);
     }
     {
+        Input_Item item("sternheimer_molecular_coulomb");
+        item.annotation = "isolated molecular RI/grid Coulomb response; none preserves the legacy path";
+        item.category = "Output information";
+        item.type = "String";
+        item.description = "isolated_ri declares an isolated molecule/atom: use producer-matched AO Coulomb "
+                           "vertices on both sides and charge-moment exterior tails in the grid complement. "
+                           "Requires sternheimer_ao_potential_file, Delta-ST, Gamma, symmetry -1, and limits Coulomb. "
+                           "This is not a periodic-solid or ordinary SOS option.";
+        item.default_value = "none";
+        item.unit = "";
+        item.availability = "LCAO isolated molecular Delta-ST with LibRPA output.";
+        read_sync_string(input.sternheimer_molecular_coulomb);
+        item.check_value = [](const Input_Item& item, const Parameter& para) {
+            if (para.input.sternheimer_molecular_coulomb != "none"
+                && para.input.sternheimer_molecular_coulomb != "isolated_ri")
+            {
+                ModuleBase::WARNING_QUIT("ReadInput", item.label + " must be none or isolated_ri.");
+            }
+            if (para.input.sternheimer_molecular_coulomb == "isolated_ri")
+            {
+                if (!para.input.out_sternheimer_librpa)
+                {
+                    ModuleBase::WARNING_QUIT("ReadInput",
+                                             item.label + " isolated_ri requires out_sternheimer_librpa True.");
+                }
+                if (!para.input.sternheimer_delta)
+                {
+                    ModuleBase::WARNING_QUIT("ReadInput", item.label + " isolated_ri requires sternheimer_delta True.");
+                }
+                if (para.input.sternheimer_ao_potential_file.empty())
+                {
+                    ModuleBase::WARNING_QUIT("ReadInput",
+                                             item.label + " isolated_ri requires sternheimer_ao_potential_file.");
+                }
+            }
+        };
+        this->add_item(item);
+    }
+    {
+        Input_Item item("sternheimer_ao_potential_file");
+        item.annotation = "producer-matched AO Coulomb tensor for isolated molecular Delta-ST";
+        item.category = "Output information";
+        item.type = "String";
+        item.description = "Path to a versioned Hartree AO tensor exported from the same producer Cs and "
+                           "complete free-space V, in the finalized auxiliary ordering. "
+                           "Only used with sternheimer_molecular_coulomb isolated_ri.";
+        item.default_value = "";
+        item.unit = "Hartree";
+        item.availability = "LCAO isolated molecular Delta-ST with LibRPA output.";
+        read_sync_string(input.sternheimer_ao_potential_file);
+        item.check_value = [](const Input_Item& item, const Parameter& para) {
+            if (!para.input.sternheimer_ao_potential_file.empty()
+                && para.input.sternheimer_molecular_coulomb != "isolated_ri")
+            {
+                ModuleBase::WARNING_QUIT("ReadInput",
+                                         item.label + " requires sternheimer_molecular_coulomb isolated_ri.");
+            }
+        };
+        this->add_item(item);
+    }
+    {
         Input_Item item("sternheimer_grid_diagnostics");
         item.annotation = "write Delta-Sternheimer grid component diagnostics";
         item.category = "Output information";

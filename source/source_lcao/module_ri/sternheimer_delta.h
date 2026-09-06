@@ -201,6 +201,15 @@ SternheimerDeltaCoefficientComponents solve_delta_sternheimer_subspace_coefficie
     const std::vector<SternheimerFDHamiltonian::Complex>& hamiltonian_out_coupling,
     SternheimerFDHamiltonian::Complex shift);
 
+// Reject ill-conditioned sampled Gram matrices and states outside the AO span.
+std::vector<std::vector<SternheimerFDHamiltonian::Complex>> recover_delta_grid_ao_coefficients(
+    const std::vector<SternheimerDeltaGridFunction>& basis,
+    const std::vector<const SternheimerFDHamiltonian::Vector*>& states,
+    double volume_element,
+    double reconstruction_tolerance,
+    double& maximum_relative_error,
+    double* gram_reciprocal_condition = nullptr);
+
 SternheimerDeltaSubspace build_delta_sternheimer_subspace(
     const SternheimerFDHamiltonian& hamiltonian,
     const std::vector<SternheimerFDHamiltonian::Vector>& occupied_wavefunctions,
@@ -257,6 +266,8 @@ SternheimerFDHamiltonian::Vector build_delta_sternheimer_sos_wavefunction(
     double occupied_eigenvalue,
     double omega);
 
+// All overloads use the supplied perturbation elements for the AO-block rhs (-g).
+// Only Q*rhs is taken from the grid. The reconstructed residual checks this hybrid equation.
 SternheimerDeltaLinearResponse solve_delta_sternheimer_linear_response(
     const SternheimerFDHamiltonian& hamiltonian,
     const SternheimerDeltaFixedSubspace& fixed_subspace,
