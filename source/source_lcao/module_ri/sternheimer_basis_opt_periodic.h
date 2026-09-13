@@ -55,6 +55,23 @@ void write_periodic_chunk_atomic(const std::string& path,
 
 PeriodicChunk read_periodic_chunk(const std::string& path);
 
+bool validate_frozen_auxiliary_request(bool operators_only, const std::string& directory,
+                                       const std::string& metric_sha256,
+                                       const std::string& whitening_sha256);
+
+struct FrozenAuxiliaryTransform
+{
+    int rank = 0;
+    double metric_relative_error = 0.0;
+    double identity_max_error = 0.0;
+    std::vector<std::complex<double>> transform;
+};
+
+FrozenAuxiliaryTransform read_frozen_auxiliary_transform(
+    const std::string& metric_path, const std::string& metric_sha256,
+    const std::string& whitening_path, const std::string& whitening_sha256,
+    int iq, int raw_dimension, const std::vector<std::complex<double>>& current_metric);
+
 struct ManifestEntry
 {
     std::string file_path;
@@ -82,6 +99,8 @@ struct Manifest
 {
     bool operators_only = false;
     std::string frozen_charge_sha256;
+    std::string frozen_auxiliary_metric_sha256;
+    std::string frozen_auxiliary_whitening_sha256;
     std::string abacus_commit;
     std::string executable_sha256;
     std::string orbital_sha256;

@@ -5,9 +5,11 @@
 #include <complex>
 #include <algorithm>
 #include <cstdio>
+#include <cstdlib>
 #include <fstream>
 #include <gtest/gtest.h>
 #include <iterator>
+#include <iostream>
 #include <stdexcept>
 #include <string>
 #include <vector>
@@ -110,6 +112,82 @@ void write_bytes(const std::string& path, const std::vector<char>& bytes)
 
 } // namespace
 
+TEST(PeriodicFrozenAuxiliary, KeepsFrozenRankInsteadOfReselecting)
+{
+    TemporaryFiles files;
+    const auto vpath = files.add("frozen_v.bin");
+    const auto wpath = files.add("frozen_w.bin");
+    const std::vector<std::complex<double>> v = {1., 0., 0., 0., 1., 0., 0., 0., 1.};
+    const std::vector<std::complex<double>> w = {1., 0., 0., 1., 0., 0.};
+    using namespace module_ri::sternheimer_basis_opt;
+    write_periodic_chunk_atomic(vpath, header(ChunkKind::coulomb_metric, 22, 0, -1, 3, 3), v);
+    write_periodic_chunk_atomic(wpath, header(ChunkKind::coulomb_whitening, 22, 0, -1, 3, 2), w);
+    const auto result = read_frozen_auxiliary_transform(vpath, module_ri::sternheimer_siab::sha256_file(vpath),
+        wpath, module_ri::sternheimer_siab::sha256_file(wpath), 22, 3, v);
+    EXPECT_EQ(result.rank, 2);
+    EXPECT_EQ(result.transform, w);
+    EXPECT_DOUBLE_EQ(result.metric_relative_error, 0.);
+    EXPECT_DOUBLE_EQ(result.identity_max_error, 0.);
+}
+
+TEST(PeriodicFrozenAuxiliary, AlignsRawSignGauge)
+{
+    TemporaryFiles files;
+    const auto vpath = files.add("signed_v.bin");
+    const auto wpath = files.add("signed_w.bin");
+    using namespace module_ri::sternheimer_basis_opt;
+    write_periodic_chunk_atomic(vpath, header(ChunkKind::coulomb_metric, 22, 0, -1, 2, 2),
+                                {1., .2, .2, 1.});
+    write_periodic_chunk_atomic(wpath, header(ChunkKind::coulomb_whitening, 22, 0, -1, 2, 1), {0., 1.});
+    const auto vs = module_ri::sternheimer_siab::sha256_file(vpath);
+    const auto ws = module_ri::sternheimer_siab::sha256_file(wpath);
+    const auto result = read_frozen_auxiliary_transform(vpath, vs, wpath, ws, 22, 2, {1., -.2, -.2, 1.});
+    ASSERT_EQ(result.transform.size(), 2);
+    EXPECT_EQ(result.transform[1], std::complex<double>(-1., 0.));
+    EXPECT_DOUBLE_EQ(result.metric_relative_error, 0.);
+    EXPECT_DOUBLE_EQ(result.identity_max_error, 0.);
+    EXPECT_THROW(read_frozen_auxiliary_transform(vpath, std::string(64, 'a'), wpath, ws, 22, 2,
+                                               {1., -.2, -.2, 1.}), std::invalid_argument);
+    EXPECT_THROW(read_frozen_auxiliary_transform(vpath, vs, wpath, ws, 23, 2,
+                                               {1., -.2, -.2, 1.}), std::invalid_argument);
+    EXPECT_THROW(read_frozen_auxiliary_transform(vpath, vs, wpath, ws, 22, 2,
+                                               {1., -.3, -.3, 1.}), std::runtime_error);
+}
+
+TEST(PeriodicFrozenAuxiliary, RequiresCompleteOperatorsOnlyRequest)
+{
+    using module_ri::sternheimer_basis_opt::validate_frozen_auxiliary_request;
+    const std::string sha(64, 'a');
+    EXPECT_FALSE(validate_frozen_auxiliary_request(false, "", "", ""));
+    EXPECT_FALSE(validate_frozen_auxiliary_request(true, "", "", ""));
+    EXPECT_TRUE(validate_frozen_auxiliary_request(true, "reference", sha, sha));
+    EXPECT_THROW(validate_frozen_auxiliary_request(false, "reference", sha, sha), std::invalid_argument);
+    EXPECT_THROW(validate_frozen_auxiliary_request(true, "", sha, sha), std::invalid_argument);
+    EXPECT_THROW(validate_frozen_auxiliary_request(true, "reference", "", sha), std::invalid_argument);
+    EXPECT_THROW(validate_frozen_auxiliary_request(true, "reference", sha, ""), std::invalid_argument);
+    EXPECT_THROW(validate_frozen_auxiliary_request(true, "reference", sha, std::string(64, 'z')),
+                 std::invalid_argument);
+}
+
+TEST(PeriodicFrozenAuxiliary, ReferenceQ2Integration)
+{
+    const char* root = std::getenv("FROZEN_AUXILIARY_TEST_ROOT");
+    if (root == nullptr) GTEST_SKIP() << "Optional frozen q2 fixture is not supplied.";
+    using namespace module_ri::sternheimer_basis_opt;
+    const std::string vpath = std::string(root) + "/coulomb_metric.bin";
+    const std::string wpath = std::string(root) + "/coulomb_whitening.bin";
+    const auto current = read_periodic_chunk(std::string(root) + "/current_metric.bin");
+    const auto result = read_frozen_auxiliary_transform(vpath, module_ri::sternheimer_siab::sha256_file(vpath),
+        wpath, module_ri::sternheimer_siab::sha256_file(wpath), 22, 320, current.values);
+    EXPECT_EQ(result.rank, 307);
+    EXPECT_EQ(result.transform.size(), 320U * 307U);
+    EXPECT_LT(result.metric_relative_error, 1.0e-10);
+    // An independent identity diagnostic, not the physical source-agreement gate.
+    EXPECT_LT(result.identity_max_error, 1.0e-6);
+    std::cout << "frozen_q2 rank=" << result.rank << " metric_error=" << result.metric_relative_error
+              << " identity_error=" << result.identity_max_error << '\n';
+}
+
 namespace
 {
 Manifest operators_manifest(TemporaryFiles& files)
@@ -155,6 +233,25 @@ TEST(SternheimerBasisOptPeriodic, OperatorsOnlyIsDistinctCompleteAndDeterministi
     EXPECT_NE(text.find("response_solved no\n"), std::string::npos);
     EXPECT_NE(text.find("frozen_charge_sha256 " + std::string(64, 'a')), std::string::npos);
     EXPECT_EQ(text.find("all_converged yes"), std::string::npos);
+    EXPECT_EQ(text.find("frozen_auxiliary"), std::string::npos);
+    EXPECT_EQ(text.find("auxiliary_transform_origin"), std::string::npos);
+}
+
+TEST(SternheimerBasisOptPeriodic, FrozenAuxiliaryProvenanceIsExplicitAndRestricted)
+{
+    TemporaryFiles files;
+    auto manifest = operators_manifest(files);
+    const auto path = files.add("frozen_operators_manifest.dat");
+    manifest.frozen_auxiliary_metric_sha256 = std::string(64, 'b');
+    EXPECT_THROW(module_ri::sternheimer_basis_opt::write_manifest_atomic(path, manifest), std::invalid_argument);
+    manifest.frozen_auxiliary_whitening_sha256 = std::string(64, 'c');
+    module_ri::sternheimer_basis_opt::write_manifest_atomic(path, manifest);
+    const auto bytes = read_bytes(path);
+    const std::string text(bytes.begin(), bytes.end());
+    EXPECT_NE(text.find("auxiliary_transform_origin frozen_reference\n"), std::string::npos);
+    EXPECT_NE(text.find("frozen_auxiliary_whitening_sha256 " + std::string(64, 'c')), std::string::npos);
+    manifest.operators_only = false;
+    EXPECT_THROW(module_ri::sternheimer_basis_opt::write_manifest_atomic(path, manifest), std::invalid_argument);
 }
 
 TEST(SternheimerBasisOptPeriodic, OperatorsOnlyRejectsMissingKindsAndBadDensityProvenance)

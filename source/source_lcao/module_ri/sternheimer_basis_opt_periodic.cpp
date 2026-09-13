@@ -19,6 +19,118 @@ namespace module_ri
 {
 namespace sternheimer_basis_opt
 {
+FrozenAuxiliaryTransform read_frozen_auxiliary_transform(
+    const std::string& metric_path, const std::string& metric_sha256,
+    const std::string& whitening_path, const std::string& whitening_sha256,
+    const int iq, const int raw_dimension,
+    const std::vector<std::complex<double>>& current_metric)
+{
+    if (iq <= 0 || raw_dimension <= 0
+        || current_metric.size() != static_cast<std::size_t>(raw_dimension) * raw_dimension
+        || metric_sha256.size() != 64 || whitening_sha256.size() != 64
+        || sternheimer_siab::sha256_file(metric_path) != metric_sha256
+        || sternheimer_siab::sha256_file(whitening_path) != whitening_sha256)
+    {
+        throw std::invalid_argument("Frozen auxiliary transform dimensions or SHA256 do not match.");
+    }
+    const auto metric = read_periodic_chunk(metric_path);
+    const auto whitening = read_periodic_chunk(whitening_path);
+    if (metric.header.kind != ChunkKind::coulomb_metric
+        || whitening.header.kind != ChunkKind::coulomb_whitening
+        || metric.header.iq != iq || whitening.header.iq != iq
+        || metric.header.rows != raw_dimension || metric.header.columns != raw_dimension
+        || whitening.header.rows != raw_dimension || whitening.header.columns > raw_dimension)
+    {
+        throw std::invalid_argument("Frozen auxiliary transform q, kind, or shape does not match.");
+    }
+    double scale = 0.0;
+    for (std::size_t i = 0; i != current_metric.size(); ++i)
+    {
+        if (!std::isfinite(current_metric[i].real()) || !std::isfinite(current_metric[i].imag()))
+        {
+            throw std::invalid_argument("Frozen auxiliary transform received a non-finite metric.");
+        }
+        scale = std::max(scale, std::max(std::abs(current_metric[i]), std::abs(metric.values[i])));
+    }
+    if (!(scale > 0.0))
+    {
+        throw std::invalid_argument("Frozen auxiliary transform has a zero metric.");
+    }
+
+    // Real radial eigenvectors may differ by signs. Keep the reference columns,
+    // align only this raw-channel gauge, and check the entire metric afterwards.
+    const std::size_t n = static_cast<std::size_t>(raw_dimension);
+    std::vector<int> signs(n, 0);
+    for (std::size_t root = 0; root != n; ++root)
+    {
+        if (signs[root] != 0) continue;
+        signs[root] = 1;
+        std::vector<std::size_t> pending{root};
+        for (std::size_t next = 0; next != pending.size(); ++next)
+        {
+            const auto i = pending[next];
+            for (std::size_t j = 0; j != n; ++j)
+            {
+                if (signs[j] != 0 || std::abs(metric.values[i * n + j]) <= scale * 1.0e-8
+                    || std::abs(current_metric[i * n + j]) <= scale * 1.0e-8) continue;
+                const double alignment
+                    = (metric.values[i * n + j] * std::conj(current_metric[i * n + j])).real();
+                signs[j] = signs[i] * (alignment >= 0.0 ? 1 : -1);
+                pending.push_back(j);
+            }
+        }
+    }
+    double error2 = 0.0;
+    double reference2 = 0.0;
+    for (std::size_t i = 0; i != n; ++i)
+    {
+        for (std::size_t j = 0; j != n; ++j)
+        {
+            const auto old_value = metric.values[i * n + j] / scale;
+            error2 += std::norm(current_metric[i * n + j] / scale
+                                - static_cast<double>(signs[i] * signs[j]) * old_value);
+            reference2 += std::norm(old_value);
+        }
+    }
+    FrozenAuxiliaryTransform result;
+    result.metric_relative_error = std::sqrt(error2 / reference2);
+    if (!std::isfinite(result.metric_relative_error) || result.metric_relative_error > 1.0e-8)
+    {
+        throw std::runtime_error("Frozen auxiliary metric differs beyond the raw-channel sign gauge.");
+    }
+    result.rank = static_cast<int>(whitening.header.columns);
+    const std::size_t rank = static_cast<std::size_t>(result.rank);
+    result.transform = whitening.values;
+    for (std::size_t i = 0; i != n; ++i)
+        for (std::size_t a = 0; a != rank; ++a)
+            result.transform[i * rank + a] *= signs[i];
+
+    std::vector<std::complex<double>> metric_times_transform(n * rank, 0.0);
+    for (std::size_t i = 0; i != n; ++i)
+        for (std::size_t j = 0; j != n; ++j)
+            for (std::size_t a = 0; a != rank; ++a)
+                metric_times_transform[i * rank + a]
+                    += current_metric[i * n + j] * result.transform[j * rank + a];
+    for (std::size_t a = 0; a != rank; ++a)
+    {
+        for (std::size_t b = 0; b != rank; ++b)
+        {
+            std::complex<double> value = a == b ? -1.0 : 0.0;
+            for (std::size_t i = 0; i != n; ++i)
+                value += std::conj(result.transform[i * rank + a]) * metric_times_transform[i * rank + b];
+            if (!std::isfinite(value.real()) || !std::isfinite(value.imag()))
+                throw std::runtime_error("Frozen auxiliary identity diagnostic is non-finite.");
+            result.identity_max_error = std::max(result.identity_max_error, std::abs(value));
+        }
+    }
+    if (sternheimer_siab::sha256_file(metric_path) != metric_sha256
+        || sternheimer_siab::sha256_file(whitening_path) != whitening_sha256)
+    {
+        throw std::runtime_error("Frozen auxiliary input changed while loading.");
+    }
+    return result;
+}
+
 namespace
 {
 
@@ -300,6 +412,14 @@ void validate_manifest_entry(const ManifestEntry& entry, const Manifest& manifes
 
 void validate_manifest(const Manifest& manifest)
 {
+    const bool has_frozen_auxiliary = !manifest.frozen_auxiliary_metric_sha256.empty()
+                                      || !manifest.frozen_auxiliary_whitening_sha256.empty();
+    if (has_frozen_auxiliary
+        && (!manifest.operators_only || !valid_hex(manifest.frozen_auxiliary_metric_sha256, 64)
+            || !valid_hex(manifest.frozen_auxiliary_whitening_sha256, 64)))
+    {
+        throw std::invalid_argument("Frozen auxiliary provenance requires operators-only output and both SHA256s.");
+    }
     if (manifest.operators_only && !valid_hex(manifest.frozen_charge_sha256, 64))
     {
         throw std::invalid_argument("Periodic operators-only output requires the frozen charge SHA256.");
@@ -445,6 +565,19 @@ void validate_manifest(const Manifest& manifest)
 }
 
 } // namespace
+
+bool validate_frozen_auxiliary_request(const bool operators_only, const std::string& directory,
+                                       const std::string& metric_sha256,
+                                       const std::string& whitening_sha256)
+{
+    if (directory.empty() && metric_sha256.empty() && whitening_sha256.empty()) return false;
+    if (!operators_only || directory.empty() || !valid_hex(metric_sha256, 64)
+        || !valid_hex(whitening_sha256, 64))
+    {
+        throw std::invalid_argument("Frozen auxiliary input requires operators-only mode, a directory, and both SHA256s.");
+    }
+    return true;
+}
 
 PeriodicChunkHeader make_periodic_chunk_header(const ChunkKind kind,
                                                const int iq,
@@ -646,6 +779,12 @@ void write_manifest_atomic(const std::string& path, const Manifest& manifest)
         {
             output << "response_solved no\n"
                    << "frozen_charge_sha256 " << manifest.frozen_charge_sha256 << '\n';
+        }
+        if (!manifest.frozen_auxiliary_metric_sha256.empty())
+        {
+            output << "auxiliary_transform_origin frozen_reference\n"
+                   << "frozen_auxiliary_metric_sha256 " << manifest.frozen_auxiliary_metric_sha256 << '\n'
+                   << "frozen_auxiliary_whitening_sha256 " << manifest.frozen_auxiliary_whitening_sha256 << '\n';
         }
         output << "qpoint " << manifest.qpoint[0] << ' ' << manifest.qpoint[1] << ' ' << manifest.qpoint[2] << '\n'
                << "q_weight " << manifest.q_weight << '\n';

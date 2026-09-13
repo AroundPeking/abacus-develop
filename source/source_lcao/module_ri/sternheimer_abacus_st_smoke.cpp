@@ -2544,6 +2544,15 @@ void run_sternheimer_periodic_lcao_chi0_output(
 {
     const bool write_basis_opt = PARAM.inp.out_sternheimer_basis_opt;
     const bool operators_only = write_basis_opt && PARAM.inp.sternheimer_siab_source_only;
+    const auto auxiliary_env = [](const char* name) {
+        const char* value = std::getenv(name);
+        return value == nullptr ? std::string{} : std::string(value);
+    };
+    const auto frozen_auxiliary_dir = auxiliary_env("ABACUS_STERNHEIMER_FROZEN_AUXILIARY_DIR");
+    const auto frozen_metric_sha256 = auxiliary_env("ABACUS_STERNHEIMER_FROZEN_AUXILIARY_METRIC_SHA256");
+    const auto frozen_whitening_sha256 = auxiliary_env("ABACUS_STERNHEIMER_FROZEN_AUXILIARY_WHITENING_SHA256");
+    const bool use_frozen_auxiliary = periodic_basis_opt::validate_frozen_auxiliary_request(
+        operators_only, frozen_auxiliary_dir, frozen_metric_sha256, frozen_whitening_sha256);
     std::string frozen_charge_sha256;
     if (operators_only)
     {
@@ -2963,10 +2972,28 @@ void run_sternheimer_periodic_lcao_chi0_output(
         full_coulomb_metric = sternheimer_grid_projected_matrix(periodic_abfs.densities,
                                                                  periodic_abfs.potentials,
                                                                  grid_data.volume_element);
-        complex_whitening = make_sternheimer_complex_coulomb_whitening(
-            full_coulomb_metric,
-            raw_num_channels,
-            PARAM.inp.sternheimer_siab_coulomb_threshold);
+        if (use_frozen_auxiliary)
+        {
+            const auto frozen = periodic_basis_opt::read_frozen_auxiliary_transform(
+                join_path(frozen_auxiliary_dir, "coulomb_metric.bin"), frozen_metric_sha256,
+                join_path(frozen_auxiliary_dir, "coulomb_whitening.bin"), frozen_whitening_sha256,
+                response_plan.iq, raw_num_channels, full_coulomb_metric);
+            complex_whitening.raw_dimension = raw_num_channels;
+            complex_whitening.retained_rank = frozen.rank;
+            complex_whitening.discarded_rank = raw_num_channels - frozen.rank;
+            complex_whitening.relative_threshold = PARAM.inp.sternheimer_siab_coulomb_threshold;
+            complex_whitening.max_orthonormality_error = frozen.identity_max_error;
+            complex_whitening.transform = frozen.transform;
+            out << "frozen_auxiliary_metric_relative_error " << frozen.metric_relative_error << '\n'
+                << "frozen_auxiliary_identity_max_error " << frozen.identity_max_error << '\n';
+        }
+        else
+        {
+            complex_whitening = make_sternheimer_complex_coulomb_whitening(
+                full_coulomb_metric,
+                raw_num_channels,
+                PARAM.inp.sternheimer_siab_coulomb_threshold);
+        }
         whitened_channels = transform_sternheimer_abf_bloch_grid_channels(
             periodic_abfs.potentials,
             complex_whitening.transform,
@@ -4294,6 +4321,11 @@ void run_sternheimer_periodic_lcao_chi0_output(
         manifest.coulomb_relative_threshold = complex_whitening.relative_threshold;
         manifest.coulomb_max_orthonormality_error = complex_whitening.max_orthonormality_error;
         manifest.coulomb_transform_sha256 = hash_coulomb_whitening_transform(complex_whitening);
+        if (use_frozen_auxiliary)
+        {
+            manifest.frozen_auxiliary_metric_sha256 = frozen_metric_sha256;
+            manifest.frozen_auxiliary_whitening_sha256 = frozen_whitening_sha256;
+        }
         manifest.primitive_count = basis_opt_primitive_count;
         manifest.frequency_ha = frequency_grid.omega_ha;
         manifest.frequency_weights_ha = frequency_grid.weights_ha;
