@@ -892,7 +892,9 @@ If EXX(exact exchange) is calculated (i.e. dft_fuctional==hse/hf/pbe0/scan0 or r
         item.annotation = "true: write SIAB sources without solving first-order equations; false: default";
         item.category = "Output information";
         item.type = "Boolean";
-        item.description = "Write OUT.ABACUS/STERNHEIMER_SIAB_SOURCE_V1.dat without solving first-order equations.";
+        item.description = "Write molecular SIAB sources without first-order equations. For positive sternheimer_q_index, "
+                           "write S/H/O/D and Coulomb matrices in STERNHEIMER_BASIS_OPERATORS_V1; this periodic mode "
+                           "requires calculation=nscf and init_chg=file and does not produce response data.";
         item.default_value = "False";
         item.unit = "";
         item.availability = "out_sternheimer_basis_opt=True, out_sternheimer_librpa=False, basis_type=lcao, and "
@@ -907,6 +909,12 @@ If EXX(exact exchange) is calculated (i.e. dft_fuctional==hse/hf/pbe0/scan0 or r
             {
                 ModuleBase::WARNING_QUIT("ReadInput",
                                          item.label + " cannot be combined with out_sternheimer_librpa.");
+            }
+            if (para.input.sternheimer_siab_source_only && para.input.sternheimer_q_index > 0
+                && (para.input.calculation != "nscf" || para.input.init_chg != "file"))
+            {
+                ModuleBase::WARNING_QUIT("ReadInput",
+                    item.label + " periodic mode requires calculation=nscf and init_chg=file.");
             }
         };
         this->add_item(item);

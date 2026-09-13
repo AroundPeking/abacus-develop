@@ -130,6 +130,29 @@ TEST_F(ReadInputItemTest, output)
     it->second.check_value(it->second, param);
 }
 
+TEST_F(ReadInputItemTest, periodic_source_only_requires_frozen_density_nscf)
+{
+    ModuleIO::ReadInput readinput(0);
+    Parameter param;
+    const auto it = find_label("sternheimer_siab_source_only", readinput.input_lists);
+    ASSERT_NE(it, readinput.input_lists.end());
+    param.input.out_sternheimer_basis_opt = true;
+    param.input.sternheimer_siab_source_only = true;
+    param.input.sternheimer_q_index = 1;
+    param.input.calculation = "scf";
+    param.input.init_chg = "file";
+    EXPECT_EXIT(it->second.check_value(it->second, param), ::testing::ExitedWithCode(1), "");
+    param.input.calculation = "nscf";
+    param.input.init_chg = "atomic";
+    EXPECT_EXIT(it->second.check_value(it->second, param), ::testing::ExitedWithCode(1), "");
+    param.input.init_chg = "file";
+    EXPECT_NO_THROW(it->second.check_value(it->second, param));
+    param.input.sternheimer_q_index = 0;
+    param.input.calculation = "scf";
+    param.input.init_chg = "atomic";
+    EXPECT_NO_THROW(it->second.check_value(it->second, param));
+}
+
 TEST_F(InputTest, Item_test)
 {
     ModuleIO::ReadInput readinput(0);

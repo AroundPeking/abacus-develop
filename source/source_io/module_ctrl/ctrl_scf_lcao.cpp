@@ -714,7 +714,10 @@ void ModuleIO::ctrl_scf_lcao(UnitCell& ucell,
     //------------------------------------------------------------------
     //! 16) Write RPA information in LCAO basis
     //------------------------------------------------------------------
-    if (inp.rpa)
+    // Operators-only export needs the RPA input setup, not the RI reader producer.
+    const bool periodic_operators_only = inp.out_sternheimer_basis_opt
+                                        && inp.sternheimer_siab_source_only && inp.sternheimer_q_index > 0;
+    if (inp.rpa && !periodic_operators_only)
     {
         RPA_LRI<TK, double> rpa_lri_double(GlobalC::exx_info.info_ri);
         rpa_lri_double.postSCF(ucell, MPI_COMM_WORLD, *dm, pelec, kv, orb, pv, *psi);

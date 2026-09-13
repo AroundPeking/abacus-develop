@@ -300,6 +300,10 @@ void validate_manifest_entry(const ManifestEntry& entry, const Manifest& manifes
 
 void validate_manifest(const Manifest& manifest)
 {
+    if (manifest.operators_only && !valid_hex(manifest.frozen_charge_sha256, 64))
+    {
+        throw std::invalid_argument("Periodic operators-only output requires the frozen charge SHA256.");
+    }
     if ((!valid_hex(manifest.abacus_commit, 40) && !valid_hex(manifest.abacus_commit, 64))
         || !valid_hex(manifest.executable_sha256, 64) || !valid_hex(manifest.orbital_sha256, 64)
         || !valid_hex(manifest.pseudopotential_sha256, 64) || !valid_hex(manifest.auxiliary_basis_sha256, 64)
@@ -389,6 +393,53 @@ void validate_manifest(const Manifest& manifest)
         if (!records.insert(record).second)
         {
             throw std::invalid_argument("Periodic basis-optimization manifest contains a duplicate record.");
+        }
+    }
+    if (manifest.operators_only)
+    {
+        if (manifest.entries.size() != 2 + 4 * static_cast<std::size_t>(manifest.k_count))
+        {
+            throw std::invalid_argument("Periodic operators-only output requires V/W and S/H/O/D for every k point.");
+        }
+        for (const auto& entry : manifest.entries)
+        {
+            const auto& h = entry.header;
+            std::uint64_t rows = manifest.primitive_count;
+            std::uint64_t columns = manifest.primitive_count;
+            switch (h.kind)
+            {
+            case ChunkKind::coulomb_metric:
+                rows = columns = manifest.raw_auxiliary_dimension;
+                break;
+            case ChunkKind::coulomb_whitening:
+                rows = manifest.raw_auxiliary_dimension;
+                columns = manifest.whitened_auxiliary_rank;
+                break;
+            case ChunkKind::overlap:
+            case ChunkKind::hamiltonian:
+                break;
+            case ChunkKind::source:
+            case ChunkKind::occupied_projection:
+            {
+                const auto source = std::find_if(manifest.kpoints.begin(), manifest.kpoints.end(),
+                    [&](const KPointRecord& k) { return k.source_ik == h.ik; });
+                const int occupied_ik = h.kind == ChunkKind::source ? source->source_ik : source->target_ik;
+                const auto occupied = std::find_if(manifest.kpoints.begin(), manifest.kpoints.end(),
+                    [&](const KPointRecord& k) { return k.source_ik == occupied_ik; });
+                rows = occupied->occupations.size();
+                if (h.kind == ChunkKind::source)
+                {
+                    rows *= manifest.whitened_auxiliary_rank;
+                }
+                break;
+            }
+            default:
+                throw std::invalid_argument("Periodic operators-only output must not contain response chunks.");
+            }
+            if (h.rows != rows || h.columns != columns)
+            {
+                throw std::invalid_argument("Periodic operators-only chunk dimensions do not match the manifest.");
+            }
         }
     }
 }
@@ -568,7 +619,8 @@ void write_manifest_atomic(const std::string& path, const Manifest& manifest)
             throw std::runtime_error("Cannot open periodic basis-optimization temporary manifest.");
         }
         output << std::scientific << std::setprecision(17)
-               << "ABACUS_STERNHEIMER_BASIS_OPT_MANIFEST_V1\n"
+               << (manifest.operators_only ? "ABACUS_STERNHEIMER_BASIS_OPERATORS_MANIFEST_V1\n"
+                                           : "ABACUS_STERNHEIMER_BASIS_OPT_MANIFEST_V1\n")
                << "abacus_commit " << manifest.abacus_commit << '\n'
                << "executable_sha256 " << manifest.executable_sha256 << '\n'
                << "orbital_sha256 " << manifest.orbital_sha256 << '\n'
@@ -590,6 +642,11 @@ void write_manifest_atomic(const std::string& path, const Manifest& manifest)
                << "coulomb_transform_sha256 " << manifest.coulomb_transform_sha256 << '\n'
                << "primitive_count " << manifest.primitive_count << '\n'
                << "entry_count " << entries.size() << '\n';
+        if (manifest.operators_only)
+        {
+            output << "response_solved no\n"
+                   << "frozen_charge_sha256 " << manifest.frozen_charge_sha256 << '\n';
+        }
         output << "qpoint " << manifest.qpoint[0] << ' ' << manifest.qpoint[1] << ' ' << manifest.qpoint[2] << '\n'
                << "q_weight " << manifest.q_weight << '\n';
         for (int ifrequency = 0; ifrequency != manifest.frequency_count; ++ifrequency)

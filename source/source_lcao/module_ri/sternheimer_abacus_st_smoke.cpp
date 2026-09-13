@@ -877,7 +877,8 @@ void write_periodic_basis_opt_primitive_blocks_atomic(
 void write_periodic_basis_opt_status_atomic(const std::string& path,
                                             const std::string& physics_hash,
                                             const int solved_equations,
-                                            const double max_solver_relative_residual)
+                                            const double max_solver_relative_residual,
+                                            const bool operators_only = false)
 {
     const std::string temporary = path + ".tmp";
     std::remove(temporary.c_str());
@@ -888,7 +889,8 @@ void write_periodic_basis_opt_status_atomic(const std::string& path,
     }
     output << std::scientific << std::setprecision(17)
            << "status success\n"
-           << "all_converged yes\n"
+           << (operators_only ? "response_solved no\nall_converged not_applicable\n"
+                              : "all_converged yes\n")
            << "physics_hash " << physics_hash << '\n'
            << "solved_equations " << solved_equations << '\n'
            << "max_solver_relative_residual " << max_solver_relative_residual << '\n';
@@ -929,6 +931,10 @@ std::string make_periodic_basis_opt_physics_hash(
            << manifest.raw_auxiliary_dimension << ' ' << manifest.whitened_auxiliary_rank << ' '
            << manifest.discarded_auxiliary_rank << ' ' << manifest.coulomb_relative_threshold << ' '
            << manifest.coulomb_max_orthonormality_error << ' ' << manifest.primitive_count << '\n';
+    if (manifest.operators_only)
+    {
+        stream << "operators_only " << manifest.frozen_charge_sha256 << '\n';
+    }
     for (const double value: cell_vectors_bohr(ucell))
     {
         stream << value << ' ';
@@ -2537,6 +2543,18 @@ void run_sternheimer_periodic_lcao_chi0_output(
     const std::chrono::steady_clock::time_point& chi0_start_time)
 {
     const bool write_basis_opt = PARAM.inp.out_sternheimer_basis_opt;
+    const bool operators_only = write_basis_opt && PARAM.inp.sternheimer_siab_source_only;
+    std::string frozen_charge_sha256;
+    if (operators_only)
+    {
+        if (PARAM.inp.calculation != "nscf" || PARAM.inp.init_chg != "file")
+        {
+            throw std::runtime_error("Periodic operators-only export requires calculation=nscf and init_chg=file.");
+        }
+        const std::string charge_path = join_path(PARAM.globalv.global_readin_dir,
+                                                   PARAM.inp.suffix + "-CHARGE-DENSITY.restart");
+        frozen_charge_sha256 = siab::sha256_file(charge_path);
+    }
     if (write_basis_opt && structure_factor == nullptr)
     {
         throw std::runtime_error("Periodic basis-optimization output requires the ABACUS structure factor.");
@@ -2555,10 +2573,10 @@ void run_sternheimer_periodic_lcao_chi0_output(
         = supercell_translation_sum_raw != nullptr && supercell_translation_sum_raw[0] != '\0';
     const bool full_supercell_response
         = use_supercell_translation_sum && env_is_true(kSupercellFullResponseEnv);
-    if (write_basis_opt && (use_supercell_translation_sum || PARAM.inp.sternheimer_siab_source_only))
+    if (write_basis_opt && use_supercell_translation_sum)
     {
         throw std::runtime_error(
-            "Periodic basis-optimization output requires a primitive-cell full response, not a supercell or source-only run.");
+            "Periodic basis-optimization output requires a primitive cell, not a supercell run.");
     }
     if (env_is_true(kSupercellFullResponseEnv) && !use_supercell_translation_sum)
     {
@@ -2791,13 +2809,19 @@ void run_sternheimer_periodic_lcao_chi0_output(
         = use_nested_response_mpi ? GlobalV::MY_RANK % nfreq : 0;
     const int default_frequency_rank_shift = use_frequency_mpi && GlobalV::NPROC > 1 ? 1 : 0;
     const int frequency_rank_shift = int_from_env(kFrequencyRankShiftEnv, default_frequency_rank_shift);
-    const bool use_delta_sternheimer = PARAM.inp.sternheimer_delta;
+    const bool use_delta_sternheimer = PARAM.inp.sternheimer_delta && !operators_only;
     const SternheimerDeltaABlockMode delta_a_block_mode = delta_a_block_mode_from_env();
     const bool write_delta_components = use_delta_sternheimer && env_is_true(kDeltaComponentDiagnosticEnv);
     const bool write_lcao_sos = env_is_true(kLCAOSOSDiagnosticEnv);
     const char* wavefunction_diagnostic_raw = std::getenv(kWavefunctionDiagnosticEnv);
     const bool write_wavefunction_diagnostic
         = wavefunction_diagnostic_raw != nullptr && wavefunction_diagnostic_raw[0] != '\0';
+    if (operators_only && (env_is_true(kDeltaComponentDiagnosticEnv) || write_lcao_sos
+                           || write_wavefunction_diagnostic || write_partial_kresolved
+                           || sternheimer_abfs_diag_only_enabled()))
+    {
+        throw std::runtime_error("Periodic operators-only export cannot be combined with response diagnostics.");
+    }
     SternheimerWavefunctionDiagnostic::Configuration wavefunction_diagnostic_config;
     if (write_wavefunction_diagnostic)
     {
@@ -3042,7 +3066,8 @@ void run_sternheimer_periodic_lcao_chi0_output(
     if (write_basis_opt)
     {
         basis_opt_q_weight = sternheimer_qstar_weight(response_kpoints, response_plan.iq);
-        basis_opt_dir = periodic_basis_opt_directory(output_dir);
+        basis_opt_dir = operators_only ? join_path(output_dir, "STERNHEIMER_BASIS_OPERATORS_V1")
+                                       : periodic_basis_opt_directory(output_dir);
         if (GlobalV::MY_RANK == 0)
         {
             const std::string manifest_path = join_path(basis_opt_dir, "manifest.dat");
@@ -3607,6 +3632,11 @@ void run_sternheimer_periodic_lcao_chi0_output(
             }
         }
 
+        // The same S/H/O/D assembly above is used without any first-order solve.
+        if (operators_only)
+        {
+            continue;
+        }
         for (int ifrequency = 0; ifrequency != nfreq; ++ifrequency)
         {
             const int owner_rank = response_owner_rank(pair.source_index, ifrequency);
@@ -3991,7 +4021,7 @@ void run_sternheimer_periodic_lcao_chi0_output(
 
     if (use_kpoint_mpi)
     {
-        if (!use_symmetry_partial_response || write_basis_opt)
+        if ((!use_symmetry_partial_response || write_basis_opt) && !operators_only)
         {
             for (int ifrequency = 0; ifrequency != nfreq; ++ifrequency)
             {
@@ -4033,7 +4063,7 @@ void run_sternheimer_periodic_lcao_chi0_output(
         std::fill(target_lcao_occ_unocc_overlap_max.begin(), target_lcao_occ_unocc_overlap_max.end(), -1.0);
     }
 
-    if (write_basis_opt)
+    if (write_basis_opt && !operators_only)
     {
         for (int ifrequency = 0; ifrequency != nfreq; ++ifrequency)
         {
@@ -4224,9 +4254,17 @@ void run_sternheimer_periodic_lcao_chi0_output(
         throw std::runtime_error(
             "Periodic basis-optimization output rejected unconverged Sternheimer equations.");
     }
+    if (operators_only && (solved_equations != 0
+        || siab::sha256_file(join_path(PARAM.globalv.global_readin_dir,
+                                      PARAM.inp.suffix + "-CHARGE-DENSITY.restart")) != frozen_charge_sha256))
+    {
+        throw std::runtime_error("Periodic operators-only export solved equations or its frozen charge input changed.");
+    }
     if (write_basis_opt && GlobalV::MY_RANK == 0)
     {
         periodic_basis_opt::Manifest manifest;
+        manifest.operators_only = operators_only;
+        manifest.frozen_charge_sha256 = frozen_charge_sha256;
         manifest.abacus_commit = siab::require_source_commit(compiled_commit_metadata());
         manifest.executable_sha256 = siab::sha256_file(siab::resolve_executable_path());
         const auto orbital_paths = siab::resolve_required_input_files(
@@ -4318,7 +4356,7 @@ void run_sternheimer_periodic_lcao_chi0_output(
                       static_cast<std::uint64_t>(num_channels)),
                   1.0,
                   -1.0);
-        for (int ifrequency = 0; ifrequency != nfreq; ++ifrequency)
+        for (int ifrequency = 0; !operators_only && ifrequency != nfreq; ++ifrequency)
         {
             add_entry(periodic_basis_opt_frequency_filename(
                           "reference_response", ifrequency),
@@ -4386,7 +4424,7 @@ void run_sternheimer_periodic_lcao_chi0_output(
                           static_cast<std::uint64_t>(basis_opt_primitive_count)),
                       source_record.kweight,
                       -1.0);
-            for (int ifrequency = 0; ifrequency != nfreq; ++ifrequency)
+            for (int ifrequency = 0; !operators_only && ifrequency != nfreq; ++ifrequency)
             {
                 add_entry(periodic_basis_opt_k_filename(
                               "response", source_ik_one_based, ifrequency),
@@ -4406,9 +4444,20 @@ void run_sternheimer_periodic_lcao_chi0_output(
         write_periodic_basis_opt_status_atomic(join_path(basis_opt_dir, "status.dat"),
                                                manifest.physics_hash,
                                                solved_equations,
-                                               max_solver_relative_residual);
+                                               max_solver_relative_residual,
+                                               operators_only);
         GlobalV::ofs_running << " Sternheimer periodic basis-optimization dataset: "
                              << basis_opt_dir << std::endl;
+    }
+
+    if (operators_only)
+    {
+        if (GlobalV::MY_RANK == 0)
+        {
+            out << "periodic_operators_only yes\nresponse_solved no\nsolved_equations 0\n"
+                << "frozen_charge_sha256 " << frozen_charge_sha256 << '\n';
+        }
+        return;
     }
 
     if (GlobalV::MY_RANK != 0)

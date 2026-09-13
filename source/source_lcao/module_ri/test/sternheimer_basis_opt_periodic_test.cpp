@@ -3,6 +3,7 @@
 #include "source_lcao/module_ri/sternheimer_siab_provenance.h"
 
 #include <complex>
+#include <algorithm>
 #include <cstdio>
 #include <fstream>
 #include <gtest/gtest.h>
@@ -108,6 +109,90 @@ void write_bytes(const std::string& path, const std::vector<char>& bytes)
 }
 
 } // namespace
+
+namespace
+{
+Manifest operators_manifest(TemporaryFiles& files)
+{
+    Manifest manifest = canonical_manifest({});
+    manifest.operators_only = true;
+    manifest.frozen_charge_sha256 = std::string(64, 'a');
+    const auto add = [&](const ChunkKind kind, const int ik, const int rows, const int columns) {
+        const auto h = header(kind, 1, ik, -1, rows, columns);
+        const std::string path = files.add("operators_" + std::to_string(static_cast<int>(kind))
+                                           + "_" + std::to_string(ik) + ".bin");
+        module_ri::sternheimer_basis_opt::write_periodic_chunk_atomic(
+            path, h, std::vector<std::complex<double>>(rows * columns, {1.0, 0.0}));
+        manifest.entries.push_back(module_ri::sternheimer_basis_opt::make_manifest_entry(
+            path, path, h, manifest.q_weight, ik == 0 ? 1.0 : 0.5, -1.0));
+    };
+    add(ChunkKind::coulomb_metric, 0, 3, 3);
+    add(ChunkKind::coulomb_whitening, 0, 3, 2);
+    for (int ik = 1; ik <= 2; ++ik)
+    {
+        add(ChunkKind::overlap, ik, 4, 4);
+        add(ChunkKind::hamiltonian, ik, 4, 4);
+        add(ChunkKind::source, ik, 2, 4);
+        add(ChunkKind::occupied_projection, ik, 1, 4);
+    }
+    return manifest;
+}
+} // namespace
+
+TEST(SternheimerBasisOptPeriodic, OperatorsOnlyIsDistinctCompleteAndDeterministic)
+{
+    TemporaryFiles files;
+    auto manifest = operators_manifest(files);
+    const auto a = files.add("operators_manifest_a.dat");
+    const auto b = files.add("operators_manifest_b.dat");
+    module_ri::sternheimer_basis_opt::write_manifest_atomic(a, manifest);
+    std::reverse(manifest.entries.begin(), manifest.entries.end());
+    module_ri::sternheimer_basis_opt::write_manifest_atomic(b, manifest);
+    EXPECT_EQ(read_bytes(a), read_bytes(b));
+    const auto bytes = read_bytes(a);
+    const std::string text(bytes.begin(), bytes.end());
+    EXPECT_EQ(text.find("ABACUS_STERNHEIMER_BASIS_OPERATORS_MANIFEST_V1\n"), 0U);
+    EXPECT_NE(text.find("response_solved no\n"), std::string::npos);
+    EXPECT_NE(text.find("frozen_charge_sha256 " + std::string(64, 'a')), std::string::npos);
+    EXPECT_EQ(text.find("all_converged yes"), std::string::npos);
+}
+
+TEST(SternheimerBasisOptPeriodic, OperatorsOnlyRejectsMissingKindsAndBadDensityProvenance)
+{
+    TemporaryFiles files;
+    const auto complete = operators_manifest(files);
+    const auto path = files.add("operators_manifest_invalid.dat");
+    for (std::size_t i = 0; i < complete.entries.size(); ++i)
+    {
+        auto missing = complete;
+        missing.entries.erase(missing.entries.begin() + i);
+        EXPECT_THROW(module_ri::sternheimer_basis_opt::write_manifest_atomic(path, missing), std::invalid_argument);
+    }
+    auto invalid = complete;
+    invalid.frozen_charge_sha256.clear();
+    EXPECT_THROW(module_ri::sternheimer_basis_opt::write_manifest_atomic(path, invalid), std::invalid_argument);
+    invalid = complete;
+    invalid.entries.back().header.columns = 5;
+    EXPECT_THROW(module_ri::sternheimer_basis_opt::write_manifest_atomic(path, invalid), std::invalid_argument);
+}
+
+TEST(SternheimerBasisOptPeriodic, OperatorsOnlyRejectsResponseChunks)
+{
+    TemporaryFiles files;
+    auto manifest = operators_manifest(files);
+    const auto path = files.add("operators_manifest_response.dat");
+    for (const auto kind : {ChunkKind::response, ChunkKind::reference_response})
+    {
+        auto invalid = manifest;
+        const int ik = kind == ChunkKind::response ? 1 : 0;
+        const auto h = header(kind, 1, ik, 0, 2, 4);
+        const auto chunk = files.add("operators_forbidden_" + std::to_string(ik) + ".bin");
+        module_ri::sternheimer_basis_opt::write_periodic_chunk_atomic(chunk, h, std::vector<std::complex<double>>(8));
+        invalid.entries.push_back(module_ri::sternheimer_basis_opt::make_manifest_entry(
+            chunk, chunk, h, 0.25, ik == 0 ? 1.0 : 0.5, 0.75));
+        EXPECT_THROW(module_ri::sternheimer_basis_opt::write_manifest_atomic(path, invalid), std::invalid_argument);
+    }
+}
 
 TEST(SternheimerBasisOptPeriodic, ComplexChunkRoundTripsAndHasDeterministicHash)
 {

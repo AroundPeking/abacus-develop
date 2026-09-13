@@ -80,6 +80,8 @@ struct KPointRecord
 
 struct Manifest
 {
+    bool operators_only = false;
+    std::string frozen_charge_sha256;
     std::string abacus_commit;
     std::string executable_sha256;
     std::string orbital_sha256;

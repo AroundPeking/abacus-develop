@@ -58,6 +58,12 @@ void Charge::init_rho(const UnitCell& ucell,
         }
         else
         {
+            if (PARAM.inp.out_sternheimer_basis_opt && PARAM.inp.sternheimer_siab_source_only
+                && PARAM.inp.sternheimer_q_index > 0)
+            {
+                ModuleBase::WARNING_QUIT("Charge::init_rho",
+                    "Periodic operators-only export requires a readable binary charge restart; no density fallback.");
+            }
             for (int is = 0; is < nspin; ++is)
             {
 				std::stringstream ssc;
