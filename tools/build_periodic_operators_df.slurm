@@ -49,7 +49,7 @@ test -s "$build_dir/abacus_3p"
 grep -F "$commit" "$build_dir/commit.h"
 test -z "$(git -C "$source_dir" status --porcelain)"
 sha256sum "$build_dir/abacus_3p" "$build_dir/CMakeCache.txt" > "$root/result/SHA256SUMS"
-git -C "$source_dir" ls-files -z | (cd "$source_dir" && xargs -0 sha256sum) > "$root/result/SOURCE_SHA256SUMS"
+git -C "$source_dir" archive HEAD | sha256sum > "$root/result/SOURCE_ARCHIVE_SHA256"
 grep -E '^(ENABLE_MPI|ENABLE_LCAO|ENABLE_LIBRI|ENABLE_LIBCOMM|DEBUG_INFO):BOOL=ON' \
     "$build_dir/CMakeCache.txt" > "$root/result/features.txt"
 test "$(wc -l < "$root/result/features.txt")" -eq 5
