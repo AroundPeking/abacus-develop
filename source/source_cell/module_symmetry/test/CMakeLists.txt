@@ -21,4 +21,9 @@ AddTest(
   TARGET MODULE_CELL_SYMMETRY_rho_soc
   LIBS parameter base ${math_libs} device symmetry
   SOURCES symmetry_rho_soc_test.cpp
+    ${ABACUS_SOURCE_DIR}/source_estate/module_dm/density_matrix.cpp
+    ${ABACUS_SOURCE_DIR}/source_lcao/module_hcontainer/base_matrix.cpp
+    ${ABACUS_SOURCE_DIR}/source_lcao/module_hcontainer/hcontainer.cpp
+    ${ABACUS_SOURCE_DIR}/source_lcao/module_hcontainer/atom_pair.cpp
+    ${ABACUS_SOURCE_DIR}/source_basis/module_ao/parallel_orbitals.cpp
 )
