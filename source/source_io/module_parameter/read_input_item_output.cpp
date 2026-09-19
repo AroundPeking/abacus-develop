@@ -1406,6 +1406,31 @@ If EXX(exact exchange) is calculated (i.e. dft_fuctional==hse/hf/pbe0/scan0 or r
         this->add_item(item);
     }
     {
+        Input_Item item("out_librpa_abf_overlap");
+        item.annotation = "output raw active-ABF overlap for LibRPA v1 PSD diagnostics";
+        item.category = "Output information";
+        item.type = "Boolean";
+        item.description = "Write raw active-ABF q-space overlap matrices as "
+                           "v1_abf_overlap_active_iq_<iq>.dat. This diagnostic requires "
+                           "rpa=true, out_librpa_reader_version=1, and a shrink/active ABF "
+                           "lifecycle; full-unshrunk overlap output is not provided.";
+        item.default_value = "False";
+        item.unit = "";
+        item.availability = "Numerical atomic orbital basis with rpa=True, reader version 1, and shrink ABFs.";
+        read_sync_bool(input.out_librpa_abf_overlap);
+        item.check_value = [](const Input_Item& item, const Parameter& para) {
+            if (para.input.out_librpa_abf_overlap
+                && (!para.input.rpa || para.input.out_librpa_reader_version != 1
+                    || para.input.shrink_abfs_pca_thr < 0.0))
+            {
+                ModuleBase::WARNING_QUIT("ReadInput",
+                                         item.label + " requires rpa=true, "
+                                         "out_librpa_reader_version=1, and shrink ABFs.");
+            }
+        };
+        this->add_item(item);
+    }
+    {
         Input_Item item("out_pchg");
         item.annotation = "specify the bands to be calculated for the partial (band-decomposed) charge densities";
         item.category = "Output information";
