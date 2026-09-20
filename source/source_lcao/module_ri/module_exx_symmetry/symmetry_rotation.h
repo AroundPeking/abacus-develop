@@ -6,6 +6,7 @@
 #include "source_cell/module_neighbor/sltk_grid_driver.h"
 #include <iomanip>
 #include <sstream>
+#include <stdexcept>
 #include "source_cell/module_symmetry/symmetry_rotation_spin.h"
 
 namespace ModuleSymmetry
