@@ -94,11 +94,19 @@ namespace ModuleSymmetry
         for (int ik_ibz = 0;ik_ibz < nks_ibz;++ik_ibz)
         {
             // const TCdouble& kvec_d_ibz = restrict_kpt((*kstars[ik_ibz].begin()).second * ucell.symm.kgmatrix[(*kstars[ik_ibz].begin()).first], ucell.symm.epsilon);
-            for (auto& isym_kvd : kv.kstars[ik_ibz]) {
-                if (isym_kvd.first < nop_tot) {
-                    this->Ms_[ik_ibz][isym_kvd.first] = this->contruct_2d_rot_mat_ao(ucell.symm, ucell.atoms, ucell.st, kv.kvec_d[ik_ibz], isym_kvd.first, pv, spin_U[isym_kvd.first]);
-}
-}
+            for (const auto& isym_kvd : kv.kstars[ik_ibz])
+            {
+                // Grey groups reuse the spatial matrix for Theta*g. Magnetic
+                // SOC groups have a distinct antiunitary spatial-operation table.
+                const int spatial_isym = this->magnetic_nspin4_
+                    ? isym_kvd.first : isym_kvd.first % this->nsym_;
+                if (this->Ms_[ik_ibz].find(spatial_isym) == this->Ms_[ik_ibz].end())
+                {
+                    this->Ms_[ik_ibz][spatial_isym] = this->contruct_2d_rot_mat_ao(
+                        ucell.symm, ucell.atoms, ucell.st, kv.kvec_d[ik_ibz],
+                        spatial_isym, pv, spin_U[spatial_isym]);
+                }
+            }
         }
         // output Ms of isym=1
         // std::ofstream ofs("Ms_kibz7_sym7.dat");
@@ -453,7 +461,9 @@ namespace ModuleSymmetry
             int iat2 = rotated_atom(isym, iat1); //iat2=rot(iat1)
             int ia2 = cell_st.iat2ia[iat2];
             // cal phase factor from return lattice:     exp(-ik_ibz*O)
-            double arg = -2 * ModuleBase::PI * kvec_d_ibz * this->irs_.return_lattice_[iat1][isym];
+            // Keep the target branch's scalar coefficient-rotation convention.
+            // Spinor density restoration below uses the conjugated matrix.
+            double arg = (soc ? -2 : 2) * ModuleBase::PI * kvec_d_ibz * this->irs_.return_lattice_[iat1][isym];
             std::complex<double>phase_factor = std::complex<double>(std::cos(arg), std::sin(arg));
             int iw1start = atoms[it].stapos_wf + ia1 * atoms[it].nw;
             int iw2start = atoms[it].stapos_wf + ia2 * atoms[it].nw;
@@ -540,10 +550,11 @@ namespace ModuleSymmetry
         {
             // Physical DM rotation D(k) = M^dagger D(k_ibz) M, with M = T (x) U is the anti-homomorphism rep in row-major convention.
             // ABACUS stores the DM transposed (S = D^T), for which this becomes S(gk) = M^T S(k_ibz) M^* = (conj M)^dagger S (conj M)
-            // For nspin<4 the orbital-only M is real, so Mc = M and this is bit-identical to the old M^dagger D M.
+            // Preserve the scalar branch, including complex return-lattice phases.
             const std::vector<std::complex<double>>& Mref = this->Ms_[ik_ibz].at(isym);
             std::vector<std::complex<double>> Mc(Mref.size());
-            for (size_t i = 0; i < Mref.size(); ++i) { Mc[i] = std::conj(Mref[i]); }
+            for (size_t i = 0; i < Mref.size(); ++i)
+            { Mc[i] = PARAM.inp.nspin == 4 ? std::conj(Mref[i]) : Mref[i]; }
             ScalapackConnector::gemm(dagger, notrans, nbasis, nbasis, nbasis,
                 alpha, Mc.data(), i1, i1, pv.desc, DMkibz.data(), i1, i1, pv.desc,
                 beta, DMkibz_M.data(), i1, i1, pv.desc);
