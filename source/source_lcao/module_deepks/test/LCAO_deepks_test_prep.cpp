@@ -27,7 +27,7 @@ void test_deepks<T>::preparation()
     this->count_ntype();
     this->set_parameters();
 
-    this->setup_cell(, 0);
+    this->setup_cell();
 
     this->setup_kpt();
 
