@@ -49,7 +49,8 @@ option(ENABLE_LCAO "Enable LCAO algorithm" ON)
 option(USE_ELPA "Enable ELPA for LCAO" ON)
 option(ENABLE_LIBRI "Enable LibRI for hybrid functional" OFF)
 option(ENABLE_LIBCOMM "Enable LibComm" OFF)
-option(ENABLE_GREENX_MINIMAX "Enable bundled GreenX minimax grids for Sternheimer response" ON)
+option(ENABLE_GREENX_MINIMAX "Enable external GreenX minimax grids for Sternheimer response" OFF)
+set(GREENX_DIR "" CACHE PATH "GreenX installation prefix or CMake package directory")
 option(ENABLE_PEXSI "Enable PEXSI for LCAO" OFF)
 
 option(BUILD_TESTING "Build unittests" OFF)
@@ -623,8 +624,9 @@ if(ENABLE_LIBCOMM)
 endif()
 
 if(ENABLE_LIBRI AND ENABLE_GREENX_MINIMAX)
+  list(APPEND CMAKE_MODULE_PATH "${PROJECT_SOURCE_DIR}/cmake/modules")
+  find_package(GreenX REQUIRED)
   enable_language(Fortran)
-  add_compile_definitions(__GREENX_MINIMAX)
 endif()
 
 if(DEFINED Libxc_DIR)
@@ -657,10 +659,6 @@ endif()
 # Target construction, final link ordering, installation, and test targets are
 # intentionally centralized in source/CMakeLists.txt.
 add_subdirectory(source)
-
-if(TARGET abacus_greenx_minimax)
-  target_link_libraries(${ABACUS_BIN_NAME} abacus_greenx_minimax)
-endif()
 
 include(cmake/BuildInfo.cmake)
 setup_build_info()

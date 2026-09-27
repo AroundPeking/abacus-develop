@@ -555,6 +555,7 @@ add_subdirectory(source_lcao/module_ri)
 add_subdirectory(source_io/module_parameter)
 add_subdirectory(source_lcao/module_lr)
 add_subdirectory(source_lcao/module_rdmft) # add by jghan
+add_subdirectory(source_lcao/module_rpa)
 
 add_library(
   driver
@@ -762,7 +763,7 @@ if(ENABLE_MLALGO)
   target_link_libraries(${ABACUS_BIN_NAME} PRIVATE deepks hamilt_mlkedf)
 endif()
 if(ENABLE_LIBRI)
-  target_link_libraries(${ABACUS_BIN_NAME} PRIVATE ri module_exx_symmetry)
+  target_link_libraries(${ABACUS_BIN_NAME} PRIVATE ri rpa delta_st librpa_io module_exx_symmetry)
 endif()
 if(ENABLE_JSON)
   target_link_libraries(${ABACUS_BIN_NAME} PRIVATE json_output)
