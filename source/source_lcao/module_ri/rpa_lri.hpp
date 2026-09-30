@@ -24,6 +24,7 @@
 
 #include "rpa_lri.h"
 #include "exx_lri.h"
+#include "librpa_stru_symmetry.h"
 #include "source_basis/module_ao/elem_basis_idx_orb.h"
 #include "source_base/global_function.h"
 #include "source_estate/elecstate_lcao.h"
@@ -2719,6 +2720,10 @@ void RPA_LRI<T, Tdata>::out_struc(const UnitCell& ucell)
         {
             ofs << (ik + 1) << std::endl;
         }
+    }
+    if (ModuleSymmetry::Symmetry::symm_flag == 1 && ucell.symm.nrotk > 0)
+    {
+        RpaLriDetail::write_librpa_symmetry_block(ofs, ucell.symm, this->runtime.input.nspin);
     }
     ofs.close();
     return;

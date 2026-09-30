@@ -16,4 +16,9 @@ AddTest(
   LIBS parameter
   SOURCES abfs_vec3_order_test.cpp
 )
+AddTest(
+  TARGET MODULE_RI_librpa_stru_symmetry_test
+  LIBS base symmetry device
+  SOURCES librpa_stru_symmetry_test.cpp
+)
 install(DIRECTORY support DESTINATION ${CMAKE_CURRENT_BINARY_DIR})

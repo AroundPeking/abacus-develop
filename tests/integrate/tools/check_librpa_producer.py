@@ -85,7 +85,10 @@ def _compare_text(actual, reference, tolerance):
                 )
 
 
-def _check_stru(path, minimum_symmetry_rows):
+def _check_stru(path,
+                minimum_symmetry_rows,
+                expected_spin_symmetry_source,
+                expected_spin_symmetry_grey_group):
     lines = path.read_text().splitlines()
     if len(lines) < 8:
         raise ProducerContractError("{} is too short for stru_out".format(path))
@@ -133,6 +136,47 @@ def _check_stru(path, minimum_symmetry_rows):
                 except ValueError:
                     raise ProducerContractError("{} has a non-integer symmetry rotation".format(path))
             for token in tokens[9:]:
+                _number(token)
+    if expected_spin_symmetry_source is not None:
+        if row_match is None:
+            raise ProducerContractError("{} has no spatial symmetry block for spin metadata".format(path))
+        spin_index = row_index + 1 + row_match
+        if spin_index >= len(lines):
+            raise ProducerContractError("{} has no spin_symmetry block".format(path))
+        match = re.match(r"^spin_symmetry\s+([01])\s+([12])$", lines[spin_index])
+        if match is None:
+            raise ProducerContractError("{} has an invalid spin_symmetry header".format(path))
+        source = int(match.group(2))
+        grey_group = int(match.group(1))
+        if source != int(expected_spin_symmetry_source):
+            raise ProducerContractError(
+                "{} spin_symmetry source {} does not match expected {}".format(
+                    path, source, expected_spin_symmetry_source
+                )
+            )
+        if (expected_spin_symmetry_grey_group is not None
+                and grey_group != int(expected_spin_symmetry_grey_group)):
+            raise ProducerContractError(
+                "{} spin_symmetry grey group {} does not match expected {}".format(
+                    path, grey_group, expected_spin_symmetry_grey_group
+                )
+            )
+        spin_rows = lines[spin_index + 1 :]
+        if len(spin_rows) != row_match:
+            raise ProducerContractError(
+                "{} has {} spin symmetry rows for {} spatial operations".format(
+                    path, len(spin_rows), row_match
+                )
+            )
+        for line in spin_rows:
+            tokens = line.split()
+            if source == 2 and len(tokens) != 1:
+                raise ProducerContractError("{} source-2 spin row has unexpected data".format(path))
+            if source == 1 and len(tokens) != 9:
+                raise ProducerContractError("{} source-1 spin row is incomplete".format(path))
+            if not tokens or tokens[0] not in ("0", "1"):
+                raise ProducerContractError("{} has an invalid antiunitary flag".format(path))
+            for token in tokens[1:]:
                 _number(token)
 def _check_wfc_nao(path):
     """Validate the text LCAO wavefunction format consumed by GW preprocessing."""
@@ -379,7 +423,10 @@ def _check_file(path, entry):
     if kind == "gauge" or kind == "presence":
         return
     if kind == "stru":
-        _check_stru(path, entry.get("symmetry_rows"))
+        _check_stru(path,
+                    entry.get("symmetry_rows"),
+                    entry.get("spin_symmetry_source"),
+                    entry.get("spin_symmetry_grey_group"))
     elif kind == "wfc_nao":
         _check_wfc_nao(path)
     elif kind == "band":
