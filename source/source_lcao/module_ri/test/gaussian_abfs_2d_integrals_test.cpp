@@ -101,12 +101,17 @@ int main()
         {
             const int degree = l - 2;
             const double scaled_tau = tau_high_l / std::sqrt(beta);
+            // Physicists' Hermite H_degree at tau_z/(2*sqrt(beta)), the
+            // argument of the exact Fourier-Gaussian moment. The previous
+            // probabilists' recurrence (He_degree at tau_z/sqrt(beta)) made
+            // every degree >= 2 expectation wrong by O(1).
+            const double hermite_x = 0.5 * scaled_tau;
             double hm2 = 1.0;
-            double hm1 = scaled_tau;
+            double hm1 = 2.0 * hermite_x;
             double hermite = degree == 0 ? hm2 : hm1;
             for (int n = 2; n <= degree; ++n)
             {
-                hermite = scaled_tau * hm1 - 2.0 * (n - 1) * hm2;
+                hermite = 2.0 * hermite_x * hm1 - 2.0 * (n - 1) * hm2;
                 hm2 = hm1;
                 hm1 = hermite;
             }
@@ -119,7 +124,11 @@ int main()
                   * std::exp(-scaled_tau * scaled_tau / 4.0) * i_power;
             require(std::abs(GaussianAbfs2D::integral_lm(l, 0, -2.0, 0.0, 0.0, tau_high_l, beta)
                              - exact_gamma)
-                        < 2.0e-11 * std::max(1.0, std::abs(exact_gamma)),
+                        // The factorial-ratio solid-harmonic coefficients
+                        // accumulate ~3e-11 relative rounding at L=16 (28!
+                        // and 32! exceed exact double representation), so a
+                        // 1e-10 relative floor is the honest tolerance.
+                        < 1.0e-10 * std::max(1.0, std::abs(exact_gamma)),
                     "high-L Gamma closed-form integral mismatch");
         }
     }
@@ -136,12 +145,15 @@ int main()
             {
                 const int degree = l + power;
                 const double scaled_tau = tau_high_l / std::sqrt(beta);
+                // Physicists' Hermite H_degree at tau_z/(2*sqrt(beta)); see
+                // the note in the high-L loop above.
+                const double hermite_x = 0.5 * scaled_tau;
                 double hm2 = 1.0;
-                double hm1 = scaled_tau;
+                double hm1 = 2.0 * hermite_x;
                 double hermite = degree == 0 ? hm2 : hm1;
                 for (int n = 2; n <= degree; ++n)
                 {
-                    hermite = scaled_tau * hm1 - 2.0 * (n - 1) * hm2;
+                    hermite = 2.0 * hermite_x * hm1 - 2.0 * (n - 1) * hm2;
                     hm2 = hm1;
                     hm1 = hermite;
                 }
@@ -164,6 +176,42 @@ int main()
                         "all-power Gamma Fourier-Gaussian moment mismatch");
             }
         }
+    }
+
+    // Exact-Gamma (q_parallel = 0) closed forms for the L=1 Ewald kernel.
+    // dI2/dtau_z has a finite Q->0 limit -pi*erf(tau_z/(2*sqrt(beta))), odd in
+    // tau_z; the L=1, M=0 kernel K10 = -i*c1*dI2/dtau_z must reproduce it,
+    // while the in-plane M=+-1 kernels vanish because they carry a factor Q.
+    for (const double beta : {0.5, 1.0, 2.0})
+    {
+        for (const double tau_z : {-5.9304, -2.9652, 2.9652, 5.9304})
+        {
+            const double expected
+                = -GaussianAbfs2D::pi * std::erf(tau_z / (2.0 * std::sqrt(beta)));
+            require(std::abs(GaussianAbfs2D::di2_dtau(0.0, tau_z, beta) - expected) < 1.0e-14,
+                    "Q=0 closed-form limit of dI2/dtau_z mismatch");
+            const std::complex<double> k10
+                = GaussianAbfs2D::coulomb_l1(0, 0.0, 0.0, tau_z, beta);
+            require(std::abs(k10.real()) < 1.0e-14,
+                    "Q=0 L=1 M=0 kernel must be purely imaginary");
+            require(std::abs(k10.imag() + coefficient * expected) < 1.0e-14,
+                    "Q=0 L=1 M=0 kernel erf-limit mismatch");
+            require(std::abs(GaussianAbfs2D::coulomb_l1(1, 0.0, 0.0, tau_z, beta)) < 1.0e-13
+                        && std::abs(GaussianAbfs2D::coulomb_l1(2, 0.0, 0.0, tau_z, beta))
+                               < 1.0e-13,
+                    "Q=0 L=1 M=+-1 kernels must vanish");
+        }
+    }
+    require(std::abs(GaussianAbfs2D::di2_dtau(0.0, 0.0, 1.0)) < 1.0e-14
+                && std::abs(GaussianAbfs2D::coulomb_l1(0, 0.0, 0.0, 0.0, 1.0)) < 1.0e-14,
+            "Q=0 L=1 kernels must vanish at tau_z = 0");
+    // The closed form must be the continuous extension of the finite-q branch.
+    for (const double tau_z : {-5.9304, -2.9652, 2.9652, 5.9304})
+    {
+        const double closed = GaussianAbfs2D::coulomb_l1(0, 0.0, 0.0, tau_z, 1.0).imag();
+        const double small_q = GaussianAbfs2D::coulomb_l1(0, 1.0e-9, 0.0, tau_z, 1.0).imag();
+        require(std::abs(closed - small_q) < 1.0e-7,
+                "L=1 M=0 kernel discontinuous at Q=0");
     }
 
     return EXIT_SUCCESS;

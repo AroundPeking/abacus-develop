@@ -461,9 +461,11 @@ auto Gaussian_Abfs::get_lattice_sum_2d(const double& tpiba,
 
             for (int L = 0; L != lmax + 1; ++L)
             {
-                // Only L=0 is singular and L=1 has a direction-dependent q->0
-                // limit. The L>=2 Coulomb channels have finite Gamma limits.
-                if (excluded_gamma_term && (std::abs(power + 2.0) >= 1e-12 || L < 2))
+                // Only L=0 is singular at the Gamma cell and is handled
+                // analytically via chi2d. L=1,M=+-1 are odd in Q and vanish
+                // at Q=0, while L=1,M=0 keeps a finite Q-constant limit;
+                // L>=2 channels have finite Gamma limits.
+                if (excluded_gamma_term && (std::abs(power + 2.0) >= 1e-12 || L < 1))
                 {
                     continue;
                 }

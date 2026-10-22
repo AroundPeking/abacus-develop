@@ -32,7 +32,13 @@ inline double i2(const double q, const double tau_z, const double beta)
 
 inline double di2_dtau(const double q, const double tau_z, const double beta)
 {
-    if (q < 1.0e-12 || std::abs(tau_z) < 1.0e-14)
+    if (q < 1.0e-12)
+    {
+        // Q->0 limit of sgn(tau_z) dI2/d|tau_z| is -pi*erf(tau_z/(2*sqrt(beta)));
+        // erf is odd, so this also vanishes for tau_z = 0.
+        return -pi * std::erf(tau_z / (2.0 * std::sqrt(beta)));
+    }
+    if (std::abs(tau_z) < 1.0e-14)
     {
         return 0.0;
     }
