@@ -222,8 +222,12 @@ namespace ModuleSymmetry
     // calculate Wigner D matrix
     double Symmetry_rotation_k::wigner_d(const double beta, const int l, const int m1, const int m2) const
     {
-        auto factorial = [](int n) -> int {
-            int result = 1;
+        // The factorial products below overflow int32 already at l=5
+        // ((l+m1)!*(l-m1)!*(l+m2)!*(l-m2)! exceeds 2^31), which wrapped the
+        // product negative and made std::sqrt return NaN for every high-l
+        // rotation block. Keep the accumulation in double.
+        auto factorial = [](int n) -> double {
+            double result = 1.0;
             for (int i = 1;i <= n;++i) { result *= i;
 }
             return result;

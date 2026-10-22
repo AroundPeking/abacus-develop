@@ -147,6 +147,31 @@ TEST_F(SymmetryRotationTest, RotMatHighLIdentityFinite)
     }
 }
 
+TEST_F(SymmetryRotationTest, RotMatHighLNontrivialAngleFinite)
+{
+    // Regression (2026-10-22): the int32 factorial in wigner_d overflowed for
+    // l>=5 (MoS2 shrink-basis h/i channels) and produced NaN in every high-l
+    // ABF rotation block, poisoning the symmetry-restored LibRPA v1 Coulomb
+    // export. A non-trivial rotation angle must stay finite.
+    const double phi = 0.823;
+    const double c = std::cos(phi), s = std::sin(phi);
+    ModuleBase::Matrix3 rot_x(1, 0, 0, 0, c, -s, 0, s, c);
+    symrot.cal_rotmat_Slm(&rot_x, 6, 1);
+    for (int l = 5; l <= 6; ++l)
+    {
+        ModuleBase::ComplexMatrix& rotmat = symrot.get_rotmat_Slm()[0][l];
+        const int dim = 2 * l + 1;
+        for (int i = 0; i < dim; ++i)
+        {
+            for (int j = 0; j < dim; ++j)
+            {
+                EXPECT_TRUE(std::isfinite(rotmat(i, j).real()));
+                EXPECT_TRUE(std::isfinite(rotmat(i, j).imag()));
+            }
+        }
+    }
+}
+
 TEST_F(SymmetryRotationTest, GetReturnLattice)
 {
     ModuleBase::Vector3<double> posd_a1(1. / 3., 1. / 3., 0.2);
