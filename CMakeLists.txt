@@ -79,6 +79,14 @@ cmake_dependent_option(ENABLE_PEXSI "Enable PEXSI for LCAO" OFF
                        "ENABLE_LCAO;ENABLE_MPI" OFF)
 cmake_dependent_option(ENABLE_MLALGO "Enable the machine learning algorithms"
                        OFF "ENABLE_LCAO;ENABLE_MPI" OFF)
+# Optional external GreenX minimax API for the Delta-Sternheimer solver.  Off by
+# default so a stock build needs neither Fortran nor GreenX.
+cmake_dependent_option(
+  ENABLE_GREENX_MINIMAX
+  "Enable the external GreenX minimax API for Delta-Sternheimer" OFF
+  "ENABLE_LCAO;ENABLE_MPI;ENABLE_LIBRI" OFF)
+set(GREENX_DIR "" CACHE PATH
+    "GreenX installation prefix or CMake package directory")
 
 # Two-center FFT is only used in LCAO
 cmake_dependent_option(
@@ -633,6 +641,11 @@ if(ENABLE_LIBRI)
   find_package(LibRI REQUIRED)
   find_package(LibComm REQUIRED)
   find_package(cereal REQUIRED CONFIG)
+endif()
+
+if(ENABLE_GREENX_MINIMAX)
+  enable_language(Fortran)
+  find_package(GreenX REQUIRED)
 endif()
 
 if(ENABLE_LIBXC)

@@ -33,6 +33,8 @@ target_include_directories(
           ${CMAKE_CURRENT_SOURCE_DIR}/module_librpa_io)
 target_link_libraries(rpa PRIVATE ri librpa_io)
 
+add_subdirectory(module_delta_st)
+
 if(BUILD_TESTING AND ENABLE_MPI)
   add_subdirectory(unittests)
 endif()

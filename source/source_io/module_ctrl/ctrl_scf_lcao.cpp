@@ -38,6 +38,7 @@
 #ifdef __EXX
 #include "source_lcao/module_ri/exx_lri_interface.h" // use EXX codes
 #include "source_lcao/module_rpa/rpa_lri.h"          // use RPA code
+#include "source_lcao/module_rpa/module_delta_st/sternheimer_abacus_st_smoke.h"
 #endif
 #include "../module_qo/to_qo.h"                // use toQO
 #include "source_lcao/module_rdmft/rdmft.h" // use RDMFT codes
@@ -67,6 +68,150 @@ void setup_exx_h_params<double>(ModuleIO::WriteHParams& h_params, Exx_NAO<double
         ModuleIO::write_h_exx(h_params, exx_info);
     }
 }
+
+namespace
+{
+
+template <typename TK>
+std::vector<ModuleRI::SternheimerLCAOOccupiedKPoint> gather_sternheimer_lcao_occupied_kpoints(
+    const elecstate::ElecState& elec_state,
+    const K_Vectors& kv,
+    const Parallel_Orbitals& parallel_orbitals,
+    const psi::Psi<TK>& psi,
+    const Input_para& input,
+    const int nlocal)
+{
+    if (kv.get_nks() != kv.get_nkstot()
+        || elec_state.wg.nr != kv.get_nks()
+        || elec_state.ekb.nr != kv.get_nks()
+        || psi.get_nk() != kv.get_nks()
+        || kv.ik2iktot.size() != static_cast<std::size_t>(kv.get_nks())
+        || kv.kvec_d.size() != static_cast<std::size_t>(kv.get_nks())
+        || kv.wk.size() != static_cast<std::size_t>(kv.get_nks())
+        || kv.isk.size() != static_cast<std::size_t>(kv.get_nks()))
+    {
+        throw std::runtime_error("Sternheimer solid LCAO k-point metadata are incomplete; require KPAR=1.");
+    }
+
+    std::vector<ModuleRI::SternheimerLCAOOccupiedKPoint> records;
+    records.reserve(static_cast<std::size_t>(kv.get_nks()));
+    for (int local_k_index = 0; local_k_index != kv.get_nks(); ++local_k_index)
+    {
+        const double kweight = kv.wk[static_cast<std::size_t>(local_k_index)];
+        if (!std::isfinite(kweight) || kweight <= 0.0)
+        {
+            throw std::runtime_error("Sternheimer solid LCAO requires positive k-point weights.");
+        }
+
+        int occupied_count = 0;
+        for (int ib = 0; ib != elec_state.wg.nc; ++ib)
+        {
+            if (elec_state.wg(local_k_index, ib) / kweight > 1.0e-8)
+            {
+                occupied_count = ib + 1;
+            }
+        }
+        if (occupied_count == 0)
+        {
+            continue;
+        }
+
+        ModuleRI::SternheimerLCAOOccupiedKPoint record;
+        record.local_k_index = local_k_index;
+        record.global_k_index = kv.ik2iktot[static_cast<std::size_t>(local_k_index)];
+        record.zero_order_k_index = record.global_k_index;
+        record.spin_index = kv.isk[static_cast<std::size_t>(local_k_index)];
+        record.kpoint = {kv.kvec_d[static_cast<std::size_t>(local_k_index)].x,
+                         kv.kvec_d[static_cast<std::size_t>(local_k_index)].y,
+                         kv.kvec_d[static_cast<std::size_t>(local_k_index)].z};
+        record.kweight = kweight;
+        record.eigenvalues.reserve(static_cast<std::size_t>(occupied_count));
+        record.occupations.reserve(static_cast<std::size_t>(occupied_count));
+        record.coefficients.assign(
+            static_cast<std::size_t>(occupied_count),
+            std::vector<std::complex<double>>(static_cast<std::size_t>(nlocal),
+                                              std::complex<double>(0.0, 0.0)));
+        for (int ib = 0; ib != occupied_count; ++ib)
+        {
+            record.eigenvalues.push_back(elec_state.ekb(local_k_index, ib));
+            record.occupations.push_back(elec_state.wg(local_k_index, ib) / kweight);
+            const int local_band = parallel_orbitals.global2local_col(ib);
+            if (local_band < 0)
+            {
+                continue;
+            }
+            for (int local_basis = 0; local_basis != psi.get_nbasis(); ++local_basis)
+            {
+                const int global_basis = parallel_orbitals.local2global_row(local_basis);
+                if (global_basis < 0 || global_basis >= nlocal)
+                {
+                    throw std::runtime_error("Sternheimer solid LCAO global basis index is out of range.");
+                }
+                record.coefficients[static_cast<std::size_t>(ib)][static_cast<std::size_t>(global_basis)]
+                    = std::complex<double>(psi(local_k_index, local_band, local_basis));
+            }
+#ifdef __MPI
+            MPI_Allreduce(MPI_IN_PLACE,
+                          record.coefficients[static_cast<std::size_t>(ib)].data(),
+                          nlocal,
+                          MPI_DOUBLE_COMPLEX,
+                          MPI_SUM,
+                          MPI_COMM_WORLD);
+#endif
+        }
+
+        const int unoccupied_count = ModuleRI::sternheimer_lcao_virtual_state_gather_count(
+            elec_state.ekb.nc - occupied_count,
+            input.sternheimer_delta,
+            input.sternheimer_virt_src,
+            input.sternheimer_virt_max);
+        record.unoccupied_eigenvalues.reserve(static_cast<std::size_t>(unoccupied_count));
+        record.unoccupied_coefficients.assign(
+            static_cast<std::size_t>(unoccupied_count),
+            std::vector<std::complex<double>>(static_cast<std::size_t>(nlocal),
+                                              std::complex<double>(0.0, 0.0)));
+        for (int ib = occupied_count; ib != occupied_count + unoccupied_count; ++ib)
+        {
+            const std::size_t virtual_index = static_cast<std::size_t>(ib - occupied_count);
+            record.unoccupied_eigenvalues.push_back(elec_state.ekb(local_k_index, ib));
+            const int local_band = parallel_orbitals.global2local_col(ib);
+            if (local_band < 0)
+            {
+                continue;
+            }
+            for (int local_basis = 0; local_basis != psi.get_nbasis(); ++local_basis)
+            {
+                const int global_basis = parallel_orbitals.local2global_row(local_basis);
+                if (global_basis < 0 || global_basis >= nlocal)
+                {
+                    throw std::runtime_error("Sternheimer solid LCAO global unoccupied basis index is out of range.");
+                }
+                record.unoccupied_coefficients[virtual_index][static_cast<std::size_t>(global_basis)]
+                    = std::complex<double>(psi(local_k_index, local_band, local_basis));
+            }
+#ifdef __MPI
+            MPI_Allreduce(MPI_IN_PLACE,
+                          record.unoccupied_coefficients[virtual_index].data(),
+                          nlocal,
+                          MPI_DOUBLE_COMPLEX,
+                          MPI_SUM,
+                          MPI_COMM_WORLD);
+#endif
+        }
+        records.push_back(std::move(record));
+    }
+
+    ModuleRI::validate_sternheimer_lcao_occupied_kpoints(records,
+                                                         kv.get_nks(),
+                                                         kv.get_nkstot(),
+                                                         input.nspin,
+                                                         nlocal,
+                                                         -1,
+                                                         true);
+    return records;
+}
+
+} // namespace
 #endif
 
 template <typename TK, typename TR>
@@ -168,7 +313,7 @@ void ModuleIO::ctrl_scf_lcao(UnitCell& ucell,
                                  inp.dos_emin_ev,
                                  PARAM.globalv.two_fermi,
                                  inp.bndpar,
-                                 PARAM.globalv.global_out_dir,
+                                 global_out_dir,
                                  ofs_running);
     }
 
@@ -280,7 +425,7 @@ void ModuleIO::ctrl_scf_lcao(UnitCell& ucell,
 
         ModuleIO::write_hsr(hr_vec, sr, &ucell, inp.out_hsr[0], precision, pv,
                             out_app_flag, gamma_only, ucell.get_iat2iwt(), ucell.nat, istep,
-                            PARAM.globalv.global_out_dir, pelec->eferm,
+                            global_out_dir, pelec->eferm,
                             ofs_running);
     }
 
@@ -290,7 +435,7 @@ void ModuleIO::ctrl_scf_lcao(UnitCell& ucell,
     const bool output_hsr_npz = inp.out_hsr[0] == 3 || inp.out_hsr_npz_compat;
     if (output_hsr_npz)
     {
-        std::string zipname = PARAM.globalv.global_out_dir + "sr_nao.npz";
+        std::string zipname = global_out_dir + "sr_nao.npz";
         ModuleIO::output_mat_npz(ucell, zipname, *(p_hamilt->getSR()));
     }
 
@@ -300,7 +445,7 @@ void ModuleIO::ctrl_scf_lcao(UnitCell& ucell,
         for (int ispin = 0; ispin < hr_vec.size(); ++ispin)
         {
             std::string zipname
-                = PARAM.globalv.global_out_dir + "hrs" + std::to_string(ispin + 1) + "_nao.npz";
+                = global_out_dir + "hrs" + std::to_string(ispin + 1) + "_nao.npz";
             ModuleIO::output_mat_npz(ucell, zipname, *(hr_vec[ispin]));
         }
     }
@@ -311,7 +456,7 @@ void ModuleIO::ctrl_scf_lcao(UnitCell& ucell,
         for (int ispin = 0; ispin < dmr_vec.size(); ++ispin)
         {
             std::string zipname
-                = PARAM.globalv.global_out_dir + "output_DM" + std::to_string(ispin) + ".npz";
+                = global_out_dir + "output_DM" + std::to_string(ispin) + ".npz";
             ModuleIO::output_mat_npz(ucell, zipname, *(dmr_vec[ispin]));
         }
     }
@@ -694,6 +839,39 @@ void ModuleIO::ctrl_scf_lcao(UnitCell& ucell,
         rpa_lri_double.postSCF(ucell, MPI_COMM_WORLD, *dm, pelec, kv, orb, pv, *psi);
         if (inp.rpa_out_vel)
             rpa_lri_double.out_velocity(ucell, gd, two_center_bundle, pv, *psi, pelec);
+    }
+
+    if (inp.out_sternheimer_librpa || inp.out_sternheimer_siab)
+    {
+        if (pelec == nullptr || pelec->pot == nullptr || pw_rho == nullptr || psi == nullptr)
+        {
+            ModuleBase::WARNING_QUIT("ctrl_scf_lcao",
+                                     "Sternheimer LCAO output requires potential, grid, and KS states.");
+        }
+        ModuleRI::SternheimerAbacusRuntime sternheimer_runtime = {
+            inp,
+            pv.get_global_row_size(),
+            Parallel_Common::my_rank(MPI_COMM_WORLD),
+            Parallel_Common::nproc(MPI_COMM_WORLD),
+            PARAM.globalv.kpar_lcao,
+            PARAM.globalv.nthread_per_proc,
+            PARAM.globalv.deepks_setorb,
+            exx_info.info_ri.files_abfs,
+            exx_info.info_ri.kmesh_times,
+            ofs_running};
+        const std::vector<ModuleRI::SternheimerLCAOOccupiedKPoint> occupied_kpoints =
+            gather_sternheimer_lcao_occupied_kpoints(*pelec, kv, pv, *psi, inp, sternheimer_runtime.nlocal);
+        ModuleRI::run_sternheimer_abacus_lcao_chi0_output(*(pelec->pot),
+                                                          *pw_rho,
+                                                          ucell,
+                                                          *pelec,
+                                                          orb,
+                                                          occupied_kpoints,
+                                                          {kv.nmp[0], kv.nmp[1], kv.nmp[2]},
+                                                          pw_wfc,
+                                                          &sf,
+                                                          inp.rpa_outdir,
+                                                          sternheimer_runtime);
     }
 #endif
 

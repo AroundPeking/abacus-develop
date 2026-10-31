@@ -1631,6 +1631,465 @@ If EXX(exact exchange) is calculated (i.e. dft_fuctional==hse/hf/pbe0/scan0 or r
         this->add_item(item);
     }
     {
+        Input_Item item("out_sternheimer_librpa");
+        item.annotation = "true: output Sternheimer chi0 files for LibRPA; false: default";
+        item.category = "Output information";
+        item.type = "Boolean";
+        item.description = "Generate Sternheimer independent-particle response files for LibRPA. "
+                           "This switch is independent of rpa=True and currently requires "
+                           "out_librpa_ver=1.";
+        item.default_value = "False";
+        item.unit = "";
+        item.set_availability("basis_type==lcao");
+        read_sync_bool(input.out_sternheimer_librpa);
+        item.check_value = [](const Input_Item& item, const Parameter& para) {
+            if (para.input.out_sternheimer_librpa && para.input.out_librpa_ver != 1)
+            {
+                ModuleBase::WARNING_QUIT("ReadInput",
+                                         item.label + " currently requires out_librpa_ver 1.");
+            }
+        };
+        this->add_item(item);
+    }
+    {
+        Input_Item item("out_sternheimer_siab");
+        item.annotation = "true: output Sternheimer first-order-wavefunction targets for SIAB; false: default";
+        item.category = "Output information";
+        item.type = "Boolean";
+        item.description = "Write deterministic Sternheimer-SIAB v1 targets to "
+                           "OUT.ABACUS/sternheimer_matrix.dat for basis_type=lcao. Delta-ST requires the loaded "
+                           "LCAO orbitals, exactly one explicit bessel_nao_rcut, and a globally Coulomb-orthonormal "
+                           "perturbation space. This output-only switch is independent of rpa and mutually exclusive "
+                           "with out_sternheimer_librpa.";
+        item.default_value = "False";
+        item.unit = "";
+        item.set_availability("basis_type==lcao");
+        read_sync_bool(input.out_sternheimer_siab);
+        item.check_value = [](const Input_Item& item, const Parameter& para) {
+            if (para.input.out_sternheimer_siab && para.input.basis_type != "lcao")
+            {
+                ModuleBase::WARNING_QUIT(
+                    "ReadInput",
+                    item.label + " requires basis_type=lcao so Delta-ST can use the loaded LCAO orbitals.");
+            }
+            if (para.input.out_sternheimer_siab && para.input.out_sternheimer_librpa)
+            {
+                ModuleBase::WARNING_QUIT(
+                    "ReadInput",
+                    item.label + " cannot be combined with out_sternheimer_librpa because global Coulomb whitening "
+                                 "removes the raw atom-block auxiliary-channel meaning.");
+            }
+            if (para.input.out_sternheimer_siab && !para.input.sternheimer_delta)
+            {
+                ModuleBase::WARNING_QUIT("ReadInput", item.label + " requires sternheimer_delta True.");
+            }
+            if (para.input.out_sternheimer_siab && para.input.bessel_nao_rcuts.size() != 1)
+            {
+                ModuleBase::WARNING_QUIT(
+                    "ReadInput",
+                    item.label + " requires exactly one explicit bessel_nao_rcut; the H campaign uses 8 bohr.");
+            }
+        };
+        this->add_item(item);
+    }
+    {
+        Input_Item item("sternheimer_siab_lmax");
+        item.annotation = "Maximum angular momentum of Sternheimer-SIAB target primitives";
+        item.category = "Output information";
+        item.type = "Integer";
+        item.description = "Set an output-only angular cutoff for the spherical-Bessel primitive blocks in "
+                           "sternheimer_matrix.dat. The default -1 follows the loaded orbital lmax; use 2 to "
+                           "include complete d blocks without adding d orbitals to the Delta-ST fixed subspace.";
+        item.default_value = "-1";
+        item.unit = "";
+        item.set_availability("basis_type==lcao and out_sternheimer_siab==true");
+        read_sync_int(input.sternheimer_siab_lmax);
+        item.check_value = [](const Input_Item& item, const Parameter& para) {
+            if (para.input.sternheimer_siab_lmax < -1)
+            {
+                ModuleBase::WARNING_QUIT("ReadInput", item.label + " must be -1 or a non-negative integer.");
+            }
+        };
+        this->add_item(item);
+    }
+    {
+        Input_Item item("sternheimer_siab_vthr");
+        item.annotation = "Relative eigenvalue threshold for global Coulomb whitening of Sternheimer-SIAB targets";
+        item.category = "Output information";
+        item.type = "Real";
+        item.description = "Retain full-molecule auxiliary Coulomb eigenvectors with lambda greater than this value "
+                           "times the largest eigenvalue. The retained perturbations satisfy W^T V W=I.";
+        item.default_value = "1e-10";
+        item.unit = "";
+        item.set_availability("basis_type==lcao and out_sternheimer_siab==true");
+        read_sync_double(input.sternheimer_siab_vthr);
+        item.check_value = [](const Input_Item& item, const Parameter& para) {
+            if (!std::isfinite(para.input.sternheimer_siab_vthr)
+                || para.input.sternheimer_siab_vthr <= 0.0
+                || para.input.sternheimer_siab_vthr >= 1.0)
+            {
+                ModuleBase::WARNING_QUIT("ReadInput", item.label + " must be finite and strictly between zero and one.");
+            }
+        };
+        this->add_item(item);
+    }
+    {
+        Input_Item item("sternheimer_nfreq");
+        item.annotation = "Number of minimax imaginary-frequency points for Sternheimer chi0 output";
+        item.category = "Output information";
+        item.type = "Integer";
+        item.description = "Set the number of GreenX minimax imaginary-frequency points used by "
+                           "out_sternheimer_librpa. For direct comparison with LibRPA SOS chi0, this value must "
+                           "match nfreq in librpa.in.";
+        item.default_value = "6";
+        item.unit = "";
+        item.set_availability("basis_type==lcao");
+        read_sync_int(input.sternheimer_nfreq);
+        item.check_value = [](const Input_Item& item, const Parameter& para) {
+            if (para.input.sternheimer_nfreq <= 0)
+            {
+                ModuleBase::WARNING_QUIT("ReadInput", item.label + " must be a positive integer.");
+            }
+        };
+        this->add_item(item);
+    }
+    {
+        Input_Item item("sternheimer_q_index");
+        item.annotation = "One-based nonzero q-point index for periodic Sternheimer chi0 output";
+        item.category = "Output information";
+        item.type = "Integer";
+        item.description = "Select one nonzero q point by its one-based global index on the full k mesh. "
+                           "The default 0 preserves the single-k Gamma molecular path.";
+        item.default_value = "0";
+        item.unit = "";
+        item.set_availability("basis_type==lcao and out_sternheimer_librpa==true");
+        read_sync_int(input.sternheimer_q_index);
+        item.check_value = [](const Input_Item& item, const Parameter& para) {
+            if (para.input.sternheimer_q_index < 0)
+            {
+                ModuleBase::WARNING_QUIT("ReadInput", item.label + " must be zero or a positive integer.");
+            }
+        };
+        this->add_item(item);
+    }
+    {
+        Input_Item item("sternheimer_freq_file");
+        item.annotation = "Optional fixed imaginary-frequency grid file for Sternheimer chi0 output";
+        item.category = "Output information";
+        item.type = "String";
+        item.description = "Read Sternheimer imaginary-frequency points and quadrature weights from a text file "
+                           "instead of generating a GreenX minimax grid. Each non-comment row must contain either "
+                           "\"omega_Ha weight_Ha\" or \"index omega_Ha weight_Ha\". The number of rows must match "
+                           "sternheimer_nfreq. Use this option to compare Sternheimer chi0 with LibRPA SOS chi0 "
+                           "on exactly the same frequency grid.";
+        item.default_value = "";
+        item.unit = "";
+        item.set_availability("basis_type==lcao and out_sternheimer_librpa==true");
+        read_sync_string(input.sternheimer_freq_file);
+        this->add_item(item);
+    }
+    {
+        Input_Item item("sternheimer_frequency_mpi");
+        item.annotation = "true: split Sternheimer frequency points over MPI ranks; false: default";
+        item.category = "Output information";
+        item.type = "Boolean";
+        item.description = "When Sternheimer output is enabled, distribute independent "
+                           "imaginary-frequency Sternheimer solves over MPI ranks. The zero-order FD states are "
+                           "solved once on rank 0 and broadcast; each rank then processes its assigned frequency "
+                           "points.";
+        item.default_value = "False";
+        item.unit = "";
+        item.set_availability("basis_type==lcao and (out_sternheimer_librpa==true or out_sternheimer_siab==true)");
+        read_sync_bool(input.sternheimer_frequency_mpi);
+        this->add_item(item);
+    }
+    {
+        Input_Item item("sternheimer_channel_mpi");
+        item.annotation = "true: split each Sternheimer frequency over MPI ranks; false: default";
+        item.category = "Output information";
+        item.type = "Boolean";
+        item.description = "With sternheimer_frequency_mpi enabled, distribute occupied-state/auxiliary-channel "
+                           "equations within each frequency group or across all ranks in global_equation mode. "
+                           "LibRPA partial chi0 columns are reduced before reader-v1 output.";
+        item.default_value = "False";
+        item.unit = "";
+        item.set_availability("basis_type==lcao and (out_sternheimer_librpa==true or out_sternheimer_siab==true)");
+        read_sync_bool(input.sternheimer_channel_mpi);
+        this->add_item(item);
+    }
+    {
+        Input_Item item("sternheimer_mpi_layout");
+        item.annotation = "MPI ownership layout for Sternheimer response equations";
+        item.category = "Output information";
+        item.type = "String";
+        item.description = "Use frequency_grouped to assign a fixed MPI rank group to each imaginary frequency, "
+                           "or global_equation to distribute occupied-state/frequency/auxiliary-channel equations "
+                           "over all MPI ranks. The global_equation layout requires Sternheimer frequency MPI and "
+                           "channel MPI, and supports SIAB or LibRPA output.";
+        item.default_value = "frequency_grouped";
+        item.unit = "";
+        item.set_availability("basis_type==lcao and (out_sternheimer_librpa==true or out_sternheimer_siab==true)");
+        read_sync_string(input.sternheimer_mpi_layout);
+        item.check_value = [](const Input_Item& item, const Parameter& para) {
+            if (para.input.sternheimer_mpi_layout != "frequency_grouped"
+                && para.input.sternheimer_mpi_layout != "global_equation")
+            {
+                ModuleBase::WARNING_QUIT("ReadInput",
+                                         item.label + " must be frequency_grouped or global_equation.");
+            }
+        };
+        this->add_item(item);
+    }
+    {
+        Input_Item item("sternheimer_delta");
+        item.annotation = "true: use Delta-Sternheimer projected solver for Sternheimer chi0 output; false: default";
+        item.category = "Output information";
+        item.type = "Boolean";
+        item.description = "When out_sternheimer_librpa is enabled, replace the standard Sternheimer linear solve "
+                           "with a Delta-Sternheimer solve in the complement of a fixed AO/NAO virtual subspace. "
+                           "The final LibRPA v1 chi0 file format is unchanged.";
+        item.default_value = "False";
+        item.unit = "";
+        item.set_availability("basis_type==lcao");
+        read_sync_bool(input.sternheimer_delta);
+        this->add_item(item);
+    }
+    {
+        Input_Item item("sternheimer_molecular_coulomb");
+        item.annotation = "isolated molecular RI/grid Coulomb response; none preserves the legacy path";
+        item.category = "Output information";
+        item.type = "String";
+        item.description = "isolated_ri declares an isolated molecule/atom: use producer-matched AO Coulomb "
+                           "vertices on both sides and charge-moment exterior tails in the grid complement. "
+                           "Requires sternheimer_ao_file, Delta-ST, Gamma, symmetry -1, and limits Coulomb. "
+                           "This is not a periodic-solid or ordinary SOS option.";
+        item.default_value = "none";
+        item.unit = "";
+        item.set_availability("basis_type==lcao and out_sternheimer_librpa==true and sternheimer_delta==true");
+        read_sync_string(input.sternheimer_molecular_coulomb);
+        item.check_value = [](const Input_Item& item, const Parameter& para) {
+            if (para.input.sternheimer_molecular_coulomb != "none"
+                && para.input.sternheimer_molecular_coulomb != "isolated_ri")
+            {
+                ModuleBase::WARNING_QUIT("ReadInput", item.label + " must be none or isolated_ri.");
+            }
+            if (para.input.sternheimer_molecular_coulomb == "isolated_ri")
+            {
+                if (!para.input.out_sternheimer_librpa)
+                {
+                    ModuleBase::WARNING_QUIT("ReadInput",
+                                             item.label + " isolated_ri requires out_sternheimer_librpa True.");
+                }
+                if (!para.input.sternheimer_delta)
+                {
+                    ModuleBase::WARNING_QUIT("ReadInput", item.label + " isolated_ri requires sternheimer_delta True.");
+                }
+                if (para.input.sternheimer_ao_file.empty())
+                {
+                    ModuleBase::WARNING_QUIT("ReadInput",
+                                             item.label + " isolated_ri requires sternheimer_ao_file.");
+                }
+            }
+        };
+        this->add_item(item);
+    }
+    {
+        Input_Item item("sternheimer_ao_file");
+        item.annotation = "producer-matched AO Coulomb tensor for isolated molecular Delta-ST";
+        item.category = "Output information";
+        item.type = "String";
+        item.description = "Path to a versioned Hartree AO tensor exported from the same producer Cs and "
+                           "complete free-space V, in the finalized auxiliary ordering. "
+                           "Only used with sternheimer_molecular_coulomb isolated_ri.";
+        item.default_value = "";
+        item.unit = "Hartree";
+        item.set_availability("basis_type==lcao and out_sternheimer_librpa==true and sternheimer_delta==true");
+        read_sync_string(input.sternheimer_ao_file);
+        item.check_value = [](const Input_Item& item, const Parameter& para) {
+            if (!para.input.sternheimer_ao_file.empty()
+                && para.input.sternheimer_molecular_coulomb != "isolated_ri")
+            {
+                ModuleBase::WARNING_QUIT("ReadInput",
+                                         item.label + " requires sternheimer_molecular_coulomb isolated_ri.");
+            }
+        };
+        this->add_item(item);
+    }
+    {
+        Input_Item item("sternheimer_grid_diagnostics");
+        item.annotation = "write Delta-Sternheimer grid component diagnostics";
+        item.category = "Output information";
+        item.type = "Boolean";
+        item.description = "Write frequency-independent grid operator matrices and frequency-dependent response "
+                           "components for diagnosing Sternheimer real-space-grid convergence.";
+        item.default_value = "False";
+        item.unit = "";
+        item.set_availability("basis_type==lcao and out_sternheimer_librpa==true and sternheimer_delta==true");
+        read_sync_bool(input.sternheimer_grid_diagnostics);
+        this->add_item(item);
+    }
+    {
+        Input_Item item("sternheimer_fd_order");
+        item.annotation = "finite-difference Laplacian order for Sternheimer grid equations";
+        item.category = "Output information";
+        item.type = "Integer";
+        item.description = "Use the second-, fourth-, sixth-, or eighth-order centered Cartesian finite-difference Laplacian in the "
+                           "Sternheimer real-space Hamiltonian. The default remains second order.";
+        item.default_value = "2";
+        item.unit = "";
+        item.set_availability("basis_type==lcao and (out_sternheimer_librpa==true or out_sternheimer_siab==true)");
+        read_sync_int(input.sternheimer_fd_order);
+        item.check_value = [](const Input_Item& item, const Parameter& para) {
+            if (para.input.sternheimer_fd_order != 2 && para.input.sternheimer_fd_order != 4
+                && para.input.sternheimer_fd_order != 6 && para.input.sternheimer_fd_order != 8)
+            {
+                ModuleBase::WARNING_QUIT("ReadInput", item.label + " must be 2, 4, 6, or 8.");
+            }
+        };
+        this->add_item(item);
+    }
+    {
+        Input_Item item("sternheimer_response_ecutwfc");
+        item.annotation = "independent Delta-Sternheimer response-grid cutoff";
+        item.category = "Output information";
+        item.type = "Real";
+        item.description = "Use an independent real-space response grid generated from this wave-function cutoff. "
+                           "The value 0 reuses the converged PBE grid. A positive value must not exceed ecutwfc.";
+        item.default_value = "0.0";
+        item.unit = "Ry";
+        item.set_availability("basis_type==lcao and out_sternheimer_librpa==true and sternheimer_delta==true");
+        read_sync_double(input.sternheimer_response_ecutwfc);
+        item.check_value = [](const Input_Item& item, const Parameter& para) {
+            if (para.input.sternheimer_response_ecutwfc < 0.0)
+            {
+                ModuleBase::WARNING_QUIT("ReadInput", item.label + " must be zero or positive.");
+            }
+        };
+        this->add_item(item);
+    }
+    {
+        Input_Item item("sternheimer_response_nx");
+        item.annotation = "explicit Delta-Sternheimer response-grid x dimension";
+        item.category = "Output information";
+        item.type = "Integer";
+        item.description = "Set the x dimension of an explicit Delta-Sternheimer response grid without changing "
+                           "the PBE grid. Use all three response dimensions together; zero disables this route.";
+        item.default_value = "0";
+        item.unit = "";
+        item.set_availability("basis_type==lcao and out_sternheimer_librpa==true and sternheimer_delta==true");
+        read_sync_int(input.sternheimer_response_nx);
+        item.check_value = [](const Input_Item& item, const Parameter& para) {
+            if (para.input.sternheimer_response_nx < 0)
+            {
+                ModuleBase::WARNING_QUIT("ReadInput", item.label + " must be zero or positive.");
+            }
+        };
+        this->add_item(item);
+    }
+    {
+        Input_Item item("sternheimer_response_ny");
+        item.annotation = "explicit Delta-Sternheimer response-grid y dimension";
+        item.category = "Output information";
+        item.type = "Integer";
+        item.description = "Set the y dimension of an explicit Delta-Sternheimer response grid without changing "
+                           "the PBE grid. Use all three response dimensions together; zero disables this route.";
+        item.default_value = "0";
+        item.unit = "";
+        item.set_availability("basis_type==lcao and out_sternheimer_librpa==true and sternheimer_delta==true");
+        read_sync_int(input.sternheimer_response_ny);
+        item.check_value = [](const Input_Item& item, const Parameter& para) {
+            if (para.input.sternheimer_response_ny < 0)
+            {
+                ModuleBase::WARNING_QUIT("ReadInput", item.label + " must be zero or positive.");
+            }
+        };
+        this->add_item(item);
+    }
+    {
+        Input_Item item("sternheimer_response_nz");
+        item.annotation = "explicit Delta-Sternheimer response-grid z dimension";
+        item.category = "Output information";
+        item.type = "Integer";
+        item.description = "Set the z dimension of an explicit Delta-Sternheimer response grid without changing "
+                           "the PBE grid. Use all three response dimensions together; zero disables this route.";
+        item.default_value = "0";
+        item.unit = "";
+        item.set_availability("basis_type==lcao and out_sternheimer_librpa==true and sternheimer_delta==true");
+        read_sync_int(input.sternheimer_response_nz);
+        item.check_value = [](const Input_Item& item, const Parameter& para) {
+            if (para.input.sternheimer_response_nz < 0)
+            {
+                ModuleBase::WARNING_QUIT("ReadInput", item.label + " must be zero or positive.");
+            }
+        };
+        this->add_item(item);
+    }
+    {
+        Input_Item item("sternheimer_virt_src");
+        item.annotation = "ks_bands: complete LCAO KS virtual space; projected_ao: diagnostic AO projection";
+        item.category = "Output information";
+        item.type = "String";
+        item.description = "Select the fixed LCAO virtual candidates used by Delta-Sternheimer. ks_bands uses every "
+                           "unoccupied LCAO KS eigenvector and requires nbands=nlocal. projected_ao is retained for "
+                           "diagnostic comparison with the earlier projected-AO construction.";
+        item.default_value = "ks_bands";
+        item.unit = "";
+        item.set_availability("basis_type==lcao and sternheimer_delta==true");
+        read_sync_string(input.sternheimer_virt_src);
+        item.reset_value = [](const Input_Item& item, Parameter& para) {
+            std::transform(para.input.sternheimer_virt_src.begin(),
+                           para.input.sternheimer_virt_src.end(),
+                           para.input.sternheimer_virt_src.begin(),
+                           [](const unsigned char character) { return static_cast<char>(std::tolower(character)); });
+        };
+        item.check_value = [](const Input_Item& item, const Parameter& para) {
+            const std::vector<std::string> sources = {"ks_bands", "projected_ao"};
+            if (std::find(sources.begin(), sources.end(), para.input.sternheimer_virt_src)
+                == sources.end())
+            {
+                ModuleBase::WARNING_QUIT("ReadInput", nofound_str(sources, item.label));
+            }
+        };
+        this->add_item(item);
+    }
+    {
+        Input_Item item("sternheimer_virt_max");
+        item.annotation = "maximum number of fixed KS/AO virtual states for Delta-Sternheimer";
+        item.category = "Output information";
+        item.type = "Integer";
+        item.description = "Limit the number of fixed KS-band or projected-AO virtual states used by sternheimer_delta. "
+                           "The value 0 keeps all accepted candidates after occupied-state projection and "
+                           "orthogonalization.";
+        item.default_value = "0";
+        item.unit = "";
+        item.set_availability("basis_type==lcao and out_sternheimer_librpa==true and sternheimer_delta==true");
+        read_sync_int(input.sternheimer_virt_max);
+        item.check_value = [](const Input_Item& item, const Parameter& para) {
+            if (para.input.sternheimer_virt_max < 0)
+            {
+                ModuleBase::WARNING_QUIT("ReadInput", item.label + " must be non-negative.");
+            }
+        };
+        this->add_item(item);
+    }
+    {
+        Input_Item item("sternheimer_vnorm_tol");
+        item.annotation = "norm threshold for Delta-Sternheimer AO virtual-state orthogonalization";
+        item.category = "Output information";
+        item.type = "Real";
+        item.description = "Discard fixed AO/NAO candidate functions whose norm after projection out of occupied "
+                           "states and previously accepted candidates is below this threshold.";
+        item.default_value = "1e-10";
+        item.unit = "";
+        item.set_availability("basis_type==lcao and out_sternheimer_librpa==true and sternheimer_delta==true");
+        read_sync_double(input.sternheimer_vnorm_tol);
+        item.check_value = [](const Input_Item& item, const Parameter& para) {
+            if (para.input.sternheimer_vnorm_tol < 0.0)
+            {
+                ModuleBase::WARNING_QUIT("ReadInput", item.label + " must be non-negative.");
+            }
+        };
+        this->add_item(item);
     }
     {
         Input_Item item("out_abf_overlap");

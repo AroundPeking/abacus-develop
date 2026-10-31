@@ -63,6 +63,97 @@ class InputTest : public testing::Test
     }
 };
 
+TEST_F(InputTest, MolecularCoulombModeIsExplicitAndDisabledByDefault)
+{
+    ModuleIO::ReadInput readinput(0);
+    const auto mode = find_label("sternheimer_molecular_coulomb", readinput.input_lists);
+    ASSERT_NE(mode, readinput.input_lists.end());
+    EXPECT_EQ(mode->second.default_value, "none");
+    const auto file = find_label("sternheimer_ao_file", readinput.input_lists);
+    ASSERT_NE(file, readinput.input_lists.end());
+    ASSERT_TRUE(mode->second.check_value);
+    ASSERT_TRUE(file->second.check_value);
+
+    Parameter param;
+    EXPECT_EQ(TestParameters::input(param).sternheimer_molecular_coulomb, "none");
+    EXPECT_TRUE(TestParameters::input(param).sternheimer_ao_file.empty());
+    EXPECT_NO_THROW(mode->second.check_value(mode->second, param));
+    EXPECT_NO_THROW(file->second.check_value(file->second, param));
+
+    TestParameters::input(param).basis_type = "lcao";
+    TestParameters::input(param).symmetry = "1";
+    TestParameters::input(param).sternheimer_q_index = 1;
+    TestParameters::input(param).out_sternheimer_librpa = false;
+    TestParameters::input(param).sternheimer_delta = false;
+    EXPECT_NO_THROW(mode->second.check_value(mode->second, param));
+    EXPECT_NO_THROW(file->second.check_value(file->second, param));
+    EXPECT_EQ(TestParameters::input(param).sternheimer_molecular_coulomb, "none");
+    EXPECT_EQ(TestParameters::input(param).symmetry, "1");
+    EXPECT_EQ(TestParameters::input(param).sternheimer_q_index, 1);
+    EXPECT_FALSE(TestParameters::input(param).out_sternheimer_librpa);
+    EXPECT_FALSE(TestParameters::input(param).sternheimer_delta);
+}
+
+TEST_F(InputTest, MolecularCoulombReaderRequiresResponseInputs)
+{
+    ModuleIO::ReadInput readinput(0);
+    const auto mode = find_label("sternheimer_molecular_coulomb", readinput.input_lists);
+    ASSERT_NE(mode, readinput.input_lists.end());
+    ASSERT_TRUE(mode->second.check_value);
+    const auto file = find_label("sternheimer_ao_file", readinput.input_lists);
+    ASSERT_NE(file, readinput.input_lists.end());
+
+    Parameter param;
+    TestParameters::input(param).basis_type = "lcao";
+    TestParameters::input(param).sternheimer_molecular_coulomb = "isolated_ri";
+    TestParameters::input(param).sternheimer_ao_file = "ao_potentials.dat";
+    TestParameters::input(param).out_sternheimer_librpa = true;
+    TestParameters::input(param).sternheimer_delta = true;
+    EXPECT_NO_THROW(mode->second.check_value(mode->second, param));
+
+    TestParameters::input(param).out_sternheimer_librpa = false;
+    testing::internal::CaptureStdout();
+    EXPECT_EXIT(mode->second.check_value(mode->second, param), ::testing::ExitedWithCode(1), "");
+    EXPECT_THAT(testing::internal::GetCapturedStdout(), testing::HasSubstr("requires out_sternheimer_librpa True"));
+    TestParameters::input(param).out_sternheimer_librpa = true;
+
+    TestParameters::input(param).sternheimer_delta = false;
+    testing::internal::CaptureStdout();
+    EXPECT_EXIT(mode->second.check_value(mode->second, param), ::testing::ExitedWithCode(1), "");
+    EXPECT_THAT(testing::internal::GetCapturedStdout(), testing::HasSubstr("requires sternheimer_delta True"));
+    TestParameters::input(param).sternheimer_delta = true;
+
+    TestParameters::input(param).sternheimer_ao_file.clear();
+    testing::internal::CaptureStdout();
+    EXPECT_EXIT(mode->second.check_value(mode->second, param), ::testing::ExitedWithCode(1), "");
+    EXPECT_THAT(testing::internal::GetCapturedStdout(), testing::HasSubstr("requires sternheimer_ao_file"));
+    TestParameters::input(param).sternheimer_ao_file = "ao_potentials.dat";
+
+    ASSERT_TRUE(file->second.check_value);
+    EXPECT_NO_THROW(file->second.check_value(file->second, param));
+    TestParameters::input(param).sternheimer_molecular_coulomb = "periodic";
+    testing::internal::CaptureStdout();
+    EXPECT_EXIT(mode->second.check_value(mode->second, param), ::testing::ExitedWithCode(1), "");
+    EXPECT_THAT(testing::internal::GetCapturedStdout(), testing::HasSubstr("must be none or isolated_ri"));
+}
+
+TEST_F(InputTest, MolecularCoulombReaderRejectsOrphanAOPotentialFile)
+{
+    ModuleIO::ReadInput readinput(0);
+    const auto file = find_label("sternheimer_ao_file", readinput.input_lists);
+    ASSERT_NE(file, readinput.input_lists.end());
+    ASSERT_TRUE(file->second.check_value);
+
+    Parameter param;
+    TestParameters::input(param).sternheimer_ao_file = "ao_potentials.dat";
+    EXPECT_EQ(TestParameters::input(param).sternheimer_molecular_coulomb, "none");
+    EXPECT_FALSE(TestParameters::input(param).out_sternheimer_librpa);
+    testing::internal::CaptureStdout();
+    EXPECT_EXIT(file->second.check_value(file->second, param), ::testing::ExitedWithCode(1), "");
+    EXPECT_THAT(testing::internal::GetCapturedStdout(),
+                testing::HasSubstr("requires sternheimer_molecular_coulomb isolated_ri"));
+}
+
 TEST_F(InputTest, InvalidExplicitDomainDoesNotReachReadOrResetHooks)
 {
     ModuleIO::ReadInput reader(0);
