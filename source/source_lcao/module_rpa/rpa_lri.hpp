@@ -1564,17 +1564,23 @@ void RPA_LRI<T, Tdata>::output_ewald_coulomb(const UnitCell& ucell, const K_Vect
         // the exported `coulomb_mat_` uses the same ABF rotation convention as the sidecar files.
         this->symmetry_rotation_.set_Cs_rotation(exx_full_coulomb->get_abfs_nchis());
 
+        // `this->Vs_period` holds only this rank's (atoms00, atoms01) slice at this point.
+        // The irreducible sector is a GLOBAL object, so collecting from the rank-local slice
+        // reports other ranks' blocks as "missing" and restores zeros into the exported
+        // Coulomb. Gather the complete periodic matrix first (blocks are disjoint across
+        // ranks, so the summation inside comm_map2_first reconstructs them, not over-counts).
+        if (this->runtime.nproc > 1)
+        {
+            const std::set<TA> all_atoms_set(atoms.begin(), atoms.end());
+            auto Vs_period_all = RI_2D_Comm::comm_map2_first(
+                this->mpi_comm, this->Vs_period, all_atoms_set, all_atoms_set);
+            this->Vs_period.swap(Vs_period_all);
+        }
         std::size_t n_skipped_irreducible_blocks_local = 0;
         auto Vs_irreducible = RpaLriDetail::collect_local_irreducible_abf_blocks(
             this->Vs_period,
             this->symmetry_rotation_.get_irreducible_sector(),
             n_skipped_irreducible_blocks_local);
-        if (this->runtime.nproc > 1)
-        {
-            const std::set<TA> all_atoms_set(atoms.begin(), atoms.end());
-            Vs_irreducible = RI_2D_Comm::comm_map2_first(
-                this->mpi_comm, Vs_irreducible, all_atoms_set, all_atoms_set);
-        }
         const std::size_t n_skipped_irreducible_blocks
             = RpaLriDetail::sum_skipped_irreducible_blocks(
                 this->mpi_comm, n_skipped_irreducible_blocks_local);
@@ -1586,9 +1592,30 @@ void RPA_LRI<T, Tdata>::output_ewald_coulomb(const UnitCell& ucell, const K_Vect
         }
         this->Vs_period
             = this->symmetry_rotation_.restore_HR_abf(ucell.symm, ucell.atoms, ucell.st, Vs_irreducible);
+        // restore_HR_abf returns the COMPLETE periodic matrix on every rank (every rank was given
+        // the full irreducible set above). Re-collecting it with comm_map2_first would therefore
+        // add every rank's copy together and scale the exported Coulomb by the number of ranks.
+        // Slice back to the same per-rank (atoms00, atoms01) partition that gather_periodic()
+        // produces on the non-symmetry path, so out_coulomb_k_v1() keeps writing disjoint blocks.
         if (this->runtime.nproc > 1)
         {
-            this->Vs_period = RI_2D_Comm::comm_map2_first(this->mpi_comm, this->Vs_period, atoms00, atoms01);
+            std::map<TA, std::map<TAC, RI::Tensor<Tdata>>> Vs_period_local;
+            for (const auto& Ip: this->Vs_period)
+            {
+                if (atoms00.find(Ip.first) == atoms00.end())
+                {
+                    continue;
+                }
+                for (const auto& JPp: Ip.second)
+                {
+                    if (atoms01.find(JPp.first.first) == atoms01.end())
+                    {
+                        continue;
+                    }
+                    Vs_period_local[Ip.first][JPp.first] = JPp.second;
+                }
+            }
+            this->Vs_period.swap(Vs_period_local);
         }
     }
     if (this->runtime.input.out_librpa_reader_version == 1)
