@@ -43,7 +43,17 @@ void ReciprocalGrid::renew(const int& kpoint_number)
 {
     kvec_c.resize(kpoint_number);
     kvec_d.resize(kpoint_number);
-    kvec_c_full.resize(kpoint_number);
+    // `kvec_c_full` must keep holding the UNREDUCED Monkhorst-Pack mesh so that
+    // consumers which Fourier-transform over the full BZ (e.g. Ewald_Vq, which
+    // loops `ik < nkstot_nospin`) see valid entries after the IBZ reduction and
+    // after the per-pool k distribution. Resizing it down alongside kvec_c/kvec_d
+    // silently truncated it to the IBZ count and left those consumers reading
+    // past the end. Only grow here; the full mesh is (re)filled by
+    // KListIO::fill_full_kvec before any reduction takes place.
+    if (kvec_c_full.size() < static_cast<std::size_t>(kpoint_number))
+    {
+        kvec_c_full.resize(kpoint_number);
+    }
     wk.resize(kpoint_number);
     ngk.resize(kpoint_number);
 

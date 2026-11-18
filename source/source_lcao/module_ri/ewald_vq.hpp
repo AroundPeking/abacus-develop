@@ -29,6 +29,8 @@
 #include <cmath>
 #include <complex>
 #include <numeric>
+#include <sstream>
+#include <stdexcept>
 #include <type_traits>
 
 #ifdef _OPENMP
@@ -216,6 +218,20 @@ void Ewald_Vq<Tdata>::init_ions(const UnitCell& ucell, const std::array<Tcell, N
     this->list_A0_pair_k = list_As_Vq_atoms.first;
     this->list_A1_pair_k = list_As_Vq_atoms.second[0];
 
+    // Ewald's Fourier sum runs over the FULL Brillouin zone, so `kvec_c_full` must
+    // still hold the unreduced Monkhorst-Pack mesh here. Guard instead of silently
+    // reading past the end: an out-of-range access used to poison every V(R) block
+    // with stack garbage, and the result then depended on the MPI layout.
+    if (this->p_kv->kvec_c_full.size() < static_cast<std::size_t>(this->nks0))
+    {
+        std::ostringstream oss;
+        oss << "Ewald_Vq::init_ions: kvec_c_full holds "
+            << this->p_kv->kvec_c_full.size()
+            << " k-points but the Ewald sum needs the full mesh (" << this->nks0
+            << "). The full-BZ k-vector table was truncated (likely by an IBZ "
+            << "reduction resizing it); this would read out of bounds.";
+        throw std::runtime_error(oss.str());
+    }
     for (size_t ik = 0; ik != this->nks0; ++ik)
         this->kvec_c[ik] = this->p_kv->kvec_c_full[ik];
 

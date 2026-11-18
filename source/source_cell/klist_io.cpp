@@ -277,6 +277,18 @@ void pack_kpts(const std::vector<int>& isk,
         kvec_c_full_aux[3 * ik + 1] = kvec_c_full[ik].y;
         kvec_c_full_aux[3 * ik + 2] = kvec_c_full[ik].z;
     }
+    // `kvec_c_full` is the UNREDUCED mesh and is larger than `nkstot` whenever the
+    // k list has been reduced to the IBZ (or distributed over pools). It must be
+    // broadcast completely: Ewald_Vq sums over all of it on every rank. The loop
+    // above only covers the first `nkstot` entries, so the remainder used to be
+    // left zero (or, before the buffer was sized from nkstot_nospin, truncated).
+    const std::size_t n_full = kvec_c_full.size();
+    for (std::size_t j = static_cast<std::size_t>(nkstot); j < n_full; ++j)
+    {
+        kvec_c_full_aux[3 * j] = kvec_c_full[j].x;
+        kvec_c_full_aux[3 * j + 1] = kvec_c_full[j].y;
+        kvec_c_full_aux[3 * j + 2] = kvec_c_full[j].z;
+    }
 }
 
 void unpack_kpts(const std::vector<int>& isk_aux,
@@ -292,6 +304,25 @@ void unpack_kpts(const std::vector<int>& isk_aux,
                  std::vector<ModuleBase::Vector3<double>>& kvec_d,
                  std::vector<ModuleBase::Vector3<double>>& kvec_c_full)
 {
+    // kvec_c(kvec_d/wk/isk) is this pool's slice of the (IBZ-reduced) k list, so it
+    // is scattered with the `startk` offset. `kvec_c_full` is NOT pool-sliced: it is
+    // the unreduced Monkhorst-Pack mesh that every rank holds in full, because
+    // consumers such as Ewald_Vq loop over all `nkstot_nospin` points regardless of
+    // how the k points were distributed. Copying only `nks` entries here truncated it
+    // to the local count on every rank but 0, and the consumers then read past the end.
+    const std::size_t n_full =
+        static_cast<std::size_t>(kvec_c_full_aux.size() / 3);
+    if (kvec_c_full.size() != n_full)
+    {
+        kvec_c_full.resize(n_full);
+    }
+    for (std::size_t j = 0; j < n_full; ++j)
+    {
+        kvec_c_full[j].x = kvec_c_full_aux[j * 3];
+        kvec_c_full[j].y = kvec_c_full_aux[j * 3 + 1];
+        kvec_c_full[j].z = kvec_c_full_aux[j * 3 + 2];
+    }
+
     for (int i = 0; i < nks; i++)
     {
         // 3 is because each k point has three value:kx, ky, kz
@@ -302,9 +333,6 @@ void unpack_kpts(const std::vector<int>& isk_aux,
         kvec_d[i].x = kvec_d_aux[k_index * 3];
         kvec_d[i].y = kvec_d_aux[k_index * 3 + 1];
         kvec_d[i].z = kvec_d_aux[k_index * 3 + 2];
-        kvec_c_full[i].x = kvec_c_full_aux[k_index * 3];
-        kvec_c_full[i].y = kvec_c_full_aux[k_index * 3 + 1];
-        kvec_c_full[i].z = kvec_c_full_aux[k_index * 3 + 2];
         wk[i] = wk_aux[k_index];
         isk[i] = isk_aux[k_index];
     }
