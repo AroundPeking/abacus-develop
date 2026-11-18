@@ -3,6 +3,7 @@
 
 #include "exx_abfs.h"
 
+#include <cstddef>
 #include <limits>
 #include <algorithm>
 #include "source_cell/unitcell.h"
@@ -58,9 +59,20 @@ public:
 	template<typename T>
 	static int get_Lmax(const std::vector<std::vector<T>> &orb)
 	{
-		return	max_element(orb.begin(), orb.end(),
-				            [](const std::vector<T> &orb_A, const std::vector<T> &orb_B){ return orb_A.size() < orb_B.size(); })
-				->size() - 1;
+		// An empty channel list means "no angular momentum", so the answer is -1.
+		// Writing it as max_element(...)->size() - 1 did not say that: size() is
+		// unsigned, an all-empty input gave 0 - 1 = SIZE_MAX, and converting that
+		// to int yielded -1 only by two's-complement luck. Callers then added two
+		// such values (Matrix_Orbs11::init) and passed the result to
+		// Center2_Orb::init_Table_Spherical_Bessel, which reached
+		// Sph_Bessel_Recursive::cal_jlx with a negative lmax and aborted with
+		// "jlx l<0". Filter empty tails first so the size comparison is meaningful.
+		std::size_t lmax_size = 0;
+		for (const auto &channels : orb)
+		{
+			lmax_size = std::max(lmax_size, channels.size());
+		}
+		return lmax_size == 0 ? -1 : static_cast<int>(lmax_size) - 1;
 	}
 
 	static void filter_empty_orbs(

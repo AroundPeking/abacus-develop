@@ -53,6 +53,14 @@ void Center2_Orb::init_Table_Spherical_Bessel(const int Lmax_used,
     }
 
     psb->set_dx(dr * dk);
+    // Lmax_used is a sum of get_Lmax() values, and get_Lmax() returns -1 for an
+    // empty channel list. An all-empty operand therefore produced lmax + 1 <= 0,
+    // which cal_jlx rejects. Nothing is left to tabulate in that case, so skip
+    // the table instead of asking for a negative angular momentum.
+    if (Lmax_used + 1 < 0)
+    {
+        return;
+    }
     psb->cal_jlx(Lmax_used+1, Rmesh, kmesh);                // +1 for drs needs psb.jlx[l+1]. Peize Lin update 2025-12-27
 }
 

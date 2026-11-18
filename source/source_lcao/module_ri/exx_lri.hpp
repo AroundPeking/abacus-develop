@@ -13,6 +13,7 @@
 #include "source_lcao/module_ri/exx_abfs_ctor_orbs.h"
 #include "source_lcao/module_ri/exx_abfs_io.h"
 #include "source_lcao/module_ri/conv_coulomb_pot_k.h"
+#include "source_base/tool_quit.h"
 #include "source_base/tool_title.h"
 #include "source_base/timer.h"
 #include "source_lcao/module_ri/serialization_cereal.h"
@@ -32,6 +33,7 @@
 #include <limits>
 #include <numeric>
 #include <stdexcept>
+#include <sstream>
 #include <string>
 #include <type_traits>
 #include <utility>
@@ -453,6 +455,49 @@ inline std::vector<std::vector<std::vector<Numerical_Orbital_Lm>>> prepare_abfs(
         abfs = Exx_Abfs::IO::construct_abfs(abfs, orb, files_abfs, info.kmesh_times);
     }
     Exx_Abfs::Construct_Orbs::filter_empty_orbs(abfs);
+
+    // An empty auxiliary basis is not a usable basis, and nothing downstream fills
+    // it in. Report the cause here instead of letting the run die later inside the
+    // spherical Bessel table, which only says "jlx l<0" and arrives after the SCF
+    // and the EXX Coulomb build. Both ways of getting here are input mistakes:
+    // a PCA threshold above 1 asks abfs_same_atom for no same-atom basis at all,
+    // and then only the external ABFS_ORBITAL files can supply one.
+    bool abfs_empty = true;
+    for (const auto& type_channels : abfs)
+    {
+        for (const auto& channel : type_channels)
+        {
+            if (!channel.empty())
+            {
+                abfs_empty = false;
+                break;
+            }
+        }
+        if (!abfs_empty)
+        {
+            break;
+        }
+    }
+    if (abfs_empty)
+    {
+        std::ostringstream description;
+        description << "the auxiliary basis (ABFS) is empty, so no EXX/GW Coulomb matrix can be built. ";
+        if (pca_threshold > 1.0)
+        {
+            description << "pca_threshold = " << pca_threshold
+                        << " is above 1, which switches off the same-atom auxiliary basis; ";
+        }
+        if (files_abfs.empty())
+        {
+            description << "no ABFS_ORBITAL file was read, so nothing filled it back in. ";
+        }
+        else
+        {
+            description << "the " << files_abfs.size() << " ABFS_ORBITAL file(s) read supplied no channel. ";
+        }
+        description << "Set the PCA threshold to 1 or below, or list the ABFS_ORBITAL files in STRU.";
+        ModuleBase::WARNING_QUIT("ExxLriDetail::prepare_abfs", description.str());
+    }
     if (should_rotate_abfs_for_init(info))
     {
         rotate_abfs_by_multipole(abfs, info.multip_moments_threshold, runtime);

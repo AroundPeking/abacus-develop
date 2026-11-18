@@ -75,3 +75,12 @@ if(ENABLE_MPI)
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
   )
 endif()
+
+add_executable(MODULE_RI_exx_abfs_ctor_orbs_test exx_abfs_ctor_orbs_test.cpp)
+target_include_directories(MODULE_RI_exx_abfs_ctor_orbs_test PRIVATE ${CMAKE_SOURCE_DIR})
+install(TARGETS MODULE_RI_exx_abfs_ctor_orbs_test DESTINATION ${CMAKE_BINARY_DIR}/tests)
+add_test(
+  NAME MODULE_RI_exx_abfs_ctor_orbs_test
+  COMMAND ./MODULE_RI_exx_abfs_ctor_orbs_test
+  WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+)
