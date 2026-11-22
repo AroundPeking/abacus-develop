@@ -75,3 +75,11 @@ if(ENABLE_MPI)
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
   )
 endif()
+
+add_executable(MODULE_RI_smooth_cut_coulomb_test test_smooth_cut_coulomb.cpp)
+install(TARGETS MODULE_RI_smooth_cut_coulomb_test DESTINATION ${CMAKE_BINARY_DIR}/tests)
+add_test(
+  NAME MODULE_RI_smooth_cut_coulomb_test
+  COMMAND ./MODULE_RI_smooth_cut_coulomb_test
+  WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+)

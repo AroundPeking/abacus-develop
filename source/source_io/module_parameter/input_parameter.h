@@ -651,6 +651,9 @@ struct Input_para
         = true; ///< whether to reduce the real-space sector in when using symmetry=1 in EXX calculation
     double rpa_ccp_rmesh_times = 10.0; ///< how many times larger the radial mesh required for
                                        ///< calculating Columb potential is to that of atomic orbitals
+    std::string rpa_cut_coulomb = "hard"; ///< post-SCF cut kernel: hard or log_erfc
+    std::string rpa_cut_radius = "legacy"; ///< legacy radius or BvK inscribed radius
+    double rpa_cut_width = 1.091868692359; ///< multiplicative log-erfc width
     std::string rpa_abfs_preorth = "none"; ///< on-site auxiliary Coulomb preorthogonalization for RPA output
     double rpa_abfs_preorth_threshold = 1.0e-2; ///< residual Coulomb-norm threshold for RPA ABFS preorthogonalization
     double exx_cs_inv_thr = -1;        ///< threshold to inverse Vq in abfs for generating Cs
