@@ -138,6 +138,31 @@ void test_production_symmetry_block()
     require(lines[4] == "spin_symmetry 0 1", "production block must export magnetic metadata for nspin=4");
     require(lines[7].rfind("1 ", 0) == 0, "production block must preserve the antiunitary flag");
 }
+void test_collinear_symmetry_block()
+{
+    // nspin=2: the magnetic group that analyze_magnetic_group produced is the
+    // whole group and every operation keeps the spin channel. The block must
+    // say so, otherwise a consumer completes it to a grey group and the
+    // antiunitary copies become spin-channel swaps.
+    ModuleSymmetry::Symmetry symmetry;
+    symmetry.nrotk = 2;
+    symmetry.nrotk_anti = 0;
+    symmetry.magnetic_nspin4 = false;
+    symmetry.gmatrix[0] = ModuleBase::Matrix3();
+    symmetry.gmatrix[1] = ModuleBase::Matrix3(-1.0, 0.0, 0.0, 0.0, -1.0, 0.0, 0.0, 0.0, -1.0);
+
+    std::ostringstream output;
+    RpaLriDetail::write_librpa_symmetry_block(output, ModuleBase::Matrix3(), symmetry, 2);
+    const auto lines = split_lines(output.str());
+    // "2 row", two spatial rows, the spin header, then one flag row per operation.
+    require(lines.size() == 6, "collinear block must export spatial rows and an identity-spin table");
+    require(lines[0] == "2 row", "collinear block must export the magnetic-group operations");
+    require(lines[3] == "spin_symmetry 0 0",
+            "collinear block must state a unitary-only identity-spin group");
+    require(lines[4] == "0" && lines[5] == "0",
+            "every collinear spin row must be unitary with the implicit identity action");
+}
+
 } // namespace
 
 int main()
@@ -145,6 +170,7 @@ int main()
     test_common_spatial_and_magnetic_rows();
     test_explicit_spin_rows();
     test_production_symmetry_block();
+    test_collinear_symmetry_block();
     std::cout << "LibRPA stru_out symmetry tests passed\n";
     return 0;
 }

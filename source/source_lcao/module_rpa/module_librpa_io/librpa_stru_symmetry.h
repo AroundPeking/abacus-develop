@@ -176,6 +176,35 @@ inline void write_librpa_symmetry_block(std::ostream& output,
         const int grey_group = symmetry.magnetic_nspin4 ? 0 : 1;
         write_librpa_spin_symmetry(output, grey_group, 1, spin_operations);
     }
+    else if (nspin == 2)
+    {
+        // Collinear magnetism keeps the spin a good quantum number, so every
+        // operation that survived analyze_magnetic_group acts the same way on
+        // both channels: it is unitary and its spin action is the identity.
+        // Export exactly that table instead of leaving the block out.
+        //
+        // Leaving it out is not neutral. A consumer that reads only the spatial
+        // rows has no way to tell this case from a paramagnet, so it completes
+        // the group to a grey group by appending one antiunitary copy per
+        // operation. The antiunitary copy reverses the magnetization, which a
+        // collinear two-channel store can only express as a spin-channel swap,
+        // and the consumer then rejects its own reconstruction. Writing the
+        // unitary-only identity-spin table states the group once and removes
+        // the ambiguity, so reduced-k producers stay usable for analytic
+        // head/wing and for any IBZ-to-full-grid expansion.
+        std::vector<LibRpaSpinSymmetryOperation> spin_operations;
+        spin_operations.resize(static_cast<std::size_t>(symmetry.nrotk));
+        for (auto& operation : spin_operations)
+        {
+            operation.antiunitary = 0;
+            // Identity SU(2): (re, im) x 4 in row-major 2x2 order.
+            operation.spin_u = {{1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0}};
+        }
+        // grey_group = 0: the table is the whole group, not its unitary half.
+        // spin_source = 0: the identity action above is the declared spin
+        // action, so no explicit SU(2) rows are emitted.
+        write_librpa_spin_symmetry(output, 0, 0, spin_operations);
+    }
 }
 } // namespace RpaLriDetail
 
